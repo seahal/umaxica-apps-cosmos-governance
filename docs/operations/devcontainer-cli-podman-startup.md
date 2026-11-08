@@ -175,8 +175,8 @@ compose.override.yaml               = UNTRACKED + gitignored (2026-09-14); auto-
 A fresh clone needs **no local file**:
 
 ```bash
-git clone https://github.com/seahal/umaxica-apps-cosmos-global.git
-cd umaxica-apps-cosmos-global
+git clone https://github.com/seahal/umaxica-apps-cosmos-governance.git
+cd umaxica-apps-cosmos-governance
 
 # creating a local override is NOT required
 

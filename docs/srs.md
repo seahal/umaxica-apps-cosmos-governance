@@ -1,6 +1,6 @@
 # Software Requirements Specification (SRS)
 
-## Project: Umaxica Apps Cosmos Global
+## Project: Umaxica Apps Cosmos Governance
 
 ### Aligned with ISO/IEC/IEEE 29148:2018 guidance
 
@@ -10,7 +10,7 @@
 
 ### 1.1 Purpose
 
-Umaxica Apps Cosmos Global replaces the legacy edge-only portal with a unified Ruby on Rails
+Umaxica Apps Cosmos Governance replaces the legacy edge-only portal with a unified Ruby on Rails
 platform that serves every public surface owned by Umaxica—corporate, service, staff, help, docs,
 news, BFF, and API domains. The SRS defines the business goals, functional expectations, and quality
 attributes that the Rails monolith must satisfy while orchestrating user onboarding, customer
