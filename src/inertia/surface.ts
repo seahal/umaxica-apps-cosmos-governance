@@ -6,7 +6,7 @@ import { applyTheme, readThemeCookie, watchThemeCookie } from "@/lib/theme";
 
 // Shared pieces for the per-FQDN Inertia entrypoints.
 //
-// Every trust boundary (base/app, base/com, auth/org, ...) boots its own Inertia application from
+// Every trust boundary (base/app, base/com, tech/org, ...) boots its own Inertia application from
 // its own entrypoint and globs only its own page directory, so one surface can never resolve
 // another surface's page component. This module holds what is genuinely identical between them;
 // the glob itself stays a literal in each entrypoint because Vite can only rewrite a literal.

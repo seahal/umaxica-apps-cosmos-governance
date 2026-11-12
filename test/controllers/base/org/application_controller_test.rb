@@ -13,12 +13,9 @@ module Base
         assert_includes controller.class, RateLimit
         assert_includes controller.class, ::PreferenceGlobal
         assert_includes controller.class, ::BrowserRpAuthentication
-        assert_includes controller.class, ::BrowserRpSafeRequestRefresh
-        assert_includes controller.class, ::BrowserRpUnsafeRequestRefresh
         assert_includes controller.class, ::AuthorizationOperator
         assert_includes controller.class, ::VerificationOperator
         assert_includes controller.class, ActionPolicy::Controller
-        assert_includes controller.class, ::OidcSsoInitiator
         assert_includes controller.class, ::ActorSupport
         assert_includes controller.class, ::Finisher
       end
@@ -38,8 +35,6 @@ module Base
         before_filters = callbacks.select { |c| c.kind == :before }.map(&:filter)
 
         expected_order = %i(
-          authenticate_browser_rp_unsafe_request!
-          authenticate_browser_rp_safe_request!
           set_current_context
           reset_flash
           set_preferences_cookie

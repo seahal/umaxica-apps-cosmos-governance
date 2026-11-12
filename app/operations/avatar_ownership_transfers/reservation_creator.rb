@@ -4,7 +4,7 @@
 module AvatarOwnershipTransfers
   class ReservationCreator < ApplicationService
     MAX_IDEMPOTENCY_RACE_RETRIES = 3
-    VALID_FOR = 5.days
+    VALID_FOR = 120.hours
     IDEMPOTENCY_KEY_PATTERN = /\A[0-9a-f]{8}-[0-9a-f]{4}-[47][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\z/
 
     DETAIL_CLASSES = {
@@ -72,7 +72,7 @@ module AvatarOwnershipTransfers
           detail_class.create!(**detail_attributes)
           reservation
         end
-      rescue ActiveRecord::RecordNotUnique => e
+      rescue ActiveRecord::RecordNotUnique, ActiveRecord::RecordInvalid => e
         raise unless retryable_reservation_constraint?(e)
 
         attempts += 1
@@ -136,6 +136,15 @@ module AvatarOwnershipTransfers
     end
 
     def retryable_reservation_constraint?(error)
+      if error.is_a?(ActiveRecord::RecordInvalid)
+        record = error.record
+        return false unless record.instance_of?(AvatarTransferReservation) && !record.persisted?
+
+        return record.errors.any? && record.errors.all? do |entry|
+          %i(avatar_id idempotency_key).include?(entry.attribute) && entry.type == :taken
+        end
+      end
+
       %w(
         idx_avatar_transfer_reservations_idempotency
         idx_avatar_transfer_reservations_one_pending_avatar

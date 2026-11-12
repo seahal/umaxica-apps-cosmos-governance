@@ -22,37 +22,23 @@ class SecurityHeadersTest < ActionDispatch::IntegrationTest
   end
 
   test "content security policy and permissions policy are enforced" do
-    host! ENV.fetch("PRIVATE_AUTH_SERVICE_URL")
+    hosts = Rails.configuration.x.boot_config.fetch(:hosts)
+    host! hosts.base_service.host
 
-    get sign_app_health_liveness_url(ri: "jp")
+    get "/health/liveness?ri=jp"
 
     assert_response :success
     assert_nil response.headers["Content-Security-Policy-Report-Only"]
     assert_includes response.headers["Content-Security-Policy"], "default-src 'self'"
     assert_includes response.headers["Content-Security-Policy"], "object-src 'none'"
-    # Every external identity provider the browser is navigated to by a form submission has to be
-    # named. login.microsoftonline.com is the org-surface Entra ceremony target: the POST to
-    # /social/entra redirects there, and Firefox applies form-action to that redirect.
-    assert_includes response.headers["Content-Security-Policy"],
-                    "form-action 'self' https://accounts.google.com https://appleid.apple.com " \
-                    "https://login.microsoftonline.com"
-    hosts = Rails.configuration.x.boot_config.fetch(:hosts)
-
     assert_includes response.headers["Content-Security-Policy"], "https://#{hosts.base_service.host}"
     assert_includes response.headers["Content-Security-Policy"], "https://#{hosts.base_corporate.host}"
     assert_includes response.headers["Content-Security-Policy"], "https://#{hosts.base_staff.host}"
-    assert_includes response.headers["Content-Security-Policy"], "https://#{hosts.auth_service.host}"
-    # The configured Auth origin has to be the public one the browser uses. The social
-    # ceremony posts from Auth to Base and Base redirects back to Auth; Firefox applies
-    # form-action to that redirect, so a stale Auth origin here blocks the handoff.
-    assert_includes response.headers["Content-Security-Policy"],
-                    "https://#{ENV.fetch("PUBLIC_AUTH_SERVICE_URL")}"
     # Internal hosts must never be form-action targets: browser-posted forms have to
-    # aim at the public origins asserted above.
+    # aim at the public Base origins asserted above.
     assert_not_includes response.headers["Content-Security-Policy"],
                         ENV.fetch("PRIVATE_BASE_SERVICE_URL")
-    # The jump gateway must be a valid form-action target: sign-flow form submissions
-    # (e.g. the sign-up birthdate checkpoint) finalize by redirecting through it.
+    # Base handoffs use the jump gateway to move between public Base surfaces.
     assert_includes response.headers["Content-Security-Policy"],
                     Rails.configuration.x.boot_config.fetch(:jump).origin
     # connect-src decides where injected script may send data, so it must name
@@ -98,37 +84,5 @@ class SecurityHeadersTest < ActionDispatch::IntegrationTest
       assert_includes source, "respond_to?(:request)",
                       "#{source.strip} must resolve the request for both context types"
     end
-  end
-end
-
-# DAMP local route helper aliases for former shared test support.
-class SecurityHeadersTest
-  SURFACE_ROUTE_PREFIX_MAP = {
-    "sign_app_" => "auth_app_",
-    "sign_org_" => "auth_org_",
-    "acme_app_" => "base_app_",
-    "acme_org_" => "base_org_",
-  }.freeze unless const_defined?(:SURFACE_ROUTE_PREFIX_MAP, false)
-
-  private
-
-  def method_missing(name, ...)
-    aliased_name = aliased_surface_route_helper_name(name)
-    return public_send(aliased_name, ...) if aliased_name && respond_to?(aliased_name, true)
-
-    super
-  end
-
-  def respond_to_missing?(name, include_private = false)
-    aliased_name = aliased_surface_route_helper_name(name)
-    (aliased_name && respond_to?(aliased_name, include_private)) || super
-  end
-
-  def aliased_surface_route_helper_name(name)
-    helper_name = name.to_s
-    self.class::SURFACE_ROUTE_PREFIX_MAP.each do |source_prefix, target_prefix|
-      return helper_name.sub(source_prefix, target_prefix).to_sym if helper_name.start_with?(source_prefix)
-    end
-    nil
   end
 end

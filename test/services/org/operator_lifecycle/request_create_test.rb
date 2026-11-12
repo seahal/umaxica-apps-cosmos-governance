@@ -45,19 +45,19 @@ class OrgOperatorLifecycleRequestCreateTest < ActiveSupport::TestCase
       workspace_status_id: organization_statuses(:nothing).id,
     )
 
-    result = OrgOperatorLifecycleRequestCreate.call(
-      actor: operators(:one),
-      attributes: {
-        action: OperatorLifecycleRequest::ACTION_JOIN,
-        target_email: " INVITEE@EXAMPLE.COM ",
-        organization_id: org.id,
-        role_id: 4,
-      },
-    )
-
-    assert_not result.success?
-    assert_not_predicate result.request, :persisted?
-    assert_includes result.error, "Organization invitations are unavailable pending Bureau migration"
+    assert_no_difference -> { OperatorLifecycleRequest.count } do
+      assert_raises(AccessOpDataUnavailableError) do
+        OrgOperatorLifecycleRequestCreate.call(
+          actor: operators(:one),
+          attributes: {
+            action: OperatorLifecycleRequest::ACTION_JOIN,
+            target_email: " INVITEE@EXAMPLE.COM ",
+            organization_id: org.id,
+            role_id: 4,
+          },
+        )
+      end
+    end
   end
 
   test "join request is rejected when actor does not own the organization" do
@@ -68,32 +68,34 @@ class OrgOperatorLifecycleRequestCreateTest < ActiveSupport::TestCase
       workspace_status_id: organization_statuses(:nothing).id,
     )
 
-    result = OrgOperatorLifecycleRequestCreate.call(
-      actor: operators(:one),
-      attributes: {
-        action: OperatorLifecycleRequest::ACTION_JOIN,
-        target_email: "invitee@example.com",
-        organization_id: org.id,
-        role_id: 4,
-      },
-    )
-
-    assert_not result.success?
-    assert_predicate result.request.errors[:organization_id], :present?
+    assert_no_difference -> { OperatorLifecycleRequest.count } do
+      assert_raises(AccessOpDataUnavailableError) do
+        OrgOperatorLifecycleRequestCreate.call(
+          actor: operators(:one),
+          attributes: {
+            action: OperatorLifecycleRequest::ACTION_JOIN,
+            target_email: "invitee@example.com",
+            organization_id: org.id,
+            role_id: 4,
+          },
+        )
+      end
+    end
   end
 
   test "join request is rejected when the organization does not exist" do
-    result = OrgOperatorLifecycleRequestCreate.call(
-      actor: operators(:one),
-      attributes: {
-        action: OperatorLifecycleRequest::ACTION_JOIN,
-        target_email: "invitee@example.com",
-        organization_id: 999_999_999,
-        role_id: 4,
-      },
-    )
-
-    assert_not result.success?
-    assert_predicate result.request.errors[:organization_id], :present?
+    assert_no_difference -> { OperatorLifecycleRequest.count } do
+      assert_raises(AccessOpDataUnavailableError) do
+        OrgOperatorLifecycleRequestCreate.call(
+          actor: operators(:one),
+          attributes: {
+            action: OperatorLifecycleRequest::ACTION_JOIN,
+            target_email: "invitee@example.com",
+            organization_id: 999_999_999,
+            role_id: 4,
+          },
+        )
+      end
+    end
   end
 end

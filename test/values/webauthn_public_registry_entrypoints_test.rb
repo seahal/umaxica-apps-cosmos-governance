@@ -3,20 +3,12 @@
 require "test_helper"
 
 class WebauthnPublicRegistryEntrypointsTest < ActiveSupport::TestCase
-  test "APP and ORG surfaces resolve their own ceremony transaction classes" do
+  test "APP and ORG surfaces retain only their Governance credential ownership" do
     app_surface = Webauthn::Surface.for(:app)
     org_surface = Webauthn::Surface.for(:org)
 
-    assert_equal ClientPasskeyCeremonyTransaction, app_surface.ceremony_transaction_class
-    assert_equal OperatorPasskeyCeremonyTransaction, org_surface.ceremony_transaction_class
-  end
-
-  test "UV policy registry exposes each ceremony policy as server-enforced" do
-    policies = Webauthn::UvPolicy.all
-
-    assert_equal %i(direct_sign_in emergency_sign_in high_risk_step_up mfa_challenge ordinary_step_up registration),
-                 policies.map(&:purpose).sort
-    assert policies.all?(&:enforce_server_side?)
+    assert_equal ClientPasskey, app_surface.passkey_class
+    assert_equal OperatorPasskey, org_surface.passkey_class
   end
 
   test "OIDC verification result distinguishes absent and present step-up claims" do

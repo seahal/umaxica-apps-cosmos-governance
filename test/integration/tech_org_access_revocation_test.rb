@@ -2,174 +2,59 @@
 
 require "test_helper"
 
-# AT-050 / AT-052: the Tech `tech.access` grant interval and committed revocation decide the next
-# request, including a request that must first refresh its credentials. Tech has no protected
-# unsafe action (its only POST routes are sign-in, sign-out, completion and the CSP sink), so the
-# unsafe refresh path has no Tech subject; the safe refresh path is exercised here.
 class TechOrgAccessRevocationTest < ActionDispatch::IntegrationTest
-  fixtures :operators, :operator_statuses
-
-  setup do
-    @host = ENV.fetch("PUBLIC_TECH_STAFF_URL")
-    host! @host
+  test "valid Tech RP proof cannot replace unavailable Access authority and keeps local credentials" do
+    operator = Operator.create!(security_mode_id: SecurityModeConfigurable::ADVANCED, status_id: OperatorStatus::ACTIVE)
+    client = OidcClientRegistry.find!("tech-org-ww")
+    session = seed_rp_browser_session(
+      client:, actor: operator, sid: SecureRandom.uuid, absolute_expires_at: 1.hour.from_now,
+    )
+    now = Time.current.to_i
+    claims = {
+      "iss" => OidcIssuer.for_client(client),
+      "sub" => OidcSubject.for(operator, resource_type: "operator"),
+      "aud" => [client.aud],
+      "client_id" => client.client_id,
+      "sid" => session.op_session_binding.sid,
+      "jti" => SecureRandom.uuid,
+      "scope" => "openid profile domain:operator",
+      "iat" => now,
+      "nbf" => now,
+      "exp" => now + 600,
+      "authn_ctx" => AuthenticationContextValue::NORMAL_KEY,
+    }
+    token = JitSecurityJwtKeyring.encode(
+      claims, typ: "at+jwt", issuer_id: OidcIssuer.jwt_issuer_id_for_client(client),
+    )
+    host! ENV.fetch("PUBLIC_TECH_STAFF_URL")
     https!
-    @operator = operators(:one)
-    @client = OidcClientRegistry.find!("tech-org-ww")
-    @root_token = OperatorToken.create!(
-      authentication_epoch: 0, staff: @operator,
-      authentication_event_at: 1.minute.ago,
-    )
-    @rp_session = OpOrgGrant.create!(
-      authentication_epoch: 0,
-      operator_token: @root_token,
-      oidc_client_id: @client.client_id,
-      oidc_scope: "openid profile",
-      oidc_jti: SecureRandom.uuid,
-      oidc_nonce: SecureRandom.hex(16),
-      oidc_auth_time: 1.minute.ago,
-      refresh_token_expires_at: 1.hour.from_now,
-    )
+    cookies[OidcRpBrowserCredentialContract::ACCESS_COOKIE] = token
+    cookies[OidcRpBrowserCredentialContract::SESSION_COOKIE] = session.public_id
+    as_rp_cell("tech-org-ww") do
+      install_base_rp_jwks_client(client_id: client.client_id, access_token: token)
+      2.times do
+        get tech_org_dashboard_path(ri: "jp")
+
+        assert_response :service_unavailable
+        assert_includes response.headers["Cache-Control"], "no-store"
+        assert_not_includes response.body, I18n.t("tech.org.dashboard.empty_state")
+        assert_equal token, cookies[OidcRpBrowserCredentialContract::ACCESS_COOKIE]
+        assert_equal session.public_id, cookies[OidcRpBrowserCredentialContract::SESSION_COOKIE]
+        assert_nil session.reload.revoked_at
+      end
+    end
   end
 
-  test "a grant is refused before its start, honoured at its start and just before its expiry, refused at expiry" do
-    starts_at = 1.hour.from_now.change(usec: 0)
-    expires_at = starts_at + 1.day
-    grant_tech_access(starts_at:, expires_at:)
+  test "invalid Tech credential is refused before any authority query" do
+    host! ENV.fetch("PUBLIC_TECH_STAFF_URL")
+    https!
+    cookies[OidcRpBrowserCredentialContract::ACCESS_COOKIE] = "invalid-external-proof"
 
-    travel_to(starts_at - 1.second) { assert_dashboard_refused }
-    travel_to(starts_at) { assert_dashboard_allowed }
-    travel_to(expires_at - 1.second) { assert_dashboard_allowed }
-    travel_to(expires_at) { assert_dashboard_refused }
-  end
-
-  test "a committed grant revocation refuses the next protected request" do
-    grant = grant_tech_access
-
-    assert_dashboard_allowed
-
-    grant.revoke!(by: operators(:two), reason_code: "duty_ended")
-
-    assert_dashboard_refused
-  end
-
-  test "positive control: an expired access credential is refreshed while the grant is in force" do
-    grant_tech_access
-    sign_in_tech(access_expires_at: 1.minute.ago)
-
-    get tech_org_dashboard_path(ri: "jp")
-
-    assert_response :success
-    assert_select "p", I18n.t("tech.org.dashboard.empty_state")
-  end
-
-  test "a request that must refresh its credentials after a grant revocation is refused and loses its cookies" do
-    grant = grant_tech_access
-    grant.revoke!(by: operators(:two), reason_code: "duty_ended")
-    sign_in_tech(access_expires_at: 1.minute.ago)
-
-    get tech_org_dashboard_path(ri: "jp")
-
-    assert_not_equal 200, response.status
-    assert_not_includes response.body, I18n.t("tech.org.dashboard.empty_state")
-    assert_cookie_cleared OidcRpBrowserCredentialContract::REFRESH_COOKIE
-  end
-
-  test "a revoked parent refuses both the current access credential and the refresh path" do
-    grant_tech_access
-    sign_in_tech
-    access_cookie = cookies[OidcRpBrowserCredentialContract::ACCESS_COOKIE]
-    refresh_cookie = cookies[OidcRpBrowserCredentialContract::REFRESH_COOKIE]
-    AuthenticationLogoutCurrentSession.call(
-      cause: "browser_logout", resource: @operator, token: @root_token,
-      reason: "user_logout",
-    )
-
-    get tech_org_dashboard_path(ri: "jp")
-
-    assert_not_equal 200, response.status
-    assert_not_includes response.body, I18n.t("tech.org.dashboard.empty_state")
-
-    cookies[OidcRpBrowserCredentialContract::ACCESS_COOKIE] = access_cookie
-    cookies[OidcRpBrowserCredentialContract::REFRESH_COOKIE] = refresh_cookie
-    travel 15.minutes
-    get tech_org_dashboard_path(ri: "jp")
-
-    assert_not_equal 200, response.status
-    assert_not_includes response.body, I18n.t("tech.org.dashboard.empty_state")
-    assert_predicate @rp_session.reload, :revoked?
-  end
-
-  test "an unreadable capability store returns no protected content and reuses no earlier result" do
-    grant_tech_access
-
-    assert_dashboard_allowed
-    failing = ->(*) { raise ActiveRecord::ConnectionNotEstablished, "org zenith unavailable" }
-
-    Operator.stub(:find_by, failing) do
-      sign_in_tech
+    as_rp_cell("tech-org-ww") do
       get tech_org_dashboard_path(ri: "jp")
     end
 
-    assert_not_equal 200, response.status
-    assert_not_includes response.body, I18n.t("tech.org.dashboard.empty_state")
-    assert_includes response.headers.fetch("Cache-Control"), "no-store"
-  end
-
-  private
-
-  def assert_cookie_cleared(name)
-    lines = Array(response.headers["Set-Cookie"]).flat_map { |value| value.to_s.split("\n") }
-    cleared = lines.find { |line| line.start_with?("#{name}=") }
-
-    assert cleared, "expected #{name} to be cleared"
-    assert_match(/max-age=0|expires=Thu, 01 Jan 1970/i, cleared)
-  end
-
-  def grant_tech_access(starts_at: 1.minute.ago, expires_at: 1.day.from_now)
-    OperatorCapabilityGrant.create!(
-      operator: @operator,
-      granted_by_operator: operators(:two),
-      origin: "grant",
-      capability: OperatorCapabilityGrant::TECH_ACCESS,
-      reason_code: "duty_assignment",
-      starts_at:,
-      expires_at:,
-    )
-  end
-
-  def sign_in_tech(access_expires_at: 10.minutes.from_now)
-    cookies[OidcRpBrowserCredentialContract::ACCESS_COOKIE] = AuthenticationTokenService.encode(
-      @operator,
-      host: @host,
-      resource_type: "operator",
-      session_public_id: @root_token.public_id,
-      base_session_public_id: @root_token.public_id,
-      oidc_sid: @rp_session.public_id,
-      oidc_jti: @rp_session.oidc_jti,
-      expires_at: access_expires_at,
-      scopes: %w(openid profile),
-      issuer: OidcIssuer.for_client(@client),
-      audiences: [@client.aud],
-      jwt_issuer_id: OidcIssuer.jwt_issuer_id_for_client(@client),
-      subject: OidcSubject.for(@operator, resource_type: "operator"),
-      client_id: @client.client_id,
-    )
-    cookies[OidcRpBrowserCredentialContract::REFRESH_COOKIE] = @rp_session.reload.issue_refresh_token!
-  end
-
-  def assert_dashboard_allowed
-    sign_in_tech
-    get(tech_org_dashboard_path(ri: "jp"))
-
-    assert_response :success
-    assert_select "p", I18n.t("tech.org.dashboard.empty_state")
-  end
-
-  def assert_dashboard_refused
-    sign_in_tech
-    get(tech_org_dashboard_path(ri: "jp"))
-
-    assert_response :forbidden
+    assert_response :unauthorized
     assert_not_includes response.body, I18n.t("tech.org.dashboard.empty_state")
   end
 end

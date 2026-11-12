@@ -25,8 +25,6 @@ module Base
             request: request,
           )
           redirect_to(base_org_identity_secrets_path(ri: params[:ri]), status: :see_other)
-        rescue TokenStatusManagement::StepUpEvidenceUnavailable
-          render plain: STEP_UP_REQUIRED_MESSAGE, status: :unauthorized
         end
       end
     end

@@ -1,8 +1,8 @@
 # Integrated stack acceptance index
 
 This is the independent investigation entry point for the approved UMAXICA stack integration: opaque
-identifiers, organization-owned Avatars, authentication phase integrity, Email observability, and
-realm-separated contact identifiers/OTP/dead history. The domain criteria below state what must hold
+identifiers, organization-owned Avatars, Email observability, and realm-separated contact
+identifiers/OTP/dead history. The domain criteria below state what must hold
 and how to judge it; they are neither a progress log nor a new source of business-policy authority.
 They preserve the user-approved contracts and applicable ADRs. Existing code never weakens them.
 
@@ -19,21 +19,15 @@ global requirement registry, new harness, DSL or test runner.
 | --------------------------------------------------------------------------------------- | -------------------------- | ------------------------------------------------------------------------------------------------- |
 | [Persistent identifiers](identifier-contracts.md)                                       | ID-1–ID-8                  | PK, classification, generation, permanence, collision, indexes, external compatibility and guards |
 | [Contact identifiers](contact-identifiers.md)                                           | CONTACT-1–CONTACT-9        | Six realm/channel policies, keys, proof, live uniqueness and internal dead history                |
-| [Authentication flow integrity](authentication-flow-integrity.md)                       | FLOW-1–FLOW-6              | HTTP instance/phase admission, terminality, races, response and audit                             |
 | [Avatar ownership](avatar-ownership.md)                                                 | AV-1–AV-9                  | Concrete temporal authority, four transfers, registry, Grants, Groups and deferral                |
 | [Email observability](email-observability.md)                                           | MAIL-1–MAIL-6              | Filtering, standard delivery, pre-export control, collector and read-only configuration           |
 | [Delivery and transition criteria](../../specs/integrated-stack-delivery/acceptance.md) | PROC-1–PROC-6, MIG-1–MIG-4 | Worktree/authority, TDD/gates/holds, documents/commits, isolated migrations/cutover               |
 
-Keep existing AUTH-_, SESSION-_ and AUTHZ-* IDs in their functional checklists intact. At editorial
-inspection, authentication.md, session-management.md and authorization.md existed as another
-contributor's untracked work; this document commit does not claim to persist those files. Their
-accepted underlying authority remains independently accessible in the tracked
-[authentication boundary](../../.agents/harnesses/rules/generic/authentication-boundaries.mdc),
-[root-login ADR](../../adr/root-login-establishment-boundary.md),
-[Base/Auth ADR](../../adr/base-auth-ceremony-and-seven-rp-boundary.md) and
-[Action Policy conventions](../security/action-policy-conventions.md). The flow criteria specialize
-existing browser-binding requirements without renumbering or replacing the broader criteria. Luna
-must update planned references when actual checks are implemented; do not invent missing paths.
+The former cross-surface sign-in and sign-out flow criteria were retired with their local routes.
+This checklist covers the remaining identifier, Avatar, email-observability, and contact-identifier
+domains. See the [current Base and Tech surface boundary](../architecture/base-auth-seven-rp-boundary.md)
+for the sign-in availability decision and [Action Policy conventions](../security/action-policy-conventions.md)
+for the retained authorization contract.
 
 ## Independent investigation
 

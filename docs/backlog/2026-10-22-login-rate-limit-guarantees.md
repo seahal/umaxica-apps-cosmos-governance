@@ -4,7 +4,11 @@ Status: Deferred; recorded at the user's request on 2026-10-22. No implementatio
 authorized by this entry. `.com` authentication was retired after this entry was recorded; this
 entry now covers `.app` and `.org`. Stored in `docs/backlog/` at the user's explicit request.
 
-## Current findings
+> **Route status (2026-11-10):** Local Auth route/controller references below are historical after
+> the owner-approved hard reset. Preserve these rate-limit observations as a snapshot and re-scope
+> them to retained callers or an external authority before implementation.
+
+## Historical findings
 
 App Secret login declares IP limits of 5/minute and 20/15 minutes, plus an account limit of
 5/minute. App email OTP issuance declares IP limits of 5/minute and 20/15 minutes and an identifier

@@ -90,6 +90,11 @@ class IdentifierContractInventoryQueryTest < ActiveSupport::TestCase
   test "default inventory reads each configured application and framework database" do
     result = IdentifierContractInventoryQuery.call
 
+    assert_equal %w(
+      app_setting app_signal app_zenith avatar chronicle com_setting occurrence org_setting
+      org_signal org_zenith primary queue rp_base_app rp_base_org rp_tech_org storage
+    ), result.connections.map { |connection| connection.fetch(:connection_name) }.sort
+
     assert_equal IdentifierContractInventoryQuery::CONNECTION_SPECS.map { |spec| spec.fetch(:name) },
                  result.connections.map { |connection| connection.fetch(:connection_name) }
     assert_equal result.connections.length, result.connections.map { |connection| connection.fetch(:database_name) }

@@ -3,6 +3,41 @@
 require "test_helper"
 
 class ClientSecretCredentialTest < ActiveSupport::TestCase
+  test "claim identifiers are unique while unclaimed credentials retain NULL identifiers" do
+    first = client_secret_credentials(:one)
+    second = client_secret_credentials(:two)
+    operation = SecureRandom.uuid
+    flow = PublicId.generate
+    claimed_at = Time.current
+    ClientSecretCredential.where(id: first.id).update_all(
+      claimed_at: claimed_at, claim_operation_id: operation,
+      claim_sign_in_flow_ref: flow, claim_ceremony_session_id: 123,
+    )
+    first.reload
+
+    [:claim_operation_id, :claim_sign_in_flow_ref].each do |field|
+      duplicate = second.dup
+      duplicate[field] = first[field]
+
+      assert_not duplicate.valid?
+      assert duplicate.errors.of_kind?(field, :taken)
+      attributes = {
+        claimed_at: claimed_at,
+        claim_operation_id: SecureRandom.uuid,
+        claim_sign_in_flow_ref: PublicId.generate,
+        claim_ceremony_session_id: 456,
+      }
+      attributes[field] = first[field]
+      assert_raises(ActiveRecord::RecordNotUnique) do
+        ClientSecretCredential.transaction(requires_new: true) do
+          ClientSecretCredential.where(id: second.id).update_all(attributes)
+        end
+      end
+    end
+    assert_nil second.reload.claim_operation_id
+    assert_nil second.claim_sign_in_flow_ref
+  end
+
   test "name accepts 254 and 255 characters and rejects 256 missing and empty values" do
     credential = client_secret_credentials(:one)
     [254, 255].each do |length|
@@ -117,12 +152,12 @@ class ClientSecretCredentialTest < ActiveSupport::TestCase
     attributes = credential.attributes
     audit_count = ClientSecretAuditOutbox.count
 
-    assert_raises(ClientSecretCredential::InvalidTransition) do
+    assert_raises(AccessOpDataUnavailableError) do
       credential.commit_sign_in_claim!(
         actor_context: context, flow: Object.new, ceremony: Object.new, at: Client.database_now,
       )
     end
-    assert_raises(ClientSecretCredential::InvalidTransition) do
+    assert_raises(AccessOpDataUnavailableError) do
       credential.commit_sign_in_retirement!(
         actor_context: context, at: Client.database_now, purge_at: 1.day.from_now,
         successful: false, flow: Object.new, reason: "flow_failed",

@@ -56,16 +56,13 @@ class IdentifierHistoryFingerprintVerifierTest < ActiveSupport::TestCase
       test "#{realm} #{channel} history requires its dedicated key independently of live lookup keys" do
         identifier = (channel == "email") ? "history@example.test" : "+819012345678"
         history_key = "#{realm.upcase}_#{channel.upcase}_HISTORY_KEY"
-        live_key =
-          (channel == "email") ? "#{realm.upcase}_EMAIL_ADDRESS_HMAC_KEY" :
-                              "#{realm.upcase}_TELEPHONE_NUMBER_HMAC_KEY"
         original_history = ENV.fetch(history_key)
-        original_live = ENV.fetch(live_key)
         fingerprint = IdentifierHistoryFingerprintVerifier.create(identifier:, realm:, channel:)
-        ENV[live_key] = "independent-live-key-test-#{realm}-#{channel}"
 
-        assert IdentifierHistoryFingerprintVerifier.matches?(fingerprint:, identifier:, realm:, channel:),
-               "Live lookup key changes must not affect history matching"
+        Rails.app.credentials.stub(:option, nil) do
+          assert IdentifierHistoryFingerprintVerifier.matches?(fingerprint:, identifier:, realm:, channel:),
+                 "Live lookup key changes must not affect history matching"
+        end
         ENV[history_key] = "independent-history-key-test-#{realm}-#{channel}"
 
         assert_not IdentifierHistoryFingerprintVerifier.matches?(fingerprint:, identifier:, realm:, channel:),
@@ -84,7 +81,6 @@ class IdentifierHistoryFingerprintVerifierTest < ActiveSupport::TestCase
         end
       ensure
         ENV[history_key] = original_history if original_history
-        ENV[live_key] = original_live if original_live
       end
 
       test "#{realm} #{channel} history refuses reuse of every configured live identifier HMAC key" do
@@ -96,7 +92,7 @@ class IdentifierHistoryFingerprintVerifierTest < ActiveSupport::TestCase
           APP_EMAIL_ADDRESS_HMAC_KEY ORG_EMAIL_ADDRESS_HMAC_KEY
           APP_TELEPHONE_NUMBER_HMAC_KEY ORG_TELEPHONE_NUMBER_HMAC_KEY
         ).each do |live_key|
-          ENV[history_key] = ENV.fetch(live_key)
+          ENV[history_key] = Rails.app.credentials.option(live_key.to_sym)
 
           assert_raises(ArgumentError) { IdentifierHistoryFingerprintVerifier.create(identifier:, realm:, channel:) }
           assert_raises(ArgumentError) do
@@ -118,7 +114,7 @@ class IdentifierHistoryFingerprintVerifierTest < ActiveSupport::TestCase
         ).each do |live_key|
           configured_key = ->(name) { (name == live_key) ? ENV.fetch(history_key) : nil }
 
-          Rails.app.creds.stub(:option, configured_key) do
+          Rails.app.credentials.stub(:option, configured_key) do
             assert_raises(ArgumentError) { IdentifierHistoryFingerprintVerifier.create(identifier:, realm:, channel:) }
           end
         end

@@ -110,7 +110,7 @@ module Base
                 capability: input.fetch(:capability),
               )
               authorize!(grant, to: :create?, with: OperatorCapabilityGrantPolicy)
-              result = OrgIamOwnerMutation.grant(
+              result = OrgIamOwnerMutationOperation.grant(
                 actor: avatar_actor, subject: input.fetch(:operator), token: avatar_root, evidence:,
                 operation_id: input.fetch(:operation_id), capability: input.fetch(:capability),
                 duration_days: input.fetch(:duration_days), reason_code: input.fetch(:reason_code),
@@ -126,7 +126,7 @@ module Base
               else
                 raise ArgumentError, "unsupported IAM grant result: #{result.status.inspect}"
               end
-            rescue OrgIamAuditedCommit::OperationConflict
+            rescue OrgIamAuditedCommitter::OperationConflict
               render json: { errors: { operation_id: t("base.org.admin.errors.conflict") } }, status: :conflict
             rescue OrgAdministrativeAudit::IntentUnavailableError
               render_audit_unavailable
@@ -144,7 +144,7 @@ module Base
               end
               return render(json: { errors: }, status: :unprocessable_content) if errors.any?
 
-              result = OrgIamOwnerMutation.revoke(
+              result = OrgIamOwnerMutationOperation.revoke(
                 actor: avatar_actor, token: avatar_root, evidence:, operation_id:, grant:, reason_code:,
                 request: audit_request,
               )
@@ -163,7 +163,7 @@ module Base
               end
             rescue OperatorCapabilityGrant::LastCapabilityHolderError
               render json: { errors: { base: t("base.org.admin.errors.last_holder") } }, status: :unprocessable_content
-            rescue OperatorCapabilityGrant::AlreadyRevokedError, OrgIamAuditedCommit::OperationConflict
+            rescue OperatorCapabilityGrant::AlreadyRevokedError, OrgIamAuditedCommitter::OperationConflict
               render json: { errors: { base: t("base.org.admin.errors.conflict") } }, status: :conflict
             rescue OrgAdministrativeAudit::IntentUnavailableError
               render_audit_unavailable

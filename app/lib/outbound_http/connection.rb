@@ -12,6 +12,7 @@ module OutboundHttp
   # Timeouts are required keyword arguments rather than defaults: a caller that
   # forgets one must fail at construction instead of silently inheriting a
   # transport default (`generic/no-silent-fallback.mdc`).
+  # TODO: AUDIT external access: shared Faraday builder for outbound HTTP.
   module Connection
     # Faraday wraps SocketError, SystemCallError, the Net::HTTP timeouts, and
     # OpenSSL::SSL::SSLError into its own hierarchy, so a call site rescuing the
@@ -50,8 +51,8 @@ module OutboundHttp
       end
     end
 
-    # Faraday.default_adapter is deliberately left alone: the OmniAuth, OAuth2,
-    # and openid_connect gem chain shares that global, and reassigning it would
+    # Faraday.default_adapter is deliberately left alone: the OAuth2 and
+    # openid_connect gem chain shares that global, and reassigning it would
     # change their transport as a side effect of this application's own calls.
     def self.default_adapter
       :net_http

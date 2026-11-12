@@ -75,13 +75,13 @@ module PreferenceBrowserBinding
   end
 
   def write_browser_binding_cookie(raw_value, expires_at:)
-    cookies[COOKIE_NAME] = CoreCookieOptions.for(
+    cookies[COOKIE_NAME] = BrowserCookieOptions.for(
       request: request, expires: expires_at, httponly: true, secure: true, same_site: :lax, path: "/",
     ).merge(value: raw_value)
   end
 
   def clear_browser_binding_cookie!
-    options = CoreCookieOptions.for(
+    options = BrowserCookieOptions.for(
       request: request, httponly: true, secure: true, same_site: :lax, path: "/",
     )
     cookies.delete(COOKIE_NAME, **options)

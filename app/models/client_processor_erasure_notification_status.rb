@@ -4,6 +4,9 @@
 class ClientProcessorErasureNotificationStatus < AppPrincipalRecord
   include ReferenceRecord
 
+  has_many :client_processor_erasure_notifications, foreign_key: :status_id, inverse_of: :status,
+                                                    dependent: :restrict_with_error
+
   PENDING = 10
   NOTIFIED = 20
   RETRYABLE_FAILURE = 30

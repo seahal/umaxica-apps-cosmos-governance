@@ -9,9 +9,6 @@ The active controller bases are:
 - `BareController`
 - surface-local `ApplicationController`
 
-`OpenController`, `PrivateController`, and `GuestController` are legacy compatibility wrappers, not
-the source of truth for authentication classification.
-
 Use this document with `docs/architecture/controller-boundaries.md` and
 `docs/architecture/current_context.md`.
 
@@ -40,18 +37,15 @@ surface authentication-aware controller lifecycle.
 Surface-local `ApplicationController` inherits directly from `ActionController::Base` and owns the
 authentication-aware request lifecycle.
 
-Base additionally separates its app and org protocol Authority from each self-RP application
-lifecycle. `Base::{App,Org}::AuthorityController` explicitly inherits `::ApplicationController`,
-not the same-namespace self-RP controller. It declares its own root-session lifecycle and standard
-CSRF protection. The leading `::` is security-relevant: an unqualified parent resolves to the local
-RP base and inherits RP authentication and refresh callbacks alongside root authentication. Base
-com has no authority or browser-RP authentication workflow; its application controller serves the
-anonymous public and Preference surface. See `adr/base-auth-ceremony-and-seven-rp-boundary.md`.
+Base app and org each own a separate Browser RP lifecycle. Tech org owns its operator RP lifecycle.
+Base com serves anonymous public and Preference routes. The local router has no Auth/Visa provider
+endpoints or Base/Tech RP sign-in, callback, RP-initiated sign-out, Back-Channel Logout, or
+OIDC-driven step-up callback routes. Existing local RP credentials remain subject to the local
+session boundary; no OIDC sign-in or sign-out flow can start here.
 
 Authentication modes that are more specific than this base split, including bare endpoints,
 guest-only flows, optional access, and step-up requirements, must be declared and audited explicitly
-by concrete controller/action metadata and policy. They must not be inferred from legacy
-compatibility inheritance alone. Missing declarations resolve to `:deny_all`.
+by concrete controller/action metadata and policy. Missing declarations resolve to `:deny_all`.
 
 ## Request Lifecycle Shape
 
@@ -169,11 +163,10 @@ login-independent surface preference state. "Actor-local preference" means `Clie
 `OperatorPreference`: the account-local state for the current runtime actor. COM has no actor-local
 preference. This is not Rails `session`, and it is not the `Actor` CurrentAttributes object.
 
-`/preference`, `/setting`, and `/configurator` have distinct responsibilities. Current surface-local
-`/settings` routes are documented in [`preference.md`](preference.md#url-role-boundary): Auth APP is
-still completing the O-11 identity migration; Auth ORG has no `/settings` route, and Base ORG owns
-its separate management entry on the Base ORG host. Shared path text does not share a controller or
-lifecycle. `/configurator` remains the generic path for new operator-managed configuration.
+`/preference`, `/setting`, and `/configurator` have distinct responsibilities. Base app and org
+routes own their own preference and management controllers; shared path text does not share a
+controller or lifecycle. `/configurator` remains the generic path for new operator-managed
+configuration.
 
 ## Cookie Key Compatibility
 
@@ -195,9 +188,7 @@ registers no callbacks from `included do`; controllers that need locale/timezone
 reflection can rely on `Actor.preferences` being complete. These two gaps are resolved as of the
 2026-07-17 controller-layer audit.
 
-Preference persistence effects now run only through the explicit writer boundary: Base owns save and
-reset, while Visa APP/ORG invokes sign-in reflection or sign-out rebuilding after the matching
-authentication transition commits. Preference token and cookie issuance happens only after the
-setting transaction commits. Authentication-token refresh remains an independent authenticated
-protocol; it does not rotate Preference state. Do not move any of these explicit write effects into
-`set_current_context` or ordinary GET/HEAD callbacks.
+Preference persistence effects now run only through the explicit Base writer boundary. Preference
+token and cookie issuance happens only after the setting transaction commits. Authentication-token
+refresh remains an independent authenticated protocol; it does not rotate Preference state. Do not
+move these explicit write effects into `set_current_context` or ordinary GET/HEAD callbacks.

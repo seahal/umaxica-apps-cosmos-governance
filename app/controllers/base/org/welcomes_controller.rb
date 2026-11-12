@@ -15,8 +15,7 @@ module Base
           title: "Welcome!",
           next_link: {
             label: "Next",
-            href: rp_welcome_return_path(params[AuthIoKeys::Params::PT], surface: "org") ||
-              base_org_dashboard_path(ri: params[:ri]),
+            href: base_org_dashboard_path(ri: params[:ri]),
           },
         }
       end

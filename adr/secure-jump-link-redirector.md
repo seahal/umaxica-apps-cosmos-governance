@@ -147,3 +147,44 @@ remain final-receiver identities rather than gateway URLs.
 This is a documentation-only decision. The existing single-Jump-gateway implementation and direct
 cross-host callers have not been migrated. The absence of an Away implementation is not permission
 to bypass the required route.
+
+## Amendment: Confirmation for the Cosmos Split (2026-11-10)
+
+**Status: Accepted (owner).** The 2026-10-22 selection stands unchanged after the Cosmos split:
+
+- Jump carries navigation only between subdomains of the same registered domain, never across
+  top-level domains. The Jump gateway's own host (`jump.umaxica.net`) is the intermediate hop, not a
+  destination.
+- Navigation across top-level domains uses Away, first-party included (for example `.com` to
+  `.app`).
+- Until Away is implemented, cross-TLD navigation fails closed; Rails offers no direct or Jump
+  fallback and shows no cross-TLD link that would need one.
+- The Jump token issuer gets an allowlist of permitted final destinations, loaded from configuration
+  at boot and frozen (`adr/cosmos-outbound-network-access-policy.md`); signing alone is not
+  permission.
+- **Only two exits.** Rails leaves its own origin only through `https://jump.umaxica.net` and
+  `https://away.umaxica.net`, via one common facade implemented as a single controller concern.
+  Only that concern may call `redirect_to(..., allow_other_host: true)`; every other controller uses
+  the concern's methods when it needs to leave its origin, and nothing else may set
+  `allow_other_host` (owner, 2026-11-10). Enforce it three ways: the facade can emit only
+  those two origins; a static check fails when `allow_other_host: true` or a raw external `href`
+  appears outside the facade; Rails' own refusal of redirects to other hosts stays enabled outside
+  the facade. This holds regardless of what the gateways do internally, so their implementations
+  are verified separately.
+- **Same-origin destinations are server-decided too.** Request input carries only a server-issued
+  reference or a signed value, never a raw URL. A local path must start with exactly one `/` and
+  contain no `//`, no backslash, no scheme and no control characters (`//host` is read by browsers
+  as another site).
+- **Away shows a notice when crossing top-level domains,** first-party included, before continuing.
+- **No gateway-to-gateway destinations.** A Jump token must never name Away or Jump as its
+  destination, and an Away token must never name Jump or Away. Rails' facade, Jump and Away each
+  refuse such destinations, so no redirect loop or chained hop can form.
+
+### Direction confirmed (owner, 2026-11-10)
+
+Although OpenID Connect single sign-on could now keep a session across top-level domains, Jump stays
+limited to subdomain moves within one top-level domain. Its value is that it has no interstitial
+page and adds no waiting time; Away is mandatory for every cross-TLD move, first-party included, and
+always shows the notice. The `.com` surfaces are now almost unused, so Jump's approved edges and
+origin lists need a review after the split; that review is recorded in the Jump repository
+(`umaxica-apps-edge-jump`, `plans/2026-11-10-review-after-cosmos-split.md`).

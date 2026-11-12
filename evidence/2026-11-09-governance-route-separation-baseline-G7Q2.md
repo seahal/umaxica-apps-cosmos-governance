@@ -1,0 +1,387 @@
+# Governance route separation pre-change test baseline
+
+- HEAD: `43db4906742db2fb13b238c9ccde378e4e1583b4`.
+- The worktree was already uncommitted; results reflect its state, including the Rails pin and the then-unconstrained `argon2` declaration. No route separation source edits had been made.
+- Command: `PARALLEL_WORKERS=1 bin/rails test`.
+- Result: exit 1; 17,164 runs, 149,570 assertions, 301 failures, 72 errors, 0 skips; 1,775.36 seconds.
+- Test DB setup: missing test replica databases were created only when absent by cloning their corresponding test writer databases; writers had already been migrated. No test database was dropped or reset.
+- The captured output included sensitive redirect material. It is intentionally excluded; this record contains test identifiers only.
+
+## Failures
+
+- `CoreAuthBoundaryTest#test_logout_redirects_to_the_base_oidc_logout_flow_on_every_surface` (`test/controllers/core/auth_boundary_test.rb:88`)
+- `BaseDashboardAuthenticationGuidanceTest#test_org_authenticated_Sign_GET_and_HEAD_are_passive_while_new_POST_is_terminally_refused` (`test/integration/base_dashboard_authentication_guidance_test.rb:105`)
+- `BaseDashboardAuthenticationGuidanceTest#test_app_authenticated_Sign_GET_and_HEAD_are_passive_while_new_POST_is_terminally_refused` (`test/integration/base_dashboard_authentication_guidance_test.rb:105`)
+- `Auth::Org::Omniauth::OmniauthCallbacksControllerTest#test_app-surface_OmniAuth_providers_are_rejected_on_the_org_host` (`test/controllers/auth/org/omniauth/omniauth_callbacks_controller_test.rb:219`)
+- `SignOrgVerificationBaseDirectCoverageTest#test_a_revoked_Root_never_authorizes_the_protected_Base_operation` (`test/controllers/concerns/sign/org_verification_base_included_do_test.rb:116`)
+- `OidcRpLogoutRegisteredRpMatrixTest#test_A14-18_old_completion_cannot_destroy_an_APP_RP_sign-in_established_through_the_callback` (`test/integration/oidc_rp_logout_registered_rp_matrix_test.rb:184`)
+- `OidcRpLogoutRegisteredRpMatrixTest#test_an_old_return_refuses_a_wrong_state_and_cannot_disrupt_a_new_RP_session` (`test/integration/oidc_rp_logout_registered_rp_matrix_test.rb:135`)
+- `OidcRpLogoutRegisteredRpMatrixTest#test_each_first-party_RP_clears_local_credentials_without_stopping_its_grant_and_redirects_with_its_stored_hint` (`test/integration/oidc_rp_logout_registered_rp_matrix_test.rb:42`)
+- `Auth::App::Sign::Up::EmailsControllerTest#test_email_signup_checkpoint_cancel_stops_the_signup_path` (`test/controllers/auth/app/up/emails_controller_test.rb:1986`)
+- `PreferenceWebCsrfTest#test_missing_Sec-Fetch-Site_legacy_fallback_passes_only_with_the_same_session-bound_token` (`test/integration/preference_web_csrf_test.rb:439`)
+- `PreferenceWebCsrfTest#test_ordinary_base_app_endpoint_rejects_auth_origin_even_with_a_real_session-bound_token` (`test/integration/preference_web_csrf_test.rb:326`)
+- `WelcomeAndActivitySeamsTest#test_org_authenticated_welcome_offers_its_own_next_step_and_spends_the_presentation_gate_once` (`test/controllers/welcome_and_activity_seams_test.rb:39`)
+- `CoreRpCookieSurfaceContractTest#test_app_and_org_accept_only_their_exact_RP_access_credential` (`test/integration/core_rp_cookie_surface_contract_test.rb:47`)
+- `StaffLifecycleBoundaryTest#test_org_withdrawal_route_is_informational_instead_of_destructive_self_service` (`test/integration/staff_lifecycle_boundary_test.rb:101`)
+- `Auth::App::Sign::In::ChallengesControllerTest#test_with_no_usable_method_the_page_keeps_cancellation_as_the_only_exit` (`test/controllers/auth/app/in/challenges_controller_test.rb:281`)
+- `Auth::App::Sign::In::ChallengesControllerTest#test_contradictory_MFA_GET_and_HEAD_preserve_the_original_app_flow_and_issue_no_session` (`test/controllers/auth/app/in/challenges_controller_test.rb:50`)
+- `OpenapiPreferencesContractTest#test_auth_org_preference_endpoints_conform_to_the_org_description` (`test/contracts/openapi_preferences_contract_test.rb:32`)
+- `OpenapiPreferencesContractTest#test_warp_org_preference_endpoints_conform_to_the_org_description` (`test/contracts/openapi_preferences_contract_test.rb:32`)
+- `OpenapiPreferencesContractTest#test_warp_app_preference_endpoints_conform_to_the_app_description` (`test/contracts/openapi_preferences_contract_test.rb:32`)
+- `OpenapiPreferencesContractTest#test_base_org_preference_endpoints_conform_to_the_org_description` (`test/contracts/openapi_preferences_contract_test.rb:49`)
+- `OpenapiPreferencesContractTest#test_core_app_preference_endpoints_conform_to_the_app_description` (`test/contracts/openapi_preferences_contract_test.rb:32`)
+- `OpenapiPreferencesContractTest#test_core_org_preference_endpoints_conform_to_the_org_description` (`test/contracts/openapi_preferences_contract_test.rb:32`)
+- `OpenapiPreferencesContractTest#test_auth_app_preference_endpoints_conform_to_the_app_description` (`test/contracts/openapi_preferences_contract_test.rb:32`)
+- `OpenapiPreferencesContractTest#test_base_app_preference_endpoints_conform_to_the_app_description` (`test/contracts/openapi_preferences_contract_test.rb:49`)
+- `AppleAuthTest#test_callback_initializes_preference_timezone_options_when_missing` (`test/integration/apple_auth_test.rb:551`)
+- `AppSecretLoginJourneyTest#test_signed-in_Passkey_registration_distributes_correctly_at_A=7` (`test/integration/app_secret_login_journey_test.rb:381`)
+- `AppSecretLoginJourneyTest#test_signed-in_Passkey_registration_distributes_correctly_at_A=17` (`test/integration/app_secret_login_journey_test.rb:381`)
+- `AppSecretLoginJourneyTest#test_signed-in_Passkey_registration_distributes_correctly_at_A=20` (`test/integration/app_secret_login_journey_test.rb:381`)
+- `AppSecretLoginJourneyTest#test_signed-in_Passkey_registration_distributes_correctly_at_A=16` (`test/integration/app_secret_login_journey_test.rb:381`)
+- `AppSecretLoginJourneyTest#test_signed-in_Passkey_registration_distributes_correctly_at_A=0` (`test/integration/app_secret_login_journey_test.rb:381`)
+- `AppSecretLoginJourneyTest#test_signed-in_Passkey_registration_distributes_correctly_at_A=9` (`test/integration/app_secret_login_journey_test.rb:381`)
+- `AppSecretLoginJourneyTest#test_signed-in_Passkey_registration_distributes_correctly_at_A=19` (`test/integration/app_secret_login_journey_test.rb:381`)
+- `AppSecretLoginJourneyTest#test_signed-in_Passkey_registration_distributes_correctly_at_A=14` (`test/integration/app_secret_login_journey_test.rb:381`)
+- `AppSecretLoginJourneyTest#test_unavailable_manual_payload_retires_candidates_and_releases_capacity_through_the_protected_HTTP_endpoint` (`test/integration/app_secret_login_journey_test.rb:509`)
+- `AppSecretLoginJourneyTest#test_signed-in_Passkey_registration_distributes_correctly_at_A=6` (`test/integration/app_secret_login_journey_test.rb:381`)
+- `AppSecretLoginJourneyTest#test_signed-in_Passkey_registration_distributes_correctly_at_A=11` (`test/integration/app_secret_login_journey_test.rb:381`)
+- `AppSecretLoginJourneyTest#test_signed-in_Passkey_registration_distributes_correctly_at_A=8` (`test/integration/app_secret_login_journey_test.rb:381`)
+- `AppSecretLoginJourneyTest#test_signed-in_Passkey_registration_distributes_correctly_at_A=13` (`test/integration/app_secret_login_journey_test.rb:381`)
+- `AppSecretLoginJourneyTest#test_signed-in_Passkey_registration_distributes_correctly_at_A=5` (`test/integration/app_secret_login_journey_test.rb:381`)
+- `AppSecretLoginJourneyTest#test_signed-in_Passkey_registration_distributes_correctly_at_A=12` (`test/integration/app_secret_login_journey_test.rb:381`)
+- `AppSecretLoginJourneyTest#test_signed-in_Passkey_registration_distributes_correctly_at_A=2` (`test/integration/app_secret_login_journey_test.rb:381`)
+- `AppSecretLoginJourneyTest#test_signed-in_Passkey_registration_distributes_correctly_at_A=15` (`test/integration/app_secret_login_journey_test.rb:381`)
+- `AppSecretLoginJourneyTest#test_manual_HTTP_delivery_and_storage_confirmation_lead_to_one_canonical_Base_Secret_login` (`test/integration/app_secret_login_journey_test.rb:624`)
+- `AppSecretLoginJourneyTest#test_signed-in_Passkey_registration_distributes_correctly_at_A=18` (`test/integration/app_secret_login_journey_test.rb:381`)
+- `AppSecretLoginJourneyTest#test_signed-in_Passkey_registration_distributes_correctly_at_A=4` (`test/integration/app_secret_login_journey_test.rb:381`)
+- `AppSecretLoginJourneyTest#test_signed-in_Passkey_registration_distributes_correctly_at_A=3` (`test/integration/app_secret_login_journey_test.rb:381`)
+- `AppSecretLoginJourneyTest#test_signed-in_Passkey_registration_distributes_correctly_at_A=1` (`test/integration/app_secret_login_journey_test.rb:381`)
+- `AppSecretLoginJourneyTest#test_signed-in_Passkey_registration_distributes_correctly_at_A=10` (`test/integration/app_secret_login_journey_test.rb:381`)
+- `IdentityAuthorityInversionGuardTest#test_route_sources_use_noun_lifecycle_resources_for_edge_and_preference_routes` (`test/unit/security/identity_authority_inversion_guard_test.rb:28`)
+- `OidcCurrentDeviceLogoutTest#test_org_confirmation_stops_both_rotated_roots_and_their_grants_on_the_current_device` (`test/integration/oidc_current_device_logout_test.rb:1110`)
+- `OidcCurrentDeviceLogoutTest#test_app_confirmation_stops_both_rotated_roots_and_their_grants_on_the_current_device` (`test/integration/oidc_current_device_logout_test.rb:1110`)
+- `OidcCurrentDeviceLogoutTest#test_org_leaving_Visa_confirmation_keeps_the_OP_session_and_both_grants_active` (`test/integration/oidc_current_device_logout_test.rb:954`)
+- `OidcCurrentDeviceLogoutTest#test_APP_RP_logout_leaves_the_signed-in_ORG_browser_usable_on_its_next_request` (`test/integration/oidc_current_device_logout_test.rb:75`)
+- `OidcCurrentDeviceLogoutTest#test_app_leaving_Visa_confirmation_keeps_the_OP_session_and_both_grants_active` (`test/integration/oidc_current_device_logout_test.rb:954`)
+- `OidcRpLogoutEditReturnTest#test_Edit_RP_returns_through_Visa_ORG_and_Base_ORG_self-RP_returns_to_Base_staff` (`test/integration/oidc_rp_logout_edit_return_test.rb:129`)
+- `GlobalRegionCanonicalizationTest#test_Base_Auth_and_Visa_roots_normalize_invalid_region_inputs_and_accept_both_regions` (`test/integration/global_region_canonicalization_test.rb:42`)
+- `GlobalRegionCanonicalizationTest#test_Global_browser_roots_canonicalize_missing_region_on_GET_and_HEAD` (`test/integration/global_region_canonicalization_test.rb:16`)
+- `XperRetiredHostsTest#test_a_retained_Base_host_still_owns_the_same_endpoint_paths` (`test/integration/xper_retired_hosts_test.rb:58`)
+- `Auth::App::CredentialRemovalConstraintsTest#test_totp_removal_is_allowed_when_another_usable_step-up_capability_remains` (`test/integration/sign/app/credential_removal_constraints_test.rb:923`)
+- `Auth::App::CredentialRemovalConstraintsTest#test_email_removal_may_leave_a_usable_passkey-only_identity` (`test/integration/sign/app/credential_removal_constraints_test.rb:254`)
+- `Auth::App::CredentialRemovalConstraintsTest#test_telephone_removal_is_allowed_when_another_contact_capability_remains` (`test/integration/sign/app/credential_removal_constraints_test.rb:1243`)
+- `Auth::App::CredentialRemovalConstraintsTest#test_telephone_removal_may_leave_a_usable_passkey-only_identity` (`test/integration/sign/app/credential_removal_constraints_test.rb:420`)
+- `Auth::App::CredentialRemovalConstraintsTest#test_totp_removal_is_blocked_when_it_would_remove_the_last_usable_step-up_capability` (`test/integration/sign/app/credential_removal_constraints_test.rb:755`)
+- `Auth::App::CredentialRemovalConstraintsTest#test_email_removal_is_allowed_when_sign-in,_step-up_and_contact_capabilities_remain` (`test/integration/sign/app/credential_removal_constraints_test.rb:1080`)
+- `Auth::App::CredentialRemovalConstraintsTest#test_passkey_removal_is_allowed_when_another_usable_step-up_capability_remains` (`test/integration/sign/app/credential_removal_constraints_test.rb:1406`)
+- `Auth::App::CredentialRemovalConstraintsTest#test_passkey_removal_is_blocked_when_it_would_remove_the_last_usable_step-up_capability` (`test/integration/sign/app/credential_removal_constraints_test.rb:588`)
+- `Warp::Org::Api::V0::Preferences::PreferencesControllerTest#test_PATCH_cookie_is_refused_on_the_read-only_Warp_host` (`test/controllers/warp/org/api/v0/preferences/preferences_controller_test.rb:40`)
+- `Warp::Org::Api::V0::Preferences::PreferencesControllerTest#test_PATCH_theme_is_refused_on_the_read-only_Warp_host` (`test/controllers/warp/org/api/v0/preferences/preferences_controller_test.rb:24`)
+- `SocialLoginSocTest#test_SOC-10:_google_cancellation_at_birthdate_ends_its_parent_once_and_returns_to_RP` (`test/integration/social_login_soc_test.rb:709`)
+- `SocialLoginSocTest#test_SOC-11:_google_GET_of_confirmation_page_after_advancing_preserves_all_state` (`test/integration/social_login_soc_test.rb:916`)
+- `SocialLoginSocTest#test_SOC-10:_apple_cancellation_at_birthdate_ends_its_parent_once_and_returns_to_RP` (`test/integration/social_login_soc_test.rb:709`)
+- `SocialLoginSocTest#test_SOC-11:_apple_GET_of_confirmation_page_after_advancing_preserves_all_state` (`test/integration/social_login_soc_test.rb:916`)
+- `Security::Invariants::OrgWithdrawalGateInvariantTest#test_a_closing_operator_on_the_Base_org_identity_surface_is_redirected_to_withdrawal` (`test/security/invariants/org_withdrawal_gate_invariant_test.rb:45`)
+- `BaseIdentityCredentialManagementTest#test_app_MFA_challenge_page_renders_the_current_level_for_a_stepped-up_client` (`test/controllers/base/identity_credential_management_test.rb:298`)
+- `BaseIdentityCredentialManagementTest#test_org_secret_credential_removal_discards_the_credential_when_another_remains` (`test/controllers/base/identity_credential_management_test.rb:169`)
+- `RedirectTargetUsageTest#test_allow_other_host_true_is_limited_to_reviewed_Jump_and_protocol_handoff_boundaries` (`test/unit/security/redirect_target_usage_test.rb:50`)
+- `Warp::App::Api::V0::Preferences::CookieControllerTest#test_PATCH_cannot_write_consent_on_the_read-only_Warp_host` (`test/controllers/warp/app/api/v0/preferences/cookie_controller_test.rb:27`)
+- `ClientSecretAuditDeliveryJobTest#test_a_conflicting_Secret_audit_does_not_starve_later_pages` (`test/jobs/client_secret_audit_delivery_job_test.rb:299`)
+- `CoreAccessRefusalRefreshRetentionTest#test_all_surfaces_refuse_bad_access_without_deleting_or_rotating_an_independently_valid_refresh_credential` (`test/integration/core_access_refusal_refresh_retention_test.rb:99`)
+- `Main::SurfaceTest#test_falls_back_to_com_when_host_has_no_surface_subdomain` (`test/unit/core/surface_test.rb:44`)
+- `NeutralRpEntryContractTest#test_a_revoked_RP_credential_can_start_the_neutral_entry_and_preserves_Root_authority_on_every_surface` (`test/integration/routes/neutral_rp_entry_contract_test.rb:110`)
+- `IdentityPasskeyCeremonyContractTest#test_signature_verification_rejects_wrong_key_and_tampering` (`test/services/identity/passkey_ceremony_contract_test.rb:88`)
+- `Base::App::Identity::EmailsControllerTest#test_destroy_returns_unavailable_when_the_request_transaction_cannot_own_Ticket_commit` (`test/controllers/base/app/identity/emails_controller_test.rb:173`)
+- `Base::App::Identity::EmailsControllerTest#test_destroy_with_step-up_for_another_scope_is_refused_and_keeps_the_email` (`test/controllers/base/app/identity/emails_controller_test.rb:479`)
+- `Base::App::Identity::EmailsControllerTest#test_destroy_without_fresh_step-up_is_refused_and_keeps_the_email` (`test/controllers/base/app/identity/emails_controller_test.rb:327`)
+- `AuthenticatedResponseCachePolicyTest#test_detaching_stale_credentials_clears_Inertia_history_on_the_page_that_follows` (`test/controllers/concerns/authenticated_response_cache_policy_test.rb:582`)
+- `ApiContentNegotiationTest#test_a_bodyless_post_is_not_refused_for_declaring_no_media_type` (`test/controllers/api_content_negotiation_test.rb:118`)
+- `ApiContentNegotiationTest#test_a_json_request_body_is_accepted` (`test/controllers/api_content_negotiation_test.rb:136`)
+- `EffectiveEntryIntentTest#test_app_create_admission_refuses_the_other_intent_at_continuation_without_consumption` (`test/controllers/auth/effective_entry_intent_test.rb:78`)
+- `EffectiveEntryIntentTest#test_app_create_admission_refuses_the_other_intent_at_redemption_without_consumption` (`test/controllers/auth/effective_entry_intent_test.rb:78`)
+- `EffectiveEntryIntentTest#test_app_ordinary_admission_refuses_the_other_intent_at_continuation_without_consumption` (`test/controllers/auth/effective_entry_intent_test.rb:78`)
+- `EffectiveEntryIntentTest#test_app_ordinary_admission_refuses_the_other_intent_at_redemption_without_consumption` (`test/controllers/auth/effective_entry_intent_test.rb:78`)
+- `SocialAuthProviderBoundaryTest#test_callback_rejects_stale_provider_assertion_iat` (`test/integration/social_auth_provider_boundary_test.rb:468`)
+- `Base::App::Identity::SensitiveAdmissionConfirmationsBrowserBindingTest#test_Base_confirms_an_O-9_admission_only_with_the_original_session's_browser_marker` (`test/controllers/base/app/identity/sensitive_admission_confirmations_browser_binding_test.rb:132`)
+- `Base::App::Identity::SensitiveAdmissionConfirmationsBrowserBindingTest#test_sensitive_admission_confirmation_refuses_a_browser_without_its_Base_marker` (`test/controllers/base/app/identity/sensitive_admission_confirmations_browser_binding_test.rb:88`)
+- `Base::App::Identity::Mfa::ResetsControllerTest#test_a_historical_restricted_session_cannot_reach_the_reset_page` (`test/controllers/base/app/identity/mfa/resets_controller_test.rb:106`)
+- `ObjectPlacementTest#test_every_file_names_its_own_role` (`test/tooling/object_placement_test.rb:148`)
+- `AppPasskeySecretSessionStepUpTest#test_A29-8:_a_Step-Up_ticket_remains_available_while_Sign_In_is_blocked` (`test/integration/app_passkey_secret_session_step_up_test.rb:108`)
+- `AppPasskeySecretSessionStepUpTest#test_a_Secret-origin_session_with_a_valid_other-method_Step-Up_reaches_the_admitted_Auth_registration` (`test/integration/app_passkey_secret_session_step_up_test.rb:530`)
+- `OrgSocialLoginBlockedTest#test_app_Google_provider_request_on_staff_host_redirects_to_callback` (`test/integration/org_social_login_blocked_test.rb:18`)
+- `Security::Invariants::ActorContextInvariantTest#test_Actor_install_context_is_limited_to_reviewed_lifecycle_boundaries` (`test/security/invariants/actor_context_invariant_test.rb:73`)
+- `Auth::App::SignInAdmissionTest#test_Auth_APP_sign-in_state_is_issued_in_a_secure_host-only_purpose_cookie` (`test/controllers/auth/app/sign_in_admission_test.rb:91`)
+- `Auth::App::SignInAdmissionTest#test_a_tampered_sign-in_purpose_cookie_shows_restart_guidance_without_changing_cookies` (`test/controllers/auth/app/sign_in_admission_test.rb:108`)
+- `IdentityTelephoneCeremonyContractTest#test_signature_verification_rejects_wrong_key_tampered_payload_wrong_kid_and_wrong_issuer_audience` (`test/services/identity/telephone_ceremony_contract_test.rb:160`)
+- `ClientSecretNameCommittedHttpTest#test_current_Step-Up_renames_the_Secret_and_commits_one_source_event_over_HTTP` (`test/integration/client_secret_name_committed_http_test.rb:63`)
+- `IdentitySessionRevocationTest#test_app_session_index_renders_the_revoke_controls_when_other_sessions_exist` (`test/integration/identity_session_revocation_test.rb:42`)
+- `IdentitySessionRevocationTest#test_app_revoke_other_sessions_keeps_the_current_session` (`test/integration/identity_session_revocation_test.rb:98`)
+- `IdentitySessionRevocationTest#test_app_revoke_selected_session_revokes_only_that_session` (`test/integration/identity_session_revocation_test.rb:76`)
+- `IdentitySessionRevocationTest#test_app_session_destroy_is_not_reachable_with_GET` (`test/integration/identity_session_revocation_test.rb:66`)
+- `IdentitySessionRevocationTest#test_app_refuses_a_foreign_session_id_without_mutating_the_owner_sessions` (`test/integration/identity_session_revocation_test.rb:54`)
+- `IdentitySessionRevocationTest#test_app_revoke_other_sessions_requires_a_fresh_step-up` (`test/integration/identity_session_revocation_test.rb:109`)
+- `IdentitySessionRevocationTest#test_app_revoke_selected_session_refuses_to_revoke_the_current_session` (`test/integration/identity_session_revocation_test.rb:87`)
+- `OidcResultBrowserBindingTest#test_a_Visa_result_binds_attachment_confirmation_redemption_and_root_issuance_to_their_owning_browsers` (`test/controllers/base/oidc_result_browser_binding_test.rb:80`)
+- `IdentityStepUpCeremonyContractTest#test_signature_verification_rejects_wrong_key_and_payload_tampering` (`test/services/identity/step_up_ceremony_contract_test.rb:181`)
+- `CsrfAcceptanceOverrideInvariantTest#test_forgery_protection_is_skipped_only_by_the_CSP_report_endpoint` (`test/security/invariants/csrf_acceptance_override_invariant_test.rb:52`)
+- `ContactSettingsOtpAtomicCommitTest#test_app_settings_email_binding_failure_preserves_verification_and_identical_HTTP_retry` (`test/integration/contact_settings_otp_atomic_commit_test.rb:100`)
+- `ContactSettingsOtpAtomicCommitTest#test_app_settings_telephone_binding_failure_preserves_verification_and_identical_HTTP_retry` (`test/integration/contact_settings_otp_atomic_commit_test.rb:100`)
+- `Warp::App::Api::V0::Preferences::ThemeControllerTest#test_PATCH_cannot_write_Preference_state_on_the_read-only_Warp_host` (`test/controllers/warp/app/api/v0/preferences/theme_controller_test.rb:27`)
+- `Base::App::Identity::WithdrawalsControllerTest#test_update_with_the_purge_acknowledgement_starts_the_withdrawal_request` (`test/controllers/base/app/identity/withdrawals_controller_test.rb:119`)
+- `Base::App::Identity::WithdrawalsControllerTest#test_recovery_page_and_privacy_erasure_pages_are_reachable_once_the_ceremony_is_issued` (`test/controllers/base/app/identity/withdrawals_controller_test.rb:129`)
+- `Base::App::Identity::WithdrawalsControllerTest#test_update_without_acknowledging_the_purge_schedule_leaves_the_client_active` (`test/controllers/base/app/identity/withdrawals_controller_test.rb:111`)
+- `Base::App::Identity::WithdrawalsControllerTest#test_deactivation_clears_Inertia_history_on_the_page_that_follows_it` (`test/controllers/base/app/identity/withdrawals_controller_test.rb:173`)
+- `Base::App::Identity::WithdrawalsControllerTest#test_new_renders_the_withdrawal_entry_without_the_deactivation_form_before_the_schedule_is_acknowledged` (`test/controllers/base/app/identity/withdrawals_controller_test.rb:96`)
+- `Base::App::Identity::WithdrawalsControllerTest#test_new_reveals_the_deactivation_form_once_the_purge_schedule_is_acknowledged` (`test/controllers/base/app/identity/withdrawals_controller_test.rb:103`)
+- `Auth::Org::RestrictedModeChromeTest#test_a_normal_session_renders_no_restricted_mode_indicator` (`test/controllers/auth/org/restricted_mode_chrome_test.rb:82`)
+- `Auth::Org::RestrictedModeChromeTest#test_an_emergency_session_renders_the_restricted_mode_indicator_in_the_shared_chrome` (`test/controllers/auth/org/restricted_mode_chrome_test.rb:89`)
+- `Auth::Org::RestrictedModeChromeTest#test_the_indicator_offers_sign-out_and_nothing_that_claims_to_switch_mode_in_place` (`test/support/inertia_page_object.rb:15`)
+- `AuthApiV0PreferenceEndpointsTest#test_app_theme_mutation_is_refused_without_creating_Preference_state` (`test/controllers/auth/api_v0_preference_endpoints_test.rb:57`)
+- `SurfaceRootLandingTest#test_base_app_root_without_a_region_renders_Home_without_redirect` (`test/controllers/surface_root_landing_test.rb:18`)
+- `SurfaceRootLandingTest#test_base_app_root_with_an_unrecognized_region_renders_Home_without_redirect` (`test/controllers/surface_root_landing_test.rb:59`)
+- `Base::Org::Identity::Mfa::ResetsControllerTest#test_a_historical_restricted_session_cannot_reach_the_reset_page` (`test/controllers/base/org/identity/mfa/resets_controller_test.rb:106`)
+- `ContactRegistrationOtpHttpResendTest#test_APP_email_HTTP_resend_cooldown_after_retains_original_flow_proof_and_failure_budgets` (`test/integration/contact_registration_otp_http_resend_test.rb:78`)
+- `ContactRegistrationOtpHttpResendTest#test_APP_email_HTTP_resend_cooldown_at_retains_original_flow_proof_and_failure_budgets` (`test/integration/contact_registration_otp_http_resend_test.rb:78`)
+- `ContactRegistrationOtpHttpResendTest#test_APP_email_HTTP_resend_cooldown_before_retains_original_flow_proof_and_failure_budgets` (`test/integration/contact_registration_otp_http_resend_test.rb:78`)
+- `ContactRegistrationOtpHttpResendTest#test_APP_email_HTTP_resend_verified_source_fault_retains_original_flow_proof_and_failure_budgets` (`test/integration/contact_registration_otp_http_resend_test.rb:78`)
+- `IdentitySettingsMigrationTest#test_acme_identity_routes_exist_and_authenticate` (`test/controllers/identity_settings_migration_test.rb:107`)
+- `IdentitySettingsMigrationTest#test_acme_identity_does_not_depend_on_sign_settings_path_in_overview` (`test/controllers/identity_settings_migration_test.rb:286`)
+- `Security::Invariants::ForbiddenPatternsInvariantTest#test_production_code_does_not_introduce_forbidden_security_patterns` (`test/security/invariants/forbidden_patterns_invariant_test.rb:374`)
+- `Security::Invariants::WithdrawalGateInvariantTest#test_closing_resource_is_redirected_away_from_protected_html_routes` (`test/security/invariants/withdrawal_gate_invariant_test.rb:29`)
+- `Security::Invariants::WithdrawalGateInvariantTest#test_withdrawal_allowlist_route_remains_reachable` (`test/security/invariants/withdrawal_gate_invariant_test.rb:60`)
+- `Base::Org::Support::EnforcementCasesControllerTest#test_a_second_approval_of_the_same_case_is_a_conflict_and_does_not_apply_it_twice` (`test/controllers/base/org/support/enforcement_cases_controller_test.rb:1804`)
+- `Base::Org::Support::EnforcementCasesControllerTest#test_releasing_one_blocking_case_keeps_the_principal_locked_while_another_blocking_case_is_in_force` (`test/controllers/base/org/support/enforcement_cases_controller_test.rb:2323`)
+- `IdentityTotpCeremonyContractTest#test_signature_verification_rejects_wrong_key_and_tampering` (`test/services/identity/totp_ceremony_contract_test.rb:90`)
+- `Base::Org::Iam::GrantSubmissionsTest#test_a_missing_or_non-UUIDv4_operation_id_is_refused_before_anything_is_granted` (`test/controllers/base/org/iam/grant_submissions_test.rb:336`)
+- `Base::Org::Iam::GrantSubmissionsTest#test_an_operation_id_reused_for_a_different_grant_is_a_conflict_and_grants_nothing_more` (`test/controllers/base/org/iam/grant_submissions_test.rb:433`)
+- `Base::Org::Iam::GrantSubmissionsTest#test_ticket_ids_are_accepted_up_to_64_characters_and_refused_at_65_or_with_a_leading_symbol` (`test/controllers/base/org/iam/grant_submissions_test.rb:225`)
+- `Base::Org::Iam::GrantSubmissionsTest#test_with_Step-Up_the_grant_screen_offers_only_the_non-IAM_capabilities_the_granter_holds` (`test/controllers/base/org/iam/grant_submissions_test.rb:117`)
+- `Visa::App::BareControllerTest#test_only_the_reviewed_allowlist_inherits_the_bare_public_boundary` (`test/controllers/base/app/bare_controller_test.rb:60`)
+- `TelephoneSignupSourceProofRetryTest#test_app_telephone_signup_ceremony_proof_survives_Ticket_clear_requirement_failure_and_HTTP_retry` (`test/integration/telephone_signup_source_proof_retry_test.rb:104`)
+- `TelephoneSignupSourceProofRetryTest#test_app_telephone_signup_ceremony_proof_survives_Ticket_enter_checkpoint_failure_and_HTTP_retry` (`test/integration/telephone_signup_source_proof_retry_test.rb:104`)
+- `TelephoneSignupSourceProofRetryTest#test_app_telephone_signup_ceremony_proof_survives_Ticket_enter_guardrail_failure_and_HTTP_retry` (`test/integration/telephone_signup_source_proof_retry_test.rb:104`)
+- `TelephoneSignupSourceProofRetryTest#test_app_telephone_signup_ceremony_proof_survives_Ticket_verify_contact_failure_and_HTTP_retry` (`test/integration/telephone_signup_source_proof_retry_test.rb:104`)
+- `VisaSignInRestartGuidanceTest#test_APP_invalid_resolution_points_to_Base_APP_sign_and_refused_GET_is_read_only` (`test/controllers/visa/sign_in_restart_guidance_test.rb:20`)
+- `VisaSignInRestartGuidanceTest#test_ORG_invalid_resolution_points_to_Base_ORG_sign_and_refused_GET_is_read_only` (`test/controllers/visa/sign_in_restart_guidance_test.rb:45`)
+- `Visa::Org::SensitiveAdmissionApiCoverageTest#test_ORG_admission_creation_reaches_its_validation_boundary_for_an_authenticated_Base_caller` (`test/controllers/visa/org/sensitive_admission_api_coverage_test.rb:42`)
+- `Base::Org::WelcomeReturnTargetControllerTest#test_org_Next_returns_to_the_verified_pre-sign-in_page` (`test/controllers/base/welcome_return_target_realms_test.rb:95`)
+- `Base::Org::WelcomeReturnTargetControllerTest#test_org_ignores_the_OP_gate_namespace_and_keeps_the_RP_page_available` (`test/controllers/base/welcome_return_target_realms_test.rb:146`)
+- `ContactRegistrationOtpBootstrapReceiptRecoveryTest#test_app_email_bootstrap_retries_bootstrap_receipt_Ticket_failure_without_granting_freshness` (`test/integration/contact_registration_otp_bootstrap_receipt_recovery_test.rb:177`)
+- `ContactRegistrationOtpBootstrapReceiptRecoveryTest#test_app_email_bootstrap_retries_contact_receipt_Ticket_failure_without_granting_freshness` (`test/integration/contact_registration_otp_bootstrap_receipt_recovery_test.rb:177`)
+- `IdentityEmailCeremonyContractTest#test_signature_verification_rejects_wrong_key_and_tampering` (`test/services/identity/email_ceremony_contract_test.rb:88`)
+- `BaseIdentityReadOnlyPagesTest#test_org_standing_page_lists_an_in-force_decision_against_the_operator` (`test/controllers/base/identity_read_only_pages_test.rb:657`)
+- `BaseIdentityReadOnlyPagesTest#test_app_birthdate_page_sends_an_unregistered_client_to_Base_credential_setup_without_starting_a_ceremony` (`test/controllers/base/identity_read_only_pages_test.rb:473`)
+- `BaseIdentityReadOnlyPagesTest#test_app_standing_page_reports_the_signed-in_client's_account_standing` (`test/controllers/base/identity_read_only_pages_test.rb:88`)
+- `BaseIdentityReadOnlyPagesTest#test_org_activity_log_lists_the_operator's_own_recorded_activity` (`test/controllers/base/identity_read_only_pages_test.rb:378`)
+- `BaseIdentityReadOnlyPagesTest#test_org_standing_page_reports_the_signed-in_operator's_account_standing` (`test/controllers/base/identity_read_only_pages_test.rb:167`)
+- `BaseIdentityReadOnlyPagesTest#test_app_activity_log_lists_only_normalized_activity_for_the_signed-in_client` (`test/controllers/base/identity_read_only_pages_test.rb:267`)
+- `BaseIdentityReadOnlyPagesTest#test_app_standing_page_lists_an_in-force_decision_against_the_client` (`test/controllers/base/identity_read_only_pages_test.rb:568`)
+- `StepUpAuthenticationTest#test_a_signed_return_path_cannot_bypass_ownership_at_another_actor's_Email` (`test/integration/step_up_authentication_test.rb:467`)
+- `StepUpAuthenticationTest#test_a_Security_Mode_downgrade_through_the_controller_revokes_every_session_including_the_current_one` (`test/integration/step_up_authentication_test.rb:736`)
+- `StepUpAuthenticationTest#test_a_signed_return_path_cannot_bypass_ownership_at_another_actor's_Telephone` (`test/integration/step_up_authentication_test.rb:297`)
+- `StepUpAuthenticationTest#test_a_signed_return_path_cannot_bypass_ownership_at_another_actor's_TOTP` (`test/integration/step_up_authentication_test.rb:253`)
+- `SignOrgCredentialRemovalConstraintsTest#test_email_removal_may_leave_a_usable_passkey-only_identity` (`test/integration/sign/org/credential_removal_constraints_test.rb:232`)
+- `SignOrgCredentialRemovalConstraintsTest#test_email_telephone_passkey_and_secret_credential_removals_are_allowed_when_dimensions_remain` (`test/integration/sign/org/credential_removal_constraints_test.rb:722`)
+- `SignOrgCredentialRemovalConstraintsTest#test_passkey_removal_is_blocked_when_it_would_remove_the_last_usable_step-up_capability` (`test/integration/sign/org/credential_removal_constraints_test.rb:548`)
+- `SignOrgCredentialRemovalConstraintsTest#test_telephone_removal_may_leave_a_usable_passkey-only_identity` (`test/integration/sign/org/credential_removal_constraints_test.rb:390`)
+- `SignOrgCredentialRemovalConstraintsTest#test_secret_removal_by_an_operator_without_passkeys_is_redirected_to_passkey_registration` (`test/integration/sign/org/credential_removal_constraints_test.rb:706`)
+- `LayoutTitleContractTest#test_no_layout_or_view_builds_a_title_outside_meta-tags_except_the_standalone_documents` (`test/integration/layout_title_contract_test.rb:82`)
+- `Base::Org::Support::SessionRevocationsTest#test_reason_codes,_ticket_ids,_and_operation_ids_outside_their_contract_are_refused_without_revoking` (`test/controllers/base/org/support/session_revocations_test.rb:1332`)
+- `Base::Org::Support::SessionRevocationsTest#test_if_the_audit_intent_cannot_be_written,_no_session_is_revoked` (`test/controllers/base/org/support/session_revocations_test.rb:1762`)
+- `Base::Org::Support::SessionRevocationsTest#test_a_session_created_after_the_revocation_is_untouched:_revocation_ends_what_existed,_it_does_not_lock` (`test/controllers/base/org/support/session_revocations_test.rb:1106`)
+- `Base::Org::Support::SessionRevocationsTest#test_an_operator_with_capability_and_Step-Up_revokes_a_client's_sessions_and_sees_the_recorded_result` (`test/controllers/base/org/support/session_revocations_test.rb:914`)
+- `Base::Org::Support::SessionRevocationsTest#test_ticket_id_length_boundary:_63_and_64_characters_are_accepted` (`test/controllers/base/org/support/session_revocations_test.rb:1435`)
+- `Base::Org::Support::SessionRevocationsTest#test_if_the_audit_result_cannot_be_written,_the_result_page_reports_the_operation_as_unconfirmed` (`test/controllers/base/org/support/session_revocations_test.rb:1870`)
+- `Base::Org::Support::SessionRevocationsTest#test_resubmitting_the_same_operation_requires_identical_request_metadata` (`test/controllers/base/org/support/session_revocations_test.rb:1211`)
+- `Base::Org::Support::SessionRevocationsTest#test_an_Emergency_session_cannot_revoke_sessions_even_with_the_capability` (`test/controllers/base/org/support/session_revocations_test.rb:1654`)
+- `Base::Org::Support::SessionRevocationsTest#test_an_admin-locked_operator_loses_their_grants'_effect` (`test/controllers/base/org/support/session_revocations_test.rb:1547`)
+- `AcceptanceWu29SentryToggleTest#test_A29-8_blocked_entry_preserves_authenticated_page,_real_refresh_and_completed_Step-Up` (`test/integration/acceptance_wu29_sentry_toggle_test.rb:126`)
+- `PreferenceReferenceDefaultsRecoveryTest#test_an_app_preference_write_restores_a_missing_audit_level_and_records_its_audit_entry` (`test/integration/preference_reference_defaults_recovery_test.rb:24`)
+- `PreferenceReferenceDefaultsRecoveryTest#test_an_org_preference_write_restores_a_missing_audit_level_on_the_audit_writer` (`test/integration/preference_reference_defaults_recovery_test.rb:38`)
+- `Base::App::Identity::TelephonesControllerTest#test_index_does_not_list_another_client's_telephones` (`test/controllers/base/app/identity/telephones_controller_test.rb:186`)
+- `Base::App::Identity::TelephonesControllerTest#test_create_starts_telephone_verification_and_moves_on_to_the_registration_step` (`test/controllers/base/app/identity/telephones_controller_test.rb:231`)
+- `Base::App::Identity::TelephonesControllerTest#test_edit_answers_not_found_for_a_telephone_owned_by_another_client` (`test/controllers/base/app/identity/telephones_controller_test.rb:220`)
+- `Base::App::Identity::TelephonesControllerTest#test_edit_renders_the_removal_page_for_a_telephone_the_client_owns` (`test/controllers/base/app/identity/telephones_controller_test.rb:208`)
+- `Base::App::Identity::TelephonesControllerTest#test_new_renders_the_telephone_form` (`test/controllers/base/app/identity/telephones_controller_test.rb:195`)
+- `Base::App::Identity::TelephonesControllerTest#test_create_re-renders_the_form_when_the_number_cannot_be_verified` (`test/controllers/base/app/identity/telephones_controller_test.rb:260`)
+- `Base::App::Identity::TelephonesControllerTest#test_destroy_may_remove_the_last_contact_method_when_a_passkey_remains` (`test/controllers/base/app/identity/telephones_controller_test.rb:298`)
+- `Base::App::Identity::TelephonesControllerTest#test_index_lists_the_telephones_owned_by_the_signed-in_client` (`test/controllers/base/app/identity/telephones_controller_test.rb:168`)
+- `Base::App::Identity::TelephonesControllerTest#test_destroy_removes_the_telephone_while_another_verified_contact_remains` (`test/controllers/base/app/identity/telephones_controller_test.rb:277`)
+- `Base::Org::Identity::Revocations::OthersControllerTest#test_destroy_requires_a_fresh_step-up` (`test/controllers/base/org/identity/revocations/others_controller_test.rb:182`)
+- `Base::Org::Identity::Revocations::OthersControllerTest#test_destroy_revokes_every_other_staff_session_and_keeps_the_current_one` (`test/controllers/base/org/identity/revocations/others_controller_test.rb:101`)
+- `IdentityStepUpTotpDeviceConcurrencyTest#test_Ticket_evidence_commits_before_a_waiting_device_revocation` (`test/operations/identity_step_up_totp_device_concurrency_test.rb:181`)
+- `AuthRegionContractTest#test_every_generated_link_on_an_entry_page_carries_the_requested_region` (`test/integration/auth_region_contract_test.rb:272`)
+- `Base::Org::WelcomeDashboardAuthoritySlice1CTest#test_root_with_an_expired_org_session_renders_the_home` (`test/controllers/base/org/welcome_dashboard_authority_slice_1c_test.rb:772`)
+- `Auth::BaseTest#test_JwtConfiguration.audiences_rejects_missing_blank_and_overlapping_values` (`test/controllers/concerns/auth/base_test.rb:577`)
+- `StepUpRequiredResponseShapeTest#test_an_org_JSON_request_from_an_Emergency_Access_session_is_refused_with_403_instead_of_a_step-up_prompt` (`test/integration/step_up_required_response_shape_test.rb:472`)
+- `StepUpRequiredResponseShapeTest#test_an_app_JSON_request_from_a_client_with_no_step-up_method_asks_to_register_one` (`test/integration/step_up_required_response_shape_test.rb:549`)
+- `StepUpRequiredResponseShapeTest#test_an_app_Inertia_request_receives_a_challenge_without_an_external-location_response` (`test/integration/step_up_required_response_shape_test.rb:218`)
+- `StepUpRequiredResponseShapeTest#test_an_org_scripted_request_receives_localized_plain_text_and_the_challenge` (`test/integration/step_up_required_response_shape_test.rb:394`)
+- `StepUpRequiredResponseShapeTest#test_an_authorized_app_document_request_receives_the_challenge_and_an_explicit_entry_link` (`test/integration/step_up_required_response_shape_test.rb:120`)
+- `StepUpRequiredResponseShapeTest#test_an_authorized_org_document_request_receives_the_challenge_and_an_explicit_entry_link` (`test/integration/step_up_required_response_shape_test.rb:298`)
+- `SurfaceSignOutEntryAndBirthdateTest#test_org_birthdate_page_shows_the_operator's_stored_birthdate_behind_a_fresh_step-up` (`test/controllers/surface_sign_out_entry_and_birthdate_test.rb:103`)
+- `OidcResultCsrfTransportTest#test_app_Visa_result_requires_a_browser_navigation_and_legacy_POST_cannot_issue_a_root` (`test/controllers/base/oidc_result_csrf_transport_test.rb:146`)
+- `OidcResultCsrfTransportTest#test_org_Visa_result_requires_a_browser_navigation_and_legacy_POST_cannot_issue_a_root` (`test/controllers/base/oidc_result_csrf_transport_test.rb:146`)
+- `Base::App::Verification::SetupsControllerTest#test_email_registration_without_a_chosen_email_bootstrap_returns_to_the_method_choice` (`test/controllers/base/app/verification/setups_controller_test.rb:314`)
+- `Base::App::Verification::SetupsControllerTest#test_an_actor_who_already_holds_an_authenticator_is_sent_to_ordinary_verification_instead_of_the_choice` (`test/controllers/base/app/verification/setups_controller_test.rb:192`)
+- `Base::App::Verification::SetupsControllerTest#test_the_method_choice_page_lists_passkey,_authenticator_app_and_email_and_changes_nothing` (`test/controllers/base/app/verification/setups_controller_test.rb:170`)
+- `Base::App::Verification::SetupsControllerTest#test_choosing_the_authenticator_app_starts_a_TOTP-only_bootstrap_that_Auth_admits_straight_to_enrollment` (`test/controllers/base/app/verification/setups_controller_test.rb:225`)
+- `Base::App::Verification::SetupsControllerTest#test_email_bootstrap_completes_without_freshness_and_the_protected_operation_then_needs_a_new_verification` (`test/controllers/base/app/verification/setups_controller_test.rb:330`)
+- `Base::App::Verification::SetupsControllerTest#test_the_choice_refuses_a_missing_or_unsupported_method_without_starting_a_transaction` (`test/controllers/base/app/verification/setups_controller_test.rb:215`)
+- `Base::App::Verification::SetupsControllerTest#test_the_protected_operation_of_an_actor_without_an_authenticator_leads_to_the_Base_method_choice` (`test/controllers/base/app/verification/setups_controller_test.rb:156`)
+- `Base::App::Verification::SetupsControllerTest#test_a_session_whose_root_login_is_no_longer_fresh_cannot_choose_a_method` (`test/controllers/base/app/verification/setups_controller_test.rb:306`)
+- `Base::App::Verification::SetupsControllerTest#test_an_RP_step-up_callback_refusal_is_logged_without_callback_credentials_and_returned_as_localized_text` (`test/controllers/base/app/verification/setups_controller_test.rb:136`)
+- `Base::App::Verification::SetupsControllerTest#test_an_RP_step-up_start_refusal_is_logged_by_reason_and_returned_as_localized_text` (`test/controllers/base/app/verification/setups_controller_test.rb:108`)
+- `BaseOauthOidcAuthorityTest#test_base_org_revocation_delegates_with_operator_realm_binding` (`test/controllers/base/oauth_oidc_authority_test.rb:690`)
+- `BaseOauthOidcAuthorityTest#test_A27-2/A29-8:_SSO_codes_reuse_the_Root_while_Sign_In_is_blocked` (`test/controllers/base/oauth_oidc_authority_test.rb:1200`)
+- `BaseOauthOidcAuthorityTest#test_base_oauth_authorize_refuses_a_finalized_result_without_a_second_root_session` (`test/controllers/base/oauth_oidc_authority_test.rb:1632`)
+- `BaseOauthOidcAuthorityTest#test_base_revocation_delegates_with_base_host_binding` (`test/controllers/base/oauth_oidc_authority_test.rb:663`)
+- `BaseOauthOidcAuthorityTest#test_A29-8:_prompt_none_remains_available_while_Sign_In_is_blocked` (`test/controllers/base/oauth_oidc_authority_test.rb:1318`)
+- `IdentitySettingsPageCoverageTest#test_client_browses_identity_telephones` (`test/integration/identity_settings_page_coverage_test.rb:447`)
+- `IdentitySettingsPageCoverageTest#test_operator_browses_identity_sessions_secrets_and_telephones` (`test/integration/identity_settings_page_coverage_test.rb:169`)
+- `PreferenceOptionTamperingTest#test_timezone_update_accepts_a_numeric_option_id_given_as_a_string` (`test/integration/preference_option_tampering_test.rb:78`)
+- `PreferenceOptionTamperingTest#test_timezone_update_resolves_each_spelling_of_an_option_name_to_the_same_option` (`test/integration/preference_option_tampering_test.rb:54`)
+- `OpenapiRouteCoverageTest#test_no_route_the_router_serves_is_missing_from_its_surface_description` (`test/contracts/openapi_route_coverage_test.rb:61`)
+- `SurfaceChromePreferenceControlsTest#test_page_chrome_exposes_browser_write_endpoints_only_to_Base` (`test/integration/surface_chrome_preference_controls_test.rb:80`)
+- `OpenapiCoreSessionContractTest#test_an_authenticated_session_summary_conforms` (`test/contracts/openapi_core_session_contract_test.rb:42`)
+- `OpenapiCoreSessionContractTest#test_a_successful_credential_rotation_conforms` (`test/contracts/openapi_core_session_contract_test.rb:76`)
+- `Base::Org::Iam::GrantsControllerTest#test_self-grant,_unknown_capability,_unknown_operator,_and_out-of-list_durations_are_refused` (`test/controllers/base/org/iam/grants_controller_test.rb:555`)
+- `Base::Org::Iam::GrantsControllerTest#test_a_granter_cannot_delegate_a_capability_they_do_not_hold` (`test/controllers/base/org/iam/grants_controller_test.rb:335`)
+- `Base::Org::Iam::GrantsControllerTest#test_revoking_the_last_holder_of_the_grant_capability_is_refused_and_leaves_the_grant_in_force` (`test/controllers/base/org/iam/grants_controller_test.rb:804`)
+- `Base::Org::Iam::GrantsControllerTest#test_the_grant_screen_asks_for_Step-Up_only_after_the_grant_capability_is_confirmed` (`test/controllers/base/org/iam/grants_controller_test.rb:709`)
+- `Base::Org::Iam::GrantsControllerTest#test_IAM_capabilities_cannot_be_delegated_through_the_console,_even_by_a_holder` (`test/controllers/base/org/iam/grants_controller_test.rb:436`)
+- `Base::Org::Iam::GrantsControllerTest#test_a_granter_delegates_Tech_access_to_another_operator_with_Step-Up_and_an_audit_record` (`test/controllers/base/org/iam/grants_controller_test.rb:223`)
+- `Base::Org::Iam::GrantsControllerTest#test_a_revoked_grant_stops_the_grantee's_next_request` (`test/controllers/base/org/iam/grants_controller_test.rb:979`)
+- `IdentitySecretCredentialCeremonyContractTest#test_signature_verification_rejects_wrong_key_and_tampering` (`test/services/identity/secret_credential_ceremony_contract_test.rb:107`)
+- `Base::App::Api::V0::Preferences::ThemeControllerTest#test_PATCH_update_creates_the_actor_preference_record_on_a_signed-in_first_write` (`test/controllers/base/app/api/v0/preferences/theme_controller_test.rb:146`)
+- `EnforcementIdentifierAttachmentGateTest#test_app_email_attachment_is_rejected_when_blocked_by_an_in-force_attachment_blocked_Identifier_Effect` (`test/integration/enforcement_identifier_attachment_gate_test.rb:138`)
+- `EnforcementIdentifierAttachmentGateTest#test_app_telephone_attachment_is_rejected_when_blocked_by_an_in-force_attachment_blocked_Identifier_Effect` (`test/integration/enforcement_identifier_attachment_gate_test.rb:255`)
+- `EnforcementIdentifierAttachmentGateTest#test_org_email_attachment_is_rejected_when_blocked_by_an_in-force_attachment_blocked_Identifier_Effect` (`test/integration/enforcement_identifier_attachment_gate_test.rb:380`)
+- `EnforcementIdentifierAttachmentGateTest#test_org_telephone_attachment_is_rejected_when_blocked_by_an_in-force_attachment_blocked_Identifier_Effect` (`test/integration/enforcement_identifier_attachment_gate_test.rb:505`)
+- `BaseSameOriginHandoffTest#test_Visa_app_authorize_returns_a_base-app-ww_code_to_the_Base_callback_through_Jump` (`test/integration/base_same_origin_handoff_test.rb:148`)
+- `BaseSameOriginHandoffTest#test_Visa_app_authorize_still_hands_a_cross-origin_Core_code_callback_to_Jump` (`test/integration/base_same_origin_handoff_test.rb:233`)
+- `BaseSameOriginHandoffTest#test_Visa_org_authorize_returns_a_base-org-ww_code_to_the_Base_callback_through_Jump` (`test/integration/base_same_origin_handoff_test.rb:191`)
+- `AuthInvalidCookieRecoveryTest#test_app:_an_access_cookie_with_a_missing_component_is_detached_and_the_page_renders_anonymous` (`test/integration/auth_invalid_cookie_recovery_test.rb:288`)
+- `AuthInvalidCookieRecoveryTest#test_app:_an_access_cookie_with_an_extra_component_is_detached_and_the_page_renders_anonymous` (`test/integration/auth_invalid_cookie_recovery_test.rb:288`)
+- `AuthInvalidCookieRecoveryTest#test_app:_an_access_cookie_with_a_percent-encoded_NUL_is_detached_and_the_page_renders_anonymous` (`test/integration/auth_invalid_cookie_recovery_test.rb:288`)
+- `AuthInvalidCookieRecoveryTest#test_org:_an_access_cookie_for_a_revoked_session_is_detached` (`test/integration/auth_invalid_cookie_recovery_test.rb:199`)
+- `AuthInvalidCookieRecoveryTest#test_app:_an_access_cookie_with_an_unsigned_token_with_an_unknown_algorithm_is_detached_and_the_page_renders_anonymous` (`test/integration/auth_invalid_cookie_recovery_test.rb:288`)
+- `AuthInvalidCookieRecoveryTest#test_app:_an_access_cookie_with_an_oversized_value_is_detached_and_the_page_renders_anonymous` (`test/integration/auth_invalid_cookie_recovery_test.rb:288`)
+- `AuthInvalidCookieRecoveryTest#test_app_recovery_does_not_write_a_Domain_cookie` (`test/integration/auth_invalid_cookie_recovery_test.rb:572`)
+- `AuthInvalidCookieRecoveryTest#test_org:_a_malformed_access_cookie_is_detached_and_a_public_page_renders_anonymous` (`test/integration/auth_invalid_cookie_recovery_test.rb:38`)
+- `AuthInvalidCookieRecoveryTest#test_app:_a_malformed_access_cookie_is_detached_and_a_public_page_renders_anonymous` (`test/integration/auth_invalid_cookie_recovery_test.rb:38`)
+- `AuthInvalidCookieRecoveryTest#test_app:_an_access_cookie_for_a_revoked_session_is_detached` (`test/integration/auth_invalid_cookie_recovery_test.rb:199`)
+- `AuthInvalidCookieRecoveryTest#test_app:_an_access_cookie_with_a_lone_separator_is_detached_and_the_page_renders_anonymous` (`test/integration/auth_invalid_cookie_recovery_test.rb:288`)
+- `AuthInvalidCookieRecoveryTest#test_app:_an_access_cookie_for_a_session_idle_past_the_window_is_detached_as_a_lifecycle_end` (`test/integration/auth_invalid_cookie_recovery_test.rb:481`)
+- `AuthInvalidCookieRecoveryTest#test_app:_an_access_cookie_with_invalid_UTF-8_bytes_is_detached_and_the_page_renders_anonymous` (`test/integration/auth_invalid_cookie_recovery_test.rb:288`)
+- `AuthInvalidCookieRecoveryTest#test_app:_an_access_cookie_with_invalid_base64url_is_detached_and_the_page_renders_anonymous` (`test/integration/auth_invalid_cookie_recovery_test.rb:288`)
+- `AuthInvalidCookieRecoveryTest#test_app:_an_access_cookie_naming_a_session_that_does_not_exist_is_detached` (`test/integration/auth_invalid_cookie_recovery_test.rb:140`)
+- `AuthInvalidCookieRecoveryTest#test_app:_a_HEAD_with_a_malformed_access_cookie_on_a_protected_page_detaches_it_on_the_redirect` (`test/integration/auth_invalid_cookie_recovery_test.rb:74`)
+- `AuthInvalidCookieRecoveryTest#test_app:_an_access_cookie_with_a_zero-length_decoded_segment_is_detached_and_the_page_renders_anonymous` (`test/integration/auth_invalid_cookie_recovery_test.rb:288`)
+- `AuthInvalidCookieRecoveryTest#test_app:_a_malformed_access_cookie_on_a_protected_page_takes_the_same_sign-in_redirect_as_no_cookie` (`test/integration/auth_invalid_cookie_recovery_test.rb:64`)
+- `AuthInvalidCookieRecoveryTest#test_org:_a_HEAD_with_a_malformed_access_cookie_on_a_protected_page_detaches_it_on_the_redirect` (`test/integration/auth_invalid_cookie_recovery_test.rb:74`)
+- `AuthInvalidCookieRecoveryTest#test_app:_a_truncated_valid_access_token_is_detached` (`test/integration/auth_invalid_cookie_recovery_test.rb:354`)
+- `AuthInvalidCookieRecoveryTest#test_org:_a_malformed_access_cookie_on_a_protected_page_takes_the_same_sign-in_redirect_as_no_cookie` (`test/integration/auth_invalid_cookie_recovery_test.rb:64`)
+- `AuthInvalidCookieRecoveryTest#test_org:_an_access_cookie_naming_a_session_that_does_not_exist_is_detached` (`test/integration/auth_invalid_cookie_recovery_test.rb:140`)
+- `WithdrawalLifecycleSecurityTest#test_confirmed_withdrawal_revokes_all_normal_sessions_and_issues_a_ceremony_session` (`test/integration/withdrawal_lifecycle_security_test.rb:238`)
+- `Wua6StandbySupportRevocationScreenTest#test_ORG_read-only_owner_screens_deny_Standby_and_allow_Normal_with_fresh_matching_Step-Up` (`test/integration/wua6_standby_support_revocation_screen_test.rb:146`)
+- `AcceptanceWu02BaseRpStateTest#test_A02-12:_Base_Welcome_and_Selector_work_from_RP_credentials_without_an_Auth_Rails_session` (`test/integration/acceptance_wu02_base_rp_state_test.rb:55`)
+- `Base::Org::StaffConsolePagesTest#test_iam_console_opens_with_iam.capability.read` (`test/controllers/base/org/staff_console_pages_test.rb:174`)
+- `Base::Org::StaffConsolePagesTest#test_support_console_opens_with_support.console.read_and_lists_only_granted_areas` (`test/controllers/base/org/staff_console_pages_test.rb:153`)
+- `Base::Org::StaffConsolePagesTest#test_the_dashboard_shows_Administration_only_for_consoles_the_operator_is_granted` (`test/controllers/base/org/staff_console_pages_test.rb:198`)
+- `CoreBffSurfaceSmokeTest#test_core_BFF_and_logout_routes_are_executable_on_every_surface` (`test/controllers/core/bff_surface_smoke_test.rb:51`)
+- `IdentitySocialCeremonyContractTest#test_signature_verification_rejects_wrong_key_and_tampering` (`test/services/identity/social_ceremony_contract_test.rb:318`)
+- `Base::App::RpRootFeatureRefusalTest#test_a_valid_Base_RP_session_receives_a_localized_refusal_for_unavailable_root-dependent_features` (`test/controllers/base/app/rp_root_feature_refusal_test.rb:94`)
+- `Auth::Org::Sign::In::PasskeysControllerTest#test_normal_passkey_binding_refusal_preserves_safe_requests_and_prevents_replay_artifacts` (`test/controllers/auth/org/in/passkeys_controller_test.rb:193`)
+- `EnforcementReconciliationJobTest#test_ends_an_active_case_whose_approved_appeal_did_not_finish_ending_it` (`test/jobs/enforcement_reconciliation_job_test.rb:286`)
+- `EnforcementReconciliationJobTest#test_completes_the_end_audit_for_an_approved_appeal_whose_case_already_ended` (`test/jobs/enforcement_reconciliation_job_test.rb:326`)
+- `Base::Org::AvatarSelectedDeleteAuthorityTest#test_selected_Avatar_deletion_is_refused_without_changing_the_Avatar_or_RP_selection` (`test/controllers/base/org/avatar_selected_delete_authority_test.rb:141`)
+- `BaseIdentitySessionsPresentationTest#test_app_rejects_an_otherwise_valid_Access_Token_after_its_session_absolute_expiry` (`test/controllers/base/identity_sessions_presentation_test.rb:62`)
+- `BaseIdentitySessionsPresentationTest#test_app_session_inventory_contains_only_user-facing_fields_and_refuses_self-revocation` (`test/controllers/base/identity_sessions_presentation_test.rb:24`)
+- `BaseIdentitySessionsPresentationTest#test_app_session_inventory_links_to_its_own_GET_detail_with_complete_display_columns` (`test/controllers/base/identity_sessions_presentation_test.rb:41`)
+- `BaseIdentitySessionsPresentationTest#test_org_session_inventory_contains_only_user-facing_fields_and_refuses_self-revocation` (`test/controllers/base/identity_sessions_presentation_test.rb:58`)
+- `BaseIdentitySessionsPresentationTest#test_org_rejects_an_otherwise_valid_Access_Token_after_its_session_absolute_expiry` (`test/controllers/base/identity_sessions_presentation_test.rb:66`)
+- `Base::Org::Identity::Emails::RegistrationsControllerTest#test_edit_redirects_back_to_new_when_no_registration_is_in_progress` (`test/controllers/base/org/identity/emails/registrations_controller_test.rb:181`)
+- `Base::Org::Identity::Emails::RegistrationsControllerTest#test_create_rejects_the_submission_when_the_stealth_Turnstile_check_fails` (`test/controllers/base/org/identity/emails/registrations_controller_test.rb:192`)
+- `Base::Org::Identity::Emails::RegistrationsControllerTest#test_update_redirects_back_to_new_when_the_session_holds_no_pending_registration` (`test/controllers/base/org/identity/emails/registrations_controller_test.rb:233`)
+- `Base::Org::Identity::Emails::RegistrationsControllerTest#test_edit_renders_the_verification_step_while_the_registration_session_is_valid` (`test/controllers/base/org/identity/emails/registrations_controller_test.rb:226`)
+- `Base::Org::Identity::Emails::RegistrationsControllerTest#test_create_rejects_an_address_that_fails_model_validation` (`test/controllers/base/org/identity/emails/registrations_controller_test.rb:202`)
+- `Base::Org::Identity::Emails::RegistrationsControllerTest#test_create_stores_the_pending_registration_and_moves_the_ceremony_to_the_verification_step` (`test/controllers/base/org/identity/emails/registrations_controller_test.rb:207`)
+- `Base::Org::Identity::Emails::RegistrationsControllerTest#test_new_renders_the_registration_form_and_leaves_no_pending_registration_in_the_session` (`test/controllers/base/org/identity/emails/registrations_controller_test.rb:174`)
+- `Base::Org::Support::StandbyEnforcementCasesControllerTest#test_Standby_cannot_start_Step-Up_or_authenticator_bootstrap_from_Base` (`test/controllers/base/org/support/standby_enforcement_cases_controller_test.rb:1063`)
+- `Base::App::BillingsControllerTest#test_index_renders_for_signed_in_clients` (`test/controllers/base/app/billings_controller_test.rb:73`)
+
+## Errors
+
+- `SignOrgVerificationBaseDirectCoverageTest#test_a_real_public_passkey_ceremony_authorizes_Base_only_after_result_consumption`
+- `SignUpCancellationTest#test_replayed_cancel_reruns_cleanup_when_previous_cleanup_did_not_finish`
+- `RpStepUpCallbackDispatcherTest#test_a_late_successful_token_response_after_the_dispatch_deadline_is_not_installed`
+- `Base::Org::Identity::BirthdatesControllerTest#test_show_includes_the_stored_birthdate_when_one_is_present`
+- `Base::Org::Identity::BirthdatesControllerTest#test_show_reports_that_a_birthdate_is_not_set`
+- `Base::Org::Identity::BirthdatesControllerTest#test_standby_session_cannot_view_the_step-up_protected_birthdate`
+- `RpCellLocalSessionReadinessTest#test_palm-app-jp_signs_out_locally_before_revoking_its_Refresh_Token`
+- `RpCellLocalSessionReadinessTest#test_edit-org-ww_authenticates_from_its_local_session_and_refuses_without_it_or_after_logout`
+- `RpCellLocalSessionReadinessTest#test_core-app-jp_signs_out_locally_before_revoking_its_Refresh_Token`
+- `RpCellLocalSessionReadinessTest#test_Core_ORG_RP-cell_sign-out_commits_local_revocation_before_revoking_its_refresh_token`
+- `RpCellLocalSessionReadinessTest#test_warp-org-jp_authenticates_from_its_local_session_and_refuses_without_it_or_after_logout`
+- `RpCellLocalSessionReadinessTest#test_warp-org-jp_signs_out_locally_before_revoking_its_Refresh_Token`
+- `RpCellLocalSessionReadinessTest#test_palm-app-jp_authenticates_from_its_local_session_and_refuses_without_it_or_after_logout`
+- `RpCellLocalSessionReadinessTest#test_core-org-jp_signs_out_locally_before_revoking_its_Refresh_Token`
+- `RpCellLocalSessionReadinessTest#test_warp-app-jp_signs_out_locally_before_revoking_its_Refresh_Token`
+- `RpCellLocalSessionReadinessTest#test_tech-org-ww_authenticates_from_its_local_session_and_refuses_without_it_or_after_logout`
+- `RpCellLocalSessionReadinessTest#test_Core_APP_RP-cell_sign-out_commits_local_revocation_before_revoking_its_refresh_token`
+- `RpCellLocalSessionReadinessTest#test_warp-app-jp_authenticates_from_its_local_session_and_refuses_without_it_or_after_logout`
+- `RpCellLocalSessionReadinessTest#test_tech-org-ww_signs_out_locally_before_revoking_its_Refresh_Token`
+- `AvatarRegistryTransferFailureTest#test_app_to_app_transfer_rolls_back_a_destination_write_failure_and_retries_once`
+- `AvatarRegistryTransferFailureTest#test_app_to_org_transfer_rolls_back_a_destination_write_failure_and_retries_once`
+- `AvatarRegistryTransferFailureTest#test_org_to_app_transfer_rolls_back_a_destination_write_failure_and_retries_once`
+- `AvatarRegistryTransferFailureTest#test_org_to_org_transfer_rolls_back_a_destination_write_failure_and_retries_once`
+- `CredentialRegistrationOtpSessionValueTest#test_registration_session_encodes_the_original_Root_and_realm_channel_transaction_bound_browser_digest`
+- `PasskeyAuthenticationResubmissionHttpTest#test_two_concurrent_HTTP_resubmissions_admit_at_most_one_authentication_and_preserve_its_Auth_session`
+- `Security::CsrfRouteCoverageTest#test_state-changing_application_routes_do_not_use_null-session_csrf_handling`
+- `IdentityTotpNameCommitOrderTest#test_concurrent_TOTP_renames_can_reuse_one_Step-Up_event`
+- `Auth::Org::ApplicationControllerTest#test_authenticate_operator!_allows_access_when_operator_is_logged_in`
+- `Palm::App::Oidc::CallbacksControllerTest#test_as_the_Palm_cell_process_the_callback_opens_a_local_session_that_authenticates_the_page`
+- `OtpVerificationFailureBudgetTest#test_success_creates_no_key_and_signup_exhaustion_cannot_exhaust_other_scopes`
+- `SignUpOtpDeliveryIssuerTest#test_app_email_issuer_refuses_replacement_of_a_committed_proof_without_claiming_delivery`
+- `SignUpOtpDeliveryIssuerTest#test_app_telephone_issuer_refuses_replacement_of_a_committed_proof_without_claiming_delivery`
+- `Base::App::IdentityAuthoritySlice1ATest#test_base_sign_out_create_is_session_mutation_and_completes_on_the_base_surface`
+- `PreferenceSignedInDualWriteTest#test_a_signed-in_operator's_region_choice_updates_its_explicit_option-backed_preference`
+- `DbscHeaderBoundaryTest#test_decodes_proofs_once_and_rejects_wrong_audiences_and_signatures_without_mutation`
+- `DbscHeaderBoundaryTest#test_issues_challenge_only_for_the_registered_identifier_without_logging_secrets`
+- `DbscHeaderBoundaryTest#test_refuses_a_request_without_the_corresponding_record`
+- `DbscHeaderBoundaryTest#test_rejects_unknown_or_unregistered_identifiers_before_changing_a_challenge`
+- `DbscHeaderBoundaryTest#test_rejects_malformed_fields_before_changing_a_challenge`
+- `OrgRootLoginEstablishmentTest#test_Entra_and_Passkey_establish_Normal_root_credentials_only_on_Visa`
+- `Base::Org::WelcomeReturnTargetControllerTest#test_org_ignores_a_return_target_issued_for_another_surface`
+- `Base::App::WelcomeDashboardAuthoritySlice1CTest#test_root_with_an_expired_app_session_renders_the_home`
+- `RootRevokeOthersConcurrentLoginTest#test_A44-10_revoke-others_snapshots_existing_roots_before_a_concurrent_Root_login_commits`
+- `BaseOrgDashboardLocalLoginJourneyTest#test_A12-1:_org_Dashboard_completes_Entra_and_Passkey_through_automatic_relays`
+- `TotpRegistrationBoundaryTest#test_admitted_bootstrap_confirms_a_DB_TOTP_candidate_without_Auth_root_credentials_or_freshness`
+- `Auth::App::Settings::TotpsControllerTest#test_admitted_first_code_accepts_the_existing_space_separated_paste_format`
+- `Auth::App::Settings::TotpsControllerTest#test_first_TOTP_registration_uses_explicit_bootstrap_without_granting_step_up_freshness`
+- `Auth::App::Settings::TotpsControllerTest#test_admitted_TOTP_registration_creates_no_Secret_credentials`
+- `Auth::App::Settings::TotpsControllerTest#test_admitted_valid_first_code_creates_a_credential_only_at_Base_finalization`
+- `Auth::App::Settings::TotpsControllerTest#test_Base_finalization_preserves_the_admitted_TOTP_title_and_first_accepted_window`
+- `Base::App::Verification::SetupsControllerTest#test_a_wrong_email_code_leaves_the_bootstrap_pending`
+- `SignAppLayoutTest#test_cookie_banner_settings_url_is_the_base_cookie_preference_edit`
+- `OutboundSensitivePayloadTest#test_registration_OTP_SMS_uses_version_four_and_preserves_its_original_ceremony_tuple`
+- `WithdrawalLifecycleSecurityTest#test_withdrawal_recovery_is_rejected_before_one_hour_and_after_purge_deadline`
+- `Outbound::SmsDeliveryJobTest#test_retired_corporate_OTP_deliveries_are_reported_without_sending`
+- `AuthSignUpCheckpointCancellationTest#test_app_email_OTP_checkpoint_cancels_the_sign-up_ceremony_on_delete`
+- `AuthSignUpCheckpointCancellationTest#test_app_email_OTP_checkpoint_reissues_the_passcode_on_resend`
+- `AuthSignUpCheckpointCancellationTest#test_app_telephone_OTP_checkpoint_cancels_the_sign-up_ceremony_on_delete`
+- `AuthSignUpCheckpointCancellationTest#test_app_telephone_passkey_checkpoint_cancels_the_sign-up_ceremony_on_delete`
+- `ExternalAuthenticationAuthenticationMethodLockPolicyTest#test_is_not_locked_once_the_case_has_ended`
+- `Base::Org::Identity::Emails::RegistrationsControllerTest#test_ORG_Email_finalization_rejects_actor_context_even_after_the_original_OTP_was_consumed`
+- `Base::Org::Identity::Emails::RegistrationsControllerTest#test_update_treats_an_expired_one-time_passcode_as_an_expired_registration_session`
+- `Base::Org::Identity::Emails::RegistrationsControllerTest#test_update_verifies_the_address_and_returns_to_the_identity_page_on_the_correct_code`
+- `Base::Org::Identity::Emails::RegistrationsControllerTest#test_update_discards_the_pending_registration_once_the_attempt_limit_locks_it`
+- `Base::Org::Identity::Emails::RegistrationsControllerTest#test_ORG_Email_finalization_rejects_policy_scope_even_after_the_original_OTP_was_consumed`
+- `Base::Org::Identity::Emails::RegistrationsControllerTest#test_update_re-renders_the_verification_step_when_the_submitted_code_is_wrong`
+- `Base::Org::Identity::Emails::RegistrationsControllerTest#test_ORG_Email_finalization_rejects_weakened_policy_even_after_the_original_OTP_was_consumed`
+- `Base::Org::Identity::Emails::RegistrationsControllerTest#test_update_rejects_the_verification_when_the_stealth_Turnstile_check_fails`
+- `Base::Org::Identity::Emails::RegistrationsControllerTest#test_ORG_Email_Ticket_failure_leaves_Source_finalized_and_Step-Up_unchanged`
+- `Base::Org::Identity::Emails::RegistrationsControllerTest#test_update_rejects_a_blank_verification_code_before_consuming_an_OTP_attempt`
+- `Base::Org::Identity::Emails::RegistrationsControllerTest#test_ORG_Email_finalization_rejects_browser_even_after_the_original_OTP_was_consumed`
+- `Base::Org::Identity::Emails::RegistrationsControllerTest#test_ORG_Email_finalization_rejects_lost_credential_even_after_the_original_OTP_was_consumed`

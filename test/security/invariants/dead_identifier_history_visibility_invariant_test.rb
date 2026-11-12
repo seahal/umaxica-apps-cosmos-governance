@@ -9,12 +9,12 @@ module Security
 
       PUBLIC_BOUNDARY_GLOBS = %w(
         app/controllers/**/*.rb app/serializers/**/*.rb app/presenters/**/*.rb
-        app/helpers/**/*.rb app/views/**/* app/notifiers/**/*.rb app/adapters/mcp_*.rb
+        app/helpers/**/*.rb app/views/**/* app/notifiers/**/*.rb
         config/routes.rb config/routes/**/*.rb
       ).freeze
 
       %w(Email Telephone).each do |channel|
-        test "#{channel} dead history has no ordinary product rendering API or MCP reference" do
+        test "#{channel} dead history has no ordinary product rendering API" do
           model_names = %w(Client Operator).map { |realm| "#{realm}#{channel}History" }
           table_names = model_names.map { |name| name.constantize.table_name }
           forbidden_reference = Regexp.union(*model_names, *table_names, "IdentifierHistoryFingerprintVerifier")

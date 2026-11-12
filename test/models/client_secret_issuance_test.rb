@@ -4,7 +4,39 @@ require "test_helper"
 
 class ClientSecretIssuanceTest < ActiveSupport::TestCase
   self.fixture_table_names = []
-  fixtures :clients
+  fixtures :clients, :client_secret_issuances, :client_secret_credentials
+
+  test "issuance remains associated with its owner and prevents direct owner deletion" do
+    client = Client.create!(security_mode_id: SecurityModeConfigurable::NORMAL)
+    issuance = ClientSecretIssuance.create!(
+      client: client, origin_operation_id: SecureRandom.uuid, origin: "manual",
+      attempt_number: 1, browser_session_ref: "owner-test-session", planned_count: 0,
+    )
+
+    assert_includes client.secret_issuances, issuance
+    assert_raises(ActiveRecord::InvalidForeignKey) do
+      Client.transaction(requires_new: true) { Client.where(id: client.id).delete_all }
+    end
+    assert_predicate issuance.reload, :persisted?
+  end
+
+  test "issuance with a credential cannot be deleted through model or SQL" do
+    issuance = client_secret_issuances(:one)
+    credential = client_secret_credentials(:one)
+
+    assert_equal issuance.id, credential.issuance_id
+    assert_not issuance.destroy
+    assert_predicate issuance.errors[:base], :present?
+    assert_predicate credential.reload, :persisted?
+    error =
+      assert_raises(ActiveRecord::InvalidForeignKey) do
+        ClientSecretIssuance.transaction(requires_new: true) {
+          ClientSecretIssuance.where(id: issuance.id).delete_all
+        }
+      end
+
+    assert_kind_of PG::ForeignKeyViolation, error.cause
+  end
 
   test "zero planned candidates is terminal omission without an expiry or reservation" do
     issuance = ClientSecretIssuance.new(planned_count: 0)

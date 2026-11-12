@@ -58,12 +58,7 @@ class EnforcementCaseApprovalOperation
     private
 
     def validate_step_up!(actor:, token:, evidence:)
-      unless actor.is_a?(Operator) && actor.persisted? && token.is_a?(OperatorToken) && token.staff_id == actor.id
-        raise ArgumentError, "enforcement Case approval requires its bound Operator and token"
-      end
-      return if evidence.is_a?(StepUpEvidenceValue)
-
-      raise TokenStatusManagement::StepUpEvidenceUnavailable, "enforcement Case approval requires current Step-Up"
+      raise AccessOpDataUnavailableError
     end
 
     def ensure_outermost_transactions!(actor:, token:, source:)
@@ -75,9 +70,7 @@ class EnforcementCaseApprovalOperation
     end
 
     def verify_step_up!(actor:, token:, evidence:)
-      return if StepUpEvidenceVerifier.call(evidence:, actor:, token:)
-
-      raise TokenStatusManagement::StepUpEvidenceUnavailable, "enforcement Case approval requires current Step-Up"
+      raise AccessOpDataUnavailableError
     end
   end
 end

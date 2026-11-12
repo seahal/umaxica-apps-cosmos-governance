@@ -151,11 +151,11 @@ class Base::Org::Api::V0::Preferences::ThemeControllerTest
   end
 
   def set_access_cookie(token)
-    cookies[AuthenticationBase::ACCESS_COOKIE_KEY] = token
+    cookies[AuthenticationCookieName.access] = token
   end
 
   def set_refresh_cookie(token)
-    cookies[AuthenticationBase::REFRESH_COOKIE_KEY] = token
+    cookies[AuthenticationCookieName.refresh] = token
   end
 
   def jump_rt_url_from_location(location)
@@ -199,34 +199,6 @@ class Base::Org::Api::V0::Preferences::ThemeControllerTest
     ClientPasskeyStatus.find_or_create_by!(id: ClientPasskeyStatus::ACTIVE)
   end
 
-  def ensure_user_token_reference_records!
-    ClientTokenKind.find_or_create_by!(id: ClientTokenKind::BROWSER_WEB)
-    ClientTokenStatus.find_or_create_by!(id: ClientTokenStatus::ACTIVE)
-    ClientTokenBindingMethod.find_or_create_by!(id: ClientTokenBindingMethod::LEGACY)
-    ClientTokenDbscStatus.find_or_create_by!(id: ClientTokenDbscStatus::NOTHING)
-  end
-
-  def ensure_staff_token_reference_records!
-    OperatorTokenKind.find_or_create_by!(id: OperatorTokenKind::BROWSER_WEB)
-    OperatorTokenStatus.find_or_create_by!(id: OperatorTokenStatus::ACTIVE)
-    OperatorTokenBindingMethod.find_or_create_by!(id: OperatorTokenBindingMethod::LEGACY)
-    OperatorTokenDbscStatus.find_or_create_by!(id: OperatorTokenDbscStatus::NOTHING)
-  end
-
-  def satisfy_user_verification(token, scope: nil)
-    _verification, raw_token = ClientVerification.issue_for_token!(token: token)
-    cookies[ClientVerification.cookie_name] = raw_token
-    mark_token_step_up_satisfied_for_test(token, scope: scope)
-    true
-  end
-
-  def satisfy_staff_verification(token, scope: nil)
-    _verification, raw_token = OperatorVerification.issue_for_token!(token: token)
-    cookies[OperatorVerification.cookie_name] = raw_token
-    mark_token_step_up_satisfied_for_test(token, scope: scope)
-    true
-  end
-
   def mark_token_step_up_satisfied_for_test(token, scope: nil, at: Time.current)
     return unless token.respond_to?(:update_columns)
 
@@ -240,7 +212,7 @@ class Base::Org::Api::V0::Preferences::ThemeControllerTest
   def load_jump_rt_env!
     @jump_rt_env_originals ||= {}
     jump_rt_key = Base64.strict_encode64(OpenSSL::PKey::EC.generate("secp384r1").to_der)
-    %w(AUTH_APP AUTH_ORG ACME_APP ACME_ORG CORE_APP CORE_ORG BASE_APP BASE_ORG).each do |namespace|
+    %w(FOREIGN_APP FOREIGN_ORG BASE_APP BASE_ORG).each do |namespace|
       ENV["JWT_#{namespace}_ACTIVE_KID"] = "#{namespace.downcase.tr("_", "-")}-test"
       ENV["JWT_#{namespace}_PRIVATE_KEY"] = jump_rt_key
     end
@@ -297,13 +269,5 @@ class Base::Org::Api::V0::Preferences::ThemeControllerTest
     rescue NameError
       nil
     end
-  end
-
-  def setup_google_mock_auth(uid: "google_uid_123", email: "google@example.com")
-    OmniAuth.config.mock_auth[:google_app] =
-      OmniAuth::AuthHash.new(
-        provider: "google_app", uid: uid, info: { email: email, name: "Google Client" },
-        credentials: { token: "google_token", expires_at: 1.hour.from_now.to_i },
-      )
   end
 end

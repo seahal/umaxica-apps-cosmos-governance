@@ -11,16 +11,13 @@ module Tech
       include ::Session
       include ::PreferenceGlobal
       include ::BrowserRpAuthentication
+      include ::BrowserRpUnsafeRequestGuard
       include ::AuthenticationWithdrawalGate
-      include ::BrowserRpSafeRequestRefresh
-      include ::BrowserRpUnsafeRequestRefresh
       include ::SignErrorResponses
-      include ::SessionLimitGate
       include ::AuthorizationAudit
       include ::AuthorizationOperator
       include ::VerificationOperator
       include ActionPolicy::Controller
-      include ::OidcSsoInitiator
       include SurfaceRouteAliasHelper
       include ::ActorSupport
       include ::Finisher
@@ -32,11 +29,8 @@ module Tech
       helper_method :current_resource, :browser_rp_authenticated?, :browser_rp_session_public_id,
                     :current_browser_session_security_context, :current_session_public_id,
                     :current_session, :logged_in?, :current_actor, :current_account,
-                    :current_operator, :active_operator?, :logged_in_operator?,
-                    :signed_pt_param
-      before_action :authenticate_browser_rp_safe_request!
-      prepend_before_action :authenticate_browser_rp_unsafe_request!
-
+                    :current_operator, :active_operator?, :logged_in_operator?
+      prepend_before_action :guard_browser_rp_unsafe_request!
       layout "tech/org/application"
 
       allow_browser versions: :modern
@@ -47,7 +41,6 @@ module Tech
 
       authorize :user, through: :current_policy_user
       authorize :actor, through: :current_actor
-      rescue_from AuthenticationBase::LoginCooldownError, with: :render_login_cooldown
       rescue_from ApplicationError, with: :handle_application_error
       rescue_from ActionController::InvalidCrossOriginRequest, with: :handle_csrf_failure
       rescue_from ActionPolicy::Unauthorized, with: :handle_authorization_error
@@ -81,17 +74,9 @@ module Tech
 
       public
 
-      def oidc_client_id = "tech-org-ww"
-
       def browser_rp_client_id = "tech-org-ww"
 
       def browser_rp_resource_type = "operator"
-
-      def oidc_sign_host = ENV.fetch("PUBLIC_AUTH_STAFF_URL")
-
-      def oidc_visa_authority_host = Rails.configuration.x.boot_config.fetch(:hosts).visa_staff.host
-
-      def oidc_acme_host = oidc_visa_authority_host
 
       public :browser_rp_client_id, :browser_rp_resource_type
 

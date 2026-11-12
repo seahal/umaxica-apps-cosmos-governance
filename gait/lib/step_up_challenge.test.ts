@@ -69,4 +69,16 @@ describe("handleStepUpChallenge", () => {
     ).toBe(false);
     expect(location.assign).not.toHaveBeenCalled();
   });
+
+  test("does not handle an unauthorized response without an authentication header", () => {
+    const location = {
+      href: "https://base.example.test/identity/passkeys/passkey-1",
+      origin: "https://base.example.test",
+      assign: vi.fn<(target: string) => void>(),
+    };
+    vi.stubGlobal("window", { location });
+
+    expect(handleStepUpChallenge({ status: 401, headers: {} })).toBe(false);
+    expect(location.assign).not.toHaveBeenCalled();
+  });
 });

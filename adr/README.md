@@ -2,15 +2,13 @@
 
 This directory stores accepted architecture and design decisions.
 
-COM caution note (2026-11-06): `.com` authentication has been retired. Auth and Visa serve only the
-`app` and `org` realms, and the COM principal, OP and RP stores no longer exist; the anonymous `com`
-surface (Base Preference, Warp, Info, Help, Docs, News) remains. No ADR records this retirement yet,
-and many ADRs still describe COM sign-in, sign-up, Visitor identities, COM RPs or COM Auth/Visa
-hosts. Treat every COM statement in an ADR as unverified until it is checked against current code.
-When a task depends on such a statement, or finds one stale or contradictory, do not act on it and
-do not silently rewrite it: report it and propose a remediation (supersede, amend or retire the
-record) for the owner to decide. Remaining COM Auth/Visa code is tracked in
-`docs/backlog/2026-11-06-com-auth-and-visa-host-remnants.md`.
+Local-surface reset note (2026-11-10): the owner-approved hard reset keeps Base app/com/org, Tech,
+and operator tools as this repository's local surfaces. Local Auth, Visa, Core, Warp, Palm, Edit,
+Press (Docs, News, Help, and Info), and Guid routes/controllers are removed. Base.com remains only for Base
+com routes that are intentionally retained. These local route changes do not by themselves retire
+external identity/OIDC contracts, client registrations, models, databases, or persisted data. ADRs
+with route assignments superseded by the reset carry dated amendments; use current code and
+`docs/reference/subdomains.md` for local route ownership.
 
 Current Rails naming note (2026-09-25): references to the Rails `Side`/`Wide` surface in older
 decisions are historical. Its current internal namespace is `Warp`; registered OIDC client IDs, JWT

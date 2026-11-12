@@ -14,10 +14,9 @@
 module PreferenceWriteBoundary
   extend ActiveSupport::Concern
 
-  # The set two.md section 4.4 fixes as closed. `save` is Base's own authenticated write, `sign_in`
-  # is the Visa one-way reflect, `sign_out` is the Visa rebuild+retire, `reset` is Base's
-  # anonymous-row retirement. Anything else is unsupported and must be refused rather than guessed.
-  OPERATIONS = %i(save sign_in sign_out reset).freeze
+  # Base owns authenticated preference writes (`save`) and anonymous-row retirement (`reset`).
+  # Anything else is unsupported and must be refused rather than guessed.
+  OPERATIONS = %i(save reset).freeze
   ANONYMOUS_DISPLAY_TYPES = %i(
     theme language timezone currency date_format time_format motion density page_size
   ).freeze
@@ -47,14 +46,11 @@ module PreferenceWriteBoundary
 
   # Static surface-to-realm map. Keys are the concrete presentation surfaces that can issue a write;
   # values name the realm and the closed operation subset the surface may use. Base owns the
-  # actor-persistence writes (`save`, `reset`); Visa owns the sign-in reflection / sign-out rebuild
-  # (`sign_in`, `sign_out`). A surface not listed here has no write rights at all.
+  # actor-persistence writes (`save`, `reset`). A surface not listed here has no write rights.
   SURFACE_REALMS = {
     "base/com" => { realm: :com, operations: %i(save reset) },
     "base/app" => { realm: :app, operations: %i(save reset) },
     "base/org" => { realm: :org, operations: %i(save reset) },
-    "visa/app" => { realm: :app, operations: %i(sign_in sign_out) },
-    "visa/org" => { realm: :org, operations: %i(sign_in sign_out) },
   }.freeze
 
   class UnsupportedOperationError < StandardError; end
@@ -66,8 +62,6 @@ module PreferenceWriteBoundary
   # The caller supplies its verified actor and validated changes, and changes only the yielded row.
   # Signing runs inside the transaction; response cookies are queued only after it commits.
   def write_preference!(operation:, actor:, submitted:, &block)
-    return write_visa_preference!(operation:, actor:, submitted:) if %i(sign_in sign_out).include?(operation)
-
     case preference_class.name
     when "ComPreference"
       write_com_preference!(operation:, actor:, submitted:, &block)
@@ -179,26 +173,45 @@ module PreferenceWriteBoundary
     preference_class = context.fetch(:preference_model)
     issuance = nil
 
-    with_realm_setting_connection(preference_class) do
-      preference_class.transaction do
-        decision_time = preference_class.database_now
-        previous = current_realm_preference_for_write(preference_class, token_payload, decision_time)
-        if authorization.fetch(:operation) == :reset
-          previous&.retire!
-          previous = nil
+    ChronicleRecord.connected_to(role: :writing) do
+      ChronicleRecord.transaction(requires_new: true) do
+        PreferenceClassRegistry.audit_class_for(preference_class).lock_preference_audit_writers!
+        with_realm_setting_connection(preference_class) do
+          preference_class.transaction do
+            decision_time = preference_class.database_now
+            previous = current_realm_preference_for_write(preference_class, token_payload, decision_time)
+            if authorization.fetch(:operation) == :reset
+              if previous
+                @preferences = previous
+                previous.retire!
+                create_audit_log(
+                  event_id: "RESET_BY_USER_DECISION",
+                  context: { preference_reset: true,
+                             rebootstrap: true, },
+                )
+              end
+              previous = nil
+            end
+            preference = previous || create_anonymous_realm_preference!(preference_class, context, decision_time)
+            @preferences = preference
+            unless previous
+              create_audit_log(
+                event_id: "CREATE_NEW_PREFERENCE_TOKEN", context: { token_created: true },
+                expires_at: preference.last_issued_expires_at,
+              )
+            end
+            apply_anonymous_realm_submission!(
+              preference, normalized, realm, previous:, binding_value:,
+                                             binding_was_valid:, decision_time:,
+            )
+            preference.update!(jti: JitSecurityJwtJtiGenerator.generate)
+            issuance = prepare_anonymous_realm_token!(preference, context, decision_time)
+            preference.confirm_issuance!(
+              issued_at: Time.at(issuance.decoded.fetch("iat")).utc,
+              expires_at: issuance.expires_at,
+            )
+          end
         end
-        preference = previous || create_anonymous_realm_preference!(preference_class, context, decision_time)
-        @preferences = preference
-        apply_anonymous_realm_submission!(
-          preference, normalized, realm, previous:, binding_value:,
-                                         binding_was_valid:, decision_time:,
-        )
-        preference.update!(jti: JitSecurityJwtJtiGenerator.generate)
-        issuance = prepare_anonymous_realm_token!(preference, context, decision_time)
-        preference.confirm_issuance!(
-          issued_at: Time.at(issuance.decoded.fetch("iat")).utc,
-          expires_at: issuance.expires_at,
-        )
       end
     end
 
@@ -464,84 +477,6 @@ module PreferenceWriteBoundary
     )
   end
 
-  def write_visa_preference!(operation:, actor:, submitted:)
-    context = preference_write_context
-    authorization = PreferenceWriteBoundary.authorize_writer!(
-      controller: self.class,
-      action: action_name,
-      surface_key: context.fetch(:surface_key),
-      operation: operation,
-      realm_model: context.fetch(:preference_model),
-    )
-    validate_visa_preference_actor!(actor, context.fetch(:realm))
-    raise ArgumentError, "Visa Preference writes do not accept request changes" unless submitted == {}
-
-    token_payload = decode_visa_preference_cookie(context)
-    actor_snapshot = explicit_actor_preference_snapshot(actor, context.fetch(:realm)) if operation == :sign_in
-    preference_class = context.fetch(:preference_model)
-    issuance = nil
-
-    with_realm_setting_connection(preference_class) do
-      preference_class.transaction do
-        decision_time = preference_class.database_now
-        previous = current_realm_preference_for_write(preference_class, token_payload, decision_time)
-        if authorization.fetch(:operation) == :sign_out
-          preference = create_anonymous_realm_preference!(preference_class, context, decision_time)
-          copy_realm_preference_state!(previous, preference, context.fetch(:realm)) if previous
-          previous&.retire!
-        else
-          preference = previous || create_anonymous_realm_preference!(preference_class, context, decision_time)
-          apply_explicit_actor_snapshot!(preference, actor_snapshot, context.fetch(:realm))
-        end
-
-        preference.update!(jti: JitSecurityJwtJtiGenerator.generate)
-        issuance = prepare_anonymous_realm_token!(preference, context, decision_time)
-        preference.confirm_issuance!(
-          issued_at: Time.at(issuance.decoded.fetch("iat")).utc,
-          expires_at: issuance.expires_at,
-        )
-      end
-    end
-
-    emit_anonymous_realm_token!(issuance)
-    issuance
-  rescue ActiveRecord::StatementInvalid, ActiveRecord::ConnectionNotEstablished,
-         ActiveRecord::RecordInvalid, ActiveRecord::RecordNotSaved, IOError, SystemCallError => e
-    log_visa_preference_write_failure(operation, e)
-    raise PreferenceBase::ResolutionError, "Preference persistence failed"
-  rescue JitSecurityJwtRegistry::ConfigurationError => e
-    raise_preference_resolution_error!(:signing_configuration, e)
-  end
-
-  def validate_visa_preference_actor!(actor, realm)
-    valid_actor =
-      case realm
-      when "app" then actor.is_a?(Client)
-      when "org" then actor.is_a?(Operator)
-      else false
-      end
-    raise UnsupportedSurfaceError, "Visa Preference writer actor does not match its realm" unless
-      valid_actor && actor.persisted?
-  end
-
-  def decode_visa_preference_cookie(context)
-    cookie_name = PreferenceCookieName.anonymous_jwt
-    raw_cookie = request.get_header("HTTP_COOKIE").to_s
-    matching_names =
-      raw_cookie.split(";").filter_map do |part|
-        name, = part.strip.split("=", 2)
-        name if name == cookie_name
-      end
-    raise PreferenceBase::ResolutionError, "ambiguous Preference cookie" if matching_names.length > 1
-
-    token = BrowserCredentialCookie.read(cookies, cookie_name)
-    return if token.blank?
-
-    PreferenceToken.decode(
-      token, host: request.host, jwt_issuer_id: context.fetch(:issuer_id),
-    )
-  end
-
   def current_realm_preference_for_write(preference_class, payload, decision_time)
     public_id = PreferenceToken.extract_public_id(payload)
     return if public_id.blank?
@@ -591,7 +526,7 @@ module PreferenceWriteBoundary
     case realm
     when "app" then AppPreferenceWebPushOption.ensure_defaults!
     when "org" then OrgPreferenceWebPushOption.ensure_defaults!
-    else raise ArgumentError, "unsupported Visa Preference realm: #{realm.inspect}"
+    else raise ArgumentError, "unsupported Base Preference realm: #{realm.inspect}"
     end
   end
 
@@ -602,13 +537,13 @@ module PreferenceWriteBoundary
     when "org"
       OrgPreferenceWebPush.create!(preference: preference, option_id: OrgPreferenceWebPushOption::DISABLED)
     else
-      raise ArgumentError, "unsupported Visa Preference realm: #{realm.inspect}"
+      raise ArgumentError, "unsupported Base Preference realm: #{realm.inspect}"
     end
   end
 
   def explicit_actor_preference_snapshot(actor, realm)
-    # Base explicit saves take the same actor lock; read from the owner database after that writer
-    # commits so sign-in cannot reflect a lagging replica or a half-applied child set.
+    # Read from the owner database after the Base explicit save commits, so rendered preferences
+    # cannot reflect a lagging replica or a half-applied child set.
     case realm
     when "app"
       ClientPreference.connection_class_for_self.connected_to(role: :writing) do
@@ -647,96 +582,8 @@ module PreferenceWriteBoundary
         end
       end
     else
-      raise ArgumentError, "unsupported Visa Preference realm: #{realm.inspect}"
+      raise ArgumentError, "unsupported Base Preference realm: #{realm.inspect}"
     end
-  end
-
-  def apply_explicit_actor_snapshot!(preference, snapshot, realm)
-    prefix = realm.capitalize
-    snapshot.each do |field, value|
-      type = anonymous_display_type_for_actor_field(field)
-      option = preference_option_for_wire_value(prefix, type, value)
-
-      PreferenceClassRegistry.record_class(prefix, type).find_by!(preference_id: preference.id)
-        .update!(preference: preference, option_id: option.id)
-    end
-  end
-
-  def anonymous_display_type_for_actor_field(field)
-    case field
-    when "theme" then :theme
-    when "language" then :language
-    when "timezone" then :timezone
-    when "currency" then :currency
-    when "date_format" then :date_format
-    when "time_format" then :time_format
-    when "motion" then :motion
-    when "density" then :density
-    when "page_size" then :page_size
-    else raise ArgumentError, "actor field is not transferable to an anonymous Preference: #{field.inspect}"
-    end
-  end
-
-  def copy_realm_preference_state!(source, target, realm)
-    prefix = realm.capitalize
-    ANONYMOUS_STORED_DISPLAY_TYPES.each do |type|
-      record_class = PreferenceClassRegistry.record_class(prefix, type)
-      source_record = record_class.find_by!(preference_id: source.id)
-      target_record = record_class.find_by!(preference_id: target.id)
-      target_record.update!(preference: target, option_id: source_record.option_id)
-    end
-
-    cookie_class = PreferenceClassRegistry.cookie_class(prefix)
-    source_cookie = cookie_class.find_by!(preference_id: source.id)
-    target_cookie = cookie_class.find_by!(preference_id: target.id)
-    target_cookie.update!(preference: target, **source_cookie.attributes.symbolize_keys.slice(*COOKIE_CONSENT_FIELDS))
-    copy_realm_receipt_and_binding!(source, target, realm)
-    copy_realm_web_push!(source, target, realm)
-  end
-
-  def copy_realm_receipt_and_binding!(source, target, realm)
-    case realm
-    when "app"
-      copy_receipt!(AppPreferenceConsentReceipt, source, target)
-      copy_binding!(AppPreferenceBrowserBinding, source, target)
-    when "org"
-      copy_receipt!(OrgPreferenceConsentReceipt, source, target)
-      copy_binding!(OrgPreferenceBrowserBinding, source, target)
-    else
-      raise ArgumentError, "unsupported Visa Preference realm: #{realm.inspect}"
-    end
-  end
-
-  def copy_receipt!(receipt_class, source, target)
-    receipt = receipt_class.find_by(preference_id: source.id)
-    return unless receipt
-
-    receipt_class.create!(preference: target, version: receipt.version, recorded_at: receipt.recorded_at)
-  end
-
-  def copy_binding!(binding_class, source, target)
-    binding = binding_class.find_by(preference_id: source.id)
-    return unless binding
-
-    binding_class.create!(preference: target, digest: binding.digest)
-  end
-
-  def copy_realm_web_push!(source, target, realm)
-    case realm
-    when "app"
-      copy_web_push!(AppPreferenceWebPush, source, target)
-    when "org"
-      copy_web_push!(OrgPreferenceWebPush, source, target)
-    else
-      raise ArgumentError, "unsupported Visa Preference realm: #{realm.inspect}"
-    end
-  end
-
-  def copy_web_push!(web_push_class, source, target)
-    web_push = web_push_class.find_by(preference_id: source.id)
-    return unless web_push
-
-    web_push_class.find_by!(preference_id: target.id).update!(preference: target, option_id: web_push.option_id)
   end
 
   def prepare_anonymous_realm_token!(preference, context, decision_time)
@@ -806,17 +653,6 @@ module PreferenceWriteBoundary
 
   def anonymous_realm_cookie_options(expires_at:, httponly:)
     anonymous_com_cookie_options(expires_at:, httponly:)
-  end
-
-  def log_visa_preference_write_failure(operation, error)
-    Rails.logger.error(
-      JitLogEvent.format(
-        "preference.visa_write.failed",
-        operation: operation,
-        error_class: error.class.name,
-        request_id: request.request_id,
-      ),
-    )
   end
 
   def validate_com_write_request!(operation:, actor:, submitted:)
@@ -938,8 +774,6 @@ module PreferenceWriteBoundary
       when "base/com" then base_com_writer_callers(operation:, action:)
       when "base/app" then base_app_writer_callers(operation:, action:)
       when "base/org" then base_org_writer_callers(operation:, action:)
-      when "visa/app" then visa_app_writer_callers(operation:, action:)
-      when "visa/org" then visa_org_writer_callers(operation:, action:)
       else []
       end
     end
@@ -1011,20 +845,6 @@ module PreferenceWriteBoundary
         Base::Org::Preference::RegionsController,
         Base::Org::Preference::ScreensController,
       ]
-    end
-
-    def visa_app_writer_callers(operation:, action:)
-      return [Visa::App::Oauth::AuthorizationsController] if operation == :sign_in && action == "create"
-      return [Visa::App::Oidc::Logouts::ConfirmationsController] if operation == :sign_out && action == "create"
-
-      []
-    end
-
-    def visa_org_writer_callers(operation:, action:)
-      return [Visa::Org::Oauth::AuthorizationsController] if operation == :sign_in && action == "create"
-      return [Visa::Org::Oidc::Logouts::ConfirmationsController] if operation == :sign_out && action == "create"
-
-      []
     end
   end
 end

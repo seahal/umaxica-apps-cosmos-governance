@@ -26,7 +26,7 @@ class RetentionHoldPurgeTest < ActiveJob::TestCase
     ClientRetentionHold.create!(client: client, reason_code: "legal_hold")
     request = ClientPrivacyRequest.create!(client: client)
 
-    RetentionPurgeJob.perform_now(batch_size: 1)
+    assert_raises(AccessOpDataUnavailableError) { RetentionPurgeJob.perform_now(batch_size: 1) }
 
     client.reload
     request.reload
@@ -37,7 +37,7 @@ class RetentionHoldPurgeTest < ActiveJob::TestCase
     assert_predicate ClientOccurrence.where(event_type: "privacy_erasure.blocked_by_legal_hold"), :exists?
   end
 
-  test "a released client hold no longer blocks an otherwise eligible purge" do
+  test "a released local hold cannot substitute for missing remote purge authority" do
     ClientStatus.find_or_create_by!(id: ClientStatus::NOTHING)
     ClientVisibility.find_or_create_by!(id: ClientVisibility::USER)
     ClientMfaStatus.find_or_create_by!(id: ClientMfaStatus::UNCONFIGURED)
@@ -57,8 +57,8 @@ class RetentionHoldPurgeTest < ActiveJob::TestCase
     hold = ClientRetentionHold.create!(client: client, reason_code: "legal_hold")
     hold.update!(status_id: ClientRetentionHoldStatus::RELEASED, released_at: 1.hour.ago)
 
-    RetentionPurgeJob.perform_now(batch_size: 1)
+    assert_raises(AccessOpDataUnavailableError) { RetentionPurgeJob.perform_now(batch_size: 1) }
 
-    assert_predicate client.reload, :terminated?
+    assert_nil client.reload.terminated_at
   end
 end

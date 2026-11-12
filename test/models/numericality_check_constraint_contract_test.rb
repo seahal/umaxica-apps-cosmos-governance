@@ -9,6 +9,8 @@ require "test_helper"
 # A model numericality minimum must also hold for rows written without model validation, so each
 # greater_than_or_equal_to validator has a database CHECK constraint stating the same minimum.
 class NumericalityCheckConstraintContractTest < ActiveSupport::TestCase
+  self.fixture_table_names = []
+
   APP_ROOT = Rails.root.join("app").to_s
 
   Rails.application.eager_load!

@@ -10,7 +10,7 @@ const props: RootLandingProps = {
   title: "Base App",
   heading: "Base App",
   description: "This endpoint is intentionally thin.",
-  sign_up: { label: "Sign up", href: "/oidc/authorization?ri=jp" },
+  links: [{ label: "Accounts", href: "/accounts" }],
 };
 
 describe("RootLanding", () => {
@@ -28,53 +28,19 @@ describe("RootLanding", () => {
     );
   });
 
-  it("links to the sign-up destination the server generated", () => {
+  it("renders only the navigation links the server supplied", () => {
     expect(renderToStaticMarkup(<RootLanding {...props} />)).toMatch(
-      /<a href="\/oidc\/authorization\?ri=jp"[^>]*>Sign up<\/a>/u,
+      /<a href="\/accounts"[^>]*>Accounts<\/a>/u,
     );
   });
 
-  it("renders a server-provided admission action as a POST form", () => {
+  it("omits navigation when the server supplied none", () => {
     const markup = renderToStaticMarkup(
       <RootLanding
         {...props}
-        sign_in={{
-          label: "Sign in",
-          action: "/?ri=jp",
-          method: "post",
-          intent: "sign_in",
-          authenticity_token: "csrf-token",
-        }}
+        links={null}
       />,
     );
-
-    expect(markup).toContain('<form action="/?ri=jp" method="post">');
-    expect(markup).toContain('name="intent" value="sign_in"');
-    expect(markup).toContain('name="authenticity_token" value="csrf-token"');
-    expect(markup).not.toContain('href="/?ri=jp"');
-  });
-
-  it("does not add optional hidden fields when the action omits them", () => {
-    const markup = renderToStaticMarkup(
-      <RootLanding
-        {...props}
-        sign_in={{ label: "Sign in", action: "/" }}
-      />,
-    );
-
-    expect(markup).toContain('<form action="/" method="post">');
-    expect(markup).not.toContain('name="intent"');
-    expect(markup).not.toContain('name="authenticity_token"');
-  });
-
-  it("omits the sign-up link when the surface offers none", () => {
-    const markup = renderToStaticMarkup(
-      <RootLanding
-        {...props}
-        sign_up={null}
-      />,
-    );
-
     expect(markup).not.toContain("<a href");
   });
 });

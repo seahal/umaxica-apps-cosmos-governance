@@ -24,13 +24,13 @@ class WithdrawalPersonalDataAnonymizerTest < ActiveSupport::TestCase
       telephone = telephone_model.create!(
         owner_key => actor.id, :raw_number => original_number, :confirm_policy => true, :confirm_using_mfa => true,
       )
-      email.finalize_binding!
-      telephone.finalize_binding!
+      email.update_columns(binding_finalized_at: email.class.database_now)
+      telephone.update_columns(binding_finalized_at: telephone.class.database_now)
       email_digest = email.address_digest
       telephone_digest = telephone.number_digest
       actor.update!(withdrawn_at: now, terminated_at: now, discard_at: now, purge_eligible_at: now + 1.day)
 
-      WithdrawalPersonalDataAnonymizer.call(actor: actor)
+      assert_raises(AccessOpDataUnavailableError) { WithdrawalPersonalDataAnonymizer.call(actor: actor) }
 
       assert_withheld("Retention must preserve original encrypted email") { email.reload.address == original_address }
       assert_withheld("Retention must preserve original encrypted telephone") {
@@ -81,7 +81,7 @@ class WithdrawalPersonalDataAnonymizerTest < ActiveSupport::TestCase
         :confirm_using_mfa => true, :discard_at => now + 1.hour, :purge_eligible_at => longer_deadline,
       )
 
-      WithdrawalPersonalDataAnonymizer.call(actor: actor)
+      assert_raises(AccessOpDataUnavailableError) { WithdrawalPersonalDataAnonymizer.call(actor: actor) }
 
       assert_equal longer_deadline, email.reload.purge_eligible_at
       assert_equal longer_deadline, telephone.reload.purge_eligible_at
@@ -106,7 +106,7 @@ class WithdrawalPersonalDataAnonymizerTest < ActiveSupport::TestCase
         :confirm_using_mfa => true, :created_at => 3.days.ago,
       )
 
-      WithdrawalPersonalDataAnonymizer.call(actor: actor)
+      assert_raises(AccessOpDataUnavailableError) { WithdrawalPersonalDataAnonymizer.call(actor: actor) }
 
       [email.reload, telephone.reload].each do |record|
         assert_operator record.purge_eligible_at, :>=, record.discard_at
@@ -133,7 +133,7 @@ class WithdrawalPersonalDataAnonymizerTest < ActiveSupport::TestCase
         :confirm_using_mfa => true, :otp_attempts_count => 2, :locked_at => deadline,
       )
       actor.update!(withdrawn_at: now, terminated_at: now)
-      WithdrawalPersonalDataAnonymizer.call(actor: actor)
+      assert_raises(AccessOpDataUnavailableError) { WithdrawalPersonalDataAnonymizer.call(actor: actor) }
 
       assert_equal 2, email.reload.otp_attempts_count
       assert_equal 2, telephone.reload.otp_attempts_count
@@ -180,7 +180,7 @@ class WithdrawalPersonalDataAnonymizerTest < ActiveSupport::TestCase
     previous_delay = ENV["APP_SECRET_PURGE_DELAY_SECONDS"]
     ENV["APP_SECRET_PURGE_DELAY_SECONDS"] = "86400"
 
-    assert_same client, WithdrawalPersonalDataAnonymizer.call(actor: client)
+    assert_raises(AccessOpDataUnavailableError) { WithdrawalPersonalDataAnonymizer.call(actor: client) }
     assert_withheld("Original identifier must survive the retention boundary") {
       email.reload.address == original_address
     }
@@ -203,7 +203,6 @@ class WithdrawalPersonalDataAnonymizerTest < ActiveSupport::TestCase
     assert_equal ClientTotpCredentialStatus::REVOKED, totp.reload.user_identity_totp_credential_status_id
     assert secret.reload.revoked_at
     assert_kind_of Time, secret.discard_at
-    assert_nil ClientSecretLookupQuery.call(client: client, secret: raw)
     assert issuance.reload.canceled_at
     assert_equal %w(secret.discarded secret.revoked),
                  ClientSecretAuditOutbox.where(credential_ref: secret.public_id).order(:event_name).pluck(:event_name)

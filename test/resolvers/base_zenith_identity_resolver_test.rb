@@ -48,9 +48,9 @@ class BaseZenithIdentityResolverTest < ActiveSupport::TestCase
 
   test "a local identity from another RP cell is refused" do
     actor = Client.create!(security_mode_id: SecurityModeConfigurable::NORMAL, status_id: ClientStatus::ACTIVE)
-    cell = RpCellBinding.fetch("rp_core_app")
+    cell = RpCellBinding.fetch("rp_tech_org")
     subject = OidcSubject.for(actor, resource_type: "client")
-    enrollment = RpCallbackCommitter.call(
+    enrollment = seed_rp_cell_session(
       cell:, issuer: OidcIssuer.for_resource_type("client"), subject:, sid: SecureRandom.uuid,
       absolute_expires_at: 1.hour.from_now,
     )
@@ -95,20 +95,19 @@ class BaseZenithIdentityResolverTest < ActiveSupport::TestCase
     cell = configuration.fetch(:cell)
     issuer = OidcIssuer.for_resource_type(resource_type)
     subject = OidcSubject.for(actor, resource_type:)
-    enrollment = RpCallbackCommitter.call(
+    enrollment = seed_rp_cell_session(
       cell:, issuer:, subject:, sid: SecureRandom.uuid, absolute_expires_at: 1.hour.from_now,
     )
 
-    assert_predicate enrollment, :success?
     authenticated_state_for_enrollment(cell:, enrollment:, subject:, issuer:)
   end
 
   def authenticated_state_for_enrollment(cell:, enrollment:, subject:, issuer:)
-    anchor = enrollment.session.op_session_binding
+    anchor = enrollment.op_session_binding
     BrowserRpAuthentication::AccessState.new(
       status: :valid,
-      resource: enrollment.principal,
-      rp_session: enrollment.session,
+      resource: enrollment.op_session_binding.identity_binding.principal,
+      rp_session: enrollment,
       payload: {
         "iss" => issuer,
         "aud" => [cell.client_id],

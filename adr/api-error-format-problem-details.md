@@ -11,6 +11,11 @@ This decision selects the error representation for the application's machine-fac
 and establishes ownership of the problem-type identifier namespace. The rules it adopts are recorded
 in `docs/reference/api-design-standards.md`; this record states what was decided and why.
 
+> **Route-source disposition (2026-11-10):** The controller paths below are historical source
+> examples. The owner-approved local-surface hard reset removes the referenced foreign local
+> routes/controllers; the error-format decision applies only to retained API callers and does not
+> imply that those routes remain served.
+
 ## Context
 
 The repository emits at least seven mutually incompatible JSON error shapes, observed in

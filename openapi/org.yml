@@ -9,26 +9,21 @@ info:
     machine-readable health and revision endpoints.
 
     The `app`, `com`, and `org` surfaces are independent trust boundaries served on separate
-    hosts, so each has its own description. This one covers the staff and organization surface. An
-    endpoint described here exists on this surface's own hosts; it is never shared across surfaces.
+    hosts, so each has its own description. This one covers the Base org surface. An endpoint
+    described here exists on this surface's own host; it is never shared across surfaces.
 
     ## What is absent, and why
 
     Endpoints whose wire format is fixed by another specification -- OAuth 2.0, OIDC, WebAuthn,
-    DBSC, MCP (JSON-RPC 2.0), and `.well-known` resources -- are intentionally absent. They are
-    governed by their own specifications, not by this contract. The DBSC registration endpoint
-    is under `/api/v0/preferences/dbsc` but remains undescribed here because DBSC has its own
-    specification. The remaining legacy `/edge/v0` and `/web/v0` endpoints stay absent until they
-    converge (adr/api-route-vocabulary-consolidation.md).
+    MCP (JSON-RPC 2.0), and `.well-known` resources -- are intentionally absent. They are
+    governed by their own specifications, not by this contract. No other host's routes are included
+    in this description.
 
     ## Preferences
 
-    `/api/v0/preferences/{cookie,theme}` is a host-local browser API served on several first-party
-    hosts of this surface (Base, Auth, Core, and Warp), each listed in the path's `servers`. Each
-    host reads and writes its own host-only preference credentials, so a browser calls only the
-    origin it is on; the endpoints are not for cross-origin use. The Auth host serves them only as
-    display-preference transport for its ceremony pages
-    (adr/preference-browser-transport-family-capability.md).
+    `/api/v0/preferences/{cookie,theme,web_push}` is a host-local browser API served by Base org. Its public
+    host is listed in each path's `servers`; requests are same-origin and are not for cross-origin
+    use.
 
     The text operational endpoints -- `GET /health`, `GET /health/{startup,liveness,readiness}`,
     and `GET /revision` -- are absent because they are not JSON: they render `text/plain` and do
@@ -38,10 +33,8 @@ info:
     ## Hosts
 
     `servers` appears only where a host is real, public, and knowable from the repository. The
-    Core session paths carry one, and the preference paths list every host that serves them. The health and revision endpoints carry none because they are blocked
-    at the edge. The content and Palm paths carry none because their hosts are supplied by
-    deployment environment variables, and the docs and news content editions have no production
-    host at all.
+    preference paths identify the Base org host. The health and revision endpoints carry none
+    because they are blocked at the edge.
 
     ## Errors
 
@@ -58,12 +51,8 @@ tags:
   - name: Health
     description: >-
       Machine-readable health aggregate and deployment revision. Blocked at the edge, JSON only.
-  - name: Session
-    description: Core browser BFF session and token lifecycle, authenticated by first-party cookie.
   - name: Preferences
-    description: Cookie-consent and color-theme JSON endpoints under `/api/v0/preferences`.
-  - name: Content
-    description: Read-only published documentation, help, news, and info entries.
+    description: Cookie-consent, color-theme, and Web Push JSON endpoints under `/api/v0/preferences`.
 
 paths:
   /api/v0/health.json:
@@ -72,25 +61,11 @@ paths:
   /api/v0/revision.json:
     $ref: "shared/paths/api-v0-revision.yml"
 
-  /api/v0/session:
-    $ref: "org/paths/session.yml"
-
-  /api/v0/token/refresh:
-    $ref: "org/paths/token-refresh.yml"
-
   /api/v0/preferences/cookie:
     $ref: "org/paths/preferences-cookie.yml"
 
   /api/v0/preferences/theme:
     $ref: "org/paths/preferences-theme.yml"
 
-  /api/v0/entries:
-    $ref: "shared/paths/entries.yml"
-
-  /api/v0/entries/{public_id}:
-    $ref: "shared/paths/entry.yml"
-
-components:
-  securitySchemes:
-    coreBrowserCookie:
-      $ref: "shared/components.yml#/securitySchemes/coreBrowserCookie"
+  /api/v0/preferences/web_push:
+    $ref: "org/paths/preferences-web-push.yml"

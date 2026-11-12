@@ -54,7 +54,7 @@ class RedirectsJumpGatewayUrlTest < ActiveSupport::TestCase
   end
 
   test "accepts rails issued jwt" do
-    token = JumpRtIssuer.call(namespace: "AUTH_APP", url: "https://www.umaxica.app/dashboard", dst: "internal")
+    token = JumpRtIssuer.call(namespace: "BASE_APP", url: "https://www.umaxica.app/dashboard", dst: "internal")
     result = RedirectsJumpGatewayUrl.call(token)
 
     assert_predicate result, :ok?

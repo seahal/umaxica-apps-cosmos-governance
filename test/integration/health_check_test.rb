@@ -4,18 +4,18 @@
 require "test_helper"
 # require "helpers/global_test_support"
 
-# Probe and aggregate behaviour on a single surface (auth/app). The wire contract is text/plain:
+# Probe and aggregate behaviour on a single surface (base/app). The wire contract is text/plain:
 # a probe is "ok\n" / 200 or "unavailable\n" / 503, and GET /health is the seven-line aggregate.
 class HealthCheckTest < ActionDispatch::IntegrationTest
   setup do
-    host! ENV.fetch("PRIVATE_AUTH_SERVICE_URL", "auth.app.localhost")
+    host! Rails.configuration.x.boot_config.fetch(:hosts).base_service.host
   end
 
   test "readiness returns ok as text/plain when dependencies are healthy" do
     result = Health::CheckResult.new(
       check: :readiness,
       status: :ok,
-      surface: "sign app",
+      surface: "base app",
       dependencies: { "database" => "ok" },
     )
 
@@ -34,7 +34,7 @@ class HealthCheckTest < ActionDispatch::IntegrationTest
     result = Health::CheckResult.new(
       check: :readiness,
       status: :unready,
-      surface: "sign app",
+      surface: "base app",
       dependencies: { "database" => "failed" },
     )
 
@@ -65,7 +65,7 @@ class HealthCheckTest < ActionDispatch::IntegrationTest
     result = Health::CheckResult.new(
       check: :health,
       status: :ok,
-      surface: "sign app",
+      surface: "base app",
       dependencies: {
         "liveness" => { status: "ok" },
         "readiness" => { status: "ok" },
@@ -82,12 +82,12 @@ class HealthCheckTest < ActionDispatch::IntegrationTest
     assert_response :success
     assert_equal "text/plain", response.media_type
     assert_equal(
-      "title: Health status\nnamespace: auth/app\nstatus: ok\nstartup: ok\n" \
+      "title: Health status\nnamespace: base/app\nstatus: ok\nstartup: ok\n" \
       "liveness: ok\nreadiness: ok\ntimestamp: 2024-08-30T06:40:00Z\n",
       response.body,
     )
-    assert_includes response.body.lines, "namespace: auth/app\n"
-    assert_no_match(/sign app/i, response.body)
+    assert_includes response.body.lines, "namespace: base/app\n"
+    assert_no_match(/base app/i, response.body)
   end
 
   # The `.json` suffix is deliberately not a route: `/api/v0/health.json` serves real JSON at nearly

@@ -4,24 +4,11 @@
 module JumpRtSurface
   module_function
 
-  # Jump RT issuer capability is limited to the active app/org namespaces and Palm app. It is deliberately
-  # separate from JitSecurityJwtRegistry::SURFACE_NAMESPACES, which also carries non-Jump issuers.
-  # Each issuer identity comes from the existing public surface setting; there is no Jump-specific
-  # issuer-origin setting.
+  # Base app and org origins are the only local Jump issuer boundaries.
   ISSUER_ORIGIN_ENV = {
-    "AUTH_APP" => "PUBLIC_AUTH_SERVICE_URL",
-    "AUTH_ORG" => "PUBLIC_AUTH_STAFF_URL",
     "BASE_APP" => "PUBLIC_BASE_SERVICE_URL",
     "BASE_ORG" => "PUBLIC_BASE_STAFF_URL",
-    "VISA_APP" => "PUBLIC_VISA_SERVICE_URL",
-    "VISA_ORG" => "PUBLIC_VISA_STAFF_URL",
-    "CORE_APP" => "PUBLIC_CORE_SERVICE_URL",
-    "CORE_ORG" => "PUBLIC_CORE_STAFF_URL",
-    "WARP_APP" => "PUBLIC_WARP_SERVICE_URL",
-    "WARP_ORG" => "PUBLIC_WARP_STAFF_URL",
-    "PALM_APP" => "PUBLIC_PALM_SERVICE_URL",
   }.freeze
-  BOOT_HOST_FIELDS = { "VISA_APP" => :visa_service, "VISA_ORG" => :visa_staff }.freeze
   ISSUER_NAMESPACES = ISSUER_ORIGIN_ENV.keys.freeze
 
   JWKS_PATH = "/.well-known/jwks.json"
@@ -32,17 +19,12 @@ module JumpRtSurface
     normalized_namespace = normalize_namespace(namespace)
     name = ISSUER_ORIGIN_ENV.fetch(normalized_namespace)
     raw = env[name]
-    from_local_boot = raw.blank? && env.equal?(ENV) && Rails.env.local?
-    raw = local_boot_origin(normalized_namespace) if from_local_boot
     raise JumpRtConfigurationError, "#{name} is required for Jump issuance" if raw.blank?
 
     raw = raw.to_s
     candidate = raw.match?(%r{\A[a-z][a-z0-9+.-]*://}i) ? raw : "https://#{raw}"
     begin
-      from_local_boot ? ConfigValues.build(
-        candidate,
-        allow_localhost: true,
-      ).to_s : ConfigValues.public_https_origin(candidate)
+      ConfigValues.public_https_origin(candidate)
     rescue ArgumentError => e
       raise JumpRtConfigurationError, "#{name} must be a public HTTPS origin for Jump: #{e.message}"
     end
@@ -52,17 +34,11 @@ module JumpRtSurface
     "#{issuer_origin(namespace, env: env)}#{JWKS_PATH}"
   end
 
-  # Acme is Base-hosted and issues through the Base or Auth controller that owns the request; Edit
-  # is a receiver only. Neither has a Jump issuer namespace.
+  # Only local Base controllers issue Jump RTs.
   def namespace_for_controller(controller_class_name)
     service =
       case controller_class_name.to_s
-      when /\AAuth::/ then "AUTH"
-      when /\ACore::/ then "CORE"
-      when /\AWarp::/ then "WARP"
       when /\ABase::/ then "BASE"
-      when /\AVisa::/ then "VISA"
-      when /\APalm::/ then "PALM"
       end
     surface =
       case controller_class_name.to_s
@@ -88,14 +64,5 @@ module JumpRtSurface
 
   def normalize_host(host)
     host.to_s.strip.sub(/\Ahttps?:\/\//, "").split("/").first
-  end
-
-  def local_boot_origin(namespace)
-    field = BOOT_HOST_FIELDS.fetch(namespace, nil)
-    return unless field
-
-    Rails.configuration.x.boot_config.fetch(:hosts).public_send(field).to_s
-  rescue NoMethodError, KeyError
-    nil
   end
 end

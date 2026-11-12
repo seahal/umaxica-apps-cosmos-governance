@@ -23,8 +23,8 @@ module Security
 
         assert_predicate preference_token, :present?
 
-        cookies[AuthenticationBase::ACCESS_COOKIE_KEY] = preference_token
-        get base_app_identity_sessions_url(ri: "jp", host: host), headers: { "Accept" => "application/json" }
+        cookies[AuthenticationCookieName.access] = preference_token
+        get base_app_identity_url(ri: "jp", host: host), headers: { "Accept" => "application/json" }
 
         assert_response :unauthorized
       end
@@ -43,7 +43,7 @@ module Security
 
         assert_predicate preference_token, :present?
 
-        get base_app_identity_sessions_url(ri: "jp", host: host),
+        get base_app_identity_url(ri: "jp", host: host),
             headers: { "Accept" => "application/json", "Authorization" => "Bearer #{preference_token}" }
 
         assert_response :unauthorized

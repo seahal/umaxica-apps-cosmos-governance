@@ -1,14 +1,16 @@
 # OP/RP Ownership Manifest (R5-WU01)
 
-Status: model inventory generated 2026-10-17 from the development boot (eager-loaded models, live
-development catalog, controller source). The `OidcCallback` reader entry was rechecked against
-current controller and service references on 2026-11-01; model counts and other reader rows were not
+Status: historical model inventory generated 2026-10-17 from the development boot (eager-loaded
+models, live development catalog, controller source). The `OidcCallback` reader entry was rechecked
+against controller and service references on 2026-11-01; model counts and other reader rows were not
 regenerated.
 
-Current authentication boundary update (2026-11-07): app and org are the active authenticated realms.
-The com Auth, Core, and Warp RP paths and Visitor token issuance were retired. The inventory and
-read rows below are historical R5 worklist evidence; their `Visitor` and com-cell entries describe
-persisted/model state at the dated snapshot, not current route or authentication capability.
+Route-scope update (2026-11-11): Auth, Visa, Core, Warp, Palm, Edit/Press, Docs, News, Help, Info,
+and Guid local route/controller trees are removed. The owner-approved URL removal also retires
+Base/Tech RP sign-in, callback, sign-out, Back-Channel Logout, and OIDC-driven step-up callback
+routes. This manifest and its RP read rows are historical R5 worklist evidence; they do not describe
+current route ownership. Model and connection rows remain a snapshot for the separate model/database
+review and do not imply an active route caller.
 
 Owner specification: `one.md` sections 4, 5.3 and R5-WU01.
 
@@ -39,10 +41,10 @@ is a separate decision.
 | `chronicle`  | 36               | `app_document_audit_events`, `com_document_behaviors`               |
 | `avatar`     | 12               | `posts`, `post_versions`, `client_avatar_extractions`               |
 
-## Current direct reads by RP code (work list)
+## Direct reads by RP code (2026-10-17 work-list snapshot)
 
-Constants referenced directly from RP controller trees and the shared RP Concerns. Every entry below
-is a cross-owner read that R5 must replace; none may survive cell activation (R5-WU19).
+Constants referenced directly from RP controller trees and the shared RP Concerns at the snapshot
+date. These entries are historical cross-owner reads, not current controller call sites.
 
 | RP code                   | OP stores read                                           | Zenith stores read                                                                | Domain stores read                | Replaced by                                        |
 | ------------------------- | -------------------------------------------------------- | --------------------------------------------------------------------------------- | --------------------------------- | -------------------------------------------------- |

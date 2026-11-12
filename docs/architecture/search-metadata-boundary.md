@@ -162,6 +162,6 @@ in this document as settled fact.
 ## Related
 
 - `docs/operations/search-engine-webmaster-tools.md`
-- `docs/architecture/docs-help-news-content-boundary.md`
+- `docs/architecture/content-surface-matrix.md`
 - `docs/architecture/i18n.md`
 - `docs/reference/subdomains.md`

@@ -32,32 +32,16 @@ class BaseRouteContractTest < ActionDispatch::IntegrationTest
     end
   end
 
-  # Every path on these hosts resolves inside the host's own module. Health and revision used to
-  # resolve to Base::App instead, which left the hosts unable to name themselves in a health
-  # response and left Base::Net and Base::Dev controllers on disk that no route reached.
-  test "base private network and developer hosts route entirely within their own modules" do
-    {
-      "base.net.localhost" => "base/net",
-      "base.dev.localhost" => "base/dev",
-    }.each do |host, module_prefix|
-      {
-        ["/", :get] => ["roots", "index"],
-        ["/revision", :get] => ["revisions", "show"],
-        ["/health", :get] => ["healths", "show"],
-        ["/health/liveness", :get] => ["health/livenesses", "show"],
-        ["/health/readiness", :get] => ["health/readinesses", "show"],
-        ["/health/startup", :get] => ["health/startups", "show"],
-        ["/csp-violation-report", :post] => ["csp_violation_reports", "create"],
-      }.each do |(path, method), (controller, action)|
-        recognized = Rails.application.routes.recognize_path("http://#{host}#{path}", method: method)
-
-        assert_equal "#{module_prefix}/#{controller}", recognized[:controller]
-        assert_equal action, recognized[:action]
+  test "base network and developer hosts do not resolve Base routes" do
+    %w(base.net.localhost base.dev.localhost).each do |host|
+      %w(/revision /health).each do |path|
+        assert_raises(ActionController::RoutingError, "#{host} must not serve #{path}") do
+          Rails.application.routes.recognize_path("http://#{host}#{path}", method: :get)
+        end
       end
     end
   end
 
-  # rubocop:disable Minitest/MultipleAssertions
   test "base app route contract" do
     [Rails.configuration.x.boot_config.fetch(:hosts).base_service.host, "www.umaxica.app",
      BASE_APP_HOST,].uniq.each do |host|
@@ -148,14 +132,14 @@ class BaseRouteContractTest < ActionDispatch::IntegrationTest
         )
       end
 
-      # The Base self-RP receives its authorization response here (two.md D-50).
-      recognized = Rails.application.routes.recognize_path(
-        "http://#{host}/oidc/callback",
-        method: :get,
-      )
-
-      assert_equal "base/app/oidc/callbacks", recognized[:controller]
-      assert_equal "show", recognized[:action]
+      [
+        ["/oidc/callback", :get], ["/oidc/closures", :post],
+        ["/sign/out/new", :get], ["/sign/out/edit", :get], ["/sign/out", :post],
+      ].each do |path, method|
+        assert_raises(ActionController::RoutingError, "#{method.upcase} #{path} is retired") do
+          Rails.application.routes.recognize_path("http://#{host}#{path}", method: method)
+        end
+      end
 
       [
         ["/oauth/authorize", :get],
@@ -172,22 +156,6 @@ class BaseRouteContractTest < ActionDispatch::IntegrationTest
       assert_raises(ActionController::RoutingError) do
         Rails.application.routes.recognize_path("http://#{host}/oidc", method: :get)
       end
-
-      recognized = Rails.application.routes.recognize_path(
-        "http://#{host}/sign/out/new",
-        method: :get,
-      )
-
-      assert_equal "base/app/sign_outs", recognized[:controller]
-      assert_equal "new", recognized[:action]
-
-      recognized = Rails.application.routes.recognize_path(
-        "http://#{host}/sign/out",
-        method: :post,
-      )
-
-      assert_equal "base/app/sign_outs", recognized[:controller]
-      assert_equal "create", recognized[:action]
 
       assert_raises(ActionController::RoutingError) do
         Rails.application.routes.recognize_path(
@@ -216,8 +184,6 @@ class BaseRouteContractTest < ActionDispatch::IntegrationTest
       assert_equal "create", recognized[:action]
     end
   end
-  # rubocop:enable Minitest/MultipleAssertions
-
   test "base com route contract" do
     recognized = Rails.application.routes.recognize_path("http://#{BASE_COM_HOST}/", method: :get)
 
@@ -256,7 +222,6 @@ class BaseRouteContractTest < ActionDispatch::IntegrationTest
       end
     end
   end
-  # rubocop:disable Minitest/MultipleAssertions
   test "base org route contract" do
     recognized = Rails.application.routes.recognize_path(
       "http://#{BASE_ORG_HOST}/",
@@ -329,42 +294,18 @@ class BaseRouteContractTest < ActionDispatch::IntegrationTest
       )
     end
 
-    # The Base self-RP receives its authorization response here (two.md D-50).
-    recognized = Rails.application.routes.recognize_path(
-      "http://#{BASE_ORG_HOST}/oidc/callback",
-      method: :get,
-    )
-
-    assert_equal "base/org/oidc/callbacks", recognized[:controller]
-    assert_equal "show", recognized[:action]
+    [
+      ["/oidc/callback", :get], ["/oidc/closures", :post],
+      ["/sign/out/new", :get], ["/sign/out/edit", :get], ["/sign/out", :post],
+    ].each do |path, method|
+      assert_raises(ActionController::RoutingError, "#{method.upcase} #{path} is retired") do
+        Rails.application.routes.recognize_path("http://#{BASE_ORG_HOST}#{path}", method: method)
+      end
+    end
 
     assert_raises(ActionController::RoutingError) do
       Rails.application.routes.recognize_path("http://#{BASE_ORG_HOST}/oidc", method: :get)
     end
-
-    recognized = Rails.application.routes.recognize_path(
-      "http://#{BASE_ORG_HOST}/sign/out/new",
-      method: :get,
-    )
-
-    assert_equal "base/org/sign_outs", recognized[:controller]
-    assert_equal "new", recognized[:action]
-
-    recognized = Rails.application.routes.recognize_path(
-      "http://#{BASE_ORG_HOST}/sign/out/edit",
-      method: :get,
-    )
-
-    assert_equal "base/org/sign_outs", recognized[:controller]
-    assert_equal "edit", recognized[:action]
-
-    recognized = Rails.application.routes.recognize_path(
-      "http://#{BASE_ORG_HOST}/sign/out",
-      method: :post,
-    )
-
-    assert_equal "base/org/sign_outs", recognized[:controller]
-    assert_equal "create", recognized[:action]
 
     assert_raises(ActionController::RoutingError) do
       Rails.application.routes.recognize_path(
@@ -392,5 +333,4 @@ class BaseRouteContractTest < ActionDispatch::IntegrationTest
     assert_equal "base/org/csp_violation_reports", recognized[:controller]
     assert_equal "create", recognized[:action]
   end
-  # rubocop:enable Minitest/MultipleAssertions
 end

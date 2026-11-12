@@ -19,7 +19,6 @@ class OrgAdminStepUpCeremonyTest < ActionDispatch::IntegrationTest
       visibility_id: OperatorVisibility::STAFF,
     )
     OperatorPasskeyTestSupport.give_two_active_passkeys!(@operator)
-    @root_token = authentication_harness_create_token(@operator)
     @client = Client.create!(
       security_mode_id: SecurityModeConfigurable::NORMAL,
       status_id: ClientStatus::ACTIVE,
@@ -39,34 +38,25 @@ class OrgAdminStepUpCeremonyTest < ActionDispatch::IntegrationTest
     end
   end
 
-  test "Support revocation requires recent proof in this RP session" do
+  test "Support revocation cannot infer missing Access authority from its verified RP proof" do
     host! @base_host
-
     as_rp_cell("base-org-ww") do
-      _token_response, _payload, rp_session = sign_in_rp_cell(
-        "base-org-ww", actor: @operator, root_token: @root_token,
+      headers = as_staff_headers(@operator, host: @base_host)
+      session_id = Rack::Utils.parse_cookies_header(headers.fetch("Cookie")).fetch(
+        OidcRpBrowserCredentialContract::SESSION_COOKIE,
       )
+      session = RpBaseOrgSession.find_by!(public_id: session_id)
+      states_before = RpBaseOrgStepUpState.count
+      events_before = AppIdentityAuthenticationEvent.count
+      2.times do
+        get new_base_org_support_client_revocation_path(@client.public_id, ri: "jp"), headers: headers
 
-      get new_base_org_support_client_revocation_path(@client.public_id, ri: "jp")
-
-      assert_response :unauthorized
-      assert_includes response.headers.fetch("WWW-Authenticate"), 'error="insufficient_user_authentication"'
-      assert_equal 0, RpBaseOrgStepUpState.where(rp_session:).count
-    end
-  end
-
-  test "Support revocation page accepts a current OP event installed in its RP session" do
-    host! @base_host
-
-    as_rp_cell("base-org-ww") do
-      _token_response, _payload, rp_session = sign_in_rp_cell_with_step_up_evidence(
-        "base-org-ww", actor: @operator, root_token: @root_token,
-      )
-
-      get new_base_org_support_client_revocation_path(@client.public_id, ri: "jp")
-
-      assert_response :success
-      assert_equal rp_session.public_id, cookies[OidcRpBrowserCredentialContract::SESSION_COOKIE]
+        assert_response :service_unavailable
+        assert_includes response.headers["Cache-Control"], "no-store"
+        assert_equal states_before, RpBaseOrgStepUpState.count
+        assert_equal events_before, AppIdentityAuthenticationEvent.count
+        assert_nil session.reload.revoked_at
+      end
     end
   end
 end

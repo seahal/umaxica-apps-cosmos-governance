@@ -13,9 +13,11 @@
 module AvatarAuthorityApiEndpoint
   extend ActiveSupport::Concern
 
+  include ProblemDetailsRendering
+
   REALMS = {
-    "app" => { surface: :app, client_id: "base-app-ww", resource_type: "client", grant: OpAppGrant },
-    "org" => { surface: :org, client_id: "base-org-ww", resource_type: "operator", grant: OpOrgGrant },
+    "app" => { surface: :app, client_id: "base-app-ww", resource_type: "client" },
+    "org" => { surface: :org, client_id: "base-org-ww", resource_type: "operator" },
   }.freeze
 
   private
@@ -40,28 +42,9 @@ module AvatarAuthorityApiEndpoint
       return render(json: { error: "invalid_client" }, status: :unauthorized)
     end
 
-    auth = OidcAccessTokenAuthenticator.call(
-      access_token: request.authorization.to_s.delete_prefix("Bearer "), resource_type: realm.fetch(:resource_type),
-      host: request.host, authorization_scheme: "Bearer",
-    )
-    unless auth.success? && auth.payload["client_id"] == realm.fetch(:client_id)
-      return render(json: { error: "invalid_token" }, status: :unauthorized)
-    end
-    unless auth.resource.login_allowed?
-      return render(json: { error: "invalid_token" }, status: :unauthorized)
-    end
-
-    grant = realm.fetch(:grant).find_by(
-      public_id: auth.payload["sid"],
-      oidc_client_id: realm.fetch(:client_id),
-    )
-    return render(json: { error: "invalid_token" }, status: :unauthorized) unless grant&.active?
-
-    @avatar_actor = auth.resource
-    @avatar_root = grant.parent_token
-    @avatar_access_state = BrowserRpAuthentication::AccessState.new(
-      status: :valid, resource: @avatar_actor, rp_session: grant, payload: auth.payload, security_context: nil,
-    )
+    raise AccessOpDataUnavailableError
+  rescue AccessOpDataUnavailableError
+    render_problem(:service_unavailable)
   end
 
   # Base APP and ORG selections are owned by their RP sessions. The owner treats every supplied
@@ -92,13 +75,9 @@ module AvatarAuthorityApiEndpoint
     )
   end
 
-  # Keep the OP transaction open while the domain writer rechecks and commits. The writer obtains
-  # device, root and grant locks in refresh order; this wrapper does not pre-lock the root.
-  def with_owner_step_up(scope)
-    evidence = current_step_up_evidence
-    return require_owner_step_up(scope, nil) unless evidence
-
-    avatar_root.class.transaction { yield evidence }
+  # The owner-side proof must come from Access before an authority mutation can start.
+  def with_owner_step_up(_scope)
+    raise AccessOpDataUnavailableError
   end
 
   # Read-only owner endpoints run on the read role, where SELECT FOR UPDATE is forbidden. They
@@ -107,14 +86,8 @@ module AvatarAuthorityApiEndpoint
     require_owner_step_up(scope, surface) { |evidence| yield evidence }
   end
 
-  # OidcAccessTokenAuthenticator has verified this exact payload and the shared resolver binds its
-  # event snapshot to the active grant, root, device, client, subject and authentication context.
   def current_step_up_evidence
-    StepUpEvidenceResolver.call(
-      access_state: @avatar_access_state,
-      actor: avatar_actor,
-      cell: RpCellBinding.for_client(avatar_realm.fetch(:client_id)),
-    )
+    raise AccessOpDataUnavailableError
   end
 
   def current_resource = avatar_actor
@@ -123,7 +96,7 @@ module AvatarAuthorityApiEndpoint
 
   def avatar_switcher
     @avatar_switcher ||= BaseSwitcherAuthority.new(
-      surface: self.class.const_get(:AVATAR_SURFACE, false).to_sym, principal: avatar_actor, session: avatar_root,
+      surface: avatar_realm.fetch(:surface), principal: avatar_actor, session: avatar_root,
     )
   end
 

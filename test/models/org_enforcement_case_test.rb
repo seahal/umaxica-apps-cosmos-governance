@@ -71,10 +71,12 @@ class OrgEnforcementCaseTest < ActiveSupport::TestCase
       effective_at: Time.current,
     )
 
-    EnforcementCaseApplyOperation.call(
-      enforcement_case: the_case,
-      actor_operator_public_id: the_case.applied_by_operator_public_id,
-    )
+    assert_raises(AccessOpDataUnavailableError) do
+      EnforcementCaseApplyOperation.call(
+        enforcement_case: the_case,
+        actor_operator_public_id: the_case.applied_by_operator_public_id,
+      )
+    end
     target.reload
 
     assert_equal "active", the_case.state

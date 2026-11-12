@@ -85,6 +85,8 @@ class OperatorPreference < OrgPrincipalRecord
 
   attribute :status_id, default: ACTIVE_STATUS_ID
   validates :status_id, inclusion: { in: OperatorPreferenceStatus::DEFAULTS }
+  validates :operator_id, uniqueness: { conditions: -> { where(status_id: ACTIVE_STATUS_ID) } },
+                          if: -> { status_id == ACTIVE_STATUS_ID }
   validates :public_id, presence: true, uniqueness: true
   validate :retired_status_cannot_be_reactivated, on: :update
   before_destroy :preload_dependent_associations, prepend: true

@@ -10,6 +10,7 @@ class AvatarOwnershipTransfer < AvatarRecord
   belongs_to :avatar, inverse_of: :ownership_transfers
 
   validates :state, inclusion: { in: STATES }
+  validates :avatar_id, uniqueness: { conditions: -> { pending } }, if: -> { state == "pending" }
   validates :from_owner_surface, inclusion: { in: SURFACES }
   validates :to_owner_surface, inclusion: { in: SURFACES }
   validates :request_actor_surface, inclusion: { in: SURFACES }

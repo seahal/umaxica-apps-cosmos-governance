@@ -1,9 +1,9 @@
 # Step-Up Operation Inventory
 
-This inventory records the step-up operations that are in the current Rails implementation. The
-runtime requirement is owned by the Base action policy and is carried through the Base admission,
-Auth ceremony, result delivery, Base acceptance, and the protected mutation. The scope catalog is
-only a destination validator; it is not a policy source.
+This inventory records the retained Base step-up requirements and mutation guards. Auth ceremony,
+OIDC result-delivery and Base/Tech RP entry routes were removed during the 2026-11-11 surface reset;
+those sign-in and provider continuation flows are unavailable. The runtime requirement remains
+owned by Base action policy. The scope catalog is only a destination validator, not a policy source.
 
 ## Requirement vocabulary
 
@@ -26,17 +26,20 @@ step-up freshness.
 
 ## Operation matrix
 
+The former Google and Apple link/unlink entry is historical: its Auth settings controllers and
+Base social identity routes were removed, so no local caller remains.
+
 | Surface | Actor / resource | Operation | Current caller and scope | Current protection | Target
 evidence / behavior | Unavailable-method behavior | | --- | --- | --- | --- | --- | --- | | app |
 Client / own identity | Google and Apple link or unlink |
 `Auth::App::Settings::{Googles,Apples}Controller`, `social_link` / `social_unlink` | Step-up before
 mutation | Normal step-up; provider identity itself is not evidence | Available methods are
 recomputed and the operation is refused when none remain | | app | Client / own identity | Passkey
-creation, update, removal | Base/Auth identity and passkey controllers, `settings_passkey` |
+creation, update, removal | Base identity and passkey controllers, `settings_passkey` |
 Bootstrap for the first credential; step-up for existing credentials | Registration and ordinary
 step-up remain separate | Registration entry is available only through configured bootstrap rules;
 no credential is silently selected | | app | Client / own identity | TOTP creation and removal |
-Base/Auth TOTP controllers, `settings_totp` | Bootstrap for first TOTP; step-up for later changes |
+Base TOTP controllers, `settings_totp` | Bootstrap for first TOTP; step-up for later changes |
 TOTP enrollment does not grant step-up freshness | Only active app TOTP is offered and permanent
 credential lock is respected | | app | Client / own identity | Email and telephone change or
 removal | Base identity controllers, `settings_email` / `settings_telephone` | Step-up and contact

@@ -19,9 +19,11 @@ class EnforcementCaseEndMissingPrincipalTest < ActiveSupport::TestCase
     )
     the_case.save!
 
-    assert EnforcementCaseEndOperation.call(enforcement_case: AppEnforcementCase.find(the_case.id), reason: "revoked")
+    assert_raises(AccessOpDataUnavailableError) do
+      EnforcementCaseEndOperation.call(enforcement_case: AppEnforcementCase.find(the_case.id), reason: "revoked")
+    end
     assert_predicate the_case.reload.ended_at, :present?
-    assert the_case.audit_event_recorded?("ended")
+    assert_not the_case.audit_event_recorded?("ended")
   end
 
   [AppEnforcementCase, OrgEnforcementCase].each do |case_class|

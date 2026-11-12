@@ -13,10 +13,6 @@ class ModelTableFixtureConsistencyTest < ActiveSupport::TestCase
     "OperatorOrganization" => "organizations",
     "AppIdentityAuthenticationEvent" => "identity_authentication_events",
     "OrgIdentityAuthenticationEvent" => "identity_authentication_events",
-    "OpAppConsumedJti" => "op_consumed_jtis",
-    "OpOrgConsumedJti" => "op_consumed_jtis",
-    "OpAppInboundEventReceipt" => "op_inbound_event_receipts",
-    "OpOrgInboundEventReceipt" => "op_inbound_event_receipts",
     # APP and ORG have separate RP databases, so both realms intentionally use the same
     # concise step-up table family without crossing a database ownership boundary.
     "RpBaseAppStepUpStateStatus" => "rp_step_up_state_statuses",

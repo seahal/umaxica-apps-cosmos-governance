@@ -83,7 +83,7 @@ module Base
         ).dashboard_identity
         raise ActiveRecord::RecordNotFound, "selected app Persona is not available to this principal" if
           result.status == :not_found
-        raise RuntimeError, "Avatar owner is unavailable for the dashboard identity" unless result.ok?
+        raise AccessOpDataUnavailableError unless result.ok?
 
         {
           display_name: result.data.fetch("display_name"),
@@ -95,7 +95,6 @@ module Base
         [
           { label: t("base.shared.dashboard.links.preference"), href: base_app_preference_path(ri: params[:ri]) },
           { label: t("base.shared.dashboard.links.switcher"), href: base_app_switcher_path(ri: params[:ri]) },
-          { label: t("base.shared.dashboard.links.logout"), href: new_base_app_sign_out_path(ri: params[:ri]) },
         ]
       end
 
@@ -104,7 +103,6 @@ module Base
           { label: t("base.shared.dashboard.links.root"), href: base_app_dashboard_path(ri: params[:ri]) },
           { label: t("base.shared.dashboard.links.account"), href: base_app_accounts_path(ri: params[:ri]) },
           { label: t("base.shared.dashboard.links.organization"), href: base_app_organizations_path(ri: params[:ri]) },
-          { label: t("base.shared.dashboard.links.avatar"), href: base_app_avatars_path(ri: params[:ri]) },
           { label: t("base.shared.dashboard.links.identity"), href: base_app_identity_path(ri: params[:ri]) },
           { label: t("base.shared.dashboard.links.billings"), href: base_app_billings_path(ri: params[:ri]) },
           { label: t("base.shared.dashboard.links.groups"), href: base_app_groups_path(ri: params[:ri]) },
@@ -117,9 +115,6 @@ module Base
           title: nil,
           heading: "Base App",
           description: t("landing.thin_endpoint"),
-          # One neutral entry; any allowed switch to registration happens inside Auth.
-          sign_in: { label: t("actions.continue"), href: base_app_sign_show_path(ri: params[:ri]) },
-          sign_up: nil,
         }
       end
     end

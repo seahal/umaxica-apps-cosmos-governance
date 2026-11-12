@@ -8,8 +8,10 @@ class LayoutMetaTagsTest < ActiveSupport::TestCase
     "Base::App" => "app/views/layouts/base/app/application.html.erb",
     "Base::Com" => "app/views/layouts/base/com/application.html.erb",
     "Base::Org" => "app/views/layouts/base/org/application.html.erb",
-    "Auth::App" => "app/views/layouts/auth/app/application.html.erb",
-    "Auth::Org" => "app/views/layouts/auth/org/application.html.erb",
+  }.freeze
+
+  OPERATIONAL_LAYOUT_PATHS = {
+    "Tech::Org" => "app/views/layouts/tech/org/application.html.erb",
   }.freeze
 
   INERTIA_LAYOUT_PATHS = {
@@ -17,15 +19,15 @@ class LayoutMetaTagsTest < ActiveSupport::TestCase
   }.freeze
 
   test "all layouts include a charset meta tag" do
-    LAYOUT_PATHS.merge(INERTIA_LAYOUT_PATHS).each do |name, path|
+    LAYOUT_PATHS.merge(OPERATIONAL_LAYOUT_PATHS).merge(INERTIA_LAYOUT_PATHS).each do |name, path|
       content = Rails.root.join(path).read
 
       assert_includes content, '<meta charset="utf-8">', "Expected charset meta tag in #{name} layout (#{path})"
     end
   end
 
-  # Turbo layouts only: an Inertia shell never loads Turbo (see StylesheetTagsTest).
-  test "all layouts include turbo-refresh-scroll meta tag" do
+  # Base Turbo layouts only: the Tech operations shell does not load Turbo.
+  test "Base Turbo layouts include turbo-refresh-scroll meta tag" do
     LAYOUT_PATHS.each do |name, path|
       content = Rails.root.join(path).read
 
@@ -37,7 +39,7 @@ class LayoutMetaTagsTest < ActiveSupport::TestCase
   end
 
   test "all layouts include title tag" do
-    LAYOUT_PATHS.merge(INERTIA_LAYOUT_PATHS).each do |name, path|
+    LAYOUT_PATHS.merge(OPERATIONAL_LAYOUT_PATHS).merge(INERTIA_LAYOUT_PATHS).each do |name, path|
       content = Rails.root.join(path).read
 
       assert_match(
@@ -50,7 +52,7 @@ class LayoutMetaTagsTest < ActiveSupport::TestCase
   test "inertia layout includes lang and theme markers" do
     content = Rails.root.join("app/views/layouts/base/app/inertia.html.erb").read
 
-    assert_includes content, 'lang="<%= get_language %>"'
+    assert_includes content, 'lang="<%= I18n.locale %>"'
     assert_includes content, 'data-theme="<%= theme_cookie_value %>"'
     assert_includes content, 'class="<%= theme_html_class %>"'
     assert_includes content, "page_title(inertia_page&.dig(:props, :title))"

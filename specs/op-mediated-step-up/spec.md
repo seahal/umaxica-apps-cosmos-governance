@@ -11,6 +11,12 @@ dispatch deadline; the class value, the signed client-assertion expectation as a
 Q-1 (for now) and the refusal of DPoP-bound grants. Implementation authorized on 2026-11-03 through
 the owner-approved `implementation-instruction.md` (Codex implements).
 
+> **Route-ownership clarification (2026-11-10):** This accepted spec remains scoped to Base app/org
+> ordinary step-up. Auth and Visa are external authority dependencies; this repository's local
+> Auth/Visa routes/controllers have been removed. Base app/org callers remain subject to the accepted
+> contract; any Tech caller follows its own accepted contract. This spec does not restore local
+> Auth/Visa routes or alter external OIDC contracts.
+
 ## Authority and scope
 
 Source: the owner's decisions of 2026-11-03, items 1 to 22 of

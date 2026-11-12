@@ -22,7 +22,6 @@ const THEME_CHROME: SurfaceChrome = {
   surface: "app",
   brand: { name: "Umaxica", href: "https://umaxica.app/" },
   banner: null,
-  restricted_mode: null,
   footer_navigation: null,
   cookie_controls: null,
   theme_controls: {
@@ -32,7 +31,6 @@ const THEME_CHROME: SurfaceChrome = {
     description: "表示テーマを選びます。",
     options: { system: "システム", light: "ライト", dark: "ダーク" },
   },
-  account_navigation: null,
   copyright: "(c) Umaxica",
 };
 const pageProps: {
@@ -190,6 +188,48 @@ describe("PreferenceSelect interaction", () => {
     expect(submit.textContent).toBe("更新");
   });
 
+  it("preserves an edit made while an earlier preference write is still in flight", () => {
+    mount(
+      <PreferenceSelect
+        {...props}
+        form={{
+          ...props.form,
+          choices: [...props.form.choices, { label: "Other", value: 3, disabled: false }],
+        }}
+      />,
+    );
+    const select = container.querySelector<HTMLSelectElement>("select")!;
+    const form = container.querySelector<HTMLFormElement>("form")!;
+
+    act(() => {
+      select.value = "1";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+      form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    });
+    act(() => {
+      select.value = "3";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    const [, , unverifiedOptions] = present(patch.mock.calls.at(-1), "the active preference PATCH");
+    const options = present(unverifiedOptions, "the active preference PATCH options");
+    act(() => {
+      options.onSuccess?.({
+        component: "base/app/preference/option",
+        props: { errors: {}, chrome: THEME_CHROME },
+        url: "/preference/region/edit?ri=jp",
+        version: "",
+        clearHistory: false,
+        encryptHistory: false,
+        rescuedProps: [],
+        flash: {},
+        rememberedState: {},
+      });
+    });
+
+    expect(select.value).toBe("3");
+  });
+
   it("marks the stored region so it cannot be chosen again", async () => {
     const user = userEvent.setup();
     mount(<PreferenceSelect {...props} />);
@@ -259,11 +299,9 @@ describe("PreferenceSelect interaction", () => {
             surface: "app",
             brand: { name: "Umaxica", href: "/" },
             banner: null,
-            restricted_mode: null,
             footer_navigation: null,
             cookie_controls: null,
             theme_controls: null,
-            account_navigation: null,
             copyright: "",
           },
         },
@@ -337,11 +375,9 @@ describe("PreferenceSelect interaction", () => {
             surface: "app",
             brand: { name: "Umaxica", href: "/" },
             banner: null,
-            restricted_mode: null,
             footer_navigation: null,
             cookie_controls: null,
             theme_controls: null,
-            account_navigation: null,
             copyright: "",
           },
         },
@@ -401,11 +437,9 @@ describe("PreferenceSelect interaction", () => {
             surface: "app",
             brand: { name: "Umaxica", href: "/" },
             banner: null,
-            restricted_mode: null,
             footer_navigation: null,
             cookie_controls: null,
             theme_controls: null,
-            account_navigation: null,
             copyright: "",
           },
         },
@@ -566,7 +600,7 @@ describe("PreferenceNotification mock interaction", () => {
     },
   };
 
-  it("submits an empty notification object and omits the display-only Web Push choice", () => {
+  it("submits an empty notification object without sending the display-only Web Push choice", () => {
     mount(<PreferenceNotification {...props} />);
 
     const select = container.querySelector<HTMLSelectElement>("select")!;
@@ -585,6 +619,19 @@ describe("PreferenceNotification mock interaction", () => {
       { preference_notification: {} },
       containing({ onStart: A_FUNCTION, onFinish: A_FUNCTION }),
     );
+
+    const [, , options] = present(patch.mock.calls[0], "the first notification PATCH");
+    const submit = container.querySelector<HTMLButtonElement>('button[type="submit"]')!;
+
+    act(() => {
+      startVisit(options);
+    });
+    expect(submit.textContent).toBe("送信中");
+
+    act(() => {
+      finishVisit(options);
+    });
+    expect(submit.textContent).toBe("更新");
   });
 });
 

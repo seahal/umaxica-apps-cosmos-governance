@@ -61,6 +61,8 @@ function clearCookies() {
 beforeEach(() => {
   stubMatchMedia();
   clearCookies();
+  document.cookie = "__Secure-experience=; Secure; Path=/; Max-Age=0";
+  document.cookie = "__Secure-experience=; Secure; Path=/nested; Max-Age=0";
   document.documentElement.className = "";
   delete document.documentElement.dataset["theme"];
   delete document.documentElement.dataset["edition"];
@@ -70,6 +72,8 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllGlobals();
   clearCookies();
+  document.cookie = "__Secure-experience=; Secure; Path=/; Max-Age=0";
+  document.cookie = "__Secure-experience=; Secure; Path=/nested; Max-Age=0";
 });
 
 describe("themeFromCode", () => {
@@ -112,6 +116,14 @@ describe("readThemeCookie", () => {
     await expect(readThemeCookie()).resolves.toBe("dark");
   });
 
+  test.each(["light", "system"] as const)("com accepts the %s experience theme", async (theme) => {
+    document.documentElement.dataset["edition"] = "com";
+    document.documentElement.dataset["theme"] = "dark";
+    document.cookie = `__Secure-experience=${encodeURIComponent(JSON.stringify({ ...COM_EXPERIENCE, theme }))}; Secure; Path=/`;
+
+    await expect(readThemeCookie()).resolves.toBe(theme);
+  });
+
   test("com retains the server-rendered theme when experience is absent or malformed", async () => {
     document.documentElement.dataset["edition"] = "com";
     document.documentElement.dataset["theme"] = "dark";
@@ -138,6 +150,9 @@ describe("readThemeCookie", () => {
 
   test.each([
     JSON.stringify({ theme: "light" }),
+    "null",
+    "[]",
+    JSON.stringify({ ...COM_EXPERIENCE, theme: "unexpected" }),
     JSON.stringify({ ...COM_EXPERIENCE, theme: "light", timezone: "unknown" }),
     JSON.stringify({ ...COM_EXPERIENCE, theme: "light", unexpected: "value" }),
     JSON.stringify({ ...COM_EXPERIENCE, theme: "light" }).replace(
@@ -205,6 +220,71 @@ describe("readThemeCookie", () => {
       stop();
       document.cookie = "__Secure-experience=; Secure; Path=/nested; Max-Age=0";
     }
+  });
+
+  test("com ignores an older cookie read that settles after the latest change", async () => {
+    document.documentElement.dataset["edition"] = "com";
+    document.documentElement.dataset["theme"] = "system";
+    let resolveOlderRead!: (cookies: CookieListItem[]) => void;
+    const olderRead = new Promise<CookieListItem[]>((resolve) => {
+      resolveOlderRead = resolve;
+    });
+    const getAll = vi
+      .spyOn(window.cookieStore, "getAll")
+      .mockReturnValueOnce(olderRead)
+      .mockResolvedValueOnce([
+        {
+          name: "__Secure-experience",
+          value: encodeURIComponent(JSON.stringify({ ...COM_EXPERIENCE, theme: "light" })),
+        },
+      ]);
+    const seen: string[] = [];
+    const stop = watchThemeCookie((theme) => seen.push(theme));
+    const firstChange = new Event("change");
+    const secondChange = new Event("change");
+    const light = JSON.stringify({ ...COM_EXPERIENCE, theme: "light" });
+    Object.defineProperties(firstChange, {
+      changed: {
+        value: [
+          {
+            name: "__Secure-experience",
+            value: encodeURIComponent(JSON.stringify(COM_EXPERIENCE)),
+          },
+        ],
+      },
+      deleted: { value: [] },
+    });
+    Object.defineProperties(secondChange, {
+      changed: { value: [{ name: "__Secure-experience", value: encodeURIComponent(light) }] },
+      deleted: { value: [] },
+    });
+
+    try {
+      window.cookieStore.dispatchEvent(firstChange);
+      window.cookieStore.dispatchEvent(secondChange);
+      await vi.waitFor(() => expect(seen).toEqual(["light"]));
+      resolveOlderRead([
+        { name: "__Secure-experience", value: encodeURIComponent(JSON.stringify(COM_EXPERIENCE)) },
+      ]);
+      await Promise.resolve();
+
+      expect(getAll).toHaveBeenCalledTimes(2);
+      expect(seen).toEqual(["light"]);
+    } finally {
+      stop();
+    }
+  });
+
+  test("rethrows non-JSON errors from the browser parser", async () => {
+    document.documentElement.dataset["edition"] = "com";
+    document.cookie = `__Secure-experience=${encodeURIComponent(JSON.stringify(COM_EXPERIENCE))}; Secure; Path=/`;
+    const parserError = new TypeError("JSON parser unavailable");
+    const parse = vi.spyOn(JSON, "parse").mockImplementation(() => {
+      throw parserError;
+    });
+
+    await expect(readThemeCookie()).rejects.toBe(parserError);
+    parse.mockRestore();
   });
 
   test("reads the theme Rails rendered the first paint from", async () => {

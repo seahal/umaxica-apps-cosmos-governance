@@ -2,6 +2,12 @@
 
 Status: implementing
 
+> **Disposition (2026-11-10):** Local Auth, Visa, Core, Warp, Palm, Edit/Press, and other foreign
+> route/controller requirements are superseded by the owner-approved local-surface hard reset.
+> Retained Base and Tech RP/OP behavior remains in scope only where current callers still exist and
+> is governed by their current contracts. This note does not remove model, database, or external OIDC
+> contracts and does not authorize restoring removed routes.
+
 ## Purpose and authority
 
 The user requested implementation of every missing part of `two.md` on 2026-10-23.

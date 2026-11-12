@@ -101,10 +101,9 @@ Rails.event.record(...)
 Those methods were custom application logging shims and are not part of the current logging
 contract.
 
-DBSC registration advertisements, registration success and challenge issuance use fixed structured
-application log events. Neither session identifiers nor challenges are included, even as truncated
-prefixes; HTTP-header presence logs retain field names only. See
-[the DBSC header boundary](../architecture/dbsc.md#http-header-boundary).
+No DBSC registration or verification endpoint remains, so the former DBSC registration and
+challenge events are no longer emitted. Retained DBSC model fields are not logging inputs. Any
+future owner-approved implementation requires a current logging contract before adding events.
 
 ActionMailer raw message content is not application logging data. The shared Rails configuration
 sets `config.action_mailer.logger = nil`, which leaves delivery, delivery jobs, interceptors and
@@ -347,7 +346,7 @@ dropped.
 
 | Class             | Event Patterns                                                                                                                                                                                                               | Rationale                                                 |
 | ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
-| Authentication    | `auth.*`, `authentication.*`, `authorization.*`, `session.*`, `social_auth.*`, `sign.social.omniauth*`, `user.token.*`, `staff.token.*`, `user.occurrence.*`, `staff.occurrence.*`, `otp.*`, `webauthn.*`, `sign.webauthn.*` | Service delivery, fraud detection, audit accountability   |
+| Authentication    | `auth.*`, `authentication.*`, `authorization.*`, `session.*`, `user.token.*`, `staff.token.*`, `user.occurrence.*`, `staff.occurrence.*`, `otp.*`, `webauthn.*`, `sign.webauthn.*` | Service delivery, fraud detection, audit accountability   |
 | Security          | `rate_limit.*`, `telephone.verification.rate_limited`, `turnstile.*`, `captcha.*`, `security.*`, `redirect.blocked`, `redirect.invalid_url`, `sign.risk.*`                                                                   | Abuse prevention, bot mitigation, platform integrity      |
 | Incident Response | `health_check.*`, `exception.*`, `unhandled_exception`, `error.unhandled`, `preference.*.error`, `preference.*.rotation_error`                                                                                               | Reliability monitoring, incident investigation, debugging |
 | Contact           | `contact.submission.*`                                                                                                                                                                                                       | Confirm delivery of user-initiated contact                |

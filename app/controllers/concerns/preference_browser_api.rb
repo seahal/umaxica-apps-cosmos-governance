@@ -2,9 +2,9 @@
 # frozen_string_literal: true
 
 # The HTTP contract for the browser theme and cookie-consent endpoints
-# (`/api/v0/preferences/{theme,cookie}`). Base owns interactive writes; Auth, Core, and Warp expose
-# read-only responses on their own hosts. This concern supplies media types, cache policy, and
-# refusal responses. Preference reads and writes stay in the web preference endpoint concerns.
+# (`/api/v0/preferences/{theme,cookie}`). Base owns the retained preference surfaces. This concern
+# supplies media types, cache policy, and refusal responses. Preference reads and writes stay in
+# the web preference endpoint concerns.
 #
 # Opt in from the concrete controller, after its last inherited `prepend_before_action`:
 #

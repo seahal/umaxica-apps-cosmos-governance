@@ -1,11 +1,80 @@
 # frozen_string_literal: true
 
-# R5-WU17 cell-process sign-in for integration tests.
-#
-# The OP side (code issue and exchange) runs as the real OP code; the RP side commits the verified
-# ID Token into the cell store exactly as the callback does (RpCallbackCommitter) and the browser
-# then holds the same three cookies a callback installs: Access, Refresh and the local session.
+# RP-cell fixtures retain local session setup and external-token verification.
+# Access owns OP issuance and step-up evidence; Governance cannot manufacture either.
 module RpCellSessionHelper
+  class UnavailableValkeyConnection
+    def key(*) = raise Umaxica::Valkey::Unavailable
+
+    def call(*) = raise Umaxica::Valkey::Unavailable
+  end
+
+  def install_base_rp_jwks_client(client_id:, access_token:)
+    raise ArgumentError, "test verifier supports retained Governance RP clients only" unless
+      %w(base-app-ww base-org-ww tech-org-ww).include?(client_id.to_s)
+
+    client = OidcClientRegistry.find!(client_id)
+    resource_type = OidcIssuer.resource_type_for_client(client)
+    namespace = (resource_type == "operator") ? "BASE_ORG" : "BASE_APP"
+    jwks_uri = OidcIssuer.jwks_uri(resource_type)
+    _claims, header = JWT.decode(access_token, nil, false)
+    jwks = JitSecurityJwtJwksService.jwk_set(namespace).deep_stringify_keys
+    raise ArgumentError, "Base test signing key is absent from the published keyset" unless
+      jwks.fetch("keys").any? { |key| key.fetch("kid") == header.fetch("kid") }
+
+    isolated_limiter = OidcJwksRefetchLimiter.new(connection: UnavailableValkeyConnection.new)
+    OidcOpJwksClient::CLIENTS[jwks_uri] = OidcOpJwksClient.new(
+      jwks_uri:, fetcher: -> { jwks }, limiter: isolated_limiter,
+    )
+  end
+
+  # Creates the local records needed by request tests without exercising the retired
+  # OIDC callback path. This is test setup; production sessions still have no issuer.
+  def seed_rp_cell_session(cell:, issuer:, subject:, sid:, absolute_expires_at:)
+    prefix = cell.record_prefix
+    record_class = "#{prefix}Record".constantize
+    identity_binding_class = "#{prefix}IdentityBinding".constantize
+    principal_class = "#{prefix}Principal".constantize
+    op_session_binding_class = "#{prefix}OpSessionBinding".constantize
+    session_class = "#{prefix}Session".constantize
+    identity_keys = { issuer:, realm: cell.realm, client_id: cell.client_id, subject: }
+    anchor_keys = identity_keys.except(:subject).merge(sid:)
+
+    record_class.connected_to(role: :writing) do
+      record_class.transaction(requires_new: true) do
+        identity_binding = identity_binding_class.find_by(identity_keys)
+        unless identity_binding
+          principal = principal_class.create!
+          identity_binding = identity_binding_class.create!(identity_keys.merge(principal:))
+        end
+        anchor = op_session_binding_class.find_by(anchor_keys)
+        raise ArgumentError, "cannot seed a revoked RP session" if anchor&.revoked_at
+
+        anchor ||= op_session_binding_class.create!(anchor_keys.merge(identity_binding:))
+        if anchor.identity_binding_id.nil?
+          anchor.update!(identity_binding:)
+        elsif anchor.identity_binding_id != identity_binding.id
+          raise ArgumentError, "RP test session identity binding does not match"
+        end
+        existing_session = session_class.includes(:op_session_binding)
+          .where(op_session_binding: anchor, revoked_at: nil)
+          .where("absolute_expires_at > ?", record_class.database_now).order(:id).first
+        existing_session || session_class.create!(
+          op_session_binding: anchor, absolute_expires_at:, installed_generation: 0,
+        )
+      end
+    end
+  end
+
+  def seed_rp_browser_session(client:, actor:, sid:, absolute_expires_at:)
+    resource_type = OidcIssuer.resource_type_for_client(client)
+
+    seed_rp_cell_session(
+      cell: RpCellBinding.for_client(client.client_id), issuer: OidcIssuer.for_client(client),
+      subject: OidcSubject.for(actor, resource_type:), sid:, absolute_expires_at:,
+    )
+  end
+
   # The process role and its deployed contract epoch are process configuration.
   def as_rp_cell(client_id)
     cell = RpCellBinding.for_client(client_id)
@@ -19,118 +88,15 @@ module RpCellSessionHelper
     previous&.each { |name, value| value.nil? ? ENV.delete(name) : ENV[name] = value }
   end
 
-  # Returns [token_response, id_token_payload, local session].
-  def sign_in_rp_cell(client_id, actor:, root_token:)
-    cell = RpCellBinding.for_client(client_id)
-    token_response = rp_cell_test_token_response(client_id, actor:, root_token:)
-    payload, = JWT.decode(token_response.fetch(:id_token), nil, false)
-    enrollment = RpCallbackCommitter.call(
-      cell:, issuer: payload.fetch("iss"), subject: payload.fetch("sub"), sid: payload.fetch("sid"),
-      absolute_expires_at: 1.hour.from_now,
-    )
-    raise ArgumentError, "cell enrollment failed: #{enrollment.outcome}" unless enrollment.success?
-
-    cookies[OidcRpBrowserCredentialContract::ACCESS_COOKIE] = token_response.fetch(:access_token)
-    cookies[OidcRpBrowserCredentialContract::REFRESH_COOKIE] = token_response.fetch(:refresh_token)
-    cookies[OidcRpBrowserCredentialContract::SESSION_COOKIE] = enrollment.session.public_id
-    [token_response, payload, enrollment.session]
+  def sign_in_rp_cell(_client_id, actor:, root_token:)
+    raise AccessOpDataUnavailableError
   end
 
-  # Installs a valid owner-issued step-up event on the grant used by the real RP callback path.
-  # Credential signature verification is covered by the passkey ceremony tests; this helper keeps
-  # HTTP tests focused on the RP controller's evidence and write-boundary behavior.
-  def sign_in_rp_cell_with_step_up_evidence(client_id, actor:, root_token:)
-    token_response, payload, session = sign_in_rp_cell(client_id, actor:, root_token:)
-    client = OidcClientRegistry.find!(client_id)
-    surface = (OidcIssuer.resource_type_for_client(client) == "operator") ? "org" : "app"
-    record_class, grant_class, commit_class =
-      case surface
-      when "app" then [OpBaseAppRecord, OpAppGrant, ClientStepUpCommit]
-      when "org" then [OpBaseOrgRecord, OpOrgGrant, OperatorStepUpCommit]
-      else raise ArgumentError, "unsupported Base RP surface: #{surface.inspect}"
-      end
-    grant = grant_class.find_by!(public_id: payload.fetch("sid"))
-    now = record_class.database_now
-    auth_time = now.to_i - 1
-    commit_owner_step_up!(grant:, root_token:, commit_class:, auth_time:)
-    access_token = AuthenticationTokenService.encode(
-      actor,
-      host: URI.parse(client.redirect_uris.first).host,
-      resource_type: OidcIssuer.resource_type_for_client(client),
-      session_public_id: root_token.public_id,
-      base_session_public_id: root_token.public_id,
-      oidc_sid: grant.public_id,
-      oidc_jti: grant.oidc_jti,
-      expires_at: now + 10.minutes,
-      scopes: %w(openid profile),
-      acr: StepUpEvidenceResolver::STEP_UP_ACR,
-      amr: ["passkey"],
-      auth_time: auth_time,
-      authentication_context: root_token.strict_authentication_context_value.to_s,
-      issuer: OidcIssuer.for_client(client),
-      audiences: [client.aud],
-      jwt_issuer_id: OidcIssuer.jwt_issuer_id_for_client(client),
-      subject: OidcSubject.for(actor, resource_type: OidcIssuer.resource_type_for_client(client)),
-      client_id: client.client_id,
-    )
-    cookies[OidcRpBrowserCredentialContract::ACCESS_COOKIE] = access_token
-    [token_response, payload, session]
+  def sign_in_rp_cell_headers(_client_id, actor:, root_token:, host:)
+    raise AccessOpDataUnavailableError
   end
 
-  private
-
-  def commit_owner_step_up!(grant:, root_token:, commit_class:, auth_time:)
-    grant.update!(
-      oidc_auth_time: Time.at(auth_time).utc,
-      oidc_acr: StepUpEvidenceResolver::STEP_UP_ACR,
-      oidc_amr: JSON.generate(["passkey"]),
-    )
-    commit_class.create!(
-      grant: grant,
-      root_token: root_token,
-      context_ref: PublicId.generate,
-      verified_method: "passkey",
-      committed_at: Time.at(auth_time).utc,
-    )
-  end
-
-  def rp_cell_test_token_response(client_id, actor:, root_token:)
-    client = OidcClientRegistry.find!(client_id)
-    verifier = SecureRandom.urlsafe_base64(48)
-    params = {
-      client_id:,
-      redirect_uri: client.redirect_uris.first,
-      response_type: "code",
-      scope: "openid",
-      state: SecureRandom.hex(16),
-      nonce: SecureRandom.hex(16),
-      code_challenge_method: "S256",
-      code_challenge: Base64.urlsafe_encode64(Digest::SHA256.digest(verifier), padding: false),
-    }
-    authentication_event_at = 1.minute.ago
-    code = OidcAuthorizationCodeIssuer.call(
-      client:, params:, resource: actor, session_token: root_token, authentication_event_at:,
-    )
-    resource_type = OidcIssuer.resource_type_for_client(client)
-    token_url = OidcIssuer.token_endpoint(resource_type)
-    result =
-      OidcClientRegistry.stub(
-        :verify_client_assertion,
-        ->(authenticated_client_id, *, **) {
-          OidcClientRegistry::AssertionAuthenticationResult.new(
-            authenticated: true, client: OidcClientRegistry.find(authenticated_client_id),
-            step_up_claims_state: :none, step_up_expectation: nil,
-          )
-        },
-      ) do
-        OidcTokenExchangeCoordinator.call(
-          grant_type: "authorization_code", code: code.code, redirect_uri: code.redirect_uri, client_id:,
-          client_assertion_type: OidcClientAssertionJwt::ASSERTION_TYPE, client_assertion: "cell-test-assertion",
-          token_endpoint_uri: token_url, code_verifier: verifier, expected_resource_type: resource_type,
-        )
-      end
-    raise ArgumentError, "OP code exchange failed: #{result.inspect}" unless result.success?
-
-    result.token_response
+  def sign_in_rp_cell_with_step_up_evidence(_client_id, actor:, root_token:)
+    raise AccessOpDataUnavailableError
   end
 end

@@ -5,20 +5,19 @@ require "test_helper"
 # require "helpers/global_test_support"
 
 class BaseSettingsAuthoritySlice1GTest < ActionDispatch::IntegrationTest
-  fixtures :clients, :operators, :client_statuses, :client_token_kinds, :client_token_statuses,
-           :client_chronicle_events, :client_chronicle_levels
+  fixtures :clients, :operators, :client_statuses, :client_chronicle_events, :client_chronicle_levels
 
   test "base app settings shell route is removed" do
     assert_raises(ActionController::RoutingError) do
       Rails.application.routes.recognize_path(
-        "http://#{ENV.fetch("PUBLIC_BASE_SERVICE_URL", "base.app.localhost")}/settings",
+        "http://#{ENV.fetch("PUBLIC_BASE_SERVICE_URL")}/settings",
         method: :get,
       )
     end
   end
 
   test "base app activities list only current user entries" do
-    host = ENV.fetch("PUBLIC_BASE_SERVICE_URL", "base.app.localhost")
+    host = ENV.fetch("PUBLIC_BASE_SERVICE_URL")
     host! host
     user = clients(:one)
     other_user = clients(:two)
@@ -28,10 +27,8 @@ class BaseSettingsAuthoritySlice1GTest < ActionDispatch::IntegrationTest
     create_user_audit(user: user, tag: "refresh-internal", event_id: ClientChronicleEvent::TOKEN_REFRESHED)
     create_user_audit(user: other_user, tag: "other-login-event")
 
-    token = create_user_token!(user)
-    select_token!(surface: :app, principal: user, token: token)
-
-    get base_app_identity_activities_url(ri: "jp", host: host), headers: app_session_headers(host, token, user)
+    headers = as_user_headers(user, host: host)
+    get base_app_identity_activities_url(ri: "jp", host: host), headers: headers
 
     assert_response :success
     rows = inertia_props.fetch("activities")
@@ -49,7 +46,7 @@ class BaseSettingsAuthoritySlice1GTest < ActionDispatch::IntegrationTest
   test "base com settings shell route is removed and org settings belongs to the base console" do
     assert_raises(ActionController::RoutingError) do
       Rails.application.routes.recognize_path(
-        "http://#{ENV.fetch("PUBLIC_BASE_CORPORATE_URL", "base.com.localhost")}/settings",
+        "http://#{ENV.fetch("PUBLIC_BASE_CORPORATE_URL")}/settings",
         method: :get,
       )
     end
@@ -57,7 +54,7 @@ class BaseSettingsAuthoritySlice1GTest < ActionDispatch::IntegrationTest
     assert_equal(
       { controller: "base/org/settings", action: "show" },
       Rails.application.routes.recognize_path(
-        "http://#{ENV.fetch("PUBLIC_BASE_STAFF_URL", "base.org.localhost")}/settings",
+        "http://#{ENV.fetch("PUBLIC_BASE_STAFF_URL")}/settings",
         method: :get,
       ),
     )
@@ -71,7 +68,6 @@ class BaseSettingsAuthoritySlice1GTest < ActionDispatch::IntegrationTest
       base_org_identity_telephone
       base_org_identity_birthdate
       base_org_identity_secret
-      base_org_identity_session
       base_org_identity_activit
       base_org_identity_withdrawal
     ).each do |prefix|
@@ -80,7 +76,7 @@ class BaseSettingsAuthoritySlice1GTest < ActionDispatch::IntegrationTest
   end
 
   test "base com no longer owns identity or withdrawal routes" do
-    host = ENV.fetch("PUBLIC_BASE_CORPORATE_URL", "base.com.localhost")
+    host = ENV.fetch("PUBLIC_BASE_CORPORATE_URL")
 
     [
       ["/identity/withdrawal/new", :get],
@@ -97,7 +93,7 @@ class BaseSettingsAuthoritySlice1GTest < ActionDispatch::IntegrationTest
   end
 
   test "base org withdrawal is informational get only" do
-    host = ENV.fetch("PUBLIC_BASE_STAFF_URL", "base.org.localhost")
+    host = ENV.fetch("PUBLIC_BASE_STAFF_URL")
 
     assert_equal(
       { controller: "base/org/identity/withdrawals", action: "show" },
@@ -114,7 +110,7 @@ class BaseSettingsAuthoritySlice1GTest < ActionDispatch::IntegrationTest
   end
 
   test "base org identity routes load controllers" do
-    host = ENV.fetch("PUBLIC_BASE_STAFF_URL", "base.org.localhost")
+    host = ENV.fetch("PUBLIC_BASE_STAFF_URL")
     host! host
 
     get base_org_identity_emails_url(ri: "jp", host: host)
@@ -123,26 +119,6 @@ class BaseSettingsAuthoritySlice1GTest < ActionDispatch::IntegrationTest
   end
 
   private
-
-  def create_user_token!(user)
-    token = ClientToken.new(
-      authentication_epoch: 0,
-      user: user,
-      user_token_kind_id: ClientTokenKind::BROWSER_WEB,
-      user_token_status_id: ClientTokenStatus::ACTIVE,
-    )
-    token.save!
-    token
-  end
-
-  def select_token!(surface:, principal:, token:)
-    BaseSelectorBootstrapAuthority.call(surface: surface, principal: principal)
-    BaseSelectorAuthority.prepare(surface: surface, principal: principal, session: token)
-  end
-
-  def app_session_headers(host, token, user)
-    as_user_headers(user, host: host, session_public_id: token.public_id)
-  end
 
   def host_headers(host = nil)
     host.present? ? { "Host" => host } : {}
@@ -156,32 +132,6 @@ class BaseSettingsAuthoritySlice1GTest < ActionDispatch::IntegrationTest
   # issuer namespace cannot be inferred from a host substring like "base". Match against the
   # actual configured Base hosts first; fall back to substring heuristics for surfaces whose
   # hosts are texually distinct (acme/core/sign).
-  def jwt_issuer_id_for_test_host(host, resource_type)
-    normalized = host.to_s
-    base_hosts = {
-      "APP" => ENV.fetch("PUBLIC_BASE_SERVICE_URL", "base.app.localhost"),
-      "ORG" => ENV.fetch("PUBLIC_BASE_STAFF_URL", "base.org.localhost"),
-      "COM" => ENV.fetch("PUBLIC_BASE_CORPORATE_URL", "base.com.localhost"),
-    }
-    return "surface:BASE_#{base_hosts.key(normalized)}" if base_hosts.value?(normalized)
-
-    service = normalized.include?("acme") ? "ACME" : (normalized.include?("core") ? "CORE" : "AUTH")
-    surface =
-      if service == "AUTH"
-        case resource_type
-        when "operator" then "ORG"
-        else "APP"
-        end
-      elsif normalized.include?(".org") || normalized.include?("org.")
-        "ORG"
-      elsif normalized.include?(".com") || normalized.include?("com.")
-        "COM"
-      else
-        "APP"
-      end
-    "surface:#{service}_#{surface}"
-  end
-
   def create_user_audit(user:, tag:, event_id: ClientChronicleEvent::LOGGED_IN)
     ChronicleRecord.connected_to(role: :writing) do
       ClientChronicle.create!(
@@ -192,37 +142,5 @@ class BaseSettingsAuthoritySlice1GTest < ActionDispatch::IntegrationTest
         occurred_at: Time.current,
       )
     end
-  end
-end
-
-# DAMP local route helper aliases for former shared test support.
-class BaseSettingsAuthoritySlice1GTest
-  SURFACE_ROUTE_PREFIX_MAP = {
-    "sign_app_" => "auth_app_",
-    "sign_org_" => "auth_org_",
-    "acme_app_" => "base_app_",
-    "acme_org_" => "base_org_",
-  }.freeze unless const_defined?(:SURFACE_ROUTE_PREFIX_MAP, false)
-
-  private
-
-  def method_missing(name, ...)
-    aliased_name = aliased_surface_route_helper_name(name)
-    return public_send(aliased_name, ...) if aliased_name && respond_to?(aliased_name, true)
-
-    super
-  end
-
-  def respond_to_missing?(name, include_private = false)
-    aliased_name = aliased_surface_route_helper_name(name)
-    (aliased_name && respond_to?(aliased_name, include_private)) || super
-  end
-
-  def aliased_surface_route_helper_name(name)
-    helper_name = name.to_s
-    self.class::SURFACE_ROUTE_PREFIX_MAP.each do |source_prefix, target_prefix|
-      return helper_name.sub(source_prefix, target_prefix).to_sym if helper_name.start_with?(source_prefix)
-    end
-    nil
   end
 end

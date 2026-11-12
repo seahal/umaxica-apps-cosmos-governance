@@ -1,15 +1,21 @@
 # Authentication Capacity Admission Boundary
 
+> **Historical route inventory (2026-11-10):** The local Auth and Visa route/controller trees
+> described below have been removed. The controller maps and flow descriptions are not current
+> endpoint contracts. Retained Base/Tech callers, external authorities, and model/database
+> contracts are determined by the current surface map and the hard-reset model/database report.
+
 ## Status
 
-This document records the current implementation audit for the future authentication capacity
-control described by U07 in `three.md`. It does not introduce a waiting room, a queue, a feature
-flag, or a new admission state machine.
+This document records the pre-reset implementation audit for the future authentication capacity
+control described by U07 in `three.md`. It does not describe current local Auth/Visa endpoints and
+does not introduce a waiting room, a queue, a feature flag, or a new admission state machine.
 
-The current `AuthCeremonyAdmission` and `BaseAuthAdmissionCoordinator` contracts remain security
-admissions. They are not capacity permits and must not be weakened or repurposed.
+In the pre-reset implementation, `AuthCeremonyAdmission` and `BaseAuthAdmissionCoordinator` were
+security admissions, not capacity permits. That distinction documents the former design and does
+not establish an active local route contract.
 
-## Existing entry boundary
+## Former entry boundary
 
 Visa creates the OIDC admission for the routed surface. Base remains the browser RP that starts the
 OIDC request; Auth consumes the admission through `AuthCeremonyAdmission` and `AuthCeremonyContext`:
@@ -35,10 +41,10 @@ The following existing controls remain separate:
 | `FqdnAvailabilityGate`         | Enforces the routed surface/FQDN availability registry                                                                 | Served-surface availability only; it is not a capacity counter                     |
 | Turnstile and rate limits      | Abuse controls at selected credential and registration requests                                                        | They limit abuse dimensions but do not provide a bounded expensive-work budget     |
 
-## Entry and execution map
+## Entry and execution map (pre-reset)
 
-The current routes keep Sign In and Sign Up independent. They must remain independent if a future
-capacity gate is added.
+The pre-reset routes kept Sign In and Sign Up independent. Any future capacity gate for a retained
+caller must preserve that separation.
 
 | Surface and flow                  | Entry or continuation boundary                                                                         | Expensive execution that needs a future second check                                                                           |
 | --------------------------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |

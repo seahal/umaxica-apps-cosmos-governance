@@ -71,7 +71,6 @@ class OperatorTest < ActiveSupport::TestCase
       [0, 1, 2, 3].each { |id| OperatorVisibility.find_or_create_by!(id: id) }
       OperatorTelephoneStatus.find_or_create_by!(id: OperatorTelephoneStatus::UNVERIFIED)
       OperatorEmailStatus.find_or_create_by!(id: OperatorEmailStatus::UNVERIFIED)
-      OperatorTokenStatus.find_or_create_by!(id: OperatorTokenStatus::ACTIVE)
     end
   end
 
@@ -430,6 +429,9 @@ class OperatorTest < ActiveSupport::TestCase
   end
 
   test "dependent behaviors for staff associations" do
+    %i(staff_tokens operator_tokens operator_device_sessions oidc_connections).each do |name|
+      assert_nil Operator.reflect_on_association(name), "Governance must not cascade into Access-owned OP state"
+    end
     assert_equal :restrict_with_error,
                  Operator.reflect_on_association(:staff_emails).options[:dependent]
     assert_equal :restrict_with_error,
@@ -441,8 +443,6 @@ class OperatorTest < ActiveSupport::TestCase
     assert_nil Operator.reflect_on_association(:client_chronicles).options[:dependent]
     assert_equal :destroy,
                  Operator.reflect_on_association(:staff_secret_credentials).options[:dependent]
-    assert_equal :destroy,
-                 Operator.reflect_on_association(:staff_tokens).options[:dependent]
     # Cross-database (org_signal DB): NO implicit cascade; purged explicitly
     # via RetentionCrossDatabaseChildPurge from the operator purge path.
     assert_nil Operator.reflect_on_association(:notification_records).options[:dependent]
@@ -482,21 +482,6 @@ class OperatorTest < ActiveSupport::TestCase
       assert_not staff.destroy
       assert_not_empty staff.errors[:base]
     end
-  end
-
-  test "association deletion: destroys dependent operator_tokens" do
-    staff = Operator.create!(
-      security_mode_id: SecurityModeConfigurable::ADVANCED,
-      id: 1_000_000_000_000 + SecureRandom.random_number(1_000_000_000),
-    )
-    token = OperatorToken.create!(
-      authentication_epoch: 0,
-      staff: staff,
-      discard_at: 1.day.from_now,
-    )
-    staff = StrictLoadingAssociationPreloader.for_destruction(staff.reload)
-    staff.destroy
-    assert_raise(ActiveRecord::RecordNotFound) { token.reload }
   end
 
   test "purge_eligible_at query excludes operators with default purge_eligible_at" do

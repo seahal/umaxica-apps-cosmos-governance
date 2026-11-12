@@ -73,6 +73,22 @@ class AppEnforcementIdentifierEffectTest < ActiveSupport::TestCase
     assert_not_includes in_force, ended
   end
 
+  test "only one open identifier effect occupies a slot and ended history remains" do
+    enforcement_case = ban_case
+    original = create_effect(enforcement_case, "unique-app@example.test", effective_at: 1.hour.ago)
+    duplicate = AppEnforcementIdentifierEffect.new(original.attributes.except("id"))
+
+    assert_not duplicate.valid?
+    assert duplicate.errors.of_kind?(:identifier_kind, :taken)
+    assert_raises(ActiveRecord::RecordNotUnique) do
+      AppEnforcementIdentifierEffect.transaction(requires_new: true) { duplicate.save!(validate: false) }
+    end
+    original.update!(ended_at: Time.current)
+
+    assert_predicate duplicate, :valid?
+    assert_predicate duplicate.save!, :itself
+  end
+
   private
 
   def ban_case

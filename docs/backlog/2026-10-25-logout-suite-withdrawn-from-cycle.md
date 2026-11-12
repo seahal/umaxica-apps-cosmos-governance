@@ -4,6 +4,10 @@ Status: Returned to the cycle 2026-10-26; definition `ten.md`; implemented by SO
 Acceptance and deployment conditions remain subject to the SO-5 evidence below. `.com`
 authentication was retired afterwards; COM references were removed from this entry.
 
+> **Route status (2026-11-10):** Local Core, Warp, Palm, and Edit RP route/controller references in
+> this cycle record are historical after the owner-approved hard reset. Base/Tech behavior and OP
+> commit/order contracts remain only where current callers exist; this note does not retire them.
+
 Units: `two.md` WU-14 (RP-Initiated Logout), WU-15 (Back-Channel Logout), WU-16 (one OP
 authority-stop primitive), WU-22 (sign-out records SO-1 … SO-7), WU-44 (root issuance re-check,
 epoch, credential-change serialization). Gates: `three.md` G-16, G-19, G-20, A14-_, A15-_, A16-_,

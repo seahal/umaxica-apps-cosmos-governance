@@ -9,13 +9,12 @@ class RpBaseAppSessionTest < ActiveSupport::TestCase
 
   test "active? reads its revocation anchor without lazy-loading the strict association" do
     cell = RpCellBinding.fetch("rp_base_app")
-    enrollment = RpCallbackCommitter.call(
+    enrollment = seed_rp_cell_session(
       cell:, issuer: "https://www.umaxica.app", subject: "active-session-subject", sid: "active-session-sid",
       absolute_expires_at: 1.hour.from_now,
     )
 
-    assert_predicate enrollment, :success?
-    session = enrollment.session
+    session = enrollment
 
     assert_predicate session, :active?
 

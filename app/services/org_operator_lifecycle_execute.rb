@@ -17,6 +17,10 @@ class OrgOperatorLifecycleExecute
     return failure("Only approved requests can be executed") unless request.approved?
     return failure("Requester cannot execute their own lifecycle request") if requested_by_actor?
 
+    if request.action.in?([OperatorLifecycleRequest::ACTION_JOIN, OperatorLifecycleRequest::ACTION_RESTORE])
+      raise AccessOpDataUnavailableError
+    end
+
     invitation = nil
     @stop_events = []
     OrgPrincipalRecord.transaction do
@@ -35,7 +39,7 @@ class OrgOperatorLifecycleExecute
       )
       stop_events = @stop_events.dup.freeze
       OrgPrincipalRecord.current_transaction.after_commit do
-        stop_events.each { |event| OpIdentityEventInvalidator.deliver(event:) }
+        raise AccessOpDataUnavailableError if stop_events.any?
       end
     end
 
@@ -51,7 +55,7 @@ class OrgOperatorLifecycleExecute
   def execute_action!
     case request.action
     when OperatorLifecycleRequest::ACTION_JOIN
-      create_invitation!
+      raise AccessOpDataUnavailableError
     when OperatorLifecycleRequest::ACTION_WITHDRAW
       withdraw_operator!
       nil
@@ -69,18 +73,6 @@ class OrgOperatorLifecycleExecute
     end
   end
 
-  def create_invitation!
-    result = OrgOperatorLifecycleInvitationIssuer.call(request: request, actor: actor)
-    unless result.success?
-      request.errors.add(:base, result.error)
-      raise ActiveRecord::RecordInvalid, request
-    end
-
-    result.invitation
-  end
-
-  # Leaving, with a window to change their mind: the operator is deactivated now
-  # and purged after GRACE_PERIOD unless `restore` runs first.
   def withdraw_operator!
     target = request.target_operator
     return if target.blank?

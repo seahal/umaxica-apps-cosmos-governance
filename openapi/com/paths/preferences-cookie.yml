@@ -5,8 +5,8 @@ servers:
 get:
   summary: Cookie-consent banner state
   description: >-
-    Reports whether the cookie-consent banner should be shown. Open: no session is required.
-    A same-TLD preference token and a matching host-only browser binding identify a recorded decision.
+    Reports whether the cookie-consent banner should be shown. Open: no session is required. A
+    same-TLD preference token and a matching host-only browser binding identify a recorded decision.
   operationId: getPreferencesCookie
   tags: [Preferences]
   security: []

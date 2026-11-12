@@ -1,0 +1,286 @@
+example_id                                                                                                  | status  | run_time        |
+----------------------------------------------------------------------------------------------------------- | ------- | --------------- |
+./vendor/fork/database_consistency/spec/checkers/case_sensitive_unique_validation_checker_spec.rb[1:1:1]    | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/case_sensitive_unique_validation_checker_spec.rb[1:2:1]    | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/case_sensitive_unique_validation_checker_spec.rb[1:3:1]    | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/column_presence_checker_spec.rb[1:1:1]                     | passed  | 0.5886 seconds  |
+./vendor/fork/database_consistency/spec/checkers/column_presence_checker_spec.rb[1:2:1]                     | passed  | 0.00422 seconds |
+./vendor/fork/database_consistency/spec/checkers/column_presence_checker_spec.rb[1:2:2:1]                   | passed  | 0.00415 seconds |
+./vendor/fork/database_consistency/spec/checkers/column_presence_checker_spec.rb[1:2:3:1]                   | passed  | 0.00912 seconds |
+./vendor/fork/database_consistency/spec/checkers/column_presence_checker_spec.rb[1:2:4:1]                   | passed  | 0.00407 seconds |
+./vendor/fork/database_consistency/spec/checkers/column_presence_checker_spec.rb[1:2:5:1]                   | passed  | 0.01393 seconds |
+./vendor/fork/database_consistency/spec/checkers/column_presence_checker_spec.rb[1:2:6:1]                   | passed  | 0.00905 seconds |
+./vendor/fork/database_consistency/spec/checkers/column_presence_checker_spec.rb[1:2:7:1]                   | passed  | 0.00845 seconds |
+./vendor/fork/database_consistency/spec/checkers/column_presence_checker_spec.rb[1:2:8:1]                   | passed  | 0.01385 seconds |
+./vendor/fork/database_consistency/spec/checkers/column_presence_checker_spec.rb[1:3:1]                     | passed  | 0.00236 seconds |
+./vendor/fork/database_consistency/spec/checkers/column_presence_checker_spec.rb[1:3:2:1]                   | passed  | 0.00212 seconds |
+./vendor/fork/database_consistency/spec/checkers/column_presence_checker_spec.rb[1:4:1]                     | passed  | 0.00471 seconds |
+./vendor/fork/database_consistency/spec/checkers/column_presence_checker_spec.rb[1:5:1]                     | passed  | 0.00338 seconds |
+./vendor/fork/database_consistency/spec/checkers/column_presence_checker_spec.rb[1:6:1:1:1]                 | passed  | 0.00172 seconds |
+./vendor/fork/database_consistency/spec/checkers/column_presence_checker_spec.rb[1:6:1:2]                   | passed  | 0.00201 seconds |
+./vendor/fork/database_consistency/spec/checkers/column_presence_checker_spec.rb[1:6:2:1]                   | passed  | 0.00168 seconds |
+./vendor/fork/database_consistency/spec/checkers/column_presence_checker_spec.rb[1:7:1:1]                   | passed  | 0.0017 seconds  |
+./vendor/fork/database_consistency/spec/checkers/column_presence_checker_spec.rb[1:7:1:2:1]                 | passed  | 0.00178 seconds |
+./vendor/fork/database_consistency/spec/checkers/column_presence_checker_spec.rb[1:7:2:1:1]                 | passed  | 0.00181 seconds |
+./vendor/fork/database_consistency/spec/checkers/column_presence_checker_spec.rb[1:7:2:2]                   | passed  | 0.00218 seconds |
+./vendor/fork/database_consistency/spec/checkers/column_presence_checker_spec.rb[1:8:1]                     | passed  | 0.0019 seconds  |
+./vendor/fork/database_consistency/spec/checkers/enum_type_checker/postgresql_spec.rb[1:1:1]                | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/enum_type_checker_spec.rb[1:1:1]                           | passed  | 0.00219 seconds |
+./vendor/fork/database_consistency/spec/checkers/enum_type_checker_spec.rb[1:2:1]                           | passed  | 0.00178 seconds |
+./vendor/fork/database_consistency/spec/checkers/enum_value_checker_spec.rb[1:1:1]                          | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/enum_value_checker_spec.rb[1:2:1]                          | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/enum_value_checker_spec.rb[1:3:1]                          | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/enum_value_checker_spec.rb[1:4:1]                          | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/enum_value_checker_spec.rb[1:5:1]                          | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/enum_value_checker_spec.rb[1:6:1]                          | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/foreign_key_cascade_checker_spec.rb[1:1:1:1]               | passed  | 0.00565 seconds |
+./vendor/fork/database_consistency/spec/checkers/foreign_key_cascade_checker_spec.rb[1:1:2:1]               | passed  | 0.00293 seconds |
+./vendor/fork/database_consistency/spec/checkers/foreign_key_cascade_checker_spec.rb[1:2:1:1]               | passed  | 0.00241 seconds |
+./vendor/fork/database_consistency/spec/checkers/foreign_key_cascade_checker_spec.rb[1:2:2:1]               | passed  | 0.00339 seconds |
+./vendor/fork/database_consistency/spec/checkers/foreign_key_cascade_checker_spec.rb[1:2:3:1]               | passed  | 0.00251 seconds |
+./vendor/fork/database_consistency/spec/checkers/foreign_key_cascade_checker_spec.rb[1:3:1]                 | passed  | 0.00202 seconds |
+./vendor/fork/database_consistency/spec/checkers/foreign_key_cascade_checker_spec.rb[1:4:1:1]               | passed  | 0.0044 seconds  |
+./vendor/fork/database_consistency/spec/checkers/foreign_key_cascade_checker_spec.rb[1:4:2:1]               | passed  | 0.00264 seconds |
+./vendor/fork/database_consistency/spec/checkers/foreign_key_checker_spec.rb[1:1:1]                         | passed  | 0.00259 seconds |
+./vendor/fork/database_consistency/spec/checkers/foreign_key_checker_spec.rb[1:2:1]                         | passed  | 0.00303 seconds |
+./vendor/fork/database_consistency/spec/checkers/foreign_key_checker_spec.rb[1:3:1]                         | passed  | 0.00312 seconds |
+./vendor/fork/database_consistency/spec/checkers/foreign_key_checker_spec.rb[1:4:1]                         | passed  | 0.00268 seconds |
+./vendor/fork/database_consistency/spec/checkers/foreign_key_checker_spec.rb[1:5:1]                         | passed  | 0.00263 seconds |
+./vendor/fork/database_consistency/spec/checkers/foreign_key_checker_spec.rb[1:6:1]                         | passed  | 0.00228 seconds |
+./vendor/fork/database_consistency/spec/checkers/foreign_key_checker_spec.rb[1:7:1]                         | passed  | 0.0023 seconds  |
+./vendor/fork/database_consistency/spec/checkers/foreign_key_checker_spec.rb[1:8:1]                         | passed  | 0.00074 seconds |
+./vendor/fork/database_consistency/spec/checkers/foreign_key_checker_spec.rb[1:9:1]                         | passed  | 0.00041 seconds |
+./vendor/fork/database_consistency/spec/checkers/foreign_key_type_checker/postgresql_spec.rb[1:1:1:1:1]     | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/foreign_key_type_checker/postgresql_spec.rb[1:1:1:2:1]     | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/foreign_key_type_checker/postgresql_spec.rb[1:1:2:1:1]     | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/foreign_key_type_checker/postgresql_spec.rb[1:1:2:2:1]     | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/foreign_key_type_checker/postgresql_spec.rb[1:2:1]         | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/foreign_key_type_checker/postgresql_spec.rb[1:3:1]         | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/foreign_key_type_checker/postgresql_spec.rb[1:4:1:1:1]     | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/foreign_key_type_checker/postgresql_spec.rb[1:4:1:2:1]     | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/foreign_key_type_checker/postgresql_spec.rb[1:4:2:1:1]     | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/foreign_key_type_checker/postgresql_spec.rb[1:4:2:2:1]     | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/foreign_key_type_checker/postgresql_spec.rb[1:5:1:1:1]     | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/foreign_key_type_checker/postgresql_spec.rb[1:5:1:2:1]     | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/foreign_key_type_checker/postgresql_spec.rb[1:5:2:1:1]     | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/foreign_key_type_checker/postgresql_spec.rb[1:5:2:2:1]     | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/foreign_key_type_checker/postgresql_spec.rb[1:6:1]         | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/foreign_key_type_checker/postgresql_spec.rb[1:7:1]         | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/foreign_key_type_checker/postgresql_spec.rb[1:8:1:1:1]     | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/foreign_key_type_checker/postgresql_spec.rb[1:8:1:2:1]     | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/foreign_key_type_checker/postgresql_spec.rb[1:8:2:1:1]     | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/foreign_key_type_checker/postgresql_spec.rb[1:8:2:2:1]     | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/foreign_key_type_checker/postgresql_spec.rb[1:9:1:1:1]     | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/foreign_key_type_checker/postgresql_spec.rb[1:9:1:2:1]     | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/foreign_key_type_checker/postgresql_spec.rb[1:9:2:1:1]     | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/foreign_key_type_checker/postgresql_spec.rb[1:9:2:2:1]     | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/foreign_key_type_checker/postgresql_spec.rb[1:10:1:1:1]    | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/foreign_key_type_checker/postgresql_spec.rb[1:10:1:2:1]    | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/foreign_key_type_checker/postgresql_spec.rb[1:10:2:1:1]    | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/foreign_key_type_checker/postgresql_spec.rb[1:10:2:2:1]    | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/foreign_key_type_checker/postgresql_spec.rb[1:11:1:1:1]    | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/foreign_key_type_checker/postgresql_spec.rb[1:11:1:2:1]    | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/foreign_key_type_checker/postgresql_spec.rb[1:11:2:1:1]    | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/foreign_key_type_checker/postgresql_spec.rb[1:11:2:2:1]    | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/foreign_key_type_checker/sqlite_spec.rb[1:1:1:1:1]         | passed  | 0.00219 seconds |
+./vendor/fork/database_consistency/spec/checkers/foreign_key_type_checker/sqlite_spec.rb[1:1:1:2:1]         | passed  | 0.00221 seconds |
+./vendor/fork/database_consistency/spec/checkers/foreign_key_type_checker/sqlite_spec.rb[1:1:2:1:1]         | passed  | 0.00211 seconds |
+./vendor/fork/database_consistency/spec/checkers/foreign_key_type_checker/sqlite_spec.rb[1:1:2:2:1]         | passed  | 0.00196 seconds |
+./vendor/fork/database_consistency/spec/checkers/foreign_key_type_checker/sqlite_spec.rb[1:2:1:1:1]         | passed  | 0.0023 seconds  |
+./vendor/fork/database_consistency/spec/checkers/foreign_key_type_checker/sqlite_spec.rb[1:2:1:2:1]         | passed  | 0.00216 seconds |
+./vendor/fork/database_consistency/spec/checkers/foreign_key_type_checker/sqlite_spec.rb[1:2:2:1:1]         | passed  | 0.00212 seconds |
+./vendor/fork/database_consistency/spec/checkers/foreign_key_type_checker/sqlite_spec.rb[1:2:2:2:1]         | passed  | 0.0024 seconds  |
+./vendor/fork/database_consistency/spec/checkers/foreign_key_type_checker/sqlite_spec.rb[1:3:1:1:1]         | passed  | 0.00246 seconds |
+./vendor/fork/database_consistency/spec/checkers/foreign_key_type_checker/sqlite_spec.rb[1:3:1:2:1]         | passed  | 0.00236 seconds |
+./vendor/fork/database_consistency/spec/checkers/foreign_key_type_checker/sqlite_spec.rb[1:3:2:1:1]         | passed  | 0.00219 seconds |
+./vendor/fork/database_consistency/spec/checkers/foreign_key_type_checker/sqlite_spec.rb[1:3:2:2:1]         | passed  | 0.00213 seconds |
+./vendor/fork/database_consistency/spec/checkers/foreign_key_type_checker/sqlite_spec.rb[1:4:1:1]           | passed  | 0.00265 seconds |
+./vendor/fork/database_consistency/spec/checkers/implicit_ordering_checker_spec.rb[1:1:1]                   | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/implicit_ordering_checker_spec.rb[1:2:1]                   | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/implicit_ordering_checker_spec.rb[1:3:1]                   | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/length_constraint_checker_spec.rb[1:1:1]                   | passed  | 0.00179 seconds |
+./vendor/fork/database_consistency/spec/checkers/length_constraint_checker_spec.rb[1:2:1]                   | passed  | 0.00197 seconds |
+./vendor/fork/database_consistency/spec/checkers/length_constraint_checker_spec.rb[1:3:1]                   | passed  | 0.00168 seconds |
+./vendor/fork/database_consistency/spec/checkers/length_constraint_checker_spec.rb[1:4:1]                   | passed  | 0.00186 seconds |
+./vendor/fork/database_consistency/spec/checkers/length_constraint_checker_spec.rb[1:5:1]                   | passed  | 0.00187 seconds |
+./vendor/fork/database_consistency/spec/checkers/missing_association_class_checker_spec.rb[1:1:1]           | passed  | 0.00187 seconds |
+./vendor/fork/database_consistency/spec/checkers/missing_association_class_checker_spec.rb[1:2:1:1]         | passed  | 0.00212 seconds |
+./vendor/fork/database_consistency/spec/checkers/missing_association_class_checker_spec.rb[1:2:2:1]         | passed  | 0.01526 seconds |
+./vendor/fork/database_consistency/spec/checkers/missing_association_class_checker_spec.rb[1:3:1:1]         | passed  | 0.00214 seconds |
+./vendor/fork/database_consistency/spec/checkers/missing_association_class_checker_spec.rb[1:3:2:1]         | passed  | 0.00137 seconds |
+./vendor/fork/database_consistency/spec/checkers/missing_association_class_checker_spec.rb[1:4:1:1]         | passed  | 0.00196 seconds |
+./vendor/fork/database_consistency/spec/checkers/missing_association_class_checker_spec.rb[1:4:2:1]         | passed  | 0.00224 seconds |
+./vendor/fork/database_consistency/spec/checkers/missing_association_class_checker_spec.rb[1:5:1:1]         | passed  | 0.00193 seconds |
+./vendor/fork/database_consistency/spec/checkers/missing_association_class_checker_spec.rb[1:5:2:1]         | passed  | 0.00171 seconds |
+./vendor/fork/database_consistency/spec/checkers/missing_association_class_checker_spec.rb[1:6:1:1]         | passed  | 0.00368 seconds |
+./vendor/fork/database_consistency/spec/checkers/missing_association_class_checker_spec.rb[1:6:2:1]         | passed  | 0.00196 seconds |
+./vendor/fork/database_consistency/spec/checkers/missing_dependent_destroy_checker_spec.rb[1:1:1]           | passed  | 0.00237 seconds |
+./vendor/fork/database_consistency/spec/checkers/missing_dependent_destroy_checker_spec.rb[1:2:1]           | passed  | 0.00052 seconds |
+./vendor/fork/database_consistency/spec/checkers/missing_dependent_destroy_checker_spec.rb[1:3:1:1]         | passed  | 0.00192 seconds |
+./vendor/fork/database_consistency/spec/checkers/missing_dependent_destroy_checker_spec.rb[1:3:2:1]         | passed  | 0.00228 seconds |
+./vendor/fork/database_consistency/spec/checkers/missing_dependent_destroy_checker_spec.rb[1:4:1:1]         | passed  | 0.0022 seconds  |
+./vendor/fork/database_consistency/spec/checkers/missing_index_checker_spec.rb[1:1:1]                       | passed  | 0.00346 seconds |
+./vendor/fork/database_consistency/spec/checkers/missing_index_checker_spec.rb[1:2:1:1:1:1]                 | passed  | 0.002 seconds   |
+./vendor/fork/database_consistency/spec/checkers/missing_index_checker_spec.rb[1:2:1:1:2:1]                 | passed  | 0.00209 seconds |
+./vendor/fork/database_consistency/spec/checkers/missing_index_checker_spec.rb[1:3:1:1:1]                   | passed  | 0.0018 seconds  |
+./vendor/fork/database_consistency/spec/checkers/missing_index_checker_spec.rb[1:3:1:2:1]                   | passed  | 0.00191 seconds |
+./vendor/fork/database_consistency/spec/checkers/missing_index_checker_spec.rb[1:3:1:3:1]                   | passed  | 0.00192 seconds |
+./vendor/fork/database_consistency/spec/checkers/missing_index_checker_spec.rb[1:3:1:4:1]                   | passed  | 0.00196 seconds |
+./vendor/fork/database_consistency/spec/checkers/missing_index_checker_spec.rb[1:3:1:5:1]                   | passed  | 0.0019 seconds  |
+./vendor/fork/database_consistency/spec/checkers/missing_index_checker_spec.rb[1:3:2:1:1]                   | passed  | 0.00193 seconds |
+./vendor/fork/database_consistency/spec/checkers/missing_index_checker_spec.rb[1:3:2:2:1]                   | passed  | 0.00225 seconds |
+./vendor/fork/database_consistency/spec/checkers/missing_index_checker_spec.rb[1:3:2:3:1]                   | passed  | 0.00193 seconds |
+./vendor/fork/database_consistency/spec/checkers/missing_index_find_by_checker_spec.rb[1:1:1]               | passed  | 0.00179 seconds |
+./vendor/fork/database_consistency/spec/checkers/missing_index_find_by_checker_spec.rb[1:2:1]               | passed  | 0.0017 seconds  |
+./vendor/fork/database_consistency/spec/checkers/missing_index_find_by_checker_spec.rb[1:3:1]               | passed  | 0.00192 seconds |
+./vendor/fork/database_consistency/spec/checkers/missing_index_find_by_checker_spec.rb[1:4:1:1]             | passed  | 0.0019 seconds  |
+./vendor/fork/database_consistency/spec/checkers/missing_index_find_by_checker_spec.rb[1:4:2:1]             | passed  | 0.00212 seconds |
+./vendor/fork/database_consistency/spec/checkers/missing_index_find_by_checker_spec.rb[1:4:3:1]             | passed  | 0.00197 seconds |
+./vendor/fork/database_consistency/spec/checkers/missing_index_find_by_checker_spec.rb[1:5:1:1]             | passed  | 0.00184 seconds |
+./vendor/fork/database_consistency/spec/checkers/missing_index_find_by_checker_spec.rb[1:6:1:1]             | passed  | 0.00185 seconds |
+./vendor/fork/database_consistency/spec/checkers/missing_index_find_by_checker_spec.rb[1:6:2:1]             | passed  | 0.00171 seconds |
+./vendor/fork/database_consistency/spec/checkers/missing_index_find_by_checker_spec.rb[1:6:3:1]             | passed  | 0.00168 seconds |
+./vendor/fork/database_consistency/spec/checkers/missing_index_find_by_checker_spec.rb[1:6:4:1]             | passed  | 0.00171 seconds |
+./vendor/fork/database_consistency/spec/checkers/missing_index_find_by_checker_spec.rb[1:7:1:1]             | passed  | 0.00189 seconds |
+./vendor/fork/database_consistency/spec/checkers/missing_index_find_by_checker_spec.rb[1:8:1:1]             | passed  | 0.0019 seconds  |
+./vendor/fork/database_consistency/spec/checkers/missing_index_find_by_checker_spec.rb[1:9:1:1]             | passed  | 0.00184 seconds |
+./vendor/fork/database_consistency/spec/checkers/missing_index_find_by_checker_spec.rb[1:10:1]              | passed  | 0.00172 seconds |
+./vendor/fork/database_consistency/spec/checkers/missing_index_find_by_checker_spec.rb[1:11:1]              | passed  | 0.0017 seconds  |
+./vendor/fork/database_consistency/spec/checkers/missing_index_find_by_checker_spec.rb[1:12:1]              | passed  | 0.00166 seconds |
+./vendor/fork/database_consistency/spec/checkers/missing_index_find_by_checker_spec.rb[1:13:1]              | passed  | 0.00181 seconds |
+./vendor/fork/database_consistency/spec/checkers/missing_index_find_by_checker_spec.rb[1:14:1]              | passed  | 0.00168 seconds |
+./vendor/fork/database_consistency/spec/checkers/missing_index_find_by_checker_spec.rb[1:14:2:1]            | passed  | 0.00182 seconds |
+./vendor/fork/database_consistency/spec/checkers/missing_index_find_by_checker_spec.rb[1:15:1]              | passed  | 0.00179 seconds |
+./vendor/fork/database_consistency/spec/checkers/missing_index_find_by_checker_spec.rb[1:16:1]              | passed  | 0.00192 seconds |
+./vendor/fork/database_consistency/spec/checkers/missing_table_checker_spec.rb[1:1:1]                       | passed  | 0.0016 seconds  |
+./vendor/fork/database_consistency/spec/checkers/missing_table_checker_spec.rb[1:2:1]                       | passed  | 0.00163 seconds |
+./vendor/fork/database_consistency/spec/checkers/missing_table_checker_spec.rb[1:3:1]                       | passed  | 0.00147 seconds |
+./vendor/fork/database_consistency/spec/checkers/missing_unique_index_checker_spec.rb[1:1:1:1]              | passed  | 0.00166 seconds |
+./vendor/fork/database_consistency/spec/checkers/missing_unique_index_checker_spec.rb[1:1:2:1]              | passed  | 0.0014 seconds  |
+./vendor/fork/database_consistency/spec/checkers/missing_unique_index_checker_spec.rb[1:2:1:1]              | passed  | 0.00145 seconds |
+./vendor/fork/database_consistency/spec/checkers/missing_unique_index_checker_spec.rb[1:2:2:1]              | passed  | 0.00168 seconds |
+./vendor/fork/database_consistency/spec/checkers/missing_unique_index_checker_spec.rb[1:2:3:1]              | passed  | 0.00153 seconds |
+./vendor/fork/database_consistency/spec/checkers/missing_unique_index_checker_spec.rb[1:3:1]                | passed  | 0.00975 seconds |
+./vendor/fork/database_consistency/spec/checkers/missing_unique_index_checker_spec.rb[1:4:1]                | passed  | 0.00241 seconds |
+./vendor/fork/database_consistency/spec/checkers/missing_unique_index_checker_spec.rb[1:5:1:1]              | passed  | 0.00149 seconds |
+./vendor/fork/database_consistency/spec/checkers/missing_unique_index_checker_spec.rb[1:5:2:1]              | passed  | 0.00176 seconds |
+./vendor/fork/database_consistency/spec/checkers/missing_unique_index_checker_spec.rb[1:5:3:1]              | passed  | 0.00137 seconds |
+./vendor/fork/database_consistency/spec/checkers/missing_unique_index_checker_spec.rb[1:6:1:1]              | passed  | 0.00136 seconds |
+./vendor/fork/database_consistency/spec/checkers/null_constraint_checker_spec.rb[1:1:1]                     | passed  | 0.00164 seconds |
+./vendor/fork/database_consistency/spec/checkers/null_constraint_checker_spec.rb[1:2:1]                     | passed  | 0.00181 seconds |
+./vendor/fork/database_consistency/spec/checkers/null_constraint_checker_spec.rb[1:3:1:1]                   | passed  | 0.00244 seconds |
+./vendor/fork/database_consistency/spec/checkers/null_constraint_checker_spec.rb[1:3:2:1]                   | passed  | 0.00203 seconds |
+./vendor/fork/database_consistency/spec/checkers/null_constraint_checker_spec.rb[1:4:1]                     | passed  | 0.00176 seconds |
+./vendor/fork/database_consistency/spec/checkers/null_constraint_checker_spec.rb[1:5:1]                     | passed  | 0.0016 seconds  |
+./vendor/fork/database_consistency/spec/checkers/null_constraint_checker_spec.rb[1:6:1]                     | passed  | 0.00152 seconds |
+./vendor/fork/database_consistency/spec/checkers/null_constraint_checker_spec.rb[1:7:1]                     | passed  | 0.00159 seconds |
+./vendor/fork/database_consistency/spec/checkers/numericality_constraint_checker_spec.rb[1:1:1]             | passed  | 0.00185 seconds |
+./vendor/fork/database_consistency/spec/checkers/numericality_constraint_checker_spec.rb[1:2:1]             | passed  | 0.00169 seconds |
+./vendor/fork/database_consistency/spec/checkers/numericality_constraint_checker_spec.rb[1:3:1]             | passed  | 0.00178 seconds |
+./vendor/fork/database_consistency/spec/checkers/numericality_constraint_checker_spec.rb[1:4:1]             | passed  | 0.00168 seconds |
+./vendor/fork/database_consistency/spec/checkers/numericality_constraint_checker_spec.rb[1:5:1]             | passed  | 0.0017 seconds  |
+./vendor/fork/database_consistency/spec/checkers/numericality_constraint_checker_spec.rb[1:6:1]             | passed  | 0.00147 seconds |
+./vendor/fork/database_consistency/spec/checkers/numericality_constraint_checker_spec.rb[1:7:1]             | passed  | 0.00157 seconds |
+./vendor/fork/database_consistency/spec/checkers/numericality_constraint_checker_spec.rb[1:8:1]             | passed  | 0.00148 seconds |
+./vendor/fork/database_consistency/spec/checkers/numericality_constraint_checker_spec.rb[1:9:1]             | passed  | 0.00173 seconds |
+./vendor/fork/database_consistency/spec/checkers/numericality_constraint_checker_spec.rb[1:10:1]            | passed  | 0.00161 seconds |
+./vendor/fork/database_consistency/spec/checkers/numericality_constraint_checker_spec.rb[1:11:1]            | passed  | 0.00151 seconds |
+./vendor/fork/database_consistency/spec/checkers/numericality_constraint_checker_spec.rb[1:12:1]            | passed  | 0.00177 seconds |
+./vendor/fork/database_consistency/spec/checkers/numericality_constraint_checker_spec.rb[1:13:1]            | passed  | 0.00169 seconds |
+./vendor/fork/database_consistency/spec/checkers/polymorphic_association_nullability_checker_spec.rb[1:1:1] | passed  | 0.00196 seconds |
+./vendor/fork/database_consistency/spec/checkers/polymorphic_association_nullability_checker_spec.rb[1:2:1] | passed  | 0.00172 seconds |
+./vendor/fork/database_consistency/spec/checkers/polymorphic_association_nullability_checker_spec.rb[1:3:1] | passed  | 0.00175 seconds |
+./vendor/fork/database_consistency/spec/checkers/polymorphic_association_nullability_checker_spec.rb[1:4:1] | passed  | 0.00167 seconds |
+./vendor/fork/database_consistency/spec/checkers/polymorphic_association_nullability_checker_spec.rb[1:5:1] | passed  | 0.00135 seconds |
+./vendor/fork/database_consistency/spec/checkers/postgresql/length_constraint_checker_spec.rb[1:1]          | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/postgresql/missing_unique_index_checker_spec.rb[1:1:1:1]   | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/postgresql/missing_unique_index_checker_spec.rb[1:1:2:1]   | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/postgresql/missing_unique_index_checker_spec.rb[1:1:3:1:1] | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/postgresql/missing_unique_index_checker_spec.rb[1:1:3:2:1] | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/postgresql/missing_unique_index_checker_spec.rb[1:2:1:1]   | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/postgresql/missing_unique_index_checker_spec.rb[1:2:2:1]   | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/postgresql/missing_unique_index_checker_spec.rb[1:2:3:1]   | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/postgresql/missing_unique_index_checker_spec.rb[1:2:4:1]   | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/postgresql/missing_unique_index_checker_spec.rb[1:2:5:1]   | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/postgresql/missing_unique_index_checker_spec.rb[1:3:1:1]   | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/postgresql/missing_unique_index_checker_spec.rb[1:4:1]     | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/postgresql/missing_unique_index_checker_spec.rb[1:5:1]     | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/postgresql/missing_unique_index_checker_spec.rb[1:6:1]     | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/postgresql/missing_unique_index_checker_spec.rb[1:7:1]     | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/postgresql/missing_unique_index_checker_spec.rb[1:8:1]     | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/postgresql/missing_unique_index_checker_spec.rb[1:9:1]     | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/postgresql/missing_unique_index_checker_spec.rb[1:10:1:1]  | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/primary_key_type_checker_spec.rb[1:1:1]                    | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/primary_key_type_checker_spec.rb[1:2:1]                    | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/redundant_index_checker/mysql_spec.rb[1:1:1]               | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/redundant_index_checker/mysql_spec.rb[1:2:1]               | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/redundant_index_checker/mysql_spec.rb[1:3:1]               | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/redundant_index_checker/mysql_spec.rb[1:4:1]               | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/redundant_index_checker/postgresql_spec.rb[1:1:1]          | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/redundant_index_checker/postgresql_spec.rb[1:2:1]          | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/redundant_index_checker/postgresql_spec.rb[1:3:1]          | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/redundant_index_checker/postgresql_spec.rb[1:4:1]          | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/redundant_index_checker/postgresql_spec.rb[1:5:1]          | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/redundant_index_checker/postgresql_spec.rb[1:6:1]          | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/redundant_index_checker/sqlite_spec.rb[1:1:1]              | passed  | 0.00161 seconds |
+./vendor/fork/database_consistency/spec/checkers/redundant_index_checker/sqlite_spec.rb[1:2:1]              | passed  | 0.0019 seconds  |
+./vendor/fork/database_consistency/spec/checkers/redundant_index_checker/sqlite_spec.rb[1:3:1]              | passed  | 0.00193 seconds |
+./vendor/fork/database_consistency/spec/checkers/redundant_index_checker/sqlite_spec.rb[1:4:1]              | passed  | 0.00175 seconds |
+./vendor/fork/database_consistency/spec/checkers/redundant_index_checker/sqlite_spec.rb[1:5:1]              | passed  | 0.00133 seconds |
+./vendor/fork/database_consistency/spec/checkers/redundant_unique_index_checker/mysql_spec.rb[1:1:1]        | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/redundant_unique_index_checker/mysql_spec.rb[1:2:1]        | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/redundant_unique_index_checker/mysql_spec.rb[1:3:1]        | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/redundant_unique_index_checker/mysql_spec.rb[1:4:1]        | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/redundant_unique_index_checker/mysql_spec.rb[1:5:1]        | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/redundant_unique_index_checker/postgresql_spec.rb[1:1:1]   | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/redundant_unique_index_checker/postgresql_spec.rb[1:2:1]   | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/redundant_unique_index_checker/postgresql_spec.rb[1:3:1]   | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/redundant_unique_index_checker/postgresql_spec.rb[1:4:1]   | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/redundant_unique_index_checker/postgresql_spec.rb[1:5:1]   | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/redundant_unique_index_checker/postgresql_spec.rb[1:6:1]   | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/redundant_unique_index_checker/postgresql_spec.rb[1:7:1]   | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/redundant_unique_index_checker/sqlite_spec.rb[1:1:1]       | passed  | 0.00156 seconds |
+./vendor/fork/database_consistency/spec/checkers/redundant_unique_index_checker/sqlite_spec.rb[1:2:1]       | passed  | 0.00162 seconds |
+./vendor/fork/database_consistency/spec/checkers/redundant_unique_index_checker/sqlite_spec.rb[1:3:1]       | passed  | 0.00155 seconds |
+./vendor/fork/database_consistency/spec/checkers/redundant_unique_index_checker/sqlite_spec.rb[1:4:1]       | passed  | 0.00168 seconds |
+./vendor/fork/database_consistency/spec/checkers/redundant_unique_index_checker/sqlite_spec.rb[1:5:1]       | passed  | 0.00134 seconds |
+./vendor/fork/database_consistency/spec/checkers/redundant_unique_index_checker/sqlite_spec.rb[1:6:1]       | passed  | 0.0016 seconds  |
+./vendor/fork/database_consistency/spec/checkers/redundant_unique_index_checker/sqlite_spec.rb[1:7:1]       | passed  | 0.00153 seconds |
+./vendor/fork/database_consistency/spec/checkers/sqlite/missing_unique_index_checker_spec.rb[1:1:1:1]       | passed  | 0.0023 seconds  |
+./vendor/fork/database_consistency/spec/checkers/sqlite/missing_unique_index_checker_spec.rb[1:1:2:1]       | passed  | 0.00212 seconds |
+./vendor/fork/database_consistency/spec/checkers/three_state_boolean_checker_spec.rb[1:1:1]                 | passed  | 0.00169 seconds |
+./vendor/fork/database_consistency/spec/checkers/three_state_boolean_checker_spec.rb[1:2:1]                 | passed  | 0.00172 seconds |
+./vendor/fork/database_consistency/spec/checkers/three_state_boolean_checker_spec.rb[1:3:1]                 | passed  | 0.00272 seconds |
+./vendor/fork/database_consistency/spec/checkers/three_state_boolean_checker_spec.rb[1:4:1]                 | passed  | 0.00208 seconds |
+./vendor/fork/database_consistency/spec/checkers/three_state_boolean_checker_spec.rb[1:5:1]                 | passed  | 0.002 seconds   |
+./vendor/fork/database_consistency/spec/checkers/unique_index_checker/postgresql_spec.rb[1:1:1:1]           | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/unique_index_checker/postgresql_spec.rb[1:1:2:1]           | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/unique_index_checker/postgresql_spec.rb[1:2:1:1]           | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/unique_index_checker/postgresql_spec.rb[1:3:1:1]           | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/unique_index_checker/postgresql_spec.rb[1:4:1:1]           | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/unique_index_checker/postgresql_spec.rb[1:5:1:1]           | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/unique_index_checker/postgresql_spec.rb[1:6:1]             | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/unique_index_checker/postgresql_spec.rb[1:7:1:1]           | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/unique_index_checker/postgresql_spec.rb[1:8:1:1]           | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/unique_index_checker/postgresql_spec.rb[1:9:1:1]           | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/unique_index_checker/postgresql_spec.rb[1:10:1]            | unknown |                 |
+./vendor/fork/database_consistency/spec/checkers/unique_index_checker/sqlite_spec.rb[1:1:1:1]               | passed  | 0.00182 seconds |
+./vendor/fork/database_consistency/spec/checkers/unique_index_checker/sqlite_spec.rb[1:1:2:1]               | passed  | 0.0027 seconds  |
+./vendor/fork/database_consistency/spec/checkers/unique_index_checker/sqlite_spec.rb[1:2:1]                 | passed  | 0.0025 seconds  |
+./vendor/fork/database_consistency/spec/checkers/unique_index_checker_spec.rb[1:1:1:1]                      | passed  | 0.00253 seconds |
+./vendor/fork/database_consistency/spec/checkers/unique_index_checker_spec.rb[1:1:2:1]                      | passed  | 0.00213 seconds |
+./vendor/fork/database_consistency/spec/checkers/unique_index_checker_spec.rb[1:2:1:1]                      | passed  | 0.00854 seconds |
+./vendor/fork/database_consistency/spec/checkers/unique_index_checker_spec.rb[1:2:2:1]                      | passed  | 0.00219 seconds |
+./vendor/fork/database_consistency/spec/checkers/unique_index_checker_spec.rb[1:3:1:1]                      | passed  | 0.00237 seconds |
+./vendor/fork/database_consistency/spec/checkers/unique_index_checker_spec.rb[1:3:2:1]                      | passed  | 0.00191 seconds |
+./vendor/fork/database_consistency/spec/checkers/unique_index_checker_spec.rb[1:3:3:1]                      | passed  | 0.00219 seconds |
+./vendor/fork/database_consistency/spec/checkers/unique_index_checker_spec.rb[1:4:1:1]                      | passed  | 0.0016 seconds  |
+./vendor/fork/database_consistency/spec/checkers/unique_index_checker_spec.rb[1:4:2:1]                      | passed  | 0.00151 seconds |
+./vendor/fork/database_consistency/spec/checkers/unique_index_checker_spec.rb[1:4:3:1]                      | passed  | 0.0019 seconds  |
+./vendor/fork/database_consistency/spec/checkers/view_primary_key_checker_spec.rb[1:1:1]                    | passed  | 0.00145 seconds |
+./vendor/fork/database_consistency/spec/checkers/view_primary_key_checker_spec.rb[1:2:1]                    | passed  | 0.0017 seconds  |
+./vendor/fork/database_consistency/spec/checkers/view_primary_key_checker_spec.rb[1:3:1:1]                  | passed  | 0.00302 seconds |
+./vendor/fork/database_consistency/spec/checkers/view_primary_key_checker_spec.rb[1:3:2:1]                  | passed  | 0.00192 seconds |
+./vendor/fork/database_consistency/spec/checkers/view_primary_key_checker_spec.rb[1:3:3:1]                  | passed  | 0.00209 seconds |
+./vendor/fork/database_consistency/spec/checkers/view_primary_key_checker_spec.rb[1:3:4:1]                  | passed  | 0.00209 seconds |
+./vendor/fork/database_consistency/spec/checkers/view_primary_key_checker_spec.rb[1:3:5:1]                  | passed  | 0.0019 seconds  |

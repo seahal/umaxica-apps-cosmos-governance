@@ -2,50 +2,29 @@
 
 Subdomain labels are entry points. They are not Rails Engine boundaries.
 
-## Current Public Surfaces
+## Routes served here
 
-Local hosts are labelled `<service>.<surface>.localhost`. The `base.*` label carries the product,
-staff, and corporate surfaces:
+| Surface | Host label | Ownership |
+| --- | --- | --- |
+| Base app | `base.app` | Base browser RP, identity, preference, and product APIs |
+| Base com | `base.com` | Anonymous public preferences and operational endpoints |
+| Base org | `base.org` | Base organization and operator management |
+| Tech org | `tech.org` | Separate global operator browser RP |
+| Operator tools | `mission`, `flipper`, `blazer`, `pghero`, `swagger`, `coverband` | Host-constrained local tools with their own Basic Auth |
 
-| Surface | Default local host   | Purpose                        |
-| ------- | -------------------- | ------------------------------ |
-| `app`   | `base.app.localhost` | End-user product surface       |
-| `org`   | `base.org.localhost` | Staff and organization surface |
-| `com`   | `base.com.localhost` | Public and corporate surface   |
+Local development uses the Base app/com/org and Tech org `*.localhost` hosts. Operator tools use
+their dedicated governance hosts. The read-only `.devcontainer/compose.yaml` mount still contains
+retired host aliases; the
+[round 2 evidence](../../evidence/2026-11-11-governance-round2-R2A7.md) records that configuration
+blocker and the failed write attempt.
 
-The credential gateway uses the `auth.*` label for the app and org audience families. The
-corporate (`com`) hosts are anonymous: they serve the public preference entry and public read-only
-pages, so `auth.com.localhost` has no credential route.
+## Removed provider configuration
 
-| Audience | Default local host   |
-| -------- | -------------------- |
-| `app`    | `auth.app.localhost` |
-| `org`    | `auth.org.localhost` |
+Auth and Visa URL configuration and local routes have been removed. Base and Tech RP sign-in,
+callback, RP-initiated sign-out, Back-Channel Logout, and OIDC-driven step-up routes are absent.
 
-The gateway also answers on `sign.*.localhost`, which is the boot-config default that applies when
-`AUTH_*_URL` and `PUBLIC_AUTH_*_URL` are unset.
+## Retired local surfaces
 
-Development and network-only hosts may exist for operational endpoints, but they are not separate
-Rails Engines.
-
-## Canonical ENV Naming
-
-URL environment variables should use the smallest boundary name that makes the ownership clear.
-
-- `PUBLIC_*` means a browser-visible or externally reachable URL.
-- `PRIVATE_*` means a Rails-internal, pod-internal, or service-internal URL.
-
-Current runtime code still contains surface/service names for compatibility, but new docs and new
-runtime config should prefer the public/private boundary language instead of inventing another
-surface-prefixed URL family.
-
-Examples of the older compatibility style that still exists in code:
-
-- `ACME_SERVICE_URL`
-- `ACME_STAFF_URL`
-- `ACME_CORPORATE_URL`
-- `ACME_DEVELOPER_URL`
-- `ACME_NETWORK_URL`
-
-Do not introduce engine-prefixed URL names such as `IDENTITY_SIGN_APP_URL`,
-`FOUNDATION_BASE_ORG_URL`, or `DISTRIBUTOR_POST_APP_URL` for new runtime code in this repository.
+Retired product route/controller trees are no longer served by this repository. Their retained
+models and databases are listed in the
+[surface hard-reset evidence](../../evidence/2026-11-11-surface-hard-reset-V4N8.md).

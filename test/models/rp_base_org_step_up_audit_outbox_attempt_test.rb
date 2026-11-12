@@ -21,12 +21,47 @@ class RpBaseOrgStepUpAuditOutboxAttemptTest < ActiveSupport::TestCase
       failure_code: "none",
     )
 
-    assert_raises(ActiveRecord::RecordNotUnique) do
-      RpBaseOrgStepUpAuditOutboxAttempt.create!(
-        outbox: outbox, attempt_number: 3, attempted_at: Time.utc(2026, 11, 3, 12), outcome: "delivered",
-        failure_code: "none",
-      )
-    end
+    duplicate = RpBaseOrgStepUpAuditOutboxAttempt.new(
+      outbox: outbox, attempt_number: 3, attempted_at: Time.utc(2026, 11, 3, 12), outcome: "delivered",
+      failure_code: "none",
+    )
+
+    assert_not duplicate.valid?
+    assert duplicate.errors.of_kind?(:outbox_id, :taken)
+    assert_raises(ActiveRecord::RecordInvalid) { duplicate.save! }
+    error =
+      assert_raises(ActiveRecord::RecordNotUnique) do
+        RpBaseOrgStepUpAuditOutboxAttempt.transaction(requires_new: true) { duplicate.save!(validate: false) }
+      end
+
+    assert_equal "idx_rp_step_up_audit_attempts_delivered",
+                 error.cause.result.error_field(PG::Result::PG_DIAG_CONSTRAINT_NAME)
+    failed = RpBaseOrgStepUpAuditOutboxAttempt.create!(
+      outbox: outbox, attempt_number: 1, attempted_at: Time.utc(2026, 11, 3, 12), outcome: "failed",
+      failure_code: "delivery_failed",
+    )
+    ordinal_duplicate = failed.dup
+
+    assert_not ordinal_duplicate.valid?
+    assert ordinal_duplicate.errors.of_kind?(:attempt_number, :taken)
+    error =
+      assert_raises(ActiveRecord::RecordNotUnique) do
+        RpBaseOrgStepUpAuditOutboxAttempt.transaction(requires_new: true) {
+          ordinal_duplicate.save!(validate: false)
+        }
+      end
+
+    assert_equal "idx_rp_step_up_audit_attempts_number",
+                 error.cause.result.error_field(PG::Result::PG_DIAG_CONSTRAINT_NAME)
+    independent_outbox = outbox.dup
+    independent_outbox.event_uuid = "00000000-0000-4000-8000-000000000211"
+    independent_outbox.save!
+    independent = failed.dup
+    independent.outbox = independent_outbox
+    independent.save!
+
+    assert_equal 1, independent.reload.attempt_number
+    assert_predicate failed.reload, :valid?
   end
 
   test "attempt numbers must be greater than zero" do

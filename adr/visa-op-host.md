@@ -6,6 +6,12 @@ Accepted and implemented in Rails (2026-10-24). This decision records the WU-02 
 supersedes the same-FQDN authority portion of `adr/base-authority-and-self-rp-separation.md`. The
 role separation in `adr/op-auth-rp-authentication-responsibility-separation.md` remains applicable.
 
+> **Local-route disposition (2026-11-10):** The owner-approved local-surface hard reset removes
+> this repository's local Visa and Auth routes/controllers. This supersedes the local Rails host and
+> endpoint implementation described below. It does not retire external OP/Auth authorities, their
+> OIDC registrations, or contracts used by retained Base/Tech callers; Base behavior remains only
+> where a current local caller exists.
+
 ## Context
 
 Base originally served both the OpenID Provider and its own browser relying party on the same host

@@ -26,7 +26,7 @@ class CoreOrgOperatorBridge < OrgRpRecord
 
   belongs_to :operator,
              class_name: "Operator",
-             inverse_of: :core_org_operator_bridge
+             inverse_of: :core_org_operator_bridges
 
   core_rp_bridge(
     actor_association_name: :operator,

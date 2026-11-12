@@ -3,8 +3,8 @@
 
 # Tech RP client for the org authority's capability decision (R5-WU11, one.md 4.2/6.4).
 #
-# Every request asks the authority again; there is no positive cache. Any transport failure,
-# non-200, malformed body or missing assertion is a denial (fail closed).
+# Every request asks the authority again; permission denial and unavailable authority are distinct.
+# TODO: AUDIT external access: calls the Tech capability API.
 class TechCapabilityClient
   CLIENT_ID = "tech-org-ww"
   OPEN_TIMEOUT = 2
@@ -21,7 +21,7 @@ class TechCapabilityClient
       # assertion audience against the URL it receives, so the audience follows the same URL.
       endpoint = OutboundHttp::LocalBackChannel.url("#{base_origin}/api/v0/tech-capability-checks")
       assertion = OidcClientAssertionJwt.issue(client_id: CLIENT_ID, token_url: endpoint)
-      return false if assertion.blank?
+      raise AccessOpDataUnavailableError if assertion.blank?
 
       uri = URI.parse(endpoint)
       connection = OutboundHttp::Connection.build(
@@ -29,12 +29,15 @@ class TechCapabilityClient
         require_https: OutboundHttp::LocalBackChannel.require_https?(endpoint),
       )
       response = connection.post(uri, { access_token:, client_assertion: assertion })
-      return false unless response.status.to_i == 200
+      return false if [401, 403].include?(response.status.to_i)
+      raise AccessOpDataUnavailableError unless response.status.to_i == 200
 
       body = JSON.parse(response.body.to_s)
-      body.is_a?(Hash) && body["allowed"] == true
+      raise AccessOpDataUnavailableError unless body.is_a?(Hash) && [true, false].include?(body["allowed"])
+
+      body["allowed"]
     rescue Faraday::Error, JSON::ParserError, URI::InvalidURIError, OutboundHttp::Connection::InsecureEndpointError
-      false
+      raise AccessOpDataUnavailableError
     end
   end
 end

@@ -34,21 +34,4 @@ class OwnershipAndStatusGateSweepTest < ActiveSupport::TestCase
     assert_not as_operator.show?
     assert_not as_operator.create?
   end
-
-  # A checkpoint may only be shown, and only completed, while the cycle is
-  # actually waiting at one -- the two answer identically by design.
-  test "the checkpoint gate follows the cycle's own status and nothing else" do
-    pending = ClientSignInFlow.new(state_id: ClientSignInFlow.state_id_for("CHECKPOINT_PENDING"))
-    elsewhere = ClientSignInFlow.new(state_id: ClientSignInFlow.state_id_for("PRIMARY_PENDING"))
-
-    assert_predicate SignIn::CyclePolicy.new(pending, user: clients(:one)), :show_checkpoint?
-    assert_predicate SignIn::CyclePolicy.new(pending, user: clients(:one)), :complete_checkpoint?
-    assert_not SignIn::CyclePolicy.new(elsewhere, user: clients(:one)).show_checkpoint?
-    assert_not SignIn::CyclePolicy.new(Object.new, user: clients(:one)).show_checkpoint?
-  end
-
-  test "a session-limit token reference that was not signed here resolves to no token" do
-    assert_nil SessionLimitResolutionTokenRef.find_client_token("not-a-signed-ref")
-    assert_nil SessionLimitResolutionTokenRef.find_client_token(nil)
-  end
 end

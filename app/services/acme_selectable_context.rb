@@ -67,26 +67,7 @@ module AcmeSelectableContext
     return persist_rp_app_selection!(public_ids, once:) if session.instance_of?(RpBaseAppSession)
     return persist_rp_org_selection!(public_ids, once:) if session.instance_of?(RpBaseOrgSession)
 
-    connection_owner(session.class).connected_to(role: :writing) do
-      session.with_lock do
-        raise SelectionAlreadyEstablished if once && session.selected_actor_context?
-        raise InvalidSelection, "invalid_selection" unless candidate_still_authorized?(public_ids)
-
-        attributes = {
-          selected_account_public_id: public_ids[:account_public_id],
-          selected_collective_public_id: public_ids[:organization_public_id],
-          selected_collective_unit_public_id: public_ids[:organization_unit_public_id],
-          selected_at: Time.current,
-        }
-        if config.avatar_mode != :none
-          attributes[:selected_avatar_public_id] = public_ids[:avatar_public_id]
-        end
-
-        selection = attributes.except(:selected_at)
-        session.revoke_step_up_authority! unless session.slice(*selection.keys) == selection.stringify_keys
-        session.update!(attributes)
-      end
-    end
+    raise AccessOpDataUnavailableError
   end
 
   def persist_rp_app_selection!(public_ids, once:)
@@ -116,6 +97,7 @@ module AcmeSelectableContext
   def persist_rp_org_selection!(public_ids, once:)
     RpBaseOrgRecord.connected_to(role: :writing) do
       session.with_lock do
+        ActiveRecord::Associations::Preloader.new(records: [session], associations: :op_session_binding).call
         raise InvalidSelection, "invalid_selection" unless session.active?
         raise InvalidSelection, "invalid_selection" unless candidate_still_authorized?(public_ids)
 

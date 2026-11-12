@@ -81,23 +81,6 @@ class IdentityTelephoneCeremonyContractTest < ActiveSupport::TestCase
     end
   end
 
-  test "valid result serializes and deserializes with acme audience binding" do
-    travel_to(@now) do
-      token = IdentityTelephoneCeremonyResult.issue(valid_result_claims, issuer_id: sign_issuer_id)
-
-      result = IdentityTelephoneCeremonyResult.decode(token, issuer_id: sign_issuer_id)
-
-      assert_equal "telephone_ceremony_result", result["purpose"]
-      assert_equal "sms_otp", result["proof_method"]
-      assert_equal "registration", result["operation"]
-      assert_equal "grant-1", result["grant_jti"]
-      assert_equal "result-1", result["result_jti"]
-      assert_equal "challenge-1", result["challenge_id"]
-      assert_equal IdentityTelephoneCeremonyContract.acme_audience("app"), result["aud"]
-      assert_equal JitSecurityJwtKeyring.active_kid(sign_issuer_id), result.kid
-    end
-  end
-
   test "result rejects missing required identifiers and expired result" do
     travel_to(@now) do
       assert_contract_error(/missing required claims: grant_jti/) do
@@ -158,7 +141,7 @@ class IdentityTelephoneCeremonyContractTest < ActiveSupport::TestCase
       token = IdentityTelephoneCeremonyGrant.issue(valid_grant_claims, issuer_id: acme_issuer_id)
 
       assert_contract_error(/kid is unknown|token verification failed/) do
-        IdentityTelephoneCeremonyGrant.decode(token, issuer_id: "surface:ACME_COM")
+        IdentityTelephoneCeremonyGrant.decode(token, issuer_id: "surface:BASE_ORG")
       end
 
       tampered = tamper_payload(token, "actor_ref" => "actor-client-2")

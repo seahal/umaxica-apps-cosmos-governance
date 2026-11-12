@@ -11,6 +11,16 @@ module Security
     class OrgWithdrawalGateInvariantTest < ActionDispatch::IntegrationTest
       fixtures :operators
 
+      setup do
+        @availability_flag = FqdnAvailabilityRegistry.flag_name_for(:base_staff)
+        @availability_was_enabled = Flipper.enabled?(@availability_flag)
+        Flipper.enable(@availability_flag)
+      end
+
+      teardown do
+        @availability_was_enabled ? Flipper.enable(@availability_flag) : Flipper.disable(@availability_flag)
+      end
+
       test "a closing operator on the Base org identity surface is redirected to withdrawal" do
         org_host = ENV.fetch("PUBLIC_BASE_STAFF_URL")
         host! org_host
@@ -44,6 +54,39 @@ module Security
 
         assert_equal base_org_identity_withdrawal_path(ri: "jp"), location
         assert_not_equal edit_base_app_identity_withdrawal_path(ri: "jp"), location
+      end
+
+      test "a closing operator cannot read protected JSON or change its selection" do
+        org_host = ENV.fetch("PUBLIC_BASE_STAFF_URL")
+        host! org_host
+        operator = operators(:one)
+        headers = as_staff_headers(operator, host: org_host)
+        operator.update!(withdrawal_started_at: 1.hour.ago)
+        original_identity = operator.reload.attributes
+
+        get base_org_identity_url(ri: "jp"), headers: headers, as: :json
+
+        assert_response :forbidden
+        assert_equal "WITHDRAWAL_REQUIRED", response.parsed_body.fetch("error")
+
+        patch base_org_selector_url(ri: "jp"), params: {}, headers: headers, as: :json
+
+        assert_response :forbidden
+        assert_equal "WITHDRAWAL_REQUIRED", response.parsed_body.fetch("error")
+        assert_equal original_identity, operator.reload.attributes
+      end
+
+      test "a reserved closing operator cannot use the withdrawal redirect as authentication" do
+        org_host = ENV.fetch("PUBLIC_BASE_STAFF_URL")
+        host! org_host
+        operator = operators(:one)
+        headers = as_staff_headers(operator, host: org_host)
+        operator.update!(withdrawal_started_at: 1.hour.ago, status_id: OperatorStatus::RESERVED)
+
+        get base_org_identity_url(ri: "jp"), headers: headers
+
+        assert_response :unauthorized
+        assert_nil response.location
       end
 
       test "an active operator can open the Base org identity surface" do

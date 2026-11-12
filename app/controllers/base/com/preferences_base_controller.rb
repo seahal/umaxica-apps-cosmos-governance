@@ -30,7 +30,7 @@ module Base
       # CSRF/Origin/Fetch Metadata and the per-field permit lists remain the enforcing boundary.
       # The write goes through the closed WU-7 boundary contract first (D-54/AC-24): operation is
       # `save` for every anonymous com write, and the realm is the one whose model this controller
-      # owns. Com has no Visa surface, so `sign_in`/`sign_out` never apply here.
+      # owns. This surface accepts only preference writes.
       def authorize_preference_write!
         realm_model = preference_class
         PreferenceWriteBoundary.authorize!(

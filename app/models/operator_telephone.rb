@@ -79,23 +79,7 @@ class OperatorTelephone < OrgPrincipalRecord
   public
 
   def finalize_telephone_registration!(transaction:, code:, session_ref:)
-    with_lock do
-      unless transaction.is_a?(OperatorTelephoneCeremonyTransaction) &&
-          transaction.surface == "org" && transaction.normalized_number_digest == number_digest &&
-          transaction.telephone_registration_otp_evidence?(
-            code: code, actor_ref: staff.public_id, session_ref: session_ref, candidate_ref: public_id,
-          )
-        raise ArgumentError, "ORG Telephone registration evidence is unavailable"
-      end
-      return self if staff_telephone_status_id == OperatorTelephoneStatus::VERIFIED
-
-      unless staff_telephone_status_id == OperatorTelephoneStatus::UNVERIFIED
-        raise ArgumentError, "ORG Telephone registration candidate is not pending"
-      end
-
-      update!(staff_telephone_status_id: OperatorTelephoneStatus::VERIFIED)
-      self
-    end
+    raise AccessOpDataUnavailableError
   end
 
   private

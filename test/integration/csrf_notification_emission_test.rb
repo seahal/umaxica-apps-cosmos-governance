@@ -43,24 +43,24 @@ class CsrfNotificationEmissionTest < ActionDispatch::IntegrationTest
                  "#{SUBSCRIBED_EVENTS.inspect}. A renamed or added event would go unrecorded."
   end
 
-  test "a cross-site POST is blocked and emits csrf_request_blocked with a usable payload" do
-    prepare_auth_sign_in_admission!
+  test "a cross-site PATCH is blocked and emits csrf_request_blocked with a usable payload" do
+    prepare_base_preference_entry!
     events =
       capture_csrf_events do
-        post_cross_site_sign_in
+        patch_cross_site_preference
       end
 
     blocked = events.find { |event| event.name == "csrf_request_blocked.action_controller" }
 
-    assert_not_nil blocked, "A cross-site POST must emit csrf_request_blocked. Got: #{events.map(&:name).inspect}"
+    assert_not_nil blocked, "A cross-site PATCH must emit csrf_request_blocked. Got: #{events.map(&:name).inspect}"
     assert_equal "cross-site", blocked.payload[:sec_fetch_site]
     assert_predicate blocked.payload[:controller], :present?
     assert_predicate blocked.payload[:action], :present?
   end
 
   test "the subscriber records a blocked request without logging the request or message" do
-    prepare_auth_sign_in_admission!
-    output = capture_logs { post_cross_site_sign_in }
+    prepare_base_preference_entry!
+    output = capture_logs { patch_cross_site_preference }
 
     assert_match "security.csrf.request_blocked", output,
                  "The subscriber must turn the Rails event into an application log event."
@@ -99,8 +99,8 @@ class CsrfNotificationEmissionTest < ActionDispatch::IntegrationTest
   RESCUE_FROM_LINE_MARKER = "rescue_from handled"
 
   test "a blocked request is recorded once, by the subscriber, with no framework CSRF warning" do
-    prepare_auth_sign_in_admission!
-    output = capture_logs { post_cross_site_sign_in }
+    prepare_base_preference_entry!
+    output = capture_logs { patch_cross_site_preference }
 
     assert_equal 1, output.scan("security.csrf.request_blocked").size,
                  "The blocked request must be recorded exactly once."
@@ -118,26 +118,19 @@ class CsrfNotificationEmissionTest < ActionDispatch::IntegrationTest
 
   private
 
-  def post_cross_site_sign_in
+  def patch_cross_site_preference
     with_forgery_protection do
-      post(
-        "/sign/in/email?ri=jp",
-        params: { user_email: { address: "csrf-probe@example.com" } },
-        headers: { "Sec-Fetch-Site" => "cross-site" },
+      patch(
+        "/preference/theme",
+        params: { ri: "jp" },
+        headers: { "Origin" => "https://attacker.example", "Sec-Fetch-Site" => "cross-site" },
       )
     end
   end
 
-  def prepare_auth_sign_in_admission!
-    host!(ENV.fetch("PUBLIC_AUTH_SERVICE_URL"))
+  def prepare_base_preference_entry!
+    host!(ENV.fetch("PUBLIC_BASE_SERVICE_URL"))
     https!
-    admission = OidcTestEntry.issue!(
-      surface: "app", intent: "sign_in",
-      base_browser_nonce: "nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn", base_token: nil,
-    )
-    admit_auth_ceremony_entry!("/sign/in", reference: admission.reference, params: { ri: "jp" })
-
-    assert_response :see_other
   end
 
   # Both loggers have to be swapped: the application subscriber writes through

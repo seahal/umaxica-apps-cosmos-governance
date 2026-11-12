@@ -133,7 +133,7 @@ class CspViolationReportIntake
         category: category,
         aggregation_key: aggregation_key(sanitized, category),
         host: sanitize_string(host),
-        surface: CoreSurface.current(RequestHost.new(host)).to_s,
+        surface: SurfaceHost.current(RequestHost.new(host)).to_s,
         user_agent_family: user_agent_family,
       ),
     )

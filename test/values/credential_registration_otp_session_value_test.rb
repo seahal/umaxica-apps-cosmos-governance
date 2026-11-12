@@ -23,8 +23,7 @@ class CredentialRegistrationOtpSessionValueTest < ActiveSupport::TestCase
 
     assert_not_equal binding.browser_digest, org_binding.browser_digest
 
-    [arguments.merge(surface: "com"), arguments.merge(surface: "unknown"), arguments.merge(surface: nil),
-     arguments.merge(surface: ""), arguments.merge(channel: :telephone),
+    [arguments.merge(channel: :telephone),
      arguments.merge(transaction_ref: SecureRandom.uuid),
      arguments.merge(root_ref: "different-root"),
      arguments.merge(browser_nonce: SecureRandom.urlsafe_base64(32)),].each do |foreign|

@@ -6,7 +6,7 @@ class RpStepUpDispatchRecoveryJob < ApplicationJob
   public
 
   def perform
-    RpStepUpDispatchRecovery.call(cell: RpStepUpCellRegistry.fetch(RpCellBinding.fetch("rp_base_app")).cell)
-    RpStepUpDispatchRecovery.call(cell: RpStepUpCellRegistry.fetch(RpCellBinding.fetch("rp_base_org")).cell)
+    RpStepUpDispatchRecoveryOperation.call(cell: RpStepUpCellRegistry.fetch(RpCellBinding.fetch("rp_base_app")).cell)
+    RpStepUpDispatchRecoveryOperation.call(cell: RpStepUpCellRegistry.fetch(RpCellBinding.fetch("rp_base_org")).cell)
   end
 end

@@ -4,29 +4,19 @@
 require "test_helper"
 
 class Base::Org::SelectorControllerTest < ActionDispatch::IntegrationTest
-  include DatabaseSelectorPrimary
-
   setup do
-    keep_reads_on_primary!
     @host = ENV.fetch("PUBLIC_BASE_STAFF_URL")
     [OperatorStatus, OperatorVisibility].each(&:ensure_defaults!)
     OperatorSecurityMode.insert_missing_fixed_ids!(OperatorSecurityMode::DEFAULTS)
     OperatorPasskeyStatus.find_or_create_by!(id: OperatorPasskeyStatus::ACTIVE)
-    ensure_token_references!
     @operator = Operator.create!(
       security_mode_id: OperatorSecurityMode::ADVANCED,
       status_id: OperatorStatus::ACTIVE,
       visibility_id: OperatorVisibility::STAFF,
     )
     @operator = OperatorPasskeyTestSupport.give_two_active_passkeys!(@operator)
-    @token = OperatorToken.create!(
-      authentication_epoch: 0,
-      staff: @operator,
-      staff_token_kind_id: OperatorTokenKind::BROWSER_WEB,
-    )
+    @external_session_ref = SecureRandom.uuid
   end
-
-  teardown { restore_database_selector_delay! }
 
   test "unauthenticated operator cannot access selector" do
     get base_org_selector_url(host: @host), headers: host_headers(@host), as: :json
@@ -42,7 +32,7 @@ class Base::Org::SelectorControllerTest < ActionDispatch::IntegrationTest
     assert_response :see_other
     assert_equal base_org_dashboard_path(ri: "jp"), URI(response.location).request_uri
     assert_equal candidate.account.public_id, rp_selection.fetch(:account_public_id)
-    assert_not @token.reload.selected_actor_context?
+    assert_equal @external_session_ref, rp_session.op_session_binding.sid
   end
 
   test "unselected RP session renders an ORG Inertia selector without writing a choice" do
@@ -68,7 +58,7 @@ class Base::Org::SelectorControllerTest < ActionDispatch::IntegrationTest
     assert_equal selected.except(:avatar_public_id).stringify_keys, rp_selection.slice(
       :account_public_id, :organization_public_id, :organization_unit_public_id,
     )
-    assert_not @token.reload.selected_actor_context?
+    assert_equal @external_session_ref, rp_session.op_session_binding.sid
   end
 
   test "selected RP session cannot overwrite its ORG choice through selector" do
@@ -106,20 +96,17 @@ class Base::Org::SelectorControllerTest < ActionDispatch::IntegrationTest
 
   private
 
-  def ensure_token_references!
-    OperatorTokenKind.find_or_create_by!(id: OperatorTokenKind::BROWSER_WEB)
-    OperatorTokenStatus.find_or_create_by!(id: OperatorTokenStatus::ACTIVE)
-    OperatorTokenBindingMethod.find_or_create_by!(id: OperatorTokenBindingMethod::LEGACY)
-    OperatorTokenDbscStatus.find_or_create_by!(id: OperatorTokenDbscStatus::NOTHING)
-  end
-
   def authenticated_headers
-    @authenticated_headers ||= as_staff_headers(@operator, host: @host, session_public_id: @token.public_id)
+    @authenticated_headers ||= as_staff_headers(@operator, host: @host, session_public_id: @external_session_ref)
   end
 
   def rp_session
-    token_id = authenticated_headers.fetch("X-TEST-SESSION-PUBLIC-ID")
-    session_public_id = @base_browser_rp_session_public_ids.fetch([RpBaseOrgSession::CLIENT_ID, token_id])
+    authenticated_headers
+    token_id = @external_session_ref
+    session_public_id = @base_browser_rp_session_public_ids.fetch(
+      [RpBaseOrgSession::CLIENT_ID, @operator.public_id,
+       token_id,],
+    )
     RpBaseOrgSession.includes(:op_session_binding).find_by!(public_id: session_public_id)
   end
 

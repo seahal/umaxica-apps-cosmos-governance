@@ -27,13 +27,19 @@ class EnforcementReconciliationJobTest < ActiveJob::TestCase
     assert_predicate actor.reload, :admin_locked?
     assert_predicate AccountAccessEvent.where(account_type: "Operator", account_id: actor.id)
       .where("metadata @> ?::jsonb", { enforcement_case_public_id: the_case.public_id }.to_json), :exists?
-    assert_not OrgEnforcementCase.pending_convergence.exists?(id: the_case.id)
+    assert OrgEnforcementCase.pending_convergence.exists?(id: the_case.id)
+    EnforcementReconciliationJob.perform_now
+
+    assert OrgEnforcementCase.pending_convergence.exists?(id: the_case.id)
+    assert_nil the_case.reload.sessions_revoked_at
   end
 
   test "a lock from another decision does not complete this Case's principal effect" do
     client = create_test_client!
     operator = operators(:one)
-    AdministrativeAccessLock.lock!(account: client, operator: operator, reason_code: "security_incident")
+    assert_raises(AccessOpDataUnavailableError) do
+      AdministrativeAccessLock.lock!(account: client, operator: operator, reason_code: "security_incident")
+    end
     the_case = AppEnforcementCase.new(
       kind: "security_lock", duration_mode: "indefinite", visibility: "visible",
       release_mode: "verification_required", effective_at: Time.current, reason_code: "security_incident",
@@ -54,7 +60,7 @@ class EnforcementReconciliationJobTest < ActiveJob::TestCase
     assert_predicate AccountAccessEvent.where(account_type: "Client", account_id: client.id)
       .where("metadata @> ?::jsonb", { enforcement_case_public_id: the_case.public_id }.to_json)
       .where(event_type: AccountAccessEvent::EVENT_TYPE_ADMIN_LOCK_REAFFIRMED), :exists?
-    assert_not AppEnforcementCase.pending_convergence.exists?(id: the_case.id)
+    assert AppEnforcementCase.pending_convergence.exists?(id: the_case.id)
   end
 
   test "retries the principal effect when its access audit failed after the principal lock" do
@@ -85,7 +91,7 @@ class EnforcementReconciliationJobTest < ActiveJob::TestCase
     assert_predicate AccountAccessEvent.where(account_type: "Client", account_id: client.id)
       .where("metadata @> ?::jsonb", { enforcement_case_public_id: the_case.public_id }.to_json)
       .where(event_type: lock_types), :exists?
-    assert_not AppEnforcementCase.pending_convergence.exists?(id: the_case.id)
+    assert AppEnforcementCase.pending_convergence.exists?(id: the_case.id)
   end
 
   test "a missing principal remains pending and is reported during reconciliation" do
@@ -129,19 +135,15 @@ class EnforcementReconciliationJobTest < ActiveJob::TestCase
     end
 
     assert_predicate client.reload, :admin_locked?
-    assert_not AppEnforcementCase.pending_convergence.exists?(id: the_case.id)
-    assert_predicate the_case.reload.sessions_revoked_at, :present?
-    assert_predicate the_case.audited_at, :present?
-    assert_empty logged
+    assert AppEnforcementCase.pending_convergence.exists?(id: the_case.id)
+    assert_nil the_case.reload.sessions_revoked_at
+    assert_nil the_case.audited_at
+    assert logged.any? { |message| message.include?("AccessOpDataUnavailableError") }
   end
 
   test "reconciles a case whose sessions_revoked_at and audited_at are still nil after apply!" do
     client = create_test_client!
     operator = operators(:one)
-    token = ClientToken.create!(
-      authentication_epoch: 0, user_id: client.id,
-      established_authentication_method: "passkey",
-    )
 
     the_case = AppEnforcementCase.new(
       kind: "method_protection",
@@ -159,23 +161,24 @@ class EnforcementReconciliationJobTest < ActiveJob::TestCase
       effect: "unusable",
       effective_at: Time.current,
     )
-    EnforcementCaseApplyOperation.call(
-      enforcement_case: the_case,
-      actor_operator_public_id: the_case.applied_by_operator_public_id,
-    )
+    assert_raises(AccessOpDataUnavailableError) do
+      EnforcementCaseApplyOperation.call(
+        enforcement_case: the_case, actor_operator_public_id: the_case.applied_by_operator_public_id,
+      )
+    end
+    assert_equal "active", the_case.reload.state
+    assert_nil the_case.sessions_revoked_at
+    assert_nil the_case.audited_at
 
-    # Simulate a prior partial failure: the state transition committed, but
-    # the convergent side effects never ran.
-    the_case.update_columns(sessions_revoked_at: nil, audited_at: nil)
+    failures = []
+    Rails.logger.stub(:error, ->(message) { failures << message }) do
+      EnforcementReconciliationJob.perform_now
+    end
 
-    EnforcementReconciliationJob.perform_now
-
-    token.reload
-    the_case.reload
-
-    assert_predicate token, :revoked?
-    assert_predicate the_case.sessions_revoked_at, :present?
-    assert_predicate the_case.audited_at, :present?
+    assert_equal "active", the_case.reload.state
+    assert_nil the_case.sessions_revoked_at
+    assert_nil the_case.audited_at
+    assert AppEnforcementCase.pending_convergence.exists?(id: the_case.id)
   end
 
   test "pending_convergence only selects active cases with an unconverged side effect" do

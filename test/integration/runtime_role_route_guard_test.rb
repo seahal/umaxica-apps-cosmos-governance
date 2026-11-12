@@ -8,7 +8,7 @@ class RuntimeRoleRouteGuardTest < ActionDispatch::IntegrationTest
   self.fixture_table_names = []
 
   test "a role process refuses another role's page before any callback" do
-    with_runtime_role("op-base-app") do
+    with_runtime_role("rp-base-org-ww") do
       get base_app_identity_birthdate_url(ri: "jp", host: ENV.fetch("PUBLIC_BASE_SERVICE_URL"))
     end
 
@@ -34,8 +34,8 @@ class RuntimeRoleRouteGuardTest < ActionDispatch::IntegrationTest
     assert_not_equal 404, response.status
   end
 
-  # R5-WU19: a closed cell keeps only its protocol receivers and health reachable.
-  test "a closed RP cell refuses its browser pages and still serves its back-channel logout receiver" do
+  # Auth/Visa URL removal retires the external logout-token receiver with the sign-in path.
+  test "a closed RP cell refuses browser pages and has no back-channel logout route" do
     host = ENV.fetch("PUBLIC_BASE_SERVICE_URL")
     with_runtime_role("rp-base-app-ww", admission: "closed") do
       get "/accounts", params: { ri: "jp" }, headers: { "Host" => host }
@@ -44,7 +44,7 @@ class RuntimeRoleRouteGuardTest < ActionDispatch::IntegrationTest
 
       post "/oidc/closures", headers: { "Host" => host }
 
-      assert_not_equal 404, response.status
+      assert_response :not_found
     end
   end
 

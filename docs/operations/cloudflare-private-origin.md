@@ -1,12 +1,13 @@
 # Cloudflare Private Origin Contract
 
 This repository exposes Rails to Cloudflare Tunnel only through the Podman `frontend` network. Two
-route types share that network but not a tunnel: published browser hostnames behind Access run over
-the `Auth` tunnel, and Workers VPC runs over its own dedicated `umaxica-dev-workers-vpc` tunnel.
+route types share that network but not a tunnel: published Base and Tech browser hostnames behind
+Access run over the primary browser tunnel, and Workers VPC runs over its own dedicated
+`umaxica-dev-workers-vpc` tunnel.
 Neither ingress path changes Rails authentication, authorization, or surface ownership.
 
 The tunnels are deliberately separate. Until 2026-09-05 the single VPC Service was bound to the
-`Auth` tunnel, so every Access application, ingress rule, replica and token rotation on the
+primary browser tunnel, so every Access application, ingress rule, replica and token rotation on the
 published browser path also moved the Edge Worker's only route to Rails. Splitting them means a
 change to one cannot take out the other. See "Workers VPC Traffic" below.
 
@@ -41,7 +42,7 @@ The gates are intentionally independent:
    [evidence](../../evidence/2026-10-13-environment-test-retirement-A6V9.md). This is an operational
    check, not a test-suite guard; repeat it after changing host configuration.
 3. **Surface routing**: the route contract tests recognize non-health application resources for the
-   private Host values and assert the matching `app`, `com`, `org`, `net`, or `dev` controller.
+   private Host values and assert the matching Base `app`, `com`, `org`, or Tech `org` controller.
 4. **Podman DNS aliases**: `podman compose config` must show the private aliases on `core`'s
    `frontend` network and no new host port publication. The connector never needs an inbound host
    port and must not be given one; the only publications in the stack are `core`'s loopback-bound
@@ -70,12 +71,6 @@ section of `docs/architecture/cloudflare-request-paths.md` for how each family r
 `config.hosts`, and for the `FORCE_SECURE_COOKIES` trade-off between the tunnel path and the
 plain-`http` local path.
 
-`edit.umaxica.org` follows the same private-origin contract: its remotely managed Tunnel ingress
-uses `http://edit.org.localhost:3000` on `frontend`. The `core` aliases in
-`.devcontainer/compose.yaml` are the repository source of that origin name. The Cloudflare account
-owns the matching public-hostname, ingress, DNS, and Access records; update that remote
-configuration by merging with its current ingress rather than replacing it.
-
 Access is the control that keeps the development surface non-public, and it lives in the Cloudflare
 account rather than in this repository — see "External Checks" below.
 
@@ -100,8 +95,8 @@ this Rails repository.
 
 That alias is not decoration, and no `*.localhost` name may replace it. RFC 6761 reserves the
 `localhost.` domain, and glibc resolves any name under it to loopback _before_ a container resolver
-is consulted — on the `frontend` network itself, `getent hosts core.app.localhost` answers `::1`,
-not this container. A VPC Service pointed at a `*.localhost` name therefore cannot work, which is
+is consulted — on the `frontend` network itself, a `getent hosts` query for a private localhost
+alias answers `::1`, not this container. A VPC Service pointed at a `*.localhost` name therefore cannot work, which is
 what drove the service to target the raw Podman address `10.89.2.2` — an address that changes
 whenever the network is recreated. `core-workers-vpc.internal` is a plain Compose alias on `core`'s
 `frontend` network: neither loopback-reserved nor ephemeral.
@@ -135,7 +130,7 @@ profile:
 
 | Service                         | Profile                      | Token variable                  | Tunnel                               |
 | :------------------------------ | :--------------------------- | :------------------------------ | :----------------------------------- |
-| `cloudflare-tunnel`             | none (starts with the stack) | `CLOUDFLARED_TOKEN`             | `Auth` — published hostnames/Access  |
+| `cloudflare-tunnel`             | none (starts with the stack) | `CLOUDFLARED_TOKEN`             | Primary browser hostnames/Access     |
 | `cloudflare-tunnel-edge`        | `tunnel-edge`                | `CLOUDFLARED_EDGE_TOKEN`        | `Edge`                               |
 | `cloudflare-tunnel-workers-vpc` | none (starts with the stack) | `CLOUDFLARED_WORKERS_VPC_TOKEN` | `umaxica-dev-workers-vpc` — VPC only |
 
@@ -258,8 +253,8 @@ done
 Every line must read `200`. Pin the curl tag, or a digest, rather than tracking `latest`.
 
 Observed 2026-09-05: on `umaxica-apps-global-dc_frontend` this loop returns `000`, not `200`, for
-every `*.localhost` alias, and `getent hosts core.app.localhost` in the same container answers
-`::1`. That is glibc applying RFC 6761 — names under the reserved `localhost.` domain resolve to
+every `*.localhost` alias, and `getent hosts` for a private localhost alias in the same container
+answers `::1`. That is glibc applying RFC 6761 — names under the reserved `localhost.` domain resolve to
 loopback without consulting the container resolver — so the probe never reaches Rails through those
 names. It is a property of the probe container's resolver, not evidence about the connector:
 cloudflared uses Go's own resolver and is not known to apply the same special case. Treat a `000`
@@ -271,7 +266,7 @@ The Workers VPC alias is unaffected and is the one to probe for that path:
 ```bash
 podman run --rm --network "$net" docker.io/curlimages/curl:8.16.0 \
   -sS -o /dev/null --max-time 5 -w "%{http_code}\n" \
-  -H "Host: core.app.localhost" http://core-workers-vpc.internal:3000/health/
+  -H "Host: base.app.localhost" http://core-workers-vpc.internal:3000/health/
 ```
 
 `Host:` is set explicitly because `core-workers-vpc.internal` is a routing name only and
@@ -311,16 +306,23 @@ development only; the first and fourth items remain unverified, and production r
 all four. A dated verification run is evidence, not a substitute for re-checking after any account
 change.
 
-That run also found that `palm-jp.umaxica.app` currently carries an interactive Access application.
-The observation predates Palm's move to a Browser RP: the former bearer API is retired. Before
-publishing the current browser flow, re-verify Access behavior, cookie forwarding, and private-origin
-reachability against the deployed route and callback contract. Local Rails routing does not establish
-that production or development edge routing has been published.
+The local route inventory includes Base app/com/org, Tech org and the host-constrained operator
+tools. Other product hostnames are outside this repository's current surface inventory. Local Rails
+routing does not establish that a hostname is published by the Cloudflare account.
 
-The Docs, Help, and News families are not published through the tunnel. `PUBLIC_DOCS_*_URL` names a
-private `*.localhost` origin and no `PUBLIC_HELP_*`/`PUBLIC_NEWS_*` value is set, so the former
-`docs-jp.`/`help-jp.`/`news-jp.umaxica.*` aliases named hostnames that nothing configured and that
-Host Authorization would reject; they are removed rather than left dangling. This also retires the
-pre-existing spelling mismatch between those aliases and the `docs.jp.umaxica.app` route
-constraints. Publishing any of the three means choosing the canonical hostname, setting the matching
-`PUBLIC_*_URL`, and adding the alias — in that order.
+## Server-to-Server Calls Through the Tunnel May Fail
+
+After the Cosmos split, server-to-server calls between repositories travel through the public
+hostnames and each repository's Cloudflare Tunnel. This Rails process no longer calls external Auth
+or Visa OIDC endpoints. Such calls can fail for reasons outside the application, so a failure on
+this path does not by itself indicate an application defect:
+
+- **Cloudflare Access.** The retained hosts may use the `surface-gate` policy. While it is locked,
+  every server-to-server call is redirected to the Access login and fails.
+- **Connector state.** A tunnel with no healthy connector answers Error 1033. A connector still
+  running with another repository's token joins that tunnel as a replica, so requests reach a
+  random repository.
+- **Container lifecycle.** The receiving repository's Dev Container may be stopped or recreating.
+
+Check these first when a cross-repository call fails in development. This path is not available
+for offline or tunnel-less local work.

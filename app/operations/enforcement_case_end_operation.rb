@@ -158,28 +158,13 @@ class EnforcementCaseEndOperation
   end
 
   def validate_step_up_pair!
-    return if step_up_token.nil? && step_up_actor.nil? && step_up_evidence.nil? && ended_by_operator_public_id.nil?
+    return if step_up_token.nil? && step_up_actor.nil? && step_up_evidence.nil?
 
-    valid_actor_and_token = step_up_token.is_a?(OperatorToken) && step_up_actor.is_a?(Operator) &&
-      step_up_actor.persisted? && step_up_actor.public_id == ended_by_operator_public_id &&
-      step_up_token.staff_id == step_up_actor.id
-    raise ArgumentError, "operator enforcement end Step-Up actor and token must be supplied together" unless
-      valid_actor_and_token
-    unless %i(release review_appeal).include?(authorization_rule)
-      raise ArgumentError, "operator enforcement end requires an explicit authorization rule"
-    end
-    return if step_up_evidence.is_a?(StepUpEvidenceValue)
-    raise TokenStatusManagement::StepUpEvidenceUnavailable, "Enforcement end requires current Step-Up" if
-      step_up_evidence.nil?
-
-    raise ArgumentError, "operator enforcement end requires its bound Step-Up actor, token and evidence"
+    raise AccessOpDataUnavailableError
   end
 
   def verify_step_up!
-    return if step_up_token.nil?
-    return if StepUpEvidenceVerifier.call(evidence: step_up_evidence, actor: step_up_actor, token: step_up_token)
-
-    raise TokenStatusManagement::StepUpEvidenceUnavailable, "Enforcement end requires current Step-Up"
+    raise AccessOpDataUnavailableError if step_up_token
   end
 
   # The operator who ended the Case; nil when no operator did (expiry, principal verification).

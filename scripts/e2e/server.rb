@@ -73,18 +73,11 @@ begin
     Rails.configuration.action_mailer.delivery_method == :test && Rails.configuration.sms_provider == "test" &&
       Rails.configuration.active_job.queue_adapter == :test
 
-  # Test Flipper is process-local memory: explicitly prepare the real availability switch.
-  # This configures only Auth public availability, without bypassing its gate.
+  # Test Flipper is process-local memory: explicitly prepare Base.com's real availability switch.
+  # This does not bypass the surface's gate.
   availability_adapter = Flipper::Adapters::Memory.new
   Flipper.configure { |configuration| configuration.adapter { availability_adapter } }
-  Flipper.new(availability_adapter).enable(FqdnAvailabilityRegistry.flag_name_for(:auth_service))
-  # Browser journeys cross Auth and Base hosts, so expose each Base slot in this isolated adapter.
-  %i(base_service base_corporate base_staff).each do |slot|
-    Flipper.new(availability_adapter).enable(FqdnAvailabilityRegistry.flag_name_for(slot))
-  end
-  %i(sign_in_available_app sign_up_available_app).each do |feature|
-    Flipper.new(availability_adapter).enable(feature)
-  end
+  Flipper.new(availability_adapter).enable(FqdnAvailabilityRegistry.flag_name_for(:base_corporate))
 
   valkey = Umaxica::Valkey::Settings.current
   [valkey.rate_limit, valkey.auth_state].each do |setting|
@@ -105,7 +98,7 @@ begin
   Rails.application.load_server
   server = Puma::Server.new(Rails.application)
   server.binder.inherit_tcp_listener(loopback, 3198, listener)
-  puts "Rails E2E: Puma starting on auth.app.localhost:3198 (test, CSRF enabled)"
+  puts "Rails E2E: Puma starting on base.com.localhost:3198 (test, CSRF enabled)"
   server_thread = server.run
   puts "Rails E2E: ready"
   server_thread.join

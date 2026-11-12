@@ -4,6 +4,11 @@
 
 Accepted (2026-09-14)
 
+> **Local-route disposition (2026-11-10):** The owner-approved local-surface hard reset removes this
+> repository's local publishing (`Edit`) and Docs/News/Help/Info routes/controllers. This supersedes
+> the local Rails UI/API delivery implementation described below; it does not retire the Publishing
+> database/model contracts, existing data, or external consumers.
+
 ## Date
 
 2026-09-14

@@ -139,20 +139,10 @@ module EnforcementCaseApplicable
   def revoke_method_sessions!
     return unless persisted?
 
-    principal = self.class.principal_class.find_by!(public_id: principal_public_id)
+    self.class.principal_class.find_by!(public_id: principal_public_id)
 
-    authentication_method_effects.where(ended_at: nil).find_each do |effect|
-      next unless METHOD_REVOKING_EFFECTS.include?(effect.effect)
-
-      AuthenticationSessionRevoker.tokens_for_method(principal, effect.authentication_method)
-        .not_revoked.find_each do |token|
-          AuthenticationLogoutCurrentSession.call(
-            resource: principal,
-            token: token,
-            reason: "enforcement_#{effect.effect}",
-            cause: "administrative", # D-173
-          )
-        end
+    if authentication_method_effects.exists?(ended_at: nil, effect: METHOD_REVOKING_EFFECTS)
+      raise AccessOpDataUnavailableError
     end
 
     update!(sessions_revoked_at: Time.current)

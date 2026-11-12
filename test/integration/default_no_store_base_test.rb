@@ -17,12 +17,12 @@ class DefaultNoStoreBaseTest < ActionDispatch::IntegrationTest
     assert_includes response.headers.fetch("Cache-Control"), "no-store"
   end
 
-  test "Base app ApplicationController authentication redirect is no-store" do
+  test "Base app ApplicationController authentication refusal is no-store" do
     host!("base.app.localhost")
 
     get("/groups", params: { ri: "jp" })
 
-    assert_response :found
+    assert_response :unauthorized
     assert_equal "no-store", response.headers.fetch("Cache-Control")
   end
 
@@ -64,12 +64,12 @@ class DefaultNoStoreBaseTest < ActionDispatch::IntegrationTest
     assert_includes response.headers.fetch("Cache-Control"), "no-store"
   end
 
-  test "Base org ApplicationController authentication redirect is no-store" do
+  test "Base org ApplicationController authentication refusal is no-store" do
     host!("base.org.localhost")
 
     get("/settings", params: { ri: "jp" })
 
-    assert_response :found
+    assert_response :unauthorized
     assert_equal "no-store", response.headers.fetch("Cache-Control")
   end
 
@@ -78,44 +78,6 @@ class DefaultNoStoreBaseTest < ActionDispatch::IntegrationTest
     host!("base.org.localhost")
 
     get("/settings", params: { ri: "jp" })
-
-    assert_response :service_unavailable
-    assert_equal "no-store", response.headers.fetch("Cache-Control")
-  end
-
-  test "Base dev ApplicationController root page is no-store" do
-    host!("base.dev.localhost")
-
-    get("/")
-
-    assert_response :success
-    assert_equal "no-store", response.headers.fetch("Cache-Control")
-  end
-
-  test "Base dev ApplicationController response halted by the availability gate is no-store" do
-    Flipper.disable(FqdnAvailabilityRegistry.flag_name_for(:base_developer))
-    host!("base.dev.localhost")
-
-    get("/")
-
-    assert_response :service_unavailable
-    assert_equal "no-store", response.headers.fetch("Cache-Control")
-  end
-
-  test "Base net ApplicationController root page is no-store" do
-    host!("base.net.localhost")
-
-    get("/")
-
-    assert_response :success
-    assert_equal "no-store", response.headers.fetch("Cache-Control")
-  end
-
-  test "Base net ApplicationController response halted by the availability gate is no-store" do
-    Flipper.disable(FqdnAvailabilityRegistry.flag_name_for(:base_network))
-    host!("base.net.localhost")
-
-    get("/")
 
     assert_response :service_unavailable
     assert_equal "no-store", response.headers.fetch("Cache-Control")
@@ -224,44 +186,6 @@ class DefaultNoStoreBaseTest < ActionDispatch::IntegrationTest
     host!("base.org.localhost")
 
     get("/robots.txt")
-
-    assert_response :service_unavailable
-    assert_equal "no-store", response.headers.fetch("Cache-Control")
-  end
-
-  test "Base dev BareController revision is no-store" do
-    host!("base.dev.localhost")
-
-    get("/revision")
-
-    assert_response :success
-    assert_equal "no-store", response.headers.fetch("Cache-Control")
-  end
-
-  test "Base dev BareController response halted by the availability gate is no-store" do
-    Flipper.disable(FqdnAvailabilityRegistry.flag_name_for(:base_developer))
-    host!("base.dev.localhost")
-
-    get("/revision")
-
-    assert_response :service_unavailable
-    assert_equal "no-store", response.headers.fetch("Cache-Control")
-  end
-
-  test "Base net BareController revision is no-store" do
-    host!("base.net.localhost")
-
-    get("/revision")
-
-    assert_response :success
-    assert_equal "no-store", response.headers.fetch("Cache-Control")
-  end
-
-  test "Base net BareController response halted by the availability gate is no-store" do
-    Flipper.disable(FqdnAvailabilityRegistry.flag_name_for(:base_network))
-    host!("base.net.localhost")
-
-    get("/revision")
 
     assert_response :service_unavailable
     assert_equal "no-store", response.headers.fetch("Cache-Control")

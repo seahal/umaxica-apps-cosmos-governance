@@ -41,7 +41,7 @@ export default defineConfig({
       use: {
         ...devices["Desktop Chrome"],
         launchOptions: {
-          args: ["--host-resolver-rules=MAP auth.app.localhost 127.0.0.1"],
+          args: ["--host-resolver-rules=MAP base.com.localhost 127.0.0.1"],
           ...(chromiumExecutablePath === undefined
             ? {}
             : {

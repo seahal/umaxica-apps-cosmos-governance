@@ -1,6 +1,6 @@
 // Registering a passkey on the surfaces that do not boot React.
 //
-// The credential ceremony lives in `@/features/auth/passkeys/webauthn` and the request/response
+// The credential ceremony lives in `@/features/identity/passkeys/webauthn` and the request/response
 // handling in `@/controllers/passkey_ceremony`; both have their own specs. What belongs here is
 // what this controller decides: which url each step goes to when the surface names it two
 // different ways, what the finish request carries, and where the visitor lands afterwards.
@@ -11,7 +11,7 @@ const solveInvisibleTurnstile = vi.fn(async (): Promise<string> => {
   throw new Error("Security verification failed. Please refresh and try again.");
 });
 
-vi.mock("@/features/auth/passkeys/invisibleTurnstile", () => ({
+vi.mock("@/features/identity/passkeys/invisibleTurnstile", () => ({
   solveInvisibleTurnstile: () => solveInvisibleTurnstile(),
 }));
 

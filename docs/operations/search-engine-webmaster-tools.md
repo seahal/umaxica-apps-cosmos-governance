@@ -15,4 +15,4 @@ Do not store ownership-verification tokens or other provider credentials in this
 
 ## Related
 
-- `docs/architecture/docs-help-news-content-boundary.md`
+- `docs/architecture/content-surface-matrix.md`

@@ -4,6 +4,25 @@
 require "test_helper"
 
 class AvatarLifecycleStateTest < ActiveSupport::TestCase
+  test "a referenced lifecycle state refuses application deletion without deleting its Avatar" do
+    state = AvatarLifecycleState.find_by!(key: "active")
+    handle = Handle.create!(handle: "lifecycle-restrict-probe", cooldown_until: Time.current)
+    avatar = Avatar.create!(
+      active_handle: handle, capability: AvatarCapability.find(AvatarCapability::NORMAL), lifecycle_state: state,
+    )
+
+    assert_not state.destroy
+    assert_not_empty state.errors[:base]
+    assert Avatar.exists?(avatar.id)
+    assert AvatarLifecycleState.exists?(state.id)
+
+    assert_raises(ActiveRecord::InvalidForeignKey) do
+      AvatarRecord.transaction(requires_new: true) { state.delete }
+    end
+    assert Avatar.exists?(avatar.id)
+    assert AvatarLifecycleState.exists?(state.id)
+  end
+
   test "seed states exist" do
     assert_equal %w(active suspended archived banned deleted), AvatarLifecycleState.order(:sort_order).pluck(:key)
   end

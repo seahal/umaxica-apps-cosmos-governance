@@ -13,13 +13,13 @@ class StepUpEvidenceResolverTest < ActiveSupport::TestCase
     @subject = OidcSubject.for(@actor, resource_type: "client")
     @sid = SecureRandom.alphanumeric(21)
     @now = RpBaseAppRecord.database_now
-    @rp_session = RpCallbackCommitter.call(
+    @rp_session = seed_rp_cell_session(
       cell: @cell,
       issuer: @issuer,
       subject: @subject,
       sid: @sid,
       absolute_expires_at: @now + 1.hour,
-    ).session
+    )
     binding = RpBaseAppOpSessionBinding.includes(identity_binding: :principal).find(@rp_session.op_session_binding_id)
     @principal = binding.identity_binding.principal
     @payload = {
@@ -40,52 +40,6 @@ class StepUpEvidenceResolverTest < ActiveSupport::TestCase
       resource: @principal,
       rp_session: @rp_session,
       payload: @payload,
-      security_context: nil,
-    )
-
-    op_now = OpBaseAppRecord.database_now
-    @op_token = ClientToken.create!(
-      authentication_epoch: @actor.authentication_epoch,
-      user: @actor,
-      user_token_kind_id: ClientTokenKind::BROWSER_WEB,
-      user_token_status_id: ClientTokenStatus::ACTIVE,
-      discard_at: op_now + 1.hour,
-    )
-    @op_token.update!(root_login_established_at: op_now, established_authentication_method: "passkey")
-    @op_token.rotate_refresh_token!(now: op_now)
-    @op_device = @op_token.device_session_record!
-    client = OidcClientRegistry.find!(@cell.client_id)
-    op_auth_time = op_now.to_i - 10
-    @op_grant = OpAppGrant.create!(
-      authentication_epoch: @op_token.authentication_epoch,
-      client_token: @op_token,
-      oidc_client_id: client.client_id,
-      oidc_scope: "openid profile",
-      oidc_jti: SecureRandom.uuid,
-      oidc_nonce: SecureRandom.hex(16),
-      oidc_auth_time: Time.at(op_auth_time).utc,
-      oidc_acr: StepUpEvidenceResolver::STEP_UP_ACR,
-      oidc_amr: JSON.generate(["passkey"]),
-      refresh_token_expires_at: op_now + 10.minutes,
-    )
-    @op_grant.issue_refresh_token!(now: op_now)
-    @op_access_state = BrowserRpAuthentication::AccessState.new(
-      status: :valid,
-      resource: @actor,
-      rp_session: @op_grant,
-      payload: {
-        "iss" => @issuer,
-        "aud" => [client.aud],
-        "sid" => @op_grant.public_id,
-        "sub" => @subject,
-        "client_id" => client.client_id,
-        AuthenticationContextValue::CLAIM => @op_token.strict_authentication_context_value.to_s,
-        "acr" => StepUpEvidenceResolver::STEP_UP_ACR,
-        "amr" => ["passkey"],
-        "auth_time" => op_auth_time,
-        "exp" => op_now.to_i + 60,
-        "jti" => @op_grant.oidc_jti,
-      },
       security_context: nil,
     )
   end
@@ -132,39 +86,6 @@ class StepUpEvidenceResolverTest < ActiveSupport::TestCase
     end
   end
 
-  test "accepts a current event from the authorized Base OP-chain grant" do
-    now = OpBaseAppRecord.database_now
-
-    OpBaseAppRecord.stub(:database_now, now) do
-      evidence = StepUpEvidenceResolver.call(access_state: @op_access_state, actor: @actor, cell: @cell)
-
-      assert_instance_of StepUpEvidenceValue, evidence
-      assert_equal @op_access_state.payload.fetch("sid"), evidence.sid
-      assert_equal @op_access_state.payload.fetch("jti"), evidence.jti
-    end
-  end
-
-  test "rejects an OP-chain access token whose committed event no longer matches its grant" do
-    changed_state = @op_access_state.with(payload: @op_access_state.payload.merge("auth_time" => @now.to_i - 2))
-    now = OpBaseAppRecord.database_now
-
-    OpBaseAppRecord.stub(:database_now, now) do
-      assert_nil StepUpEvidenceResolver.call(access_state: changed_state, actor: @actor, cell: @cell)
-    end
-  end
-
-  test "rejects step-up evidence for a DPoP-bound OP-chain grant" do
-    thumbprint = SecureRandom.hex(32)
-    @op_token.update!(dpop_jkt: thumbprint)
-    @op_device.update!(dpop_jkt: thumbprint)
-    @op_grant.update!(dpop_jkt: thumbprint)
-    now = OpBaseAppRecord.database_now
-
-    OpBaseAppRecord.stub(:database_now, now) do
-      assert_nil StepUpEvidenceResolver.call(access_state: @op_access_state, actor: @actor, cell: @cell)
-    end
-  end
-
   test "rejects step-up evidence in an ORG standby authentication context" do
     actor = operators(:one)
     cell = RpCellBinding.fetch("rp_base_org")
@@ -172,9 +93,9 @@ class StepUpEvidenceResolverTest < ActiveSupport::TestCase
     subject = OidcSubject.for(actor, resource_type: "operator")
     sid = SecureRandom.alphanumeric(21)
     now = RpBaseOrgRecord.database_now
-    session = RpCallbackCommitter.call(
+    session = seed_rp_cell_session(
       cell:, issuer:, subject:, sid:, absolute_expires_at: now + 1.hour,
-    ).session
+    )
     binding = RpBaseOrgOpSessionBinding.includes(identity_binding: :principal).find(session.op_session_binding_id)
     client = OidcClientRegistry.find!(cell.client_id)
     access_state = BrowserRpAuthentication::AccessState.new(

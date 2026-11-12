@@ -17,6 +17,11 @@ persistence and API ownership boundaries remain.
 
 ## Gateway selection amendment (2026-10-22)
 
+> **Local-route disposition (2026-11-10):** The owner-approved local-surface hard reset removes the
+> local Rails destinations for Auth, Core, Warp, Palm, Edit, Docs, News, Help, Info, and Guid. Any
+> Jump edges naming those local routes are historical in this repository. Surviving Base/Tech edges
+> and external route/registration contracts remain governed by their current callers and decisions.
+
 The [required Jump/Away selection amendment](secure-jump-link-redirector.md#amendment-required-jump-and-away-selection-2026-10-22)
 supersedes broad references below to all cross-origin navigation using Jump. Jump is required for
 approved subdomain changes within the same registered application domain; cross-TLD navigation,

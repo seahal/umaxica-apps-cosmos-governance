@@ -62,12 +62,12 @@ class ClientSecretAuditOutboxTest < ActiveSupport::TestCase
 
   test "issuance purge snapshots require one authority reference and remain immutable" do
     actor = clients(:one)
-    token = ClientToken.create!(authentication_epoch: 0, user: actor)
+    browser_session_ref = PublicId.generate
     event = ClientSecretAuditOutbox.record!(
       actor_context: ActorValuesContext.empty, client_ref: actor.public_id,
       operation_ref: SecureRandom.uuid, occurred_at: Client.database_now,
       event_name: "secret.issuance_purged", item_count: 1,
-      issuance_origin: "manual", issuance_browser_session_ref: token.public_id,
+      issuance_origin: "manual", issuance_browser_session_ref: browser_session_ref,
     )
 
     assert_raises(ActiveRecord::ReadonlyAttributeError) do

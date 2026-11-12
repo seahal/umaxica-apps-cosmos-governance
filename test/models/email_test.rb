@@ -40,11 +40,15 @@ class IdentityEmailTest < ActiveSupport::TestCase
       if model == ClientEmail
         owner = Client.create!(security_mode_id: SecurityModeConfigurable::NORMAL)
         record = ClientEmail.create!(user: owner, address: "eg@example.com", confirm_policy: true)
-        record.finalize_binding!
+        record.tap { |binding_record| binding_record.update!(binding_finalized_at: Time.current) }
         ["eg@example.com", "EG@EXAMPLE.COM"].each do |address|
           candidate = ClientEmail.create!(user: owner, address: address, confirm_policy: true)
           assert_raises(ActiveRecord::RecordNotUnique) do
-            ClientEmail.transaction(requires_new: true) { candidate.finalize_binding! }
+            ClientEmail.transaction(requires_new: true) {
+              candidate.tap { |contact|
+                contact.update_columns(binding_finalized_at: Time.current)
+              }
+            }
           end
           assert_not_predicate candidate.reload, :binding_effective?
         end

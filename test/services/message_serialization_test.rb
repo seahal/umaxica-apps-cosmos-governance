@@ -5,35 +5,6 @@ require "test_helper"
 class MessageSerializationTest < ActiveSupport::TestCase
   self.fixture_table_names = []
 
-  test "sign-in resend state round-trips JSON and rejects authenticated Marshal" do
-    binding = "b" * 64
-    token = SignInOtpResendState.issue(
-      kind: "email", target: "serialization@example.test", surface: "app",
-      browser_binding: binding, contact: nil,
-    )
-
-    assert_equal "serialization@example.test",
-                 SignInOtpResendState.parse(token, browser_binding: binding).fetch(:target)
-
-    key = ActiveSupport::KeyGenerator.new(Rails.application.secret_key_base).generate_key(
-      "sign-in-otp-resend", ActiveSupport::MessageEncryptor.key_len,
-    )
-    legacy = ActiveSupport::MessageEncryptor.new(key, cipher: "aes-256-gcm", serializer: Marshal)
-    payload = {
-      "version" => "2",
-      "kind" => "email",
-      "target" => "serialization@example.test",
-      "surface" => "app",
-      "contact_mode" => "fake",
-      "contact_ref" => "0" * 21,
-      "owner_ref" => "0" * 20,
-      "binding_fact" => "0000-00-00T00:00:00.000000Z",
-    }
-    token = legacy.encrypt_and_sign(payload, purpose: "sign-in-otp-resend:#{binding}", expires_in: 30.minutes)
-
-    assert_nil SignInOtpResendState.parse(token, browser_binding: binding)
-  end
-
   test "outbound payload rejects authenticated Marshal for each delivery purpose" do
     ["outbound.email.otp", "outbound.email.verification_token", "outbound.sms.delivery.v1"].each do |purpose|
       key = ActiveSupport::KeyGenerator.new(Rails.application.secret_key_base).generate_key(
@@ -91,28 +62,5 @@ class MessageSerializationTest < ActiveSupport::TestCase
     )
 
     assert_nil OrgNormalSignInBindingCodec.decode(token)
-  end
-
-  test "session reference lookups refuse authenticated Marshal before accessing records" do
-    key = Rails.application.key_generator.generate_key("session_limit_resolution_token_ref")
-    token = ActiveSupport::MessageVerifier.new(key, serializer: Marshal).generate({ pid: "legacy" })
-
-    assert_nil SessionLimitResolutionTokenRef.find_client_token(token)
-    assert_nil SessionLimitResolutionTokenRef.find_operator_token(token)
-
-    key = Rails.application.key_generator.generate_key("session_ref")
-    token = ActiveSupport::MessageVerifier.new(key, serializer: Marshal).generate({ id: 1, pid: "legacy" })
-
-    assert_nil ClientToken.find_from_signed_ref(token)
-    assert_empty ClientToken.find_from_signed_refs([token])
-  end
-
-  test "logout request refuses authenticated Marshal before consuming a replay identifier" do
-    key = Rails.application.key_generator.generate_key("oidc_logout_request")
-    token = ActiveSupport::MessageVerifier.new(key, serializer: Marshal).generate(
-      { "client_id" => "serialization-client", "ri" => "jp", "jti" => "a" * 32 }, purpose: "oidc_logout_request",
-    )
-
-    assert_nil OidcLogoutRequest.verify(token)
   end
 end

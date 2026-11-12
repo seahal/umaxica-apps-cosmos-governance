@@ -13,7 +13,7 @@ class StepUpEmailAvailabilityTest < ActiveSupport::TestCase
       actor.client_emails.create!(
         address: "availability@example.com", user_email_status_id: ClientEmailStatus::VERIFIED,
         step_up_otp_failures: 5, step_up_otp_locked_until: now + Rational(offset, 1_000_000),
-      ).finalize_binding!
+      ).update!(binding_finalized_at: Client.database_now)
       result = nil
       Client.stub(:database_now, now) do
         result = StepUpMethodsResolver.call(actor: actor, ticket: nil, supported_methods: [:email_otp])

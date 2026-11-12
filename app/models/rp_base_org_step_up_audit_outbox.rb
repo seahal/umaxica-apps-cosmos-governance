@@ -27,6 +27,11 @@ class RpBaseOrgStepUpAuditOutbox < RpBaseOrgRecord
            dependent: :restrict_with_error
 
   validates :event_uuid, :client_id, :subject_ref, :context_ref, :payload, :occurred_at, presence: true
+  validates :event_uuid, uniqueness: true, on: :create
+  validates :reason_code,
+            uniqueness: { scope: %i(realm client_id context_ref),
+                          conditions: -> { where(event_type: "step_up.attempt_rejected") }, },
+            on: :create, if: -> { event_type == "step_up.attempt_rejected" }
   validates :event_type, inclusion: { in: EVENT_TYPES }
   validates :realm, inclusion: { in: ["ORG"] }
   validates :reason_code, inclusion: { in: StepUpAuditCodesRegistry::REASON_CODES }

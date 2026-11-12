@@ -47,7 +47,7 @@ class Avatar < AvatarRecord
 
   belongs_to :capability, class_name: "AvatarCapability"
   belongs_to :active_handle, class_name: "Handle"
-  belongs_to :lifecycle_state, class_name: "AvatarLifecycleState"
+  belongs_to :lifecycle_state, class_name: "AvatarLifecycleState", inverse_of: :avatars
 
   has_many :handle_assignments, dependent: :restrict_with_error
   has_many :assignments_created,

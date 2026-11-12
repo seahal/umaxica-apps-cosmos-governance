@@ -40,7 +40,7 @@ class OperatorWorkspaceAccount < OrgRpRecord
   belongs_to :staff,
              class_name: "Operator",
              inverse_of: false
-  belongs_to :department, inverse_of: false
+  belongs_to :department, inverse_of: :operator_workspace_accounts
   has_many :staff_operators, class_name: "OperatorWorkspaceAccountMembership", dependent: :destroy,
                              inverse_of: :operator_workspace_account
   has_many :operators,

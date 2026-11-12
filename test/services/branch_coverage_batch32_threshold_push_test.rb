@@ -7,29 +7,6 @@ require "test_helper"
 class BranchCoverageBatch32ThresholdPushTest < ActiveSupport::TestCase
   self.fixture_table_names = []
 
-  test "SignUpStateMachine clear requirement validation arms" do
-    result = SignUpStateMachine.call(ticket: nil, event: :clear_requirement, actor_context: {}, payload: {})
-
-    assert_equal :invalid_transition, result.status
-    assert_includes result.errors, "ticket is required"
-  end
-
-  test "DbscVerificationService early failure arms" do
-    incomplete = Struct.new(:dbsc_session_id, :dbsc_public_key, :dbsc_challenge, :dbsc_challenge_issued_at)
-      .new("", nil, "c", Time.current)
-    mismatched = Struct.new(:dbsc_session_id, :dbsc_public_key, :dbsc_challenge, :dbsc_challenge_issued_at)
-      .new("other", "k", "c", Time.current)
-    missing_key = Struct.new(:dbsc_session_id, :dbsc_public_key, :dbsc_challenge, :dbsc_challenge_issued_at)
-      .new("s", nil, "c", Time.current)
-
-    assert_equal "registration_incomplete",
-                 DbscVerificationService.new(record: incomplete, session_id: "s", proof: "p").call[:error_code]
-    assert_equal "session_id_mismatch",
-                 DbscVerificationService.new(record: mismatched, session_id: "s", proof: "p").call[:error_code]
-    assert_equal "missing_public_key",
-                 DbscVerificationService.new(record: missing_key, session_id: "s", proof: "p").call[:error_code]
-  end
-
   test "Health ok? status string arms" do
     ok = Health::CheckResult.new(check: :liveness, status: :ok, surface: "app")
     unready = Health::CheckResult.new(check: :liveness, status: :unready, surface: "app")

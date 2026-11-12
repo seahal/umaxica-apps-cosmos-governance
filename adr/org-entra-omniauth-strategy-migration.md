@@ -2,6 +2,11 @@
 
 **Status:** Accepted (2026-07-31), partially superseded (2026-08-11)
 
+> **Local-route disposition (2026-11-10):** The owner-approved local-surface hard reset removes this
+> repository's Auth/Org sign-in routes/controllers. This supersedes their local implementation scope
+> below, but does not retire Entra identity data, external provider contracts, or retained
+> model/database state.
+
 **Partially superseded by:** `adr/org-entra-single-tenant-credential-configuration.md`. Tenant and
 client are no longer resolved per request from an `OrganizationEntraConnection` but read from Rails
 credentials for a single tenant; client authentication is a client secret rather than a

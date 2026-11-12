@@ -60,7 +60,7 @@ rewriting working, tested authorization code is not part of adding new surfaces.
 
 ### Development only, and what that costs
 
-All three gems are `group :development`, matching `pghero`, `blazer`, and `rails_db`.
+All three gems are `group :development`, matching `pghero` and `blazer`.
 
 For Swagger UI and the performance dashboard this is a straightforward scope decision. For Coverband
 it is a real departure from the tool's purpose: Coverband exists to tell you which code runs _in
@@ -346,3 +346,9 @@ as a dashboard tab that 404s, and a new one simply never appears.
 - `adr/valkey-nonprod-logical-db-topology.md` — the logical database layout extended here
 - `adr/public-private-url-boundaries.md` — the `PUBLIC_`/`PRIVATE_` naming
 - `docs/architecture/cloudflare-request-paths.md` — how a request reaches these hosts
+
+## Amendment (2026-11-10)
+
+rails_performance is removed (owner): its containment depended on copied gem internals, it fails
+the Herb migration, and request performance moves to OpenTelemetry. See
+`docs/backlog/2026-11-10-remove-rails-performance.md`. Coverband and Swagger are unchanged.

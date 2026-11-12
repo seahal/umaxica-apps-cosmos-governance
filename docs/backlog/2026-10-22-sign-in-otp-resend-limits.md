@@ -4,7 +4,11 @@ Status: Deferred; recorded at the user's request on 2026-10-22. No implementatio
 authorized by this entry. `.com` authentication was retired after this entry was recorded; this
 entry now covers `.app` only. Stored in `docs/backlog/` at the user's explicit request.
 
-## Current findings
+> **Route status (2026-11-10):** The local Auth route/controller references below are historical
+> after the owner-approved hard reset. The delivery-policy observations are preserved as a snapshot;
+> re-scope them to a retained caller or external authority before implementation.
+
+## Historical findings
 
 SignInOtpResender supports email on app, not SMS login. It locks an EmailOccurrence row for the
 target and reserves the resend slot before issuing or delivering. Provider failure still consumes

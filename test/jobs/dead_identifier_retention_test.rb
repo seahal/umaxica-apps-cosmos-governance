@@ -20,7 +20,7 @@ class DeadIdentifierRetentionTest < ActiveJob::TestCase
       )
       deadline = email.reload.purge_eligible_at
 
-      RetentionPurgeJob.perform_now
+      assert_raises(AccessOpDataUnavailableError) { RetentionPurgeJob.perform_now }
 
       assert_nil owner.reload.terminated_at
       assert email_model.exists?(email.id)
@@ -38,15 +38,19 @@ class DeadIdentifierRetentionTest < ActiveJob::TestCase
 
       after_deadline = deadline + 1.second
       owner_model.stub(:database_now, after_deadline) do
-        email_model.stub(:database_now, after_deadline) { RetentionPurgeJob.perform_now }
+        email_model.stub(:database_now, after_deadline) {
+          assert_raises(AccessOpDataUnavailableError) {
+            RetentionPurgeJob.perform_now
+          }
+        }
       end
 
-      assert owner.reload.terminated_at
+      assert_nil owner.reload.terminated_at
       assert_not email_model.exists?(email.id)
       assert_equal 1, email_history.where(owner_key => owner.id).count
     end
 
-    test "app due account collection archives original identifiers before marking retirement complete" do
+    test "app unavailable account authority preserves original identifiers without retirement completion" do
       owner_model, email_model, telephone_model, email_history, telephone_history, owner_key =
         case realm
         when "app"
@@ -66,14 +70,14 @@ class DeadIdentifierRetentionTest < ActiveJob::TestCase
         :confirm_using_mfa => true, :created_at => 3.days.ago,
       )
 
-      RetentionPurgeJob.perform_now
+      assert_raises(AccessOpDataUnavailableError) { RetentionPurgeJob.perform_now }
 
-      assert owner.reload.terminated_at
+      assert_nil owner.reload.terminated_at
       assert owner_model.exists?(owner.id)
-      assert_not email_model.exists?(email.id)
-      assert_not telephone_model.exists?(telephone.id)
-      assert email_history.where(owner_key => owner.id).sole.matches_identifier?(original_address)
-      assert telephone_history.where(owner_key => owner.id).sole.matches_identifier?(original_number)
+      assert email_model.exists?(email.id)
+      assert telephone_model.exists?(telephone.id)
+      assert_empty email_history.where(owner_key => owner.id)
+      assert_empty telephone_history.where(owner_key => owner.id)
     end
   end
 
@@ -95,7 +99,7 @@ class DeadIdentifierRetentionTest < ActiveJob::TestCase
     )
     operator.update_columns(discard_at: 1.hour.ago, purge_eligible_at: 1.hour.ago)
 
-    assert_raises(ActiveRecord::RecordNotDestroyed) { RetentionPurgeJob.perform_now }
+    assert_raises(AccessOpDataUnavailableError) { RetentionPurgeJob.perform_now }
     assert Operator.exists?(operator.id)
     assert OperatorEmail.exists?(first_email.id)
     assert OperatorEmail.exists?(email.id)
@@ -105,7 +109,7 @@ class DeadIdentifierRetentionTest < ActiveJob::TestCase
     assert_empty OperatorTelephoneHistory.where(staff_id: operator.id)
   end
 
-  test "irreversible due Operator erasure removes its dead histories and live identifiers atomically" do
+  test "unavailable Operator erasure preserves all dead histories and live identifiers" do
     operator = Operator.create!(security_mode_id: SecurityModeConfigurable::ADVANCED)
     email = OperatorEmail.create!(
       staff: operator, raw_address: "erasure-#{SecureRandom.hex(8)}@example.test", confirm_policy: true,
@@ -119,13 +123,13 @@ class DeadIdentifierRetentionTest < ActiveJob::TestCase
     )
     operator.update_columns(discard_at: 1.hour.ago, purge_eligible_at: 1.hour.ago)
 
-    RetentionPurgeJob.perform_now
+    assert_raises(AccessOpDataUnavailableError) { RetentionPurgeJob.perform_now }
 
-    assert_not Operator.exists?(operator.id)
-    assert_not OperatorEmail.exists?(email.id)
-    assert_not OperatorTelephone.exists?(telephone.id)
-    assert_not OperatorEmailHistory.exists?(prior_history.id)
-    assert_empty OperatorEmailHistory.where(staff_id: operator.id)
+    assert Operator.exists?(operator.id)
+    assert OperatorEmail.exists?(email.id)
+    assert OperatorTelephone.exists?(telephone.id)
+    assert OperatorEmailHistory.exists?(prior_history.id)
+    assert_equal 1, OperatorEmailHistory.where(staff_id: operator.id).count
     assert_empty OperatorTelephoneHistory.where(staff_id: operator.id)
   end
 
@@ -141,7 +145,7 @@ class DeadIdentifierRetentionTest < ActiveJob::TestCase
     )
     email_count = ClientEmailHistory.where(user_id: owner.id).count
     telephone_count = ClientTelephoneHistory.where(user_id: owner.id).count
-    RetentionPurgeJob.perform_now
+    assert_raises(AccessOpDataUnavailableError) { RetentionPurgeJob.perform_now }
 
     assert_not ClientEmail.exists?(email.id)
     assert_not ClientTelephone.exists?(telephone.id)

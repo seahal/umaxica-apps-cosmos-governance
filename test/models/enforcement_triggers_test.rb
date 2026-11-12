@@ -125,10 +125,12 @@ class EnforcementTriggersTest < ActiveSupport::TestCase
       effect: "permanently_frozen",
       effective_at: Time.current,
     )
-    EnforcementCaseApplyOperation.call(
-      enforcement_case: the_case,
-      actor_operator_public_id: the_case.applied_by_operator_public_id,
-    )
+    assert_raises(AccessOpDataUnavailableError) do
+      EnforcementCaseApplyOperation.call(
+        enforcement_case: the_case,
+        actor_operator_public_id: the_case.applied_by_operator_public_id,
+      )
+    end
 
     error =
       assert_raises(ActiveRecord::StatementInvalid) do

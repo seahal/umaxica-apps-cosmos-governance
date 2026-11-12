@@ -22,6 +22,11 @@ not a registered return URI. Base local sign-out still ends at `/lobby`. The cur
 completion contract and its implementation limits are recorded in
 `adr/first-party-sign-out-shared-database-without-backchannel-logout.md`.
 
+Route-scope supersession (2026-11-10): the owner-approved local-surface hard reset removes the
+local Auth, Visa, Core, Warp, Palm, and Edit routes/controllers described below. Surviving Base and
+Tech RP/OP behavior remains governed by current callers and accepted contracts. Existing OIDC
+registrations, external authorities, models, and database state are not removed by this amendment.
+
 Supersedes conflicting authority claims in:
 
 - `adr/acme-sign-core-base-port-boundary.md` where it calls Base an RP or Auth/Sign a special RP
@@ -48,7 +53,7 @@ The repository previously mixed Base RP routes, Auth RP routes, shared browser c
 (`sign-rp`, `base-rails-rp`, `side-rails-rp`, `core-next-rp`), TokenUsage child sessions, PostgreSQL
 authorization codes, Auth JWT ceremony grants, six Auth/Base `/dashboard` homes, Base `/lobby`, and
 `/sign/out/complete` completion pages. The consolidation plan requires one authority surface, seven
-independent first-party RPs, ceremony-only Auth, Valkey auth-state, Root homes, and one-shot
+independent first-party RPs, ceremony-only Auth, Valkey auth-state, Base Root homes, and one-shot
 `GET /sign/out`.
 
 ## Decision
@@ -95,8 +100,8 @@ Identity → Base Browser Session (`ClientToken` / `VisitorToken` / `OperatorTok
 
 ### Roots and logout
 
-- Six Auth/Base Roots: Base authenticated Root keeps former Dashboard content/guards; Auth Root is
-  always public ceremony entry. Remove six `/dashboard` routes and Base `/lobby`.
+- Three Base Roots: Base authenticated Root keeps former Dashboard content/guards. Remove the
+  `/dashboard` routes and Base `/lobby`.
 - Browser `/sign/out` is a one-shot `show`; retire `/sign/out/complete`. `GET /sign/out` never
   mutates authority state (only presentation-marker consume).
 

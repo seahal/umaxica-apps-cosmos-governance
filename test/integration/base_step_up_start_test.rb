@@ -6,7 +6,7 @@ require_relative "../support/rp_cell_session_helper"
 class BaseStepUpStartTest < ActionDispatch::IntegrationTest
   include RpCellSessionHelper
 
-  test "Base APP GET is read-only and POST starts the OP-mediated ceremony on its RP session" do
+  test "Base APP GET is read-only and POST refuses after Auth retirement without creating state" do
     actor = Client.create!(
       security_mode_id: SecurityModeConfigurable::NORMAL,
       status_id: ClientStatus::ACTIVE,
@@ -21,16 +21,19 @@ class BaseStepUpStartTest < ActionDispatch::IntegrationTest
       description: "Step-up test passkey",
       status_id: ClientPasskeyStatus::ACTIVE,
     )
-    root_token = authentication_harness_create_token(actor)
     host! ENV.fetch("PUBLIC_BASE_SERVICE_URL")
     https!
 
     as_rp_cell("base-app-ww") do
-      _token_response, _payload, rp_session = sign_in_rp_cell("base-app-ww", actor:, root_token:)
+      headers = as_user_headers(actor, host: ENV.fetch("PUBLIC_BASE_SERVICE_URL"))
+      local_id = Rack::Utils.parse_cookies_header(headers.fetch("Cookie")).fetch(
+        OidcRpBrowserCredentialContract::SESSION_COOKIE,
+      )
+      rp_session = RpBaseAppSession.find_by!(public_id: local_id)
       initial_states = RpStepUpState.where(rp_session:).count
       initial_outboxes = RpStepUpAuditOutbox.count
 
-      get base_app_verification_path(ri: "jp")
+      get base_app_verification_path(ri: "jp"), headers: headers
 
       assert_response :success
       assert_includes response.headers.fetch("Cache-Control"), "private"
@@ -40,40 +43,25 @@ class BaseStepUpStartTest < ActionDispatch::IntegrationTest
       assert_equal initial_outboxes, RpStepUpAuditOutbox.count
 
       ["https://attacker.example/", "//attacker.example", "/sign/out", "", ["/identity"]].each do |target|
-        post base_app_verification_path(ri: "jp"), params: { return_target: target }
+        post base_app_verification_path(ri: "jp"), params: { return_target: target }, headers: headers
 
         assert_response :bad_request, target.inspect
         assert_equal initial_states, RpStepUpState.where(rp_session:).count
         assert_equal initial_outboxes, RpStepUpAuditOutbox.count
       end
 
-      post base_app_verification_path(ri: "jp"), params: { return_target: "/settings/birthdate" }
+      post base_app_verification_path(ri: "jp"), params: { return_target: "/settings/birthdate" }, headers: headers
 
-      assert_response :see_other
+      assert_response :service_unavailable
       assert_includes response.headers.fetch("Cache-Control"), "private"
       assert_includes response.headers.fetch("Cache-Control"), "no-store"
-      state = RpStepUpState.find_by!(rp_session:)
-      outbox = RpStepUpAuditOutbox.find_by!(context_ref: state.public_id)
-      authorization_uri = URI.parse(response.location)
-      if authorization_uri.host == "jump.umaxica.net"
-        jump_token = Rack::Utils.parse_nested_query(authorization_uri.query).fetch("rt")
-        jump_claims, = JWT.decode(jump_token, nil, false)
-        authorization_uri = URI.parse(jump_claims.fetch("url"))
-      end
-
-      assert_equal URI.parse(OidcIssuer.authorization_endpoint("client")).path, authorization_uri.path
-      assert_equal "base-app-ww", Rack::Utils.parse_query(authorization_uri.query).fetch("client_id")
-      assert_equal "/settings/birthdate", state.return_target
-      assert_equal RpStepUpStateStatus::PENDING, state.state_id
-      assert_equal RpStepUpStateStatus::PENDING, state.reload.state_id
-      assert_equal rp_session.installed_generation, state.initiating_generation
-      assert_equal "step_up.requested", outbox.event_type
-      assert_equal rp_session.id, state.rp_session_id
+      assert_equal initial_states, RpStepUpState.where(rp_session:).count
+      assert_equal initial_outboxes, RpStepUpAuditOutbox.count
       assert_nil rp_session.reload.revoked_at
     end
   end
 
-  test "Base ORG starts through its separate RP cell and OP registration" do
+  test "Base ORG refuses Auth-mediated step-up without creating state" do
     actor = Operator.create!(
       security_mode_id: SecurityModeConfigurable::ADVANCED,
       status_id: OperatorStatus::ACTIVE,
@@ -88,30 +76,21 @@ class BaseStepUpStartTest < ActionDispatch::IntegrationTest
       description: "Step-up test passkey",
       status_id: OperatorPasskeyStatus::ACTIVE,
     )
-    root_token = authentication_harness_create_token(actor)
     host! ENV.fetch("PUBLIC_BASE_STAFF_URL")
     https!
 
     as_rp_cell("base-org-ww") do
-      _token_response, _payload, rp_session = sign_in_rp_cell("base-org-ww", actor:, root_token:)
+      headers = as_staff_headers(actor, host: ENV.fetch("PUBLIC_BASE_STAFF_URL"))
+      local_id = Rack::Utils.parse_cookies_header(headers.fetch("Cookie")).fetch(
+        OidcRpBrowserCredentialContract::SESSION_COOKIE,
+      )
+      rp_session = RpBaseOrgSession.find_by!(public_id: local_id)
 
-      post base_org_verification_path(ri: "jp"), params: { return_target: "/settings/birthdate" }
+      post base_org_verification_path(ri: "jp"), params: { return_target: "/settings/birthdate" }, headers: headers
 
-      assert_response :see_other
-      state = RpBaseOrgStepUpState.find_by!(rp_session:)
-      outbox = RpBaseOrgStepUpAuditOutbox.find_by!(context_ref: state.public_id)
-      authorization_uri = URI.parse(response.location)
-      if authorization_uri.host == "jump.umaxica.net"
-        jump_token = Rack::Utils.parse_nested_query(authorization_uri.query).fetch("rt")
-        jump_claims, = JWT.decode(jump_token, nil, false)
-        authorization_uri = URI.parse(jump_claims.fetch("url"))
-      end
-
-      assert_equal URI.parse(OidcIssuer.authorization_endpoint("operator")).path, authorization_uri.path
-      assert_equal "base-org-ww", Rack::Utils.parse_query(authorization_uri.query).fetch("client_id")
-      assert_equal "/settings/birthdate", state.return_target
-      assert_equal RpBaseOrgStepUpStateStatus::PENDING, state.state_id
-      assert_equal "step_up.requested", outbox.event_type
+      assert_response :service_unavailable
+      assert_empty RpBaseOrgStepUpState.where(rp_session:)
+      assert_empty RpBaseOrgStepUpAuditOutbox.all
       assert_nil rp_session.reload.revoked_at
     end
   end
@@ -122,17 +101,27 @@ class BaseStepUpStartTest < ActionDispatch::IntegrationTest
       status_id: OperatorStatus::ACTIVE,
       visibility_id: OperatorVisibility::STAFF,
     )
-    root_token = authentication_harness_create_token(actor)
-    root_token.update!(authentication_context: AuthenticationContextValue::STANDBY_KEY)
     host! ENV.fetch("PUBLIC_BASE_STAFF_URL")
     https!
 
     as_rp_cell("base-org-ww") do
-      _token_response, _payload, rp_session = sign_in_rp_cell("base-org-ww", actor:, root_token:)
+      headers = as_staff_headers(actor, host: ENV.fetch("PUBLIC_BASE_STAFF_URL"))
+      local_id = Rack::Utils.parse_cookies_header(headers.fetch("Cookie")).fetch(
+        OidcRpBrowserCredentialContract::SESSION_COOKIE,
+      )
+      rp_session = RpBaseOrgSession.find_by!(public_id: local_id)
+      token = jwt_access_token_for(
+        actor, host: ENV.fetch("PUBLIC_BASE_STAFF_URL"), resource_type: "operator",
+               authentication_context: AuthenticationContextValue::STANDBY_KEY,
+      )
+      browser_cookies = Rack::Utils.parse_cookies_header(headers.fetch("Cookie"))
+      browser_cookies[OidcRpBrowserCredentialContract::ACCESS_COOKIE] = token
+      cookie_header = browser_cookies.map { |name, value| "#{name}=#{Rack::Utils.escape(value)}" }.join("; ")
+      headers = headers.merge("Cookie" => cookie_header, "HTTP_COOKIE" => cookie_header)
       states_before = RpBaseOrgStepUpState.where(rp_session:).count
       outboxes_before = RpBaseOrgStepUpAuditOutbox.count
 
-      post base_org_verification_path(ri: "jp"), params: { return_target: "/settings/birthdate" }
+      post base_org_verification_path(ri: "jp"), params: { return_target: "/settings/birthdate" }, headers: headers
 
       assert_response :forbidden
       assert_equal states_before, RpBaseOrgStepUpState.where(rp_session:).count

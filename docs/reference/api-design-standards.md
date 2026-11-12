@@ -20,8 +20,7 @@ here. They are repository decisions, not standards, and are recorded as ADRs:
 Mixing the two categories in one document was the previous mistake: a rule with a published
 specification behind it is verifiable, while a rule without one needs a recorded agreement.
 
-Scope: routes under an API namespace (`/api/v0`, and the legacy `/edge/v0` and `/web/v0` namespaces
-until they converge per `adr/api-route-vocabulary-consolidation.md`).
+Scope: routes under the current `/api/v0` namespace.
 
 Out of scope: HTML ceremony routes, and the endpoints listed under
 [Protocol exemptions](#protocol-exemptions), whose wire format is fixed by their own specification.
@@ -66,7 +65,7 @@ Every non-protocol API error response uses RFC 9457 Problem Details, served as
   "title": "Authentication is required.",
   "status": 401,
   "detail": "The access cookie is absent or no longer valid.",
-  "instance": "/api/v0/session",
+  "instance": "/api/v0/preferences/theme",
   "request_id": "0f1c2d3e-4a5b-6c7d-8e9f-a0b1c2d3e4f5"
 }
 ```
@@ -205,8 +204,7 @@ RFC 9110 §12.
 - A request with no `Accept` accepts anything (§12.5.1) and must not be refused. The ranges `*/*`
   and `application/*` both satisfy the rule.
 - A request carrying a body must declare `Content-Type: application/json`; anything else is `415`. A
-  request with no body has no media type to reject and must not be refused for declaring nothing —
-  the token refresh endpoint carries its credential in a cookie and sends no body at all.
+  request with no body has no media type to reject and must not be refused for declaring nothing.
 - Both checks run before authentication and before CSRF verification. Whether a request can be
   answered at all does not depend on who is asking, and a body that cannot be parsed is rejected
   before anything tries to read it.
@@ -217,9 +215,7 @@ RFC 9110 §12.
   beats an empty body.
 
 Enforced by `ApiContentNegotiation` (`app/controllers/concerns/api_content_negotiation.rb`),
-included by every `/api/v0` boundary. `/edge/v0` and `/web/v0` do not enforce it yet, because their
-controllers still emit pre-Problem-Details error shapes and a negotiated `406` there would give one
-endpoint two error formats.
+included by every current `/api/v0` boundary.
 
 ## Caching and conditional requests
 
@@ -234,8 +230,7 @@ RFC 9110 §13 (conditional requests) and §5.2 / RFC 9111 (cache directives).
   endpoint's own contract.
 - Public content may be cacheable. A read-only public content endpoint that opts in emits `ETag`
   and/or `Last-Modified` and answers `If-None-Match` / `If-Modified-Since` with `304` (§13.1,
-  §15.4.5). Published content carries a publication timestamp, so the Publishing entries API opts
-  in and unconditional re-transfer is avoidable.
+  §15.4.5).
 - A cacheable response whose body varies by authenticated subject requires `Vary` and `private`.
 
 ## Deprecation and sunset
@@ -250,13 +245,13 @@ Any endpoint being retired signals it on the wire before removal:
   `rel="successor-version"` (RFC 5829) pointing at the replacement.
 
 An endpoint is not removed until it has carried `Sunset` for the announced window. Removing an
-endpoint that never advertised a sunset leaves clients with no remediation path and is prohibited.
+endpoint that never advertised a sunset leaves clients with no remediation path and is prohibited
+for planned retirements.
 
-This applies to each `/edge/v0` and `/web/v0` route as it converges on `/api/v0`
-(`adr/api-route-vocabulary-consolidation.md`). The one recorded exception is the 2026-10-02
-pre-deployment cutover of `/web/v0/{theme,cookie}` to `/api/v0/preferences/{theme,cookie}`, whose
-only clients were this repository's own browser code and moved in the same change; it is not a
-precedent for removing an endpoint that has a deployed client.
+The 2026-11-11 surface hard reset is an explicit owner-authorized exception: foreign and retired
+routes were removed directly, without successor or compatibility endpoints. Its scope and observed
+impact are recorded in the [hard-reset evidence](../../evidence/2026-11-11-governance-round2-R2A7.md).
+This exception does not change the default deprecation policy for future owned API retirements.
 
 ## Authentication
 
@@ -289,7 +284,6 @@ Details rule. Converting them would break protocol conformance.
 | OAuth 2.0 authorization, token, revocation, introspection  | `{"error", "error_description"}` — RFC 6749 §5.2, RFC 7009                                                                                                                         |
 | OIDC endpoints including UserInfo and back-channel logout  | RFC 6750 §3.1 bearer errors, OIDC Core                                                                                                                                             |
 | WebAuthn / passkey ceremony endpoints                      | Shapes fixed by the WebAuthn specification and the browser API                                                                                                                     |
-| DBSC endpoints                                             | Device Bound Session Credentials; see `docs/architecture/dbsc.md`                                                                                                                  |
 | MCP endpoints (`app/controllers/concerns/mcp_endpoint.rb`) | **JSON-RPC 2.0** — the response is produced by the MCP transport, not by application code                                                                                          |
 | `/health`, `/health/*`                                     | Text probe contract (`text/plain`) in `docs/reference/health-endpoints.md`; edge-blocked per `adr/internal-health-endpoint-edge-isolation.md`                                      |
 | `/api/v0/health.json`, `/api/v0/revision.json`             | Machine health/revision contract in `docs/reference/health-endpoints.md` (`application/json`, `pass/warn/fail`, `406` on non-JSON `Accept`) — not the Problem Details error format |

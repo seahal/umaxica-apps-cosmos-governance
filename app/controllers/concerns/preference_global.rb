@@ -240,10 +240,6 @@ module PreferenceGlobal
     (request.get? || request.head?) ? :found : :see_other
   end
 
-  def get_language
-    I18n.locale.to_s
-  end
-
   def get_region
     required_ri.presence || "jp"
   end

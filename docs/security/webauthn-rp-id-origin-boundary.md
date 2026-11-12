@@ -1,42 +1,24 @@
 # WebAuthn RP ID And Origin Boundary
 
-> **Legacy Sign/Acme vocabulary:** The signed-result handoff described below is historical. Auth
-> owns the credential ceremony, while Base owns browser sessions, RP sessions, and authorization
-> code issuance in the current Rails architecture. Do not use this document to introduce a new
-> signed or one-shot result path.
+WebAuthn credentials are scoped to the Base browser surface where the ceremony runs. Base app and
+Base org use separate RP IDs and exact origins; neither surface accepts credentials for the other.
 
-## Boundary
+`Webauthn::Surface` is the closed set of retained browser surfaces. `Webauthn::RelyingPartyConfigResolver`
+loads the configured RP ID and origin for each surface and builds an explicit relying party for the
+ceremony. In production, the RP ID must match the configured HTTPS origin host. Missing or invalid
+configuration fails during application initialization.
 
-WebAuthn and passkey ceremonies run in `sign/id` because browser origin, RP ID, provider callback,
-and challenge handling require stable credential ceremony URLs.
+Passkey ceremony transaction records bind their surface, RP ID and origin. Base completion
+operations validate signed result tokens against their actor, session and transaction before
+committing a credential. Browser navigation and redirect parameters are not evidence of successful
+verification. This Rails application does not verify browser assertions.
 
-The WebAuthn ceremony result is evidence. `acme/www` consumes the signed result and commits any
-session, account, credential-enrollment, authorization, or freshness effect that belongs to acme.
-
-## Sign/ID Responsibilities
-
-`sign/id` may own:
-
-- WebAuthn RP ID and origin ceremony validation;
-- challenge generation and short-lived challenge state;
-- credential inventory needed for assertion or registration;
-- attestation and assertion verification;
-- ceremony audit records.
-
-## Acme/WWW Responsibilities
-
-`acme/www` owns:
-
-- account lifecycle decisions;
-- session creation and freshness updates;
-- authorization decisions;
-- preference/settings/dashboard state;
-- downstream token issuance.
-
-Physical credential tables may remain sign-side during this implementation phase. That placement
-does not authorize sign-side sessions, account lifecycle, preference writes, or freshness storage.
+There are no local browser passkey sign-in or registration-start routes and no RP OIDC callback
+routes. Base and Tech OIDC sign-in is unavailable. Existing credential and session state remains
+owned by its Base surface.
 
 ## Related
 
-- `docs/security/credential-gateway.md`
-- `docs/security/ceremony-grant-result.md`
+- [Passkey lifecycle and audit](passkey-lifecycle-and-audit.md)
+- [WebAuthn security invariants](webauthn-security-invariants.md)
+- [Redirects versus authentication evidence](redirect-vs-ceremony-result.md)

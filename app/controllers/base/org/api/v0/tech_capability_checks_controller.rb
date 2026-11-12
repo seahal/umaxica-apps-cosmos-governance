@@ -15,6 +15,8 @@ module Base
 
           AUTHENTICATION_MODE = :open
 
+          rescue_from AccessOpDataUnavailableError, with: :render_access_unavailable
+
           rate_limit(
             to: 120, within: 1.minute, by: -> { request.remote_ip }, scope: "base_org_tech_capability_check",
             name: "tech_capability_check_ip", store: rate_limit_store, only: :create,
@@ -30,6 +32,13 @@ module Base
             )
             response.headers["Cache-Control"] = "no-store"
             render json: { allowed: }, status: :ok
+          end
+
+          private
+
+          def render_access_unavailable
+            response.headers["Cache-Control"] = "no-store"
+            render_problem(:service_unavailable)
           end
         end
       end

@@ -1,92 +1,64 @@
-# typed: false
 # frozen_string_literal: true
 
 require "test_helper"
 
 class Base::App::Api::V0::Avatar::DashboardIdentitiesControllerTest < ActionDispatch::IntegrationTest
-  self.fixture_table_names = []
-
   setup do
+    @host = ENV.fetch("PUBLIC_BASE_SERVICE_URL")
+    host! @host
+    https!
     @actor = Client.create!(
-      security_mode_id: SecurityModeConfigurable::NORMAL,
-      status_id: ClientStatus::ACTIVE,
+      security_mode_id: SecurityModeConfigurable::NORMAL, status_id: ClientStatus::ACTIVE,
       visibility_id: ClientVisibility::USER,
     )
     @other_actor = Client.create!(
-      security_mode_id: SecurityModeConfigurable::NORMAL,
-      status_id: ClientStatus::ACTIVE,
+      security_mode_id: SecurityModeConfigurable::NORMAL, status_id: ClientStatus::ACTIVE,
       visibility_id: ClientVisibility::USER,
     )
     BaseSelectorBootstrapAuthority.call(surface: :app, principal: @actor)
     BaseSelectorBootstrapAuthority.call(surface: :app, principal: @other_actor)
-    @own_candidate = BaseSwitcherAuthority.new(surface: :app, principal: @actor)
-      .selectable_candidates.fetch(0).fetch(:public)
-    @other_candidate = BaseSwitcherAuthority.new(surface: :app, principal: @other_actor)
-      .selectable_candidates.fetch(0).fetch(:public)
-    @root = ClientToken.new(user: @actor, authentication_epoch: 0)
-    @grant = Object.new
-    @grant.define_singleton_method(:active?) { true }
-    @grant.define_singleton_method(:parent_token) { @root }
-    @auth = OidcAccessTokenAuthenticator::Result.new(
-      success: true,
-      payload: { "client_id" => "base-app-ww", "sid" => "owner-api-test-grant" },
-      token: @root,
-      resource: @actor,
-      error: nil,
-    )
-
-    host! ENV.fetch("PUBLIC_BASE_SERVICE_URL")
-    https!
+    @own = BaseSwitcherAuthority.new(surface: :app, principal: @actor).selectable_candidates.first.fetch(:public)
+    @foreign = BaseSwitcherAuthority.new(
+      surface: :app,
+      principal: @other_actor,
+    ).selectable_candidates.first.fetch(:public)
   end
 
-  test "owner resolves the RP-selected persona and returns its display name and avatar version" do
-    own_persona = ClientPersona.find_by!(public_id: @own_candidate.fetch(:account_public_id))
-    own_persona.update!(moniker: "Owner-resolved persona")
+  test "owner cannot resolve own or foreign persona without Access and reveals no dashboard identity" do
+    before_actor = @actor.reload.attributes
+    before_avatars = Avatar.count
+    before_assignments = AvatarAssignment.count
+    path = "/api/v0/avatar/app/dashboard-identity"
+    [@own, @foreign].each do |selection|
+      assertion = OidcClientAssertionJwt.issue(client_id: "base-app-ww", token_url: "https://#{@host}#{path}")
+      get path, params: { persona: selection.fetch(:account_public_id),
+                          organization_public_id: selection.fetch(:organization_public_id),
+                          organization_unit_public_id: selection.fetch(:organization_unit_public_id),
+                          avatar_public_id: selection.fetch(:avatar_public_id), },
+                headers: { "X-Client-Assertion" => assertion, "Authorization" => "Bearer untrusted-input" }
 
-    with_authenticated_owner do
-      get "/api/v0/avatar/app/dashboard-identity", params: owner_params(@own_candidate),
-                                                   headers: owner_headers
+      assert_response :service_unavailable
+      assert_equal "application/problem+json", response.media_type
+      assert_equal "urn:umaxica:problem:service-unavailable", response.parsed_body.fetch("type")
+      assert_includes response.headers.fetch("Cache-Control"), "no-store"
+      assert_not_includes response.body, selection.fetch(:account_public_id)
+      assert_not response.parsed_body.key?("display_name")
+      assert_equal before_actor, @actor.reload.attributes
+      assert_equal before_avatars, Avatar.count
+      assert_equal before_assignments, AvatarAssignment.count
     end
-
-    assert_response :success
-    assert_equal "Owner-resolved persona", response.parsed_body.fetch("display_name")
-    assert_equal "default", response.parsed_body.fetch("image_version")
   end
 
-  test "owner refuses a foreign persona even when the OP root names it" do
-    @root.selected_account_public_id = @other_candidate.fetch(:account_public_id)
+  test "missing and malformed credentials never become an owner identity while Access is unavailable" do
+    path = "/api/v0/avatar/app/dashboard-identity"
+    [{}, { "Authorization" => "Bearer invalid", "X-Client-Assertion" => "invalid" }].each do |headers|
+      get path, headers: headers
 
-    with_authenticated_owner do
-      get "/api/v0/avatar/app/dashboard-identity", params: owner_params(@other_candidate),
-                                                   headers: owner_headers
-    end
-
-    assert_response :forbidden
-    assert_equal "forbidden", response.parsed_body.fetch("error")
-  end
-
-  private
-
-  def owner_params(selection)
-    {
-      persona: selection.fetch(:account_public_id),
-      organization_public_id: selection.fetch(:organization_public_id),
-      organization_unit_public_id: selection.fetch(:organization_unit_public_id),
-      avatar_public_id: selection.fetch(:avatar_public_id),
-    }
-  end
-
-  def owner_headers
-    { "Authorization" => "Bearer owner-api-test-access-token", "X-Client-Assertion" => "owner-api-test-assertion" }
-  end
-
-  # Replace only the verified transport identities at this API boundary; candidate membership,
-  # persona resolution, avatar selection and response generation remain real owner behavior.
-  def with_authenticated_owner
-    OidcClientRegistry.stub(:authenticate_assertion, true) do
-      OidcAccessTokenAuthenticator.stub(:call, @auth) do
-        OpAppGrant.stub(:find_by, @grant) { yield }
-      end
+      assert_response :service_unavailable
+      assert_equal "application/problem+json", response.media_type
+      assert_equal "urn:umaxica:problem:service-unavailable", response.parsed_body.fetch("type")
+      assert_includes response.headers.fetch("Cache-Control"), "no-store"
+      assert_not response.parsed_body.key?("display_name")
     end
   end
 end

@@ -280,7 +280,7 @@ Top structural risks:
   the request-local context facade.
 - [docs/architecture/database-boundaries.md](../../docs/architecture/database-boundaries.md): documents
   surface database naming and the `avatar` boundary.
-- [docs/identity/authority-boundary.md](../../docs/identity/authority-boundary.md): historical authority
+- [Current surface matrix](content-surface-matrix.md): the retained route and controller ownership
   boundary context.
 - [adr/acme-account-organization-bootstrap-boundary.md](../../adr/acme-account-organization-bootstrap-boundary.md):
   accepted bootstrap boundary for account/organization/title/quota direction.

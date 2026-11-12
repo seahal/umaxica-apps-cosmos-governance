@@ -13,6 +13,11 @@
 Accepted (2026-08-09). Supersedes the Open revision of the same date, which recorded the conflict
 without resolving it.
 
+> **Local-route disposition (2026-11-10):** This ADR's Core host assignments for Rails routes and
+> controllers are superseded by the owner-approved local-surface hard reset. The external public
+> host and edge contracts are not retired by this local route change; any remaining external host
+> ownership requires its owning repository/decision.
+
 ## Context
 
 Three different hostnames were treated as the Core surface's public host, in three places that were

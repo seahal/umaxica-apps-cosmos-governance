@@ -3,7 +3,11 @@
 Status: Deferred; recorded at the user's request on 2026-10-22. No implementation change is
 authorized by this entry. Stored in `docs/backlog/` at the user's explicit request.
 
-## Current findings
+> **Route status (2026-11-10):** The local Auth invitation routes/controllers referenced below are
+> removed under the owner-approved hard reset. The deferred abuse-policy question remains historical
+> context and does not authorize restoring those routes.
+
+## Historical findings
 
 OrgInvitationService.create currently returns an unsuccessful result with the message that
 organization invitations are unavailable pending Bureau migration. OrgOperatorLifecycleInvitationIssuer

@@ -48,14 +48,14 @@ class ClientCoverageTest < ActiveSupport::TestCase
   test "verified_email? and verified_telephone?" do
     assert_not @user.verified_email?
     ClientEmail.create!(user: @user, address: "v@example.com", user_email_status_id: ClientEmailStatus::VERIFIED)
-      .finalize_binding!
+      .tap { |binding_record| binding_record.update!(binding_finalized_at: Time.current) }
 
     assert_predicate @user, :verified_email?
 
     assert_not @user.verified_telephone?
     ClientTelephone.create!(
       user: @user, number: "+819012345678", user_identity_telephone_status_id: ClientTelephoneStatus::VERIFIED,
-    ).finalize_binding!
+    ).tap { |binding_record| binding_record.update!(binding_finalized_at: Time.current) }
 
     assert_predicate @user, :verified_telephone?
   end

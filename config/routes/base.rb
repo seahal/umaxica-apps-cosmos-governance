@@ -1,8 +1,7 @@
 # typed: false
 # frozen_string_literal: true
 
-# Base owns identity, browser-RP and Rails control-plane surfaces. Visa owns the OIDC authority.
-# Auth surfaces handle credential ceremonies and do not own RP authority.
+# Base owns app, com and org routes; remote identity login is retired here.
 scope(module: :base, as: :base) do
   # User authority gateway host. Hosts listed declaratively (DRY intentionally broken).
   constraints(
@@ -11,23 +10,6 @@ scope(module: :base, as: :base) do
   ) do
     scope(module: :app, as: :app) do
       root "roots#index"
-      # Self-RP entry: GET renders a neutral form; POST starts the shared OIDC authorization flow.
-      scope path: "sign", as: :sign do
-        get "", to: "sign/entries#show", as: :show
-        post "", to: "sign/entries#create", as: :create
-        # D-153: one generic landing for expected abnormal endings of the sign flow.
-        resource :interruption, only: :show, module: :sign
-      end
-      get "ceremony_bindings/:binding_ref/confirmation", to: "ceremony_binding_confirmations#show",
-                                                         as: :ceremony_binding_confirmation
-      post "ceremony_bindings/:binding_ref/confirmation", to: "ceremony_binding_confirmations#create"
-
-      # Model Context Protocol endpoint. The MCP spec requires a single path serving POST; the
-      # transport carries every protocol method in the JSON-RPC body, so one create action is the
-      # whole endpoint.
-      # Disabled pending an implementation review; see adr/mcp-endpoint-withdrawal.md.
-      # resource :mcp, only: :create
-
       resource :welcome, only: :show
       resource :dashboard, only: :show, controller: :roots do
         # Streams the selected Avatar's private image; see adr/base-dashboard-avatar-image-delivery.md.
@@ -155,25 +137,8 @@ scope(module: :base, as: :base) do
       get("service-worker", to: "/rails/pwa#service_worker", as: :pwa_service_worker)
       get("offline", to: "/rails/pwa#offline", as: :pwa_offline)
 
-      # Base owns the post-authentication sign-out confirmation and completion resources.
-      scope path: :sign do
-        resource :termination, path: "out", controller: :sign_outs, as: :sign_out,
-                               only: %i(show new edit create)
-        resource :out_completion, only: :show, path: "out/completion",
-                                  controller: :sign_outs, as: :sign_out_completion
-      end
-
-      # Base is a first-party browser RP on this host; Visa is the OIDC authority.
-
-      # The Base RP callback and back-channel logout receiver stay on this host.
-      namespace(:oidc) do
-        resource(:callback, only: :show)
-        # R5-WU10 server-to-server OIDC Back-Channel Logout receiver for this RP cell.
-        resources(:closures, only: :create)
-      end
-
-      # Browser preference API for this host's own chrome controls (theme, cookie consent). Same
-      # contract as Core: see adr/preference-browser-transport-family-capability.md. GET + PATCH only:
+      # Browser preference API for this host's own chrome controls (theme, cookie consent).
+      # GET + PATCH only:
       # `resource ... only: :update` would also map PUT (adr/api-route-vocabulary-consolidation.md,
       # 2026-10-02 amendment).
       namespace :api do
@@ -189,46 +154,9 @@ scope(module: :base, as: :base) do
         end
       end
 
-      namespace(:social) do
-        # Base-side ceremony endpoint: the continuation hands the browser to the Auth host. Sign-up
-        # finalizes in Auth (adr/sign-up-finalization-in-auth.md).
-        namespace :authentication do
-          resource :continuation, only: :create
-        end
-
-        # Non-resourceful exception: OmniAuth middleware owns these fixed provider callback paths.
-        get(
-          "google/callback",
-          to: "/auth/app/omniauth/omniauth_callbacks#omniauth",
-          as: :google_callback,
-          defaults: { provider: "google" },
-        )
-
-        get(
-          "apple/callback",
-          to: "/auth/app/omniauth/omniauth_callbacks#omniauth",
-          as: :apple_callback,
-          defaults: { provider: "apple" },
-        )
-
-        get(
-          "failure",
-          to: "/auth/app/omniauth/omniauth_callbacks#failure",
-          as: :failure,
-        )
-
-        # There is no ceremony start route here. Base starts a social ceremony
-        # through the continuation endpoint above, which issues a grant and
-        # hands the browser to the Auth host's POST-only endpoint with a 307.
-        # A GET start page would be login CSRF (CVE-2015-9284).
-      end
-
       # Step-up verification.
       resource :verification, only: %i(show create)
       namespace :verification do
-        namespace :oidc do
-          resource :callback, only: :show
-        end
         resource :cancellation, only: %i(show create)
         resource :completion, only: %i(show create)
         # Choice of a first authenticator. GET shows the methods; POST starts one bootstrap.
@@ -236,60 +164,15 @@ scope(module: :base, as: :base) do
       end
 
       resource :identity, only: :show
-      # User-facing sessions have the canonical top-level resource path. The identity namespace
-      # remains as a compatibility route for existing links while callers migrate.
-      resource :other_sessions, path: "sessions/other", controller: "identity/revocations/others", only: :destroy
-      resources :sessions, controller: "identity/sessions", only: %i(index show destroy)
-      resources :avatars, only: %i(index show new edit create update) do
-        resource :follow, controller: "avatars/follows", only: %i(create destroy)
-        resource :block, controller: "avatars/blocks", only: %i(create destroy)
-        resource :mute, controller: "avatars/mutes", only: %i(create destroy)
-      end
-      post "avatar_ownership_transfers", to: "avatar_ownership_transfers#create", as: :avatar_ownership_transfers
-      post "avatar_ownership_transfers/:id/accept", to: "avatar_ownership_transfers#accept",
-                                                    as: :accept_avatar_ownership_transfer
-      post "avatar_ownership_transfers/:id/cancel", to: "avatar_ownership_transfers#cancel",
-                                                    as: :cancel_avatar_ownership_transfer
 
       namespace :identity do
-        resources :social_identities, only: :index
-        resource :sensitive_admission_confirmation, only: %i(show create),
-                                                    path: "sensitive_admissions/:admission_ref/confirmation",
-                                                    controller: :sensitive_admission_confirmations
         resource :standing, only: :show
-        resources :passkeys, only: %i(index show new create update destroy)
-        resources :totps, only: %i(index show new create update destroy)
-        resource :recovery, only: :show do
-          resource :completion, only: :create, module: :recovery
-        end
-        namespace :recovery do
-          resource :session, only: %i(new create)
-          resources :appeals, only: :create
-        end
-        namespace :mfa do
-          resource :reset, only: :show
-          resource :challenge, only: %i(show update)
-        end
-
-        namespace :emails do
-          resource :registration, only: %i(new create edit update) do
-            resource :redelivery, only: :create
-          end
-        end
-
-        resources :emails, only: %i(index edit update destroy)
-
-        namespace :telephones do
-          resource :registration, only: %i(new create edit update)
-        end
-
-        resources :telephones, only: %i(index new create edit destroy)
+        resources :passkeys, only: %i(index show)
+        resources :totps, only: %i(index show)
+        resources :emails, only: :index
+        resources :telephones, only: :index
 
         resource :birthdate, only: :show
-
-        resources :sessions, only: %i(index show destroy)
-        resource :revocation, only: :destroy, path: "other_sessions", controller: "revocations/others",
-                              as: :other_sessions
 
         resources :activities, only: :index
 
@@ -388,23 +271,6 @@ scope(module: :base, as: :base) do
   ) do
     scope(module: :org, as: :org) do
       root "roots#index"
-      # Self-RP entry: GET renders a neutral form; POST starts the shared OIDC authorization flow.
-      scope path: "sign", as: :sign do
-        get "", to: "sign/entries#show", as: :show
-        post "", to: "sign/entries#create", as: :create
-        # D-153: one generic landing for expected abnormal endings of the sign flow.
-        resource :interruption, only: :show, module: :sign
-      end
-      get "ceremony_bindings/:binding_ref/confirmation", to: "ceremony_binding_confirmations#show",
-                                                         as: :ceremony_binding_confirmation
-      post "ceremony_bindings/:binding_ref/confirmation", to: "ceremony_binding_confirmations#create"
-
-      # Model Context Protocol endpoint. The MCP spec requires a single path serving POST; the
-      # transport carries every protocol method in the JSON-RPC body, so one create action is the
-      # whole endpoint.
-      # Disabled pending an implementation review; see adr/mcp-endpoint-withdrawal.md.
-      # resource :mcp, only: :create
-
       resource :welcome, only: :show
       resource :dashboard, only: :show, controller: :roots do
         # Streams the selected Avatar's private image; see adr/base-dashboard-avatar-image-delivery.md.
@@ -413,12 +279,6 @@ scope(module: :base, as: :base) do
       resource :selector, only: %i(show update)
       resource :switcher, only: %i(show update)
       resource :preference, only: :show
-      resource :avatar, only: %i(show edit update destroy)
-      post "avatar_ownership_transfers", to: "avatar_ownership_transfers#create", as: :avatar_ownership_transfers
-      post "avatar_ownership_transfers/:id/accept", to: "avatar_ownership_transfers#accept",
-                                                    as: :accept_avatar_ownership_transfer
-      post "avatar_ownership_transfers/:id/cancel", to: "avatar_ownership_transfers#cancel",
-                                                    as: :cancel_avatar_ownership_transfer
       resources :organizations, only: %i(index show) do
         # Org memberships are read-only: who may add, change, or end an Agent's membership in a
         # Bureau is not yet specified (adr/operator-capability-authorization.md, Not provided).
@@ -536,21 +396,6 @@ scope(module: :base, as: :base) do
             :tech_capability_check, only: :create, path: "tech-capability-checks",
                                     controller: :tech_capability_checks,
           )
-          # R5-WU13 Publishing authority for the Edit RP; fixed cells, scoped public references.
-          scope(
-            path: "publishing/:surface/:audience", as: :publishing,
-            constraints: { surface: /docs|help|info|news/, audience: /app|com|org/ },
-          ) do
-            resources(
-              :entries, only: %i(index show create update), param: :entry_ref,
-                        controller: "publishing/entries",
-            ) do
-              resources(
-                :publications, only: %i(create destroy), param: :publication_ref, controller: "publishing/publications",
-              )
-              resource(:archive, only: %i(create destroy), controller: "publishing/archives")
-            end
-          end
         end
       end
 
@@ -604,24 +449,8 @@ scope(module: :base, as: :base) do
       end
       resources :billing, only: :index
 
-      # Base owns the post-authentication sign-out confirmation and completion resources.
-      scope path: :sign do
-        resource :termination, path: "out", controller: :sign_outs, as: :sign_out,
-                               only: %i(show new edit create)
-        resource :out_completion, only: :show, path: "out/completion",
-                                  controller: :sign_outs, as: :sign_out_completion
-      end
-
-      # Base is a first-party browser RP on this host; Visa is the OIDC authority.
-
-      namespace(:oidc) do
-        resource(:callback, only: :show)
-        # R5-WU10 server-to-server OIDC Back-Channel Logout receiver for this RP cell.
-        resources(:closures, only: :create)
-      end
-
-      # Browser preference API for this host's own chrome controls (theme, cookie consent). Same
-      # contract as Core: see adr/preference-browser-transport-family-capability.md. GET + PATCH only:
+      # Browser preference API for this host's own chrome controls (theme, cookie consent).
+      # GET + PATCH only:
       # `resource ... only: :update` would also map PUT (adr/api-route-vocabulary-consolidation.md,
       # 2026-10-02 amendment).
       namespace :api do
@@ -640,35 +469,17 @@ scope(module: :base, as: :base) do
       # Step-up verification.
       resource :verification, only: %i(show create)
       namespace :verification do
-        namespace :oidc do
-          resource :callback, only: :show
-        end
         resource :cancellation, only: %i(show create)
         resource :completion, only: %i(show create)
         resource :setup, only: %i(show create)
       end
 
       resource :identity, only: :show
-      # User-facing sessions have the canonical top-level resource path. The identity namespace
-      # remains as a compatibility route for existing links while callers migrate.
-      resource :other_sessions, path: "sessions/other", controller: "identity/revocations/others", only: :destroy
-      resources :sessions, controller: "identity/sessions", only: %i(index show destroy)
       namespace :identity do
-        resources :social_identities, only: :index
         resource :standing, only: :show
-        resources :passkeys, only: %i(index show new create update destroy)
-        namespace :mfa do
-          resource :reset, only: :show
-        end
-        namespace :emails do
-          resource :registration, only: %i(new create edit update)
-        end
-        resources :emails, only: %i(index edit update destroy)
-
-        namespace :telephones do
-          resource :registration, only: %i(new create edit update)
-        end
-        resources :telephones, only: %i(index new create edit destroy)
+        resources :passkeys, only: %i(index show)
+        resources :emails, only: :index
+        resources :telephones, only: :index
 
         resource :birthdate, only: :show
 
@@ -678,73 +489,10 @@ scope(module: :base, as: :base) do
           resource :rotation, only: :create
           resource :removal, only: :create
         end
-        resources :sessions, only: %i(index show destroy)
-        resource :other_sessions, only: :destroy, controller: "revocations/others"
 
         resources :activities, only: :index
         resource :withdrawal, only: :show
       end
-    end
-  end
-
-  constraints(host: [ENV["PRIVATE_BASE_NETWORK_URL"], "base.net.localhost"].compact) do
-    scope(module: :net, as: :network) do
-      # Thin landing endpoint.
-      root(to: "roots#index")
-
-      # Deployment identifier endpoint.
-      resource(:revision, only: :show, format: false)
-
-      resource(:health, only: :show, format: false)
-      namespace(:health) do
-        resource(:liveness, only: :show, format: false)
-        resource(:readiness, only: :show, format: false)
-        resource(:startup, only: :show, format: false)
-      end
-
-      # Machine-readable health and revision. The literal ".json" is part of the path, not a Rails
-      # format token (`format: false`), mirroring the `.well-known/jwks.json` precedent above.
-      # These are JSON-only; the controllers answer 406 to any other `Accept`.
-      namespace(:api) do
-        namespace(:v0) do
-          resource(:health, only: :show, path: "health.json", format: false)
-          resource(:revision, only: :show, path: "revision.json", format: false)
-        end
-      end
-
-      resource(:csp_violation_report, only: :create, path: "csp-violation-report")
-    end
-  end
-
-  constraints(
-    host: [ENV["PUBLIC_BASE_DEVELOPER_URL"], ENV["PRIVATE_BASE_DEVELOPER_URL"],
-           "base.dev.localhost",].compact,
-  ) do
-    scope(module: :dev, as: :developer) do
-      # Thin landing endpoint.
-      root(to: "roots#index")
-
-      # Deployment identifier endpoint.
-      resource(:revision, only: :show, format: false)
-
-      resource(:health, only: :show, format: false)
-      namespace(:health) do
-        resource(:liveness, only: :show, format: false)
-        resource(:readiness, only: :show, format: false)
-        resource(:startup, only: :show, format: false)
-      end
-
-      # Machine-readable health and revision. The literal ".json" is part of the path, not a Rails
-      # format token (`format: false`), mirroring the `.well-known/jwks.json` precedent above.
-      # These are JSON-only; the controllers answer 406 to any other `Accept`.
-      namespace(:api) do
-        namespace(:v0) do
-          resource(:health, only: :show, path: "health.json", format: false)
-          resource(:revision, only: :show, path: "revision.json", format: false)
-        end
-      end
-
-      resource(:csp_violation_report, only: :create, path: "csp-violation-report")
     end
   end
 end

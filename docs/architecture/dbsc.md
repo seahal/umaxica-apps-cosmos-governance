@@ -1,14 +1,22 @@
 # Device Bound Session Credentials (DBSC)
 
+> **Runtime status (2026-11-11):** Local DBSC registration and verification endpoints and their
+> services, adapter, parser, serializer, and cookie-name helper were removed after the surface
+> reset found no remaining application caller. Client/operator token models, DBSC columns, status
+> models, and migrations are retained for the separate model/database review; they do not establish
+> a current DBSC route or proof-verification flow. The implementation sections below record the
+> former contract and are not current endpoint instructions. See the
+> [surface hard-reset report](../../evidence/2026-11-11-governance-round2-R2A7.md).
+
 > **Partially superseded by Identity Authority inversion:** The DBSC vocabulary in this document
 > remains useful only where it does not assign session or token authority to `sign/id`. `acme/www`
 > is the Session, Token, Account, Preference, Authorization, and downstream-token Authority.
 > `sign/id` is ceremony-only. Existing sign-side physical tables/models do not imply sign-side
 > authority.
 
-This document covers authentication-token DBSC only. Preference DBSC and Preference refresh
-credentials are retired; see [Preference architecture](preference.md). Their removal does not
-change authentication-token DBSC or refresh behavior.
+This document records former authentication-token DBSC behavior. Preference DBSC and Preference
+refresh credentials were separately retired; see [Preference architecture](preference.md). The
+surface reset has since removed the local authentication-token DBSC runtime as well.
 
 ## Specification
 
@@ -23,7 +31,7 @@ DBSC binds session cookies to a device-specific key pair. Even if a session cook
 cannot be used on a different device because the server requires proof-of-possession of the private
 key that is bound to the session.
 
-## Implementation
+## Former implementation
 
 The server-side DBSC implementation lives in flat `app/services/dbsc_*.rb` files:
 
@@ -39,7 +47,7 @@ Token tables (`user_tokens`, `staff_tokens`) store DBSC-related columns:
 - `dbsc_challenge` — challenge value for registration
 - `dbsc_session_id` — session binding identifier
 
-## HTTP Header Boundary
+## Former HTTP Header Boundary
 
 The header syntax follows sections 9.1–9.4 of the
 [W3C DBSC Editor's Draft](https://w3c.github.io/webappsec-dbsc/) inspected on 2026-10-22
@@ -76,7 +84,7 @@ DBSC and DPoP (RFC 9449) serve similar purposes (proof-of-possession) but target
 | DBSC      | Browser cookie-based sessions       | Session cookie bound to device key |
 | DPoP      | API access via Authorization header | Access token bound to client key   |
 
-DBSC is the active browser-session binding mechanism. DPoP remains available for
+DBSC was the former browser-session binding mechanism. DPoP remains available for
 Authorization-header token binding where an explicitly reviewed flow chooses it.
 
 ## VisitorAccount Token Strategy

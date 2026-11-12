@@ -9,7 +9,7 @@ module Base
           # Org Support owner for app Client administration (R5-WU12, approved pattern). The org
           # operator's signed caller is verified here; the existing target-specific Support policy and
           # Enforcement case policy decide; session revocation keeps its audit, Step-Up and
-          # AccountSessionRevocation semantics. No cross-TLD user login is involved.
+          # Governance account lookup remains independent of cross-TLD browser credentials.
           class AccountsController < ActionController::API
             include ::DefaultNoStore
 
@@ -138,27 +138,8 @@ module Base
                 created_at: account.created_at&.iso8601, }
             end
 
-            def revoke_sessions(account)
-              reason_code, ticket_id, operation_id = revocation_input!
-              chronicle =
-                audited_administrative_operation(
-                  operation_id:, action: AUDIT_ACTION, subject: account, reason_code:,
-                  metadata: revocation_audit_metadata(target: account, realm:, ticket_id:),
-                  changeset: revocation_audit_changeset(account),
-                ) do
-                  result = AccountSessionRevocation.purge!(
-                    account:, operator: avatar_actor, reason_code:, ticket_id:,
-                  )
-                  { revoked_count: result.revoked_count, account_access_event_id: result.event.id }
-                end
-              render json: { event_uuid: chronicle.event_uuid }, status: :created
-            rescue InvalidRevocationInput => e
-              render json: { errors: e.errors }, status: :unprocessable_content
-            rescue OrgAdministrativeAudit::OperationConflictError
-              render json: { errors: { operation_id: t("base.org.admin.errors.conflict") } }, status: :conflict
-            rescue OrgAdministrativeAudit::IntentUnavailableError
-              render json: { errors: { base: t("base.org.admin.errors.audit_unavailable") } },
-                     status: :service_unavailable
+            def revoke_sessions(_account)
+              raise AccessOpDataUnavailableError
             end
           end
         end

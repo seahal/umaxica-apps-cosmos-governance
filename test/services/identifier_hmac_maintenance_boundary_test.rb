@@ -24,7 +24,7 @@ class IdentifierHmacMaintenanceBoundaryTest < ActiveSupport::TestCase
           end
         record = model.create!(identifier.merge(owner_key => owner.id, :confirm_policy => true))
         desired_digest = SecureRandom.hex(32)
-        record.reload.finalize_binding!
+        record.reload.update_columns(binding_finalized_at: model.database_now)
         facts = record.attributes
         connection = model.lease_connection
         raw = connection.raw_connection

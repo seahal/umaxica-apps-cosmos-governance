@@ -13,12 +13,7 @@ class OrgOperatorLifecycleRequestCreate
 
   def call
     if attributes[:action].to_s == OperatorLifecycleRequest::ACTION_JOIN
-      request = OperatorLifecycleRequest.new(request_attributes)
-      request.errors.add(:organization_id, OrgInvitationService::MIGRATION_REQUIRED_MESSAGE)
-      return OrgOperatorLifecycleResult.new(
-        success: false, request: request, error: request.errors.full_messages.to_sentence,
-        invitation: nil,
-      )
+      raise AccessOpDataUnavailableError
     end
 
     request = OperatorLifecycleRequest.new(request_attributes)

@@ -1,3 +1,7 @@
+> **Status:** This legacy requirements catalog predates the 2026-11-10 surface hard reset.
+> Requirements naming local Auth, Visa, social-provider, and content routes are historical; use the
+> current route inventory and hard-reset evidence for repository behavior.
+
 # Software Requirements Specification (SRS)
 
 ## Project: Umaxica Apps Cosmos Governance

@@ -57,6 +57,7 @@ class ClientChronicle < ChronicleRecord
   belongs_to :user_chronicle_level, class_name: "ClientChronicleLevel", foreign_key: :level_id,
                                     inverse_of: :client_chronicles
   # subject_id/subject_type for cross-DB compatibility (no FK)
+  validates :event_uuid, uniqueness: true, allow_nil: true
   validates :subject_id, presence: true
   validates :subject_type, presence: true
 

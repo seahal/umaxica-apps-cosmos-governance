@@ -2,6 +2,7 @@
 
 class ClientIdentifierRotationAudit < AppZenithRecord
   validates :operation_ref, :channel, :record_id, :actor_role, :occurred_at, presence: true
+  validates :operation_ref, uniqueness: { scope: %i(channel record_id) }
   validates :channel, inclusion: { in: %w(email telephone) }
   validates :record_id, numericality: { only_integer: true, greater_than: 0 }
   before_update :reject_audit_update

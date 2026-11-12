@@ -3,6 +3,16 @@
 
 class AvatarEnterpriseOwnershipPeriod < AvatarRecord
   belongs_to :avatar, inverse_of: :enterprise_ownership_periods
+  has_many :enterprise_transfer_details,
+           class_name: "AvatarEnterpriseToEnterpriseTransferDetail",
+           foreign_key: :source_ownership_period_id,
+           inverse_of: :source_ownership_period,
+           dependent: :restrict_with_error
+  has_many :bureau_transfer_details,
+           class_name: "AvatarEnterpriseToBureauTransferDetail",
+           foreign_key: :source_ownership_period_id,
+           inverse_of: :source_ownership_period,
+           dependent: :restrict_with_error
   has_many :persona_grants,
            class_name: "AvatarEnterprisePersonaGrant",
            dependent: :restrict_with_error,

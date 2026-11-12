@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 class OperatorEmailHistory < OrgPrincipalRecord
-  belongs_to :staff, class_name: "Operator"
+  belongs_to :staff, class_name: "Operator", inverse_of: :email_histories
   validates :fingerprint, :attached_at, :detached_at, :created_at, presence: true
   before_update :reject_history_update
 

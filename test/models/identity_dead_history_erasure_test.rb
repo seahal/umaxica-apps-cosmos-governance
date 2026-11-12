@@ -5,10 +5,10 @@ require "test_helper"
 class IdentityDeadHistoryErasureTest < ActiveSupport::TestCase
   CLIENT_ERASURE_ASSOCIATIONS = %i(
     client_external_identities client_apple_notification_events client_emails client_telephones
-    client_totp_credentials client_passkeys client_withdrawal_ceremonies client_tokens client_device_sessions
-    oidc_connections client_memberships clients client_banners client_members client_member_discoveries
+    client_totp_credentials client_passkeys client_withdrawal_ceremonies
+    client_memberships clients client_banners client_members client_member_discoveries
     client_member_observations client_member_revocations client_member_impersonations client_member_suspensions
-    client_member_deletions owned_members client_bulletins rp_account authority_lock core_app_client_bridge
+    client_member_deletions owned_members client_bulletins rp_account authority_lock core_app_client_bridges
     client_preference
   ).freeze
 

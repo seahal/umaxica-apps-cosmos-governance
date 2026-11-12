@@ -10,10 +10,6 @@
 # by the retired session-limit placeholder. A session's authentication context
 # is never inferred from that historical status.
 #
-# It is also distinct from Webauthn::AuthenticationContext, which is the result
-# of one WebAuthn assertion (UV flags, AAGUID, transports). This value describes
-# the session, not a ceremony response.
-#
 # Authority: the durable value lives on the session token row
 # (`operator_tokens.authentication_context`) and is re-derived into the access
 # token's `authn_ctx` claim on every issue, refresh, and rotation, so a
@@ -33,12 +29,6 @@ class AuthenticationContextValue
   # Capability vocabulary. This is a session capability, never a role grant:
   # it can only narrow what the actor's DB roles already allow.
   CAPABILITY_STEP_UP = "step_up"
-
-  # The scopes whose riding on a token is a capability-named privilege. A Standby
-  # token carries the same scopes as the same actor's Normal token (the
-  # restriction is the operation's Step-Up requirement, not the scp claim);
-  # an unrecognised context gets none of them, fail closed.
-  CAPABILITY_NAMED_SCOPES = %w(read:org write:org read:self write:self).freeze
 
   attr_reader :key, :capabilities
 
@@ -121,26 +111,5 @@ class AuthenticationContextValue
     return normal unless claims.is_a?(Hash)
 
     from_claim(claims[CLAIM] || claims[CLAIM.to_sym])
-  end
-
-  # Session capabilities narrow the authorization scopes a token carries; they
-  # never add one that the actor's ordinary scopes did not already grant.
-  #
-  # A Standby session issues the same scopes as the same actor's Normal session:
-  # the scarce operations are withheld by their Step-Up gates, so filtering the
-  # scp claim would only split the boundary in two without narrowing anything
-  # further. An unrecognised context keeps no capability-named scope.
-  def constrain_scopes(scopes)
-    return Array(scopes) unless unknown?
-
-    Array(scopes).reject { |scope| capability_named_scope?(scope) }
-  end
-
-  private
-
-  def unknown? = !normal? && !standby?
-
-  def capability_named_scope?(scope)
-    CAPABILITY_NAMED_SCOPES.include?(scope.to_s)
   end
 end

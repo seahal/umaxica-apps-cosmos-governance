@@ -4,6 +4,11 @@
 
 Accepted (2026-10-13); amended 2026-11-01 for WU-A8 RP-local callback identity.
 
+> **Route-scope supersession (2026-11-10):** The owner-approved local-surface hard reset removes
+> Palm's local Rails routes/controllers. Tech remains an owned local surface. This changes local
+> route availability only; it does not retire OIDC client registrations, redirect URIs, native or
+> external authority contracts, or persisted model state.
+
 This is a **target contract**. At commit `9c6a0fcaee7d88e94892e2b24f2b2dbe70c89c1e` Tech does not
 exist and Palm is still a native relying party.
 

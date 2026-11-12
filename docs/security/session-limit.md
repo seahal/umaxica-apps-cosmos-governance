@@ -1,13 +1,18 @@
+> **Current route status (2026-11-11):** The hard reset removes local Auth/Visa sign-in and
+> session-limit routes, Base/Tech RP sign-in and callback routes, RP-initiated logout, and
+> Back-Channel Logout receivers. Existing local RP request validation remains; the route and
+> controller descriptions below are historical.
+
 # Sign-In Session Limit
 
-> **Current authority boundary (2026-10-24):** Visa is the OIDC authority and owns Root Session
-> issuance and session-limit resolution on `visa.umaxica.*`. Auth remains ceremony-only. Base is the
-> `www.umaxica.*` browser RP and does not read or write Visa's OP session state. Historical
-> `acme/www` and `sign/id` wording below must not be used to reintroduce a shared session or an
-> authority endpoint on Base; see `adr/visa-op-host.md`.
+> **Historical authority boundary (2026-10-24):** At that time, Visa was the OIDC authority and
+> owned Root Session issuance and session-limit resolution, Auth was ceremony-only, and Base was the
+> browser RP. The 2026-11-11 hard reset has since removed local Auth/Visa and Base/Tech RP protocol
+> routes. The route and controller descriptions below are historical; retained session-limit models
+> do not imply active local endpoints.
 
-This document records the session-limit behavior for sign-in flows on the `app` and `org` surfaces.
-COM authentication has been retired.
+This document preserves the former session-limit behavior for `app` and `org` sign-in flows. COM
+authentication was retired before the local-surface hard reset.
 
 > **Waiting lease and resolution admission implemented (2026-10-16).** R2-WU01 stores the waiting
 > slot on each realm resolution, enforces one live actor lease with a database partial unique index,
@@ -83,8 +88,8 @@ result with HTTP 403; the existing flow and lease remain unchanged.
 
 ## Session-Limit Resolution
 
-- Auth: none. An Auth host runs credential ceremonies and issues no session, so it never holds a
-  resolution; its former `/sign/in/session` page is removed.
+- External credential authority: no local session-limit route is served here. Base and Tech own their
+  browser RP sessions; authority-side sign-in resolution remains with the external authority.
 - Visa app, OIDC resume: `/sign/in/limitation` with the `ClientSessionLimitResolutionTransaction`
   challenge.
 - Google and Apple sign-up have no separate path: they reach the limit through the canonical Sign In

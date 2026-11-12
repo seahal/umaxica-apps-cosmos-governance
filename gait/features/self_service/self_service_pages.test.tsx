@@ -39,9 +39,7 @@ const { default: EntityList } = await import("@/features/self_service/EntityList
 const { default: AvatarForm } = await import("@/features/self_service/AvatarForm");
 const { default: BillingsIndex } = await import("@/pages/base/app/billings/index");
 const { default: OrganizationShow } = await import("@/pages/base/app/organizations/show");
-const { default: AvatarShow } = await import("@/pages/base/app/avatars/show");
 const { default: SwitcherShow } = await import("@/pages/base/app/switchers/show");
-const { default: SignInLimitationShow } = await import("@/pages/base/app/sign/in/limitations/show");
 
 let container: HTMLDivElement | null = null;
 let root: Root | null = null;
@@ -244,37 +242,6 @@ describe("BillingsIndex", () => {
   });
 });
 
-describe("AvatarShow", () => {
-  it("renders the moniker, the handle and the edit link", () => {
-    const html = renderToStaticMarkup(
-      <AvatarShow
-        title="Avatar"
-        moniker="First Avatar"
-        handle="first"
-        edit={{ label: "Edit", href: "/avatars/av_1/edit?ri=jp" }}
-      />,
-    );
-
-    expect(html).toMatch(/<h1[^>]*>First Avatar<\/h1>/u);
-    expect(html).toContain("first");
-    expect(html).toContain('href="/avatars/av_1/edit?ri=jp"');
-  });
-
-  it("omits the handle and the edit link the server withheld", () => {
-    const html = renderToStaticMarkup(
-      <AvatarShow
-        title="Avatar"
-        moniker="First Avatar"
-        handle={null}
-        edit={null}
-      />,
-    );
-
-    expect(html).not.toContain("<a");
-    expect(html).toContain("First Avatar");
-  });
-});
-
 describe("SwitcherShow", () => {
   const candidates = [
     { account_public_id: "acc_1", organization_public_id: "org_1", avatar_public_id: "av_1" },
@@ -387,12 +354,17 @@ describe("AvatarForm", () => {
   });
 
   it("renders the validation errors the server returned", () => {
-    formErrors = { "avatar.moniker": "can't be blank", "avatar.handle": "is taken" };
+    formErrors = {
+      avatar: "The Avatar could not be updated.",
+      "avatar.moniker": "can't be blank",
+      "avatar.handle": "is taken",
+    };
 
     const html = renderToStaticMarkup(<AvatarForm {...createProps} />);
 
     expect(html).toContain("can&#x27;t be blank");
     expect(html).toContain("is taken");
+    expect(html).toContain("The Avatar could not be updated.");
   });
 
   it("edits both fields and posts to the create action", () => {
@@ -555,107 +527,6 @@ describe("AvatarForm", () => {
 
     expect(post).not.toHaveBeenCalled();
     expect(element.textContent).toContain(message);
-  });
-});
-
-describe("SignInLimitationShow", () => {
-  const props = {
-    title: "Session limit",
-    heading: "Session limit",
-    description: "Revoke one existing session to continue signing in.",
-    session_label: "Session",
-    error: null as string | null,
-    notice: null as string | null,
-    action: "/sign/in/limitation",
-    cancel_action: "/sign/in/limitation?resolution_challenge=ch_1",
-    submit_label: "Revoke and continue",
-    cancel_label: "Cancel sign-in",
-    continue_action: "/sign/in/limitation",
-    continue_label: "Continue sign-in",
-    can_continue: false,
-    resolution: { field: "resolution_challenge", value: "ch_1" },
-    sessions: [
-      {
-        session_ref: "ref_1",
-        restriction_label: "Restricted",
-        created_label: "Created 01/02",
-        last_used_label: "Last used 01/03",
-        revoke_label: "Revoke this session",
-      },
-      {
-        session_ref: "ref_2",
-        restriction_label: "Normal",
-        created_label: "Created 01/04",
-        last_used_label: null,
-        revoke_label: "Revoke this session",
-      },
-    ],
-  };
-
-  it("renders every session, with the never-used one lacking a last-used line", () => {
-    const html = renderToStaticMarkup(<SignInLimitationShow {...props} />);
-
-    expect(html).toContain("Restricted");
-    expect(html).toContain("Normal");
-    expect(html).toContain("Last used 01/03");
-    expect(html).toContain('value="ref_2"');
-    expect(html).not.toContain('role="alert"');
-  });
-
-  it("renders the error, the notice and the field error", () => {
-    formErrors = { session_ref: "select a session" };
-
-    const html = renderToStaticMarkup(
-      <SignInLimitationShow
-        {...props}
-        error="revoke failed"
-        notice="still full"
-      />,
-    );
-
-    expect(html).toContain("revoke failed");
-    expect(html).toContain("still full");
-    expect(html).toContain("select a session");
-  });
-
-  it("selects a session, submits the patch and cancels with a delete", () => {
-    const element = mount(<SignInLimitationShow {...props} />);
-    const radio = element.querySelector<HTMLInputElement>('input[value="ref_1"]');
-
-    act(() => {
-      radio?.click();
-    });
-
-    expect(element.querySelector<HTMLInputElement>('input[value="ref_1"]')?.checked).toBe(true);
-
-    act(() => {
-      element
-        .querySelector("form")
-        ?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
-    });
-
-    expect(patch).toHaveBeenCalledWith("/sign/in/limitation");
-
-    act(() => {
-      element.querySelector<HTMLButtonElement>('button[type="button"]')?.click();
-    });
-
-    expect(deleteRequest).toHaveBeenCalledWith("/sign/in/limitation?resolution_challenge=ch_1");
-  });
-
-  it("continues the bound sign-in flow with the explicit POST action", () => {
-    const element = mount(
-      <SignInLimitationShow
-        {...props}
-        can_continue
-      />,
-    );
-
-    act(() => {
-      getByRole(element, "button", { name: "Continue sign-in" }).click();
-    });
-
-    expect(post).toHaveBeenCalledWith("/sign/in/limitation");
   });
 });
 

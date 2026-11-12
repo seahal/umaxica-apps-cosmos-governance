@@ -66,6 +66,24 @@ class ClientEmail < AppPrincipalRecord
                                  inverse_of: :client_emails
   belongs_to :user, class_name: "Client", inverse_of: :client_emails
 
+  validates :address_digest,
+            contact_binding_uniqueness: {
+              error_attribute: :address,
+              conditions: -> { where.not(binding_finalized_at: nil).where(binding_released_at: nil) },
+            },
+            if: -> {
+              binding_effective? &&
+                (will_save_change_to_address_digest? || will_save_change_to_binding_finalized_at? ||
+                  will_save_change_to_binding_released_at?)
+            }
+  validates :user_id,
+            uniqueness: { conditions: -> { where.not(binding_finalized_at: nil).where(binding_released_at: nil) } },
+            if: -> {
+              binding_effective? &&
+                (will_save_change_to_user_id? || will_save_change_to_binding_finalized_at? ||
+                  will_save_change_to_binding_released_at?)
+            }
+
   validate :effective_binding_has_digest
   validates :address, presence: true
   validates :otp_attempts_count, presence: true, numericality: { only_integer: true }

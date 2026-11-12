@@ -4,8 +4,7 @@ How to word the pair of buttons that proceeds with or abandons an action: confir
 alerts, and forms with an explicit way out.
 
 This page covers wording only. Size, hierarchy, placement, and disabled states stay with
-[the design guide](../design.md). Google, Apple, and Microsoft sign-in buttons follow
-[their own requirements](third-party-sign-in-button-requirements.md) and are outside this page.
+[the design guide](../design.md).
 
 ## Source
 

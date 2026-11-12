@@ -64,7 +64,6 @@ class BaseSelectorBootstrapAuthority
     result = [
       connection_owner(config.principal_class),
       connection_owner(config.rp_account_class),
-      connection_owner(config.token_class),
       (connection_owner(Avatar) if config.provision_default_avatar),
     ].compact
     result.uniq!

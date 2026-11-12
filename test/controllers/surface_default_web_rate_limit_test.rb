@@ -3,8 +3,8 @@
 
 require "test_helper"
 
-# Every surface declares its own default web limiter on its application
-# controller, each with its own scope name, and the limiter is the only thing
+# Base and Tech declare their own default web limiter on each application
+# controller, with separate scope names, and the limiter is the only thing
 # standing between an unauthenticated caller and unbounded traffic to that
 # surface. A scope name that collides with another surface, a store that is not
 # wired up, or a refusal handler that is never reached all look like a passing
@@ -22,28 +22,20 @@ class SurfaceDefaultWebRateLimitTest < ActionDispatch::IntegrationTest
 
   DEFAULT_WEB_QUOTA = 300
 
+  HOSTS = Rails.configuration.x.boot_config.fetch(:hosts)
   SURFACES = {
-    "base app" => ["PUBLIC_BASE_SERVICE_URL", :base_app_root_path],
-    "base com" => ["PUBLIC_BASE_CORPORATE_URL", :base_com_root_path],
-    "base org" => ["PUBLIC_BASE_STAFF_URL", :base_org_root_path],
-    "edit org" => ["PUBLIC_EDIT_STAFF_URL", :edit_org_dashboard_path],
-    "base developer" => [nil, :base_developer_root_path],
-    "auth app" => ["PUBLIC_AUTH_SERVICE_URL", :auth_app_root_path],
-    "auth org" => ["PUBLIC_AUTH_STAFF_URL", :auth_org_root_path],
-    "core app" => ["PUBLIC_CORE_SERVICE_URL", :core_app_api_v0_preferences_theme_path],
-    "core org" => ["PUBLIC_CORE_STAFF_URL", :core_org_api_v0_preferences_theme_path],
-    "warp app" => ["PUBLIC_WARP_SERVICE_URL", :warp_app_dashboard_path],
-    "warp com" => ["PUBLIC_WARP_CORPORATE_URL", :warp_com_root_path],
-    "warp org" => ["PUBLIC_WARP_STAFF_URL", :warp_org_dashboard_path],
-    "palm app" => ["PUBLIC_PALM_SERVICE_URL", :palm_app_sign_out_path],
+    "base app" => [HOSTS.base_service.host, :base_app_root_path],
+    "base com" => [HOSTS.base_corporate.host, :base_com_root_path],
+    "base org" => [HOSTS.base_staff.host, :base_org_root_path],
+    "tech org" => [HOSTS.tech_staff.host, :tech_org_root_path],
   }.freeze
 
   setup { Rails.configuration.x.rate_limit.fetch(:store).clear }
   teardown { Rails.configuration.x.rate_limit.fetch(:store).clear }
 
-  SURFACES.each do |surface, (env_name, helper)|
+  SURFACES.each do |surface, (host, helper)|
     test "#{surface} answers the request past its default web quota with a retry hint" do
-      host!(env_name ? ENV.fetch(env_name) : "base.dev.localhost")
+      host! host
 
       DEFAULT_WEB_QUOTA.times { get public_send(helper, ri: "jp") }
 

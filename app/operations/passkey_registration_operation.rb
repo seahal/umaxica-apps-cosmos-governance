@@ -16,6 +16,12 @@ class PasskeyRegistrationOperation
   class << self
     public
 
+    def reference_id_conflict?(error)
+      error.is_a?(ActiveRecord::RecordInvalid) &&
+        (error.record.is_a?(ClientPasskey) || error.record.is_a?(OperatorPasskey)) &&
+        error.record.errors.of_kind?(:external_id, :taken)
+    end
+
     def credential_id_conflict?(error)
       cause = error.cause
       return false unless cause.is_a?(PG::UniqueViolation)

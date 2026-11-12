@@ -4,7 +4,7 @@ require "test_helper"
 
 class RpStepUpStateTest < ActiveSupport::TestCase
   test "the database rejects a state stored in the other realm" do
-    result = RpCallbackCommitter.call(
+    result = seed_rp_cell_session(
       cell: RpCellBinding.fetch("rp_base_app"),
       issuer: "https://www.umaxica.app",
       subject: "step-up-state-subject",
@@ -12,10 +12,9 @@ class RpStepUpStateTest < ActiveSupport::TestCase
       absolute_expires_at: Time.utc(2099, 1, 1),
     )
 
-    assert_predicate result, :success?
     state = {
       public_id: "123456789abcdefghijkl",
-      rp_session_id: result.session.id,
+      rp_session_id: result.id,
       state_digest: Digest::SHA256.hexdigest("state-digest"),
       browser_binding_digest: Digest::SHA256.hexdigest("browser-binding"),
       nonce_digest: Digest::SHA256.hexdigest("nonce"),
@@ -38,7 +37,7 @@ class RpStepUpStateTest < ActiveSupport::TestCase
   end
 
   test "the state digest is unique" do
-    result = RpCallbackCommitter.call(
+    result = seed_rp_cell_session(
       cell: RpCellBinding.fetch("rp_base_app"),
       issuer: "https://www.umaxica.app",
       subject: "step-up-digest-subject",
@@ -47,7 +46,7 @@ class RpStepUpStateTest < ActiveSupport::TestCase
     )
     state = RpStepUpState.create!(
       public_id: "123456789abcdefghijkl",
-      rp_session: result.session,
+      rp_session: result,
       state_digest: Digest::SHA256.hexdigest("duplicate-state-digest"),
       browser_binding_digest: Digest::SHA256.hexdigest("browser-binding"),
       nonce_digest: Digest::SHA256.hexdigest("nonce"),
@@ -62,23 +61,35 @@ class RpStepUpStateTest < ActiveSupport::TestCase
       expires_at: Time.utc(2099, 1, 1),
     )
 
-    assert_raises(ActiveRecord::RecordNotUnique) do
-      RpStepUpState.create!(
-        public_id: "223456789abcdefghijkl",
-        rp_session: result.session,
-        state_digest: state.state_digest,
-        browser_binding_digest: Digest::SHA256.hexdigest("other-browser-binding"),
-        nonce_digest: Digest::SHA256.hexdigest("other-nonce"),
-        pkce_challenge: "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM",
-        pkce_verifier_ciphertext: "ciphertext:v1:other-value",
-        issuer: "https://www.umaxica.app",
-        realm: "APP",
-        client_id: "base-app-ww",
-        return_target: "/settings/security",
-        initiating_generation: 0,
-        state: RpStepUpStateStatus.find(RpStepUpStateStatus::PENDING),
-        expires_at: Time.utc(2099, 1, 1),
-      )
-    end
+    duplicate = state.dup
+    duplicate.public_id = "223456789abcdefghijkl"
+
+    assert_not duplicate.valid?
+    assert duplicate.errors.of_kind?(:state_digest, :taken)
+    assert_raises(ActiveRecord::RecordInvalid) { duplicate.save! }
+    error =
+      assert_raises(ActiveRecord::RecordNotUnique) do
+        RpStepUpState.transaction(requires_new: true) { duplicate.save!(validate: false) }
+      end
+
+    assert_equal "idx_rp_step_up_states_state_digest",
+                 error.cause.result.error_field(PG::Result::PG_DIAG_CONSTRAINT_NAME)
+    distinct = state.dup
+    distinct.public_id = "323456789abcdefghijkl"
+    distinct.state_digest = Digest::SHA256.hexdigest("distinct-state-digest")
+    distinct.save!
+    public_duplicate = state.dup
+    public_duplicate.state_digest = Digest::SHA256.hexdigest("distinct-public-id-candidate")
+
+    assert_not public_duplicate.valid?
+    assert public_duplicate.errors.of_kind?(:public_id, :taken)
+    error =
+      assert_raises(ActiveRecord::RecordNotUnique) do
+        RpStepUpState.transaction(requires_new: true) { public_duplicate.save!(validate: false) }
+      end
+
+    assert_equal "idx_rp_step_up_states_public_id",
+                 error.cause.result.error_field(PG::Result::PG_DIAG_CONSTRAINT_NAME)
+    assert_predicate state.reload, :valid?
   end
 end

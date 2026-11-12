@@ -9,9 +9,7 @@ module OrgSecondPasskeyGate
   extend ActiveSupport::Concern
 
   ALLOWED_CONTROLLER_PREFIXES = %w(
-    base/org/identity/passkeys base/org/verification base/org/verifications base/org/sign_outs
-    visa/org/sign/ visa/org/oauth/ visa/org/oidc/ visa/org/well_known
-    visa/org/edge/ visa/org/health visa/org/ceremony_binding_confirmations
+    base/org/identity/passkeys base/org/verification base/org/verifications
   ).freeze
   MINIMUM_ACTIVE_PASSKEYS = 2
 
@@ -27,7 +25,9 @@ module OrgSecondPasskeyGate
       render json: { error: "SECOND_PASSKEY_REQUIRED" }, status: :forbidden
     else
       redirect_to(
-        Rails.application.routes.url_helpers.new_base_org_identity_passkey_path(ri: params[AuthIoKeys::Params::RI]),
+        Rails.application.routes.url_helpers.base_org_verification_setup_path(
+          ri: params[AuthIoKeys::Params::RI],
+        ),
         status: :see_other,
       )
     end

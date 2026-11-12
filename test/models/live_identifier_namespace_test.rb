@@ -31,7 +31,9 @@ class LiveIdentifierNamespaceTest < ActiveSupport::TestCase
             attributes = { owner_key => owner.id, :confirm_policy => true }
             attributes[:confirm_using_mfa] = true if channel == "telephone"
             original = model.create!(**attributes, input_key => identifier)
-            original.finalize_binding! unless realm == "org"
+            original.tap { |binding_record|
+              binding_record.update!(binding_finalized_at: Time.current)
+            } unless realm == "org"
             if lifetime == :retained
               if realm == "org"
                 now = owner.class.database_now
@@ -77,7 +79,7 @@ class LiveIdentifierNamespaceTest < ActiveSupport::TestCase
                 assert_raises(ActiveRecord::RecordNotUnique) do
                   model.transaction(requires_new: true) do
                     candidate = model.create!(**competing_attributes, input_key => equivalent)
-                    candidate.finalize_binding!
+                    candidate.tap { |binding_record| binding_record.update_columns(binding_finalized_at: Time.current) }
                   end
                 end
               end

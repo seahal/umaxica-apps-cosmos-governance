@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import SurfaceDashboard, { type SurfaceDashboardProps } from "@/features/auth/SurfaceDashboard";
+import SurfaceDashboard, { type SurfaceDashboardProps } from "@/features/base/SurfaceDashboard";
 import BaseAppDashboardsShow from "@/pages/base/app/dashboards/show";
 import BaseOrgDashboardsShow from "@/pages/base/org/dashboards/show";
 
@@ -14,24 +14,21 @@ const props: SurfaceDashboardProps = {
       items: [
         { label: "Preference", href: "/preference?ri=jp" },
         { label: "Switcher", href: "/switcher?ri=jp" },
-        { label: "Logout", href: "/sign/out/new?ri=jp" },
       ],
     },
   ],
 };
 
 describe("Base Dashboard identity navigation", () => {
-  it("renders the selected Persona before Preference, Switcher, and Logout", () => {
+  it("renders the selected Persona before Preference and Switcher", () => {
     const markup = renderToStaticMarkup(<SurfaceDashboard {...props} />);
     const identityIndex = markup.indexOf("Selected Persona");
     const preferenceIndex = markup.indexOf("Preference");
     const switcherIndex = markup.indexOf("Switcher");
-    const logoutIndex = markup.indexOf("Logout");
 
     expect(identityIndex).toBeGreaterThanOrEqual(0);
     expect(identityIndex).toBeLessThan(preferenceIndex);
     expect(preferenceIndex).toBeLessThan(switcherIndex);
-    expect(switcherIndex).toBeLessThan(logoutIndex);
   });
 
   it("renders the server-supplied Avatar image before the Persona name", () => {
@@ -59,6 +56,45 @@ describe("Base Dashboard identity navigation", () => {
 
     expect(markup).not.toContain("<img");
     expect(markup).toContain("Selected Persona");
+  });
+
+  it("renders an unlinked grouped item for an identity without an image and omits empty items", () => {
+    const markup = renderToStaticMarkup(
+      <SurfaceDashboard
+        title="Dashboard"
+        sections={[
+          {
+            heading: "Available actions",
+            current_identity: { display_name: "Unlinked persona", avatar_image: null },
+            groups: [
+              {
+                heading: "Unavailable",
+                items: [{ label: "Passkey setup", href: null }],
+              },
+            ],
+            items: [],
+          },
+          { heading: "No active identity" },
+        ]}
+      />,
+    );
+
+    expect(markup).toContain("Unlinked persona");
+    expect(markup).toContain("Passkey setup");
+    expect(markup).not.toContain("<img");
+    expect(markup).not.toContain('href="null"');
+  });
+
+  it("renders the optional dashboard description", () => {
+    const markup = renderToStaticMarkup(
+      <SurfaceDashboard
+        title="Dashboard"
+        description="Current identity settings."
+        sections={[]}
+      />,
+    );
+
+    expect(markup).toContain("Current identity settings.");
   });
 
   it.each([

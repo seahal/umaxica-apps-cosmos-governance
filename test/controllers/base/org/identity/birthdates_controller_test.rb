@@ -16,78 +16,39 @@ class Base::Org::Identity::BirthdatesControllerTest < ActionDispatch::Integratio
     OperatorPasskeyTestSupport.give_two_active_passkeys!(@operator)
   end
 
-  test "show reports that a birthdate is not set" do
-    host! @host
-    headers = as_staff_headers(@operator, host: @host)
-    token = OperatorToken.find_by!(public_id: headers.fetch("X-TEST-SESSION-PUBLIC-ID"))
-    token.rotate_refresh_token! unless token.device_session_record.current_refresh_token_id
-    _, _, rp_session = sign_in_rp_cell_with_step_up_evidence("base-org-ww", actor: @operator, root_token: token)
-    access = cookies[OidcRpBrowserCredentialContract::ACCESS_COOKIE]
-    refresh = cookies[OidcRpBrowserCredentialContract::REFRESH_COOKIE]
-    browser_cookie = [
-      headers.fetch("Cookie"),
-      "#{OidcRpBrowserCredentialContract::ACCESS_COOKIE}=#{Rack::Utils.escape(access)}",
-      "#{OidcRpBrowserCredentialContract::REFRESH_COOKIE}=#{Rack::Utils.escape(refresh)}",
-      "#{OidcRpBrowserCredentialContract::SESSION_COOKIE}=#{Rack::Utils.escape(rp_session.public_id)}",
-    ].join("; ")
-    browser_headers = headers.merge("Cookie" => browser_cookie, "HTTP_COOKIE" => browser_cookie)
-    get base_org_identity_birthdate_url(ri: "jp", host: @host), headers: browser_headers
+  [nil, "1990-01-02"].each do |birthdate|
+    test "missing fresh OP evidence protects #{birthdate ? "stored" : "unset"} birthdate" do
+      @operator.update!(birthdate: birthdate)
+      headers = as_staff_headers(@operator, host: @host).merge(
+        "Sec-Fetch-Mode" => "navigate", "Sec-Fetch-Dest" => "document", "Accept" => "text/html",
+      )
+      get base_org_identity_birthdate_url(ri: "jp", host: @host), headers: headers
 
-    assert_response :success
-    assert_equal "base/org/identity/birthdates/show", inertia_component
-    assert_nil inertia_props.fetch("birthdate")
-  end
-
-  test "show includes the stored birthdate when one is present" do
-    host! @host
-    @operator.update!(birthdate: "1990-01-02")
-    headers = as_staff_headers(@operator, host: @host)
-    token = OperatorToken.find_by!(public_id: headers.fetch("X-TEST-SESSION-PUBLIC-ID"))
-    token.rotate_refresh_token! unless token.device_session_record.current_refresh_token_id
-    _, _, rp_session = sign_in_rp_cell_with_step_up_evidence("base-org-ww", actor: @operator, root_token: token)
-    access = cookies[OidcRpBrowserCredentialContract::ACCESS_COOKIE]
-    refresh = cookies[OidcRpBrowserCredentialContract::REFRESH_COOKIE]
-    browser_cookie = [
-      headers.fetch("Cookie"),
-      "#{OidcRpBrowserCredentialContract::ACCESS_COOKIE}=#{Rack::Utils.escape(access)}",
-      "#{OidcRpBrowserCredentialContract::REFRESH_COOKIE}=#{Rack::Utils.escape(refresh)}",
-      "#{OidcRpBrowserCredentialContract::SESSION_COOKIE}=#{Rack::Utils.escape(rp_session.public_id)}",
-    ].join("; ")
-    browser_headers = headers.merge("Cookie" => browser_cookie, "HTTP_COOKIE" => browser_cookie)
-    get base_org_identity_birthdate_url(ri: "jp", host: @host), headers: browser_headers
-
-    assert_response :success
-    assert_equal "base/org/identity/birthdates/show", inertia_component
-    assert_equal "1990-01-02", inertia_props.fetch("birthdate")
-  end
-
-  test "standby session cannot view the step-up protected birthdate" do
-    host! @host
-    @operator.update!(birthdate: "1990-01-02")
-    headers = as_staff_headers(@operator, host: @host)
-    token = OperatorToken.find_by!(public_id: headers.fetch("X-TEST-SESSION-PUBLIC-ID"))
-    token.update!(authentication_context: AuthenticationContextValue::STANDBY_KEY)
-    headers = as_staff_headers(@operator, host: @host, session_public_id: token.public_id)
-    token.rotate_refresh_token! unless token.device_session_record.current_refresh_token_id
-    _, _, rp_session = sign_in_rp_cell("base-org-ww", actor: @operator, root_token: token)
-    access = cookies[OidcRpBrowserCredentialContract::ACCESS_COOKIE]
-    refresh = cookies[OidcRpBrowserCredentialContract::REFRESH_COOKIE]
-    browser_cookie = [
-      headers.fetch("Cookie"),
-      "#{OidcRpBrowserCredentialContract::ACCESS_COOKIE}=#{Rack::Utils.escape(access)}",
-      "#{OidcRpBrowserCredentialContract::REFRESH_COOKIE}=#{Rack::Utils.escape(refresh)}",
-      "#{OidcRpBrowserCredentialContract::SESSION_COOKIE}=#{Rack::Utils.escape(rp_session.public_id)}",
-    ].join("; ")
-    browser_headers = headers.merge("Cookie" => browser_cookie, "HTTP_COOKIE" => browser_cookie)
-
-    assert_no_difference("OperatorStepUpCeremonyTransaction.count") do
-      get base_org_identity_birthdate_url(ri: "jp", host: @host), headers: browser_headers
+      assert_response :unauthorized
+      assert_includes response.headers.fetch("WWW-Authenticate"), "insufficient_user_authentication"
+      assert_not_includes response.body, "1990-01-02"
+      birthdate.nil? ? assert_nil(@operator.reload.birthdate) : assert_equal(birthdate, @operator.reload.birthdate)
     end
+  end
 
+  test "standby external proof cannot reveal a step-up protected birthdate" do
+    @operator.update!(birthdate: "1990-01-02")
+    headers = as_staff_headers(@operator, host: @host)
+    access = jwt_access_token_for(
+      @operator, host: @host, resource_type: "operator", authentication_context: AuthenticationContextValue::STANDBY_KEY,
+    )
+    browser_cookies = Rack::Utils.parse_cookies_header(headers.fetch("Cookie"))
+    browser_cookies[OidcRpBrowserCredentialContract::ACCESS_COOKIE] = access
+    cookie_header = browser_cookies.map { |name, value| "#{name}=#{Rack::Utils.escape(value)}" }.join("; ")
+    headers = headers.merge("Cookie" => cookie_header, "HTTP_COOKIE" => cookie_header)
+
+    assert_no_difference -> { RpBaseOrgStepUpState.count } do
+      get base_org_identity_birthdate_url(ri: "jp", host: @host), headers: headers
+    end
     assert_response :forbidden
     assert_equal I18n.t("auth.step_up.emergency_unavailable"), response.body
     assert_not_includes response.body, "1990-01-02"
-    assert_equal AuthenticationContextValue::STANDBY_KEY, token.reload.authentication_context
+    assert_equal "1990-01-02", @operator.reload.birthdate
   end
 
   test "missing local RP step-up evidence renders a challenge for a browser document navigation" do
@@ -97,11 +58,9 @@ class Base::Org::Identity::BirthdatesControllerTest < ActionDispatch::Integratio
     issuer = OidcIssuer.for_resource_type("operator")
     subject = OidcSubject.for(@operator, resource_type: "operator")
     sid = SecureRandom.uuid
-    enrollment = RpCallbackCommitter.call(
+    enrollment = seed_rp_cell_session(
       cell:, issuer:, subject:, sid:, absolute_expires_at: 1.hour.from_now,
     )
-
-    assert_predicate enrollment, :success?
 
     key = OpenSSL::PKey::EC.generate("secp384r1")
     now = Time.current.to_i
@@ -124,7 +83,7 @@ class Base::Org::Identity::BirthdatesControllerTest < ActionDispatch::Integratio
       fetcher: -> { { "keys" => [JitSecurityJwtJwk.export_public(key, kid: "birthdate-step-up-test")] } },
     )
     cookies[OidcRpBrowserCredentialContract::ACCESS_COOKIE] = access_token
-    cookies[OidcRpBrowserCredentialContract::SESSION_COOKIE] = enrollment.session.public_id
+    cookies[OidcRpBrowserCredentialContract::SESSION_COOKIE] = enrollment.public_id
 
     RuntimeRole.stub(:current, "rp-base-org-ww") do
       RuntimeRole.stub(:rp_browser_admission_open?, true) do

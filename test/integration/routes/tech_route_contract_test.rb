@@ -8,7 +8,7 @@ class TechRouteContractTest < ActionDispatch::IntegrationTest
 
   TECH_HOST = "tech.org.localhost"
 
-  test "Tech exposes the operator dashboard and browser RP entrypoints" do
+  test "Tech exposes the operator dashboard without Auth entrypoints" do
     assert_recognizes(
       { controller: "tech/org/roots", action: "index" },
       { path: "http://#{TECH_HOST}/", method: :get },
@@ -17,21 +17,9 @@ class TechRouteContractTest < ActionDispatch::IntegrationTest
       { controller: "tech/org/dashboards", action: "show" },
       { path: "http://#{TECH_HOST}/dashboard", method: :get },
     )
-    assert_recognizes(
-      { controller: "tech/org/sign/entries", action: "show" },
-      { path: "http://#{TECH_HOST}/sign", method: :get },
-    )
-    assert_recognizes(
-      { controller: "tech/org/sign/entries", action: "create" },
-      { path: "http://#{TECH_HOST}/sign", method: :post },
-    )
-    assert_recognizes(
-      { controller: "tech/org/oidc/callbacks", action: "show" },
-      { path: "http://#{TECH_HOST}/oidc/callback", method: :get },
-    )
   end
 
-  test "Tech exposes only the declared health, revision, CSP, and sign-out routes" do
+  test "Tech exposes health, revision, and CSP routes without Auth sign-out" do
     assert_recognizes(
       { controller: "tech/org/healths", action: "show" },
       { path: "http://#{TECH_HOST}/health", method: :get },
@@ -52,18 +40,15 @@ class TechRouteContractTest < ActionDispatch::IntegrationTest
       { controller: "tech/org/csp_violation_reports", action: "create" },
       { path: "http://#{TECH_HOST}/csp-violation-report", method: :post },
     )
-    assert_recognizes(
-      { controller: "tech/org/sign/outs", action: "show" },
-      { path: "http://#{TECH_HOST}/sign/out", method: :get },
-    )
-    assert_recognizes(
-      { controller: "tech/org/sign/outs", action: "create" },
-      { path: "http://#{TECH_HOST}/sign/out", method: :post },
-    )
-    assert_recognizes(
-      { controller: "tech/org/sign/out/completions", action: "show" },
-      { path: "http://#{TECH_HOST}/sign/out/completion", method: :get },
-    )
+    assert_raises(ActionController::RoutingError) do
+      Rails.application.routes.recognize_path("http://#{TECH_HOST}/sign", method: :get)
+    end
+    assert_raises(ActionController::RoutingError) do
+      Rails.application.routes.recognize_path("http://#{TECH_HOST}/oidc/callback", method: :get)
+    end
+    assert_raises(ActionController::RoutingError) do
+      Rails.application.routes.recognize_path("http://#{TECH_HOST}/sign/out", method: :get)
+    end
     assert_raises(ActionController::RoutingError) do
       Rails.application.routes.recognize_path("http://#{TECH_HOST}/sign/out/completion", method: :post)
     end
@@ -76,6 +61,9 @@ class TechRouteContractTest < ActionDispatch::IntegrationTest
     end
     assert_raises(ActionController::RoutingError) do
       Rails.application.routes.recognize_path("http://#{TECH_HOST}/oidc/backchannel/logout", method: :post)
+    end
+    assert_raises(ActionController::RoutingError) do
+      Rails.application.routes.recognize_path("http://#{TECH_HOST}/oidc/closures", method: :post)
     end
   end
 end

@@ -4,6 +4,7 @@ class ClientSocialAuditOutbox < AppZenithRecord
   attr_readonly :event_uuid, :operation_ref, :owner_ref, :identity_ref, :provider,
                 :provider_subject_digest, :event_name, :occurred_at, :released_at
 
+  validates :event_uuid, uniqueness: true
   validates :event_uuid, :operation_ref, :owner_ref, :identity_ref, :occurred_at,
             :provider_subject_digest, presence: true
   validates :provider, inclusion: { in: ClientExternalIdentity::PROVIDERS }

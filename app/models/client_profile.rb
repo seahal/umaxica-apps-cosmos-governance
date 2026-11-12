@@ -41,5 +41,5 @@ class ClientProfile < AppRpRecord
              inverse_of: :status_clients
   belongs_to :user,
              class_name: "Client",
-             inverse_of: false
+             inverse_of: :client_profiles
 end

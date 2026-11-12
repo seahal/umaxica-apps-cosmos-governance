@@ -64,6 +64,21 @@ committed payload is corrupt.
 CI does not use these files. GitHub Actions supplies the key through the `RAILS_MASTER_KEY` secret
 (`.github/workflows/ci.yml`).
 
+### Governance live identifier lookup keys
+
+The encrypted development and test payloads each hold their own independent
+`APP_EMAIL_ADDRESS_HMAC_KEY`, `ORG_EMAIL_ADDRESS_HMAC_KEY`,
+`APP_TELEPHONE_NUMBER_HMAC_KEY` and `ORG_TELEPHONE_NUMBER_HMAC_KEY` entries. These secrets are
+not local environment configuration. `IdentifierBlindIndex` and live-key reuse checks access
+`Rails.app.credentials` directly: the installed Rails `Rails.app.creds` also searches ENV and
+therefore cannot enforce this source boundary. Missing or blank lookup credentials fail clearly.
+
+New keys make existing lookup digests stale. Recomputing retained development records requires
+owner approval and the existing identifier maintenance safeguards; replacing credentials alone
+does not restore lookup of existing accounts. Current migration verification and pending work are
+tracked in `specs/governance-identifier-hmac-credentials/spec.md`. Production secret-store delivery
+and other application secrets remain separately scoped.
+
 ## Repository-root `.env`
 
 Compose reads the repository-root `.env`. It currently carries four settings:

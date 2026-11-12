@@ -10,17 +10,13 @@ module Security
       self.fixture_table_names = []
 
       AUTHENTICATED_SURFACE_CONTROLLERS = [
-        Auth::App::ApplicationController,
-        Auth::Org::ApplicationController,
         Base::App::ApplicationController,
         Base::Org::ApplicationController,
-        Core::App::ApplicationController,
-        Core::Org::ApplicationController,
-        Warp::App::ApplicationController,
-        Warp::Org::ApplicationController,
+        Tech::Org::ApplicationController,
       ].freeze
 
       REQUIRED_ORDER = %i(
+        guard_browser_rp_unsafe_request!
         set_current_context
         reset_flash
         set_preferences_cookie
@@ -41,8 +37,7 @@ module Security
             filters = before_filters_for(controller)
             required_order = REQUIRED_ORDER
             if controller < BrowserRpAuthentication
-              required_order = %i(authenticate_browser_rp_unsafe_request! authenticate_browser_rp_safe_request!) +
-                (REQUIRED_ORDER - [:transparent_refresh_access_token])
+              required_order = REQUIRED_ORDER - [:transparent_refresh_access_token]
             end
             missing = required_order - filters
             out_of_order = out_of_order_filters(filters, required_order)

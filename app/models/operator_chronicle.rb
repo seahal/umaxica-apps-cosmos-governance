@@ -62,12 +62,29 @@ class OperatorChronicle < ChronicleRecord
   validates :event_id, numericality: { only_integer: true }, allow_nil: true
   validates :level_id, numericality: { only_integer: true }, allow_nil: true
   # Validate that event_id exists in staff_chronicle_events table
+  validate :halted_flow_correlation_keys
+  validates :context, jsonb_text_uniqueness: {
+    keys: %w(transaction_public_id halt_generation), where: { event_id: OperatorChronicleEvent::SIGN_FLOW_HALTED },
+  }
   validate :event_id_must_exist
   before_validation :default_actor_to_subject
   # Helper methods for compatibility with existing code
   before_create :set_timestamp
 
   scope :recent_activity_first, -> { order(arel_table[:occurred_at].desc, arel_table[:created_at].desc) }
+
+  def halted_flow_correlation_keys
+    return unless event_id == OperatorChronicleEvent::SIGN_FLOW_HALTED
+
+    keys =
+      case context
+      when Hash then context.keys.map(&:to_s)
+      when Array then context.grep(String)
+      else []
+      end
+    errors.add(:context, :invalid) unless %w(transaction_public_id halt_generation).all? { |key| keys.include?(key) }
+  end
+  private :halted_flow_correlation_keys
 
   def set_timestamp
     self.timestamp ||= Time.current

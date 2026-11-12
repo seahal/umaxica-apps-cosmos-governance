@@ -16,12 +16,14 @@ class ClientProcessorErasureNotification < AppPrincipalRecord
   STATUS_IDS = STATUSES.values.freeze
 
   belongs_to :client_privacy_request, inverse_of: :client_processor_erasure_notifications
-  belongs_to :status, class_name: "ClientProcessorErasureNotificationStatus"
+  belongs_to :status, class_name: "ClientProcessorErasureNotificationStatus",
+                      inverse_of: :client_processor_erasure_notifications
   has_many :attempts,
            class_name: "ClientProcessorErasureNotificationAttempt",
            inverse_of: :notification,
            dependent: :delete_all
 
+  validates :processor_key, uniqueness: { scope: :client_privacy_request_id }
   validates :delivery_idempotency_key_digest, length: { maximum: 64 }
   validates :delivery_idempotency_key_digest, exclusion: { in: [nil] }
 end

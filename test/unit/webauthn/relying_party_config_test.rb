@@ -19,12 +19,12 @@ module Webauthn
     test "resolver returns per-surface config in test environment" do
       config = Webauthn::RelyingPartyConfigResolver.resolve(:app)
 
-      assert_equal "auth.umaxica.app", config.rp_id
-      assert_equal "https://auth.umaxica.app", config.origin
+      assert_equal "www.umaxica.app", config.rp_id
+      assert_equal "https://www.umaxica.app", config.origin
     end
 
     test "resolver keeps surfaces separate" do
-      assert_equal "auth.umaxica.org", Webauthn::RelyingPartyConfigResolver.resolve(:org).rp_id
+      assert_equal "www.umaxica.org", Webauthn::RelyingPartyConfigResolver.resolve(:org).rp_id
     end
 
     test "production resolution requires per-surface env and fails fast when missing" do
@@ -49,66 +49,66 @@ module Webauthn
 
     test "production resolution uses injected per-surface env values" do
       overrides = SURFACE_ENV_KEYS.index_with { nil }
-      overrides["WEBAUTHN_APP_RP_ID"] = "auth.umaxica.app"
-      overrides["WEBAUTHN_APP_ORIGIN"] = "https://auth.umaxica.app"
+      overrides["WEBAUTHN_APP_RP_ID"] = "www.umaxica.app"
+      overrides["WEBAUTHN_APP_ORIGIN"] = "https://www.umaxica.app"
 
       with_env(overrides) do
         Rails.stub(:env, ActiveSupport::StringInquirer.new("production")) do
           config = Webauthn::RelyingPartyConfigResolver.resolve(:app)
 
-          assert_equal "auth.umaxica.app", config.rp_id
-          assert_equal "https://auth.umaxica.app", config.origin
+          assert_equal "www.umaxica.app", config.rp_id
+          assert_equal "https://www.umaxica.app", config.origin
         end
       end
     end
 
     test "trusted_origin? requires exact scheme host and effective port match" do
-      config = Webauthn::RelyingPartyConfig.new(rp_id: "auth.umaxica.app", origin: "https://auth.umaxica.app")
+      config = Webauthn::RelyingPartyConfig.new(rp_id: "www.umaxica.app", origin: "https://www.umaxica.app")
 
-      assert config.trusted_origin?("https://auth.umaxica.app")
-      assert config.trusted_origin?("https://auth.umaxica.app:443")
+      assert config.trusted_origin?("https://www.umaxica.app")
+      assert config.trusted_origin?("https://www.umaxica.app:443")
 
-      assert_not config.trusted_origin?("http://auth.umaxica.app")
-      assert_not config.trusted_origin?("https://auth.umaxica.app:8443")
+      assert_not config.trusted_origin?("http://www.umaxica.app")
+      assert_not config.trusted_origin?("https://www.umaxica.app:8443")
       assert_not config.trusted_origin?("https://preview.umaxica.app")
       assert_not config.trusted_origin?("https://evil.umaxica.app")
-      assert_not config.trusted_origin?("https://auth.umaxica.org")
-      assert_not config.trusted_origin?("https://auth.umaxica.app.evil.example")
+      assert_not config.trusted_origin?("https://www.umaxica.org")
+      assert_not config.trusted_origin?("https://www.umaxica.app.evil.example")
       assert_not config.trusted_origin?("not a uri")
     end
 
     test "relying_party is built from the config and never from request state" do
-      config = Webauthn::RelyingPartyConfig.new(rp_id: "auth.umaxica.app", origin: "https://auth.umaxica.app")
+      config = Webauthn::RelyingPartyConfig.new(rp_id: "www.umaxica.app", origin: "https://www.umaxica.app")
       relying_party = config.relying_party
 
       assert_kind_of WebAuthn::RelyingParty, relying_party
-      assert_equal "auth.umaxica.app", relying_party.id
-      assert_equal ["https://auth.umaxica.app"], relying_party.allowed_origins
+      assert_equal "www.umaxica.app", relying_party.id
+      assert_equal ["https://www.umaxica.app"], relying_party.allowed_origins
     end
 
     test "rp_id must not be a parent domain of the origin host" do
       assert_raises(Webauthn::RelyingPartyConfig::InvalidConfigError) do
-        Webauthn::RelyingPartyConfig.new(rp_id: "umaxica.app", origin: "https://auth.umaxica.app")
+        Webauthn::RelyingPartyConfig.new(rp_id: "umaxica.app", origin: "https://www.umaxica.app")
       end
     end
 
     test "origin must be an absolute http(s) origin without path" do
       assert_raises(Webauthn::RelyingPartyConfig::InvalidConfigError) do
-        Webauthn::RelyingPartyConfig.new(rp_id: "auth.umaxica.app", origin: "auth.umaxica.app")
+        Webauthn::RelyingPartyConfig.new(rp_id: "www.umaxica.app", origin: "www.umaxica.app")
       end
       assert_raises(Webauthn::RelyingPartyConfig::InvalidConfigError) do
-        Webauthn::RelyingPartyConfig.new(rp_id: "auth.umaxica.app", origin: "https://auth.umaxica.app/callback")
+        Webauthn::RelyingPartyConfig.new(rp_id: "www.umaxica.app", origin: "https://www.umaxica.app/callback")
       end
     end
 
     test "configs compare by relying party id and origin, not by identity" do
-      config = Webauthn::RelyingPartyConfig.new(rp_id: "auth.umaxica.app", origin: "https://auth.umaxica.app")
-      same = Webauthn::RelyingPartyConfig.new(rp_id: "auth.umaxica.app", origin: "https://auth.umaxica.app")
-      other_origin = Webauthn::RelyingPartyConfig.new(rp_id: "auth.umaxica.com", origin: "https://auth.umaxica.com")
+      config = Webauthn::RelyingPartyConfig.new(rp_id: "www.umaxica.app", origin: "https://www.umaxica.app")
+      same = Webauthn::RelyingPartyConfig.new(rp_id: "www.umaxica.app", origin: "https://www.umaxica.app")
+      other_origin = Webauthn::RelyingPartyConfig.new(rp_id: "www.umaxica.com", origin: "https://www.umaxica.com")
 
       assert_equal config, same
       assert_not_equal config, other_origin
-      assert_not_equal config, "auth.umaxica.app"
+      assert_not_equal config, "www.umaxica.app"
       assert_equal config.hash, same.hash
     end
 

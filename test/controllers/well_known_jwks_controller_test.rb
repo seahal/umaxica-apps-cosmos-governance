@@ -16,10 +16,6 @@ class WellKnownJwksControllerTest < ActionDispatch::IntegrationTest
   ENDPOINTS = [
     ["base app", "BASE_APP", normalized_host(ENV.fetch("PUBLIC_BASE_SERVICE_URL", "www.app.localhost"))],
     ["base org", "BASE_ORG", normalized_host(ENV.fetch("PUBLIC_BASE_STAFF_URL", "www.org.localhost"))],
-    ["core app", "CORE_APP", normalized_host(ENV.fetch("PUBLIC_CORE_SERVICE_URL", "core.app.localhost"))],
-    ["core org", "CORE_ORG", normalized_host(ENV.fetch("PUBLIC_CORE_STAFF_URL", "core.org.localhost"))],
-    ["sign app", "AUTH_APP", normalized_host(ENV.fetch("PRIVATE_AUTH_SERVICE_URL", "auth.app.localhost"))],
-    ["sign org", "AUTH_ORG", normalized_host(ENV.fetch("PRIVATE_AUTH_STAFF_URL", "sign.org.localhost"))],
   ].freeze
 
   setup do
@@ -70,8 +66,6 @@ class WellKnownJwksControllerTest < ActionDispatch::IntegrationTest
   test "corporate hosts publish no JWKS" do
     [
       self.class.normalized_host(ENV.fetch("PUBLIC_BASE_CORPORATE_URL", "www.com.localhost")),
-      self.class.normalized_host(ENV.fetch("PUBLIC_CORE_CORPORATE_URL", "core.com.localhost")),
-      self.class.normalized_host(ENV.fetch("PRIVATE_AUTH_CORPORATE_URL", "sign.com.localhost")),
     ].each do |host|
       assert_raises(ActionController::RoutingError, "#{host} must not route JWKS") do
         Rails.application.routes.recognize_path("https://#{host}/.well-known/jwks.json", method: :get)

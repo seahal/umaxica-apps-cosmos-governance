@@ -11,6 +11,12 @@ the OP/RP persistence separation (release R5). Until a client is so activated, a
 during releases R1 to R4, `adr/first-party-sign-out-shared-database-without-backchannel-logout.md`
 remains fully in force.
 
+> **Local-route disposition (2026-11-10):** The owner-approved local-surface hard reset removes
+> local Core, Warp, Palm, and Edit RP routes/controllers. This supersedes their local route
+> implementation scope here. Any OP commit/outbox behavior and Base/Tech completion behavior remains
+> governed by current callers; external OIDC registrations and model/database contracts are not
+> retired by the route change.
+
 The direction is already a user decision: OP/RP persistence separation, and sign-out that succeeds
 when the OP revocation and its outbox commit, independent of any RP acknowledgement or cookie purge
 (user decision D-08, confirmed 2026-10-16). This ADR records the contract change that decision
@@ -276,3 +282,14 @@ RP cell for sign-out. The current RP logout controllers use the local-session-fi
 not read or send a stored ID Token hint. A separate shared-role branch in `BrowserRpAuthentication`
 still reads the OP grant chain for ordinary request authentication and refresh. WU-A8 remains open
 until that branch and its end-to-end acceptance surface are reconciled.
+
+## Local-route disposition (2026-11-11)
+
+The owner-approved local-surface hard reset removes the Base app, Base org, and Tech RP sign-in,
+callback, RP-initiated sign-out, Back-Channel Logout receiver, and OIDC-driven step-up callback
+routes/controllers from this repository. The Auth/Visa provider URL configuration and remote
+endpoint callers are removed, so those local RP flows cannot operate here. This supersedes the
+2026-11-10 disposition that retained Base/Tech completion behavior. External OIDC registrations and
+model/database contracts are not changed by this local route removal; registered external callers
+may therefore reach no local receiver. No database, migration, or external service is changed by
+this task.

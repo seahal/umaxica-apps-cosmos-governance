@@ -137,8 +137,6 @@ All other events require `performant` consent.
 - `authentication.*`
 - `authorization.*`
 - `session.*`
-- `social_auth.*`
-- `sign.social.omniauth*` / `sign.social.org.omniauth*`
 - `user.token.*` / `staff.token.*`
 - `user.occurrence.*` / `staff.occurrence.*`
 - `otp.*`

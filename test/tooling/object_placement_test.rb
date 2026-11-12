@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "minitest/autorun"
+require "prism"
 
 # Guards .agents/harnesses/rules/project/value-object-boundaries.mdc.
 #
@@ -95,7 +96,8 @@ class ObjectPlacementTest < Minitest::Test
   def test_validators_are_active_model_validators
     offenders =
       ruby_files_under("app/validators").reject do |path|
-        File.read(File.join(REPOSITORY_ROOT, path)).match?(/<\s*ActiveModel::(Each)?Validator\b/)
+        File.read(File.join(REPOSITORY_ROOT, path))
+          .match?(/<\s*(?:ActiveModel::(?:Each)?Validator|ActiveRecord::Validations::UniquenessValidator)\b/)
       end
 
     assert_empty offenders,
@@ -111,7 +113,7 @@ class ObjectPlacementTest < Minitest::Test
   #   app/services   - #868 has not run; the root is still mixed
   #   app/policies   - three files need a rule decision (sign_up_step_gate, quota_limits,
   #                    step_up_available_methods)
-  #   app/adapters   - MCP tools and provider/cache names need a rule decision
+  #   app/adapters   - provider/cache names need a rule decision
   #   app/lib        - ports and primitives, suffix set not settled
   #   app/values     - 96 files grandfathered until #870
   ROOT_SUFFIXES = {
@@ -215,10 +217,18 @@ class ObjectPlacementTest < Minitest::Test
         relative = source.delete_prefix("#{REPOSITORY_ROOT}/")
         next [] if relative == "test/tooling/object_placement_test.rb"
 
-        File.read(source).lines.grep(/Rails\.root\.join|file_content\(/).flat_map do |line|
-          line.scan(%r{\bapp/[a-z_]+/[a-z_0-9/]+\.rb\b}).filter_map do |path|
-            "#{relative} reads #{path}, which does not exist" unless File.exist?(File.join(REPOSITORY_ROOT, path))
-          end
+        reads = []
+        pending = [Prism.parse_file(source).value]
+        until pending.empty?
+          node = pending.pop
+          pending.concat(node.compact_child_nodes)
+          next unless node.is_a?(Prism::CallNode)
+          next unless %i(read binread readlines file_content).include?(node.name)
+
+          reads.concat(node.slice.scan(%r{\bapp/[a-z_]+/[a-z_0-9/]+\.rb\b}))
+        end
+        reads.uniq.filter_map do |path|
+          "#{relative} reads #{path}, which does not exist" unless File.exist?(File.join(REPOSITORY_ROOT, path))
         end
       end
 

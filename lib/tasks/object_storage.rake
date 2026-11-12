@@ -135,56 +135,14 @@ namespace :object_storage do
     end
   end
 
-  desc "Verify FakeCloud reachability, buckets, and Shrine attachment persistence"
+  desc "Verify FakeCloud health and registered object-storage buckets"
   task verify: :environment do
     configuration = ObjectStorageTasks.configuration
     ObjectStorageTasks.ping_endpoint!(configuration.fetch("OBJECT_STORAGE_ENDPOINT"))
     client = ObjectStorageTasks.client(configuration)
-    buckets = ObjectStorageTasks.boundary_buckets
-    buckets.each_value { |bucket| ObjectStorageTasks.ensure_bucket!(client, bucket) }
-
-    png_hex = "89504e470d0a1a0a0000000d4948445200000001000000010802000000907753de" \
-              "0000000c4944415408d763f80f00000101000518d84e0000000049454e44ae426082"
-    png = [png_hex].pack("H*")
-
-    avatar_capability = AvatarCapability.find(AvatarCapability::NORMAL)
-    handle = Handle.create!(handle: "verify-#{SecureRandom.hex(6)}", cooldown_until: Time.current)
-    avatar = Avatar.create!(
-      capability: avatar_capability,
-      active_handle: handle,
-      moniker: "Object Storage Verify",
-    )
-    avatar.image = StringIO.new(png)
-    avatar.save!
-    avatar_key = avatar.image.id
-    client.head_object(bucket: buckets.fetch(:avatar), key: "store/#{avatar_key}")
-    avatar_row = Avatar.lease_connection.select_one(
-      # rubocop:disable I18n/RailsI18n/DecorateString -- sanitize_sql_array is SQL, not an i18n string
-      Avatar.sanitize_sql_array(["SELECT image_data FROM avatars WHERE id = ?", avatar.id]),
-      # rubocop:enable I18n/RailsI18n/DecorateString
-    )
-    raise RuntimeError, "Avatar image_data missing in avatar database" if avatar_row["image_data"].blank?
-
-    leaked = PublishingRecord.lease_connection.select_value(
-      "SELECT COUNT(*) FROM information_schema.columns WHERE table_name = 'avatars' AND column_name = 'image_data'",
-    )
-    raise RuntimeError, "avatars.image_data must not exist on the publishing database" if leaked.to_i.positive?
-
-    media = Publishing::MediaFile.new
-    media.file = StringIO.new(png)
-    media.save!
-    media_key = media.file.id
-    client.head_object(bucket: buckets.fetch(:publishing), key: "store/#{media_key}")
-    media_row = PublishingRecord.lease_connection.select_one(
-      # rubocop:disable I18n/RailsI18n/DecorateString -- sanitize_sql_array is SQL, not an i18n string
-      Publishing::MediaFile.sanitize_sql_array(
-        ["SELECT file_data FROM publishing_media_files WHERE id = ?", media.id],
-      ),
-      # rubocop:enable I18n/RailsI18n/DecorateString
-    )
-    raise RuntimeError, "Publishing file_data missing in publishing database" if media_row["file_data"].blank?
-
-    puts "Avatar upload persisted in avatar DB and #{buckets.fetch(:avatar)}"
-    puts "Publishing upload persisted in publishing DB and #{buckets.fetch(:publishing)}"
+    ObjectStorageTasks.boundary_buckets.each do |boundary, bucket|
+      client.head_bucket(bucket: bucket)
+      puts "Object-storage boundary verified: #{boundary}"
+    end
   end
 end

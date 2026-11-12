@@ -10,7 +10,6 @@ class IdentityCeremonyContractGuardTest < ActiveSupport::TestCase
       [IdentityTelephoneCeremonyContract, IdentityTelephoneCeremony::Error],
       [IdentityPasskeyCeremonyContract, IdentityPasskeyCeremonyContract::Error],
       [IdentityTotpCeremonyContract, IdentityTotpCeremonyContract::Error],
-      [IdentitySocialCeremonyContract, IdentitySocialCeremonyContract::Error],
       [IdentitySecretCredentialCeremonyContract, IdentitySecretCredentialCeremonyContract::Error],
       [IdentityEmailCeremonyContract, IdentityEmailCeremonyContract::Error],
     ].each do |contract, error_class|
@@ -42,7 +41,6 @@ class IdentityCeremonyContractGuardTest < ActiveSupport::TestCase
       [IdentityTelephoneCeremonyContract, IdentityTelephoneCeremony::Error],
       [IdentityPasskeyCeremonyContract, IdentityPasskeyCeremonyContract::Error],
       [IdentityTotpCeremonyContract, IdentityTotpCeremonyContract::Error],
-      [IdentitySocialCeremonyContract, IdentitySocialCeremonyContract::Error],
       [IdentitySecretCredentialCeremonyContract, IdentitySecretCredentialCeremonyContract::Error],
       [IdentityEmailCeremonyContract, IdentityEmailCeremonyContract::Error],
     ].each do |contract, error_class|

@@ -6,10 +6,13 @@ require "test_helper"
 # FIXME: Move these per-model checks into each model's own test (test/models/<model>_test.rb)
 # through a shared assertion in test/support/, and keep this file only as a guard that every model
 # calls it, as test/models/public_id_fixed_length_contract_test.rb does for public_id.
-# Every application column that is NOT NULL without a database default rejects nil in model
-# validation, before SQL. Primary keys and Rails-managed timestamps are filled by the framework.
-# Only nil-rejecting validator kinds run, so the check needs no database rows.
+# Every Governance-owned column that is NOT NULL without a database default rejects nil in model
+# validation, before SQL. Primary keys and
+# Rails-managed timestamps are filled by the framework. Only nil-rejecting validator kinds run, so
+# the check needs no database rows.
 class NotNullColumnNilValidationContractTest < ActiveSupport::TestCase
+  self.fixture_table_names = []
+
   APP_ROOT = Rails.root.join("app").to_s
   NIL_REJECTING_KINDS = %i(presence inclusion exclusion numericality).freeze
 
@@ -18,11 +21,6 @@ class NotNullColumnNilValidationContractTest < ActiveSupport::TestCase
     [/\AAvatar\z/, "active_handle_id", "assigned during creation after validation"],
     [/OwnershipTransferRequest\z/, "requested_at", "blank requests skip party and expiry checks"],
     [/OwnershipTransferRequest\z/, "expires_at", "blank requests skip party and expiry checks"],
-    [/\APublishing::.*::Entry(Revision|Version)\z/, "content_digest",
-     "create-time digest format validation rejects nil; updates rely on the database refusal",],
-    [/\APublishing::.*::Entry(Revision|Version)\z/, "body", "the JSON-object validation reports nil"],
-    [/\APublishing::.*::VersionMultipleTaxonomyAssignment\z/, "position_snapshot",
-     "derived from position by apply_snapshot and the snapshot trigger",],
   ].freeze
 
   Rails.application.eager_load!

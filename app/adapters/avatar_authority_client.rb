@@ -6,6 +6,7 @@
 # Each call carries a fresh private_key_jwt of this realm's Base Self-RP bound to the exact URL,
 # the actor's current Access JWT and the selected persona; the owner re-resolves and decides.
 # Typed outcomes only; a write is never retried blindly.
+# TODO: AUDIT external access: calls the Avatar authority API on another first-party host.
 class AvatarAuthorityClient
   Result =
     Data.define(:status, :data, :errors) do
@@ -90,7 +91,7 @@ class AvatarAuthorityClient
 
   def switcher_context = request(:get, "/switcher")
 
-  def switch_context(attributes) = request(:put, "/switcher", attributes)
+  def switch_context(attributes) = request(:put, "/switcher", attributes, selection_params: { persona: })
 
   def selected_avatar = request(:get, "/selected-avatar")
 
@@ -143,7 +144,7 @@ class AvatarAuthorityClient
     }
   end
 
-  def request(verb, path, params = {}, idempotency_key: nil)
+  def request(verb, path, params = {}, idempotency_key: nil, selection_params: request_selection_params)
     return Result.new(status: :unauthorized, data: nil, errors: {}) if access_token.blank?
 
     url = "#{base}#{path}"
@@ -158,7 +159,7 @@ class AvatarAuthorityClient
                 "X-Client-Assertion" => assertion,
                 "Accept" => "application/json", }
     headers["Idempotency-Key"] = idempotency_key if idempotency_key
-    params = params.merge(request_selection_params)
+    params = params.merge(selection_params)
     response =
       if verb == :get
         connection.get(uri, params, headers)

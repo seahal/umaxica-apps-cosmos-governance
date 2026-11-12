@@ -4,18 +4,13 @@ require "test_helper"
 require "timeout"
 
 class BaseSelectorSingleWriteHttpTest < ActionDispatch::IntegrationTest
-  include DatabaseSelectorPrimary
-
   self.use_transactional_tests = false
   self.fixture_table_names = []
 
   teardown do
     @workers&.each { |worker| worker.join(10) }
     cleanup_browser_session!
-    cleanup_source_session!
     cleanup_actor_graph!
-  ensure
-    restore_database_selector_delay!
   end
 
   test "APP concurrent selector updates preserve the first committed choice" do
@@ -29,7 +24,6 @@ class BaseSelectorSingleWriteHttpTest < ActionDispatch::IntegrationTest
   private
 
   def exercise_selector_race!(surface:)
-    keep_reads_on_primary!
     @surface = surface
     @host = ENV.fetch((surface == :app) ? "PUBLIC_BASE_SERVICE_URL" : "PUBLIC_BASE_STAFF_URL")
     create_principal!
@@ -129,42 +123,24 @@ class BaseSelectorSingleWriteHttpTest < ActionDispatch::IntegrationTest
     if @surface == :app
       [ClientStatus, ClientVisibility, ClientMfaStatus].each(&:ensure_defaults!)
       ClientSecurityMode.insert_missing_fixed_ids!(ClientSecurityMode::DEFAULTS)
-      ensure_token_references!(ClientTokenKind, ClientTokenStatus, ClientTokenBindingMethod, ClientTokenDbscStatus)
       @principal = Client.create!(status_id: ClientStatus::ACTIVE, security_mode_id: ClientSecurityMode::NORMAL)
-      @root_token = ClientToken.create!(
-        user: @principal, authentication_epoch: @principal.authentication_epoch,
-        user_token_kind_id: ClientTokenKind::BROWSER_WEB,
-      )
-      @transaction_ids_before = ClientOidcAuthorizationTransaction.pluck(:id)
     else
       [OperatorStatus, OperatorVisibility].each(&:ensure_defaults!)
       OperatorPasskeyStatus.find_or_create_by!(id: OperatorPasskeyStatus::ACTIVE)
       OperatorSecurityMode.insert_missing_fixed_ids!(OperatorSecurityMode::DEFAULTS)
-      ensure_token_references!(
-        OperatorTokenKind, OperatorTokenStatus, OperatorTokenBindingMethod,
-        OperatorTokenDbscStatus,
-      )
       @principal = Operator.create!(
         status_id: OperatorStatus::ACTIVE, security_mode_id: OperatorSecurityMode::ADVANCED,
         visibility_id: OperatorVisibility::STAFF,
       )
-      @root_token = OperatorToken.create!(
-        staff: @principal, authentication_epoch: @principal.authentication_epoch,
-        staff_token_kind_id: OperatorTokenKind::BROWSER_WEB,
-      )
       OperatorPasskeyTestSupport.give_two_active_passkeys!(@principal)
-      @transaction_ids_before = OperatorOidcAuthorizationTransaction.pluck(:id)
     end
   end
 
   def authenticated_headers
     if @surface == :app
-      as_user_headers(
-        @principal, host: @host, session_public_id: @root_token.public_id,
-                    select_available_app_persona: false,
-      )
+      as_user_headers(@principal, host: @host, select_available_app_persona: false)
     else
-      as_staff_headers(@principal, host: @host, session_public_id: @root_token.public_id)
+      as_staff_headers(@principal, host: @host)
     end
   end
 
@@ -198,9 +174,8 @@ class BaseSelectorSingleWriteHttpTest < ActionDispatch::IntegrationTest
   end
 
   def rp_session_for(headers)
-    token_id = headers.fetch("X-TEST-SESSION-PUBLIC-ID")
-    client_id = (@surface == :app) ? RpBaseAppSession::CLIENT_ID : RpBaseOrgSession::CLIENT_ID
-    public_id = @base_browser_rp_session_public_ids.fetch([client_id, token_id])
+    cookies = headers.fetch("Cookie").split("; ").to_h { |pair| pair.split("=", 2) }
+    public_id = Rack::Utils.unescape(cookies.fetch(OidcRpBrowserCredentialContract::SESSION_COOKIE))
     session_model.find_by!(public_id: public_id)
   end
 
@@ -218,13 +193,6 @@ class BaseSelectorSingleWriteHttpTest < ActionDispatch::IntegrationTest
     else
       base_org_selector_url(host: @host, ri: "jp")
     end
-  end
-
-  def ensure_token_references!(kind_class, status_class, binding_class, dbsc_status_class)
-    kind_class.find_or_create_by!(id: kind_class::BROWSER_WEB)
-    status_class.find_or_create_by!(id: status_class::ACTIVE)
-    binding_class.find_or_create_by!(id: binding_class::LEGACY)
-    dbsc_status_class.find_or_create_by!(id: dbsc_status_class::NOTHING)
   end
 
   def start_update(browser, candidate, headers, url, ready, release)
@@ -301,34 +269,6 @@ class BaseSelectorSingleWriteHttpTest < ActionDispatch::IntegrationTest
 
   def event_receipt_model
     (@surface == :app) ? RpBaseAppEventReceipt : RpBaseOrgEventReceipt
-  end
-
-  def cleanup_source_session!
-    return unless @root_token
-
-    token_model = (@surface == :app) ? ClientToken : OperatorToken
-    grant_model = (@surface == :app) ? OpAppGrant : OpOrgGrant
-    device_model = (@surface == :app) ? ClientDeviceSession : OperatorDeviceSession
-    token_ids = token_model.where(id: @root_token.id).pluck(:id)
-    grant_ids = grants_for_source_session(grant_model, token_ids)
-    if @surface == :app
-      OpAppGrantLogoutHint.where(grant_id: grant_ids).delete_all
-      grant_model.where(id: grant_ids).delete_all
-      ClientOidcAuthorizationTransaction.where.not(id: @transaction_ids_before).delete_all
-    else
-      OpOrgGrantLogoutHint.where(grant_id: grant_ids).delete_all
-      grant_model.where(id: grant_ids).delete_all
-      OperatorOidcAuthorizationTransaction.where.not(id: @transaction_ids_before).delete_all
-    end
-    device_ids = token_model.where(id: token_ids).where.not(device_session_id: nil).pluck(:device_session_id)
-    token_model.where(id: token_ids).delete_all
-    device_model.where(id: device_ids).delete_all
-    @root_token = nil
-  end
-
-  def grants_for_source_session(grant_model, token_ids)
-    owner_column = (@surface == :app) ? :client_token_id : :operator_token_id
-    grant_model.where(owner_column => token_ids).pluck(:id)
   end
 
   def cleanup_actor_graph!

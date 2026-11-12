@@ -15,29 +15,11 @@ vi.mock("@inertiajs/react", () => ({
 const { default: ActivitiesIndex } = await import("@/pages/base/app/identity/activities/index");
 const { default: BirthdateShow } = await import("@/pages/base/app/identity/birthdates/show");
 const { default: EmailsIndex } = await import("@/pages/base/app/identity/emails/index");
-const { default: EmailEdit } = await import("@/pages/base/app/identity/emails/edit");
-const { default: EmailRegistrationNew } =
-  await import("@/pages/base/app/identity/emails/registrations/new");
-const { default: EmailRegistrationEdit } =
-  await import("@/pages/base/app/identity/emails/registrations/edit");
-const { default: MfaChallengeShow } = await import("@/pages/base/app/identity/mfa/challenges/show");
-const { default: MfaResetShow } = await import("@/pages/base/app/identity/mfa/resets/show");
 const { default: PrivacyErasureNew } =
   await import("@/pages/base/app/identity/privacy/erasures/new");
 const { default: PrivacyErasureStatusShow } =
   await import("@/pages/base/app/identity/privacy/erasure/statuses/show");
-const { default: RecoveryShow } = await import("@/pages/base/app/identity/recoveries/show");
-const { default: RecoverySessionNew } =
-  await import("@/pages/base/app/identity/recovery/sessions/new");
-const { default: SessionsIndex } = await import("@/pages/base/app/identity/sessions/index");
-const { default: SessionShow } = await import("@/pages/base/app/identity/sessions/show");
 const { default: TelephonesIndex } = await import("@/pages/base/app/identity/telephones/index");
-const { default: TelephoneNew } = await import("@/pages/base/app/identity/telephones/new");
-const { default: TelephoneEdit } = await import("@/pages/base/app/identity/telephones/edit");
-const { default: TelephoneRegistrationNew } =
-  await import("@/pages/base/app/identity/telephones/registrations/new");
-const { default: TelephoneRegistrationEdit } =
-  await import("@/pages/base/app/identity/telephones/registrations/edit");
 const { default: WithdrawalSessionNew } =
   await import("@/pages/base/app/identity/withdrawal/sessions/new");
 const { default: WithdrawalNew } = await import("@/pages/base/app/identity/withdrawals/new");
@@ -65,7 +47,7 @@ describe("identity activities index", () => {
         activities={[
           {
             occurred_at: "1 January 2026",
-            activity: "Google sign-in",
+            activity: "Email updated",
             device: "Firefox / Linux",
             source: "Location unavailable",
             risk: "Low",
@@ -75,7 +57,7 @@ describe("identity activities index", () => {
       />,
     );
 
-    expect(html).toContain("Google sign-in");
+    expect(html).toContain("Email updated");
     expect(html).toContain("Firefox / Linux");
     expect(html).not.toContain("203.0.113.4");
     expect(html).not.toContain("{}");
@@ -138,8 +120,7 @@ describe("identity emails index", () => {
     title: "Emails",
     empty_message: "No email addresses.",
     back_link: backLink,
-    new_link: { label: "Add", href: "/identity/emails/registration/new" },
-    table_headings: { address: "Address", status: "Status", actions: "Actions" },
+    table_headings: { address: "Address", status: "Status" },
   };
 
   it("lists the addresses", () => {
@@ -151,7 +132,6 @@ describe("identity emails index", () => {
             public_id: "eml_1",
             address: "someone@example.com",
             status_label: "Verified",
-            edit_link: { label: "Edit", href: "/identity/emails/eml_1/edit" },
           },
         ]}
       />,
@@ -171,202 +151,6 @@ describe("identity emails index", () => {
     );
 
     expect(html).toContain("No email addresses.");
-  });
-});
-
-describe("identity email edit", () => {
-  const props = {
-    title: "Email settings",
-    address: "someone@example.com",
-    form: {
-      action: "/identity/emails/eml_1",
-      submit_label: "Save",
-      locked: false,
-      always_on_label: "Always on",
-      always_on_description: "Security mail is always sent.",
-      promotional: { checked: true, label: "Promotional", description: "Offers." },
-      notifiable: { checked: false, label: "Notifiable", description: "Notices." },
-    },
-    delete: { label: "Delete", confirm: "Sure?", url: "/identity/emails/eml_1" },
-    cancel_link: { label: "Cancel", href: "/identity/emails" },
-  };
-
-  it("renders the preference form", () => {
-    const html = renderToStaticMarkup(
-      <EmailEdit
-        {...props}
-        error={null}
-      />,
-    );
-
-    expect(html).toContain("someone@example.com");
-    expect(html).toContain("Promotional");
-    expect(html).not.toContain('role="alert"');
-  });
-
-  it("renders the failure message and the locked state", () => {
-    const html = renderToStaticMarkup(
-      <EmailEdit
-        {...props}
-        form={{ ...props.form, locked: true }}
-        error="That did not work."
-      />,
-    );
-
-    expect(html).toContain("That did not work.");
-    expect(html).toContain("disabled");
-  });
-});
-
-describe("identity email registration screens", () => {
-  const newProps = {
-    title: "Add an email address",
-    back_link: backLink,
-    cancel_link: { label: "Cancel", href: "https://base.example/preference" },
-    form: {
-      action: "/identity/emails/registration",
-      address_label: "Address",
-      address: "",
-      submit_label: "Submit",
-      turnstile: { site_key: "site", mode: "execute" as const, action: null, cdata: null },
-      promotional: { checked: false, label: "Promotional", description: "Offers." },
-      notifiable: { checked: true, label: "Notifiable", description: "Notices." },
-    },
-  };
-
-  it("renders the address form without errors", () => {
-    const html = renderToStaticMarkup(
-      <EmailRegistrationNew
-        {...newProps}
-        errors={[]}
-      />,
-    );
-
-    expect(html).toContain("Address");
-    expect(html).not.toContain("<ul");
-  });
-
-  it("renders validation errors", () => {
-    const html = renderToStaticMarkup(
-      <EmailRegistrationNew
-        {...newProps}
-        errors={["Address is invalid"]}
-      />,
-    );
-
-    expect(html).toContain("Address is invalid");
-  });
-
-  const editProps = {
-    title: "Verify your email address",
-    description: "Enter the code.",
-    cancel_link: { label: "Cancel", href: "https://base.example/preference" },
-    form: {
-      action: "/identity/emails/registration",
-      code_label: "Verification code",
-      code_placeholder: "123456",
-      delivery_help: "It expires soon.",
-      submit_label: "Verify",
-      verification_token: "tok_1",
-      turnstile: { site_key: "site", mode: "execute" as const, action: null, cdata: null },
-    },
-    resend: { label: "Resend", url: "/identity/emails/registration/redelivery" },
-  };
-
-  it("renders the verification form", () => {
-    const html = renderToStaticMarkup(
-      <EmailRegistrationEdit
-        {...editProps}
-        errors={[]}
-      />,
-    );
-
-    expect(html).toContain("Verification code");
-    expect(html).toContain("Resend");
-  });
-
-  it("renders verification errors without a token", () => {
-    const html = renderToStaticMarkup(
-      <EmailRegistrationEdit
-        {...editProps}
-        form={{ ...editProps.form, verification_token: null }}
-        errors={["Code is invalid"]}
-      />,
-    );
-
-    expect(html).toContain("Code is invalid");
-  });
-});
-
-describe("identity multi factor screens", () => {
-  it("renders the challenge state", () => {
-    const html = renderToStaticMarkup(
-      <MfaChallengeShow
-        title="Multi factor"
-        reset_unavailable="Reset is unavailable."
-        toggle_title="Status"
-        state_label="Enabled"
-        back_link={backLink}
-        form={{
-          action: "/identity/mfa/challenge",
-          security_mode_id: 3,
-          submit_label: "Return to normal",
-        }}
-        form_unavailable={null}
-        error={null}
-      />,
-    );
-
-    expect(html).toContain("Enabled");
-    expect(html).toContain("Return to normal");
-    expect(html).not.toContain('role="alert"');
-  });
-
-  it("explains why no switch is offered", () => {
-    const html = renderToStaticMarkup(
-      <MfaChallengeShow
-        title="Multi factor"
-        reset_unavailable="Reset is unavailable."
-        toggle_title="Status"
-        state_label="Disabled"
-        back_link={backLink}
-        form={null}
-        form_unavailable="Two passkeys are required."
-        error={null}
-      />,
-    );
-
-    expect(html).toContain("Two passkeys are required.");
-    expect(html).not.toContain("<button");
-  });
-
-  it("renders the challenge failure", () => {
-    const html = renderToStaticMarkup(
-      <MfaChallengeShow
-        title="Multi factor"
-        reset_unavailable="Reset is unavailable."
-        toggle_title="Status"
-        state_label="Disabled"
-        back_link={backLink}
-        form={null}
-        form_unavailable="Two passkeys are required."
-        error="It could not be changed."
-      />,
-    );
-
-    expect(html).toContain("It could not be changed.");
-  });
-
-  it("renders the reset screen", () => {
-    const html = renderToStaticMarkup(
-      <MfaResetShow
-        title="Multi factor reset"
-        reset_unavailable="Reset is unavailable."
-        back_link={backLink}
-      />,
-    );
-
-    expect(html).toContain("Multi factor reset");
   });
 });
 
@@ -419,205 +203,8 @@ describe("identity privacy erasure screens", () => {
   });
 });
 
-describe("identity recovery screens", () => {
-  const appeal = {
-    url: "/identity/recovery/appeals",
-    reason_label: "Appeal reason",
-    reason_codes: [
-      { label: "incorrect_decision", value: "incorrect_decision" },
-      { label: "other", value: "other" },
-    ],
-    statement_label: "Appeal statement",
-    statement_max_length: 4000,
-    submit_label: "Submit appeal",
-  };
-
-  it("renders an appealable case", () => {
-    const html = renderToStaticMarkup(
-      <RecoveryShow
-        title="Account recovery"
-        description="Complete verification."
-        appeal_error={null}
-        enforcement_cases={[
-          {
-            public_id: "case_1",
-            kind_label: "Security lock",
-            restore: { url: "/identity/recovery/completion", submit_label: "Restore access" },
-            appeal,
-          },
-        ]}
-      />,
-    );
-
-    expect(html).toContain("Security lock");
-    expect(html).toContain("Submit appeal");
-    expect(html).toContain("Appeal statement");
-  });
-
-  it("renders a case without an appeal form and the appeal error", () => {
-    const html = renderToStaticMarkup(
-      <RecoveryShow
-        title="Account recovery"
-        description="Complete verification."
-        appeal_error="An appeal already exists."
-        enforcement_cases={[
-          {
-            public_id: "case_2",
-            kind_label: "Method protection",
-            restore: { url: "/identity/recovery/completion", submit_label: "Restore access" },
-            appeal: null,
-          },
-        ]}
-      />,
-    );
-
-    expect(html).toContain("An appeal already exists.");
-    expect(html).not.toContain("Submit appeal");
-  });
-
-  it("renders the recovery entry screen with the code form", () => {
-    const html = renderToStaticMarkup(
-      <RecoverySessionNew
-        title="Account recovery"
-        description="A code will be sent."
-        address_form={{
-          action: "/identity/recovery/session",
-          label: "Email address",
-          address: "someone@example.com",
-          submit_label: "Send verification code",
-        }}
-        pass_code_form={{
-          action: "/identity/recovery/session",
-          label: "Verification code",
-          submit_label: "Continue",
-        }}
-      />,
-    );
-
-    expect(html).toContain("Verification code");
-    expect(html).toContain("someone@example.com");
-  });
-
-  it("renders the recovery entry screen without the code form", () => {
-    const html = renderToStaticMarkup(
-      <RecoverySessionNew
-        title="Account recovery"
-        description="A code will be sent."
-        address_form={{
-          action: "/identity/recovery/session",
-          label: "Email address",
-          address: "",
-          submit_label: "Send verification code",
-        }}
-        pass_code_form={null}
-      />,
-    );
-
-    expect(html).not.toContain("Verification code");
-  });
-});
-
-describe("identity session screens", () => {
-  const sessionRow = {
-    device: "Firefox / Linux",
-    status: "Active",
-    last_activity: "1 Jan",
-    created: "1 Jan",
-    expires_at: "1 Feb",
-    revoke: { label: "Revoke", href: "/identity/sessions/tok_1", confirm: "Revoke this session?" },
-  };
-  const headings = {
-    device: "Device",
-    last_activity: "Last activity",
-    created: "Created",
-    expires_at: "Expires at",
-    status: "Status",
-    action: "Action",
-  };
-
-  it("renders the revocable inventory", () => {
-    const html = renderToStaticMarkup(
-      <SessionsIndex
-        title="Sessions"
-        empty_message="No active sessions were found."
-        back_link={backLink}
-        expires_at_description="This session ends at this time and cannot be extended."
-        columns={headings}
-        bulk_revocations={{
-          others: {
-            label: "Sign out other sessions",
-            confirm: "Sure?",
-            href: "/identity/other_sessions",
-          },
-        }}
-        sessions={[sessionRow, { ...sessionRow, status: "Current session", revoke: null }]}
-      />,
-    );
-
-    expect(html).toContain("Sign out other sessions");
-    expect(html).not.toContain("Sign out everywhere");
-    expect(html).toContain("Current session");
-    expect(html).toContain("Firefox / Linux");
-    expect(html).toContain("Expires at");
-    expect(html).not.toContain(">tok_2<");
-    expect(html).not.toContain("DBSC");
-    expect(html).not.toContain("Refresh expires");
-  });
-
-  it("renders the empty inventory", () => {
-    const html = renderToStaticMarkup(
-      <SessionsIndex
-        title="Sessions"
-        empty_message="No active sessions were found."
-        back_link={backLink}
-        expires_at_description="This session ends at this time and cannot be extended."
-        columns={headings}
-        bulk_revocations={null}
-        sessions={[]}
-      />,
-    );
-
-    expect(html).toContain("No active sessions were found.");
-    expect(html).not.toContain("Sign out everywhere");
-  });
-
-  it("renders the app session detail as a GET link separately from revocation", () => {
-    const html = renderToStaticMarkup(
-      <SessionsIndex
-        title="Sessions"
-        back_link={backLink}
-        empty_message="No active sessions were found."
-        expires_at_description="Session expiry"
-        columns={headings}
-        bulk_revocations={null}
-        sessions={[{ ...sessionRow, show_href: "/sessions/session-1?ri=jp", revoke: null }]}
-      />,
-    );
-    expect(html).toContain('href="/sessions/session-1?ri=jp"');
-    expect(html).not.toContain('action="/sessions/session-1?ri=jp"');
-  });
-
-  it("renders one session", () => {
-    const html = renderToStaticMarkup(
-      <SessionShow
-        title="Session"
-        session={sessionRow}
-        columns={headings}
-        expires_at_description="This session ends at this time and cannot be extended."
-        back_link={{ label: "Back", href: "/identity/sessions" }}
-      />,
-    );
-
-    expect(html).toContain("Firefox / Linux");
-    expect(html).toContain("1 Feb");
-    expect(html).toContain("This session ends at this time and cannot be extended.");
-    expect(html).not.toContain("tok_1");
-    expect(html).not.toContain("DBSC");
-  });
-});
-
 describe("identity telephone screens", () => {
-  const headings = { number: "Number", status: "Status", actions: "Actions" };
+  const headings = { number: "Number", status: "Status" };
 
   it("lists the telephones", () => {
     const html = renderToStaticMarkup(
@@ -625,26 +212,19 @@ describe("identity telephone screens", () => {
         title="Telephones"
         empty_message="No telephone numbers."
         back_link={backLink}
-        new_link={{ label: "Add", href: "/identity/telephones/new" }}
-        registration_link={{
-          label: "Verification registration",
-          href: "/identity/telephones/registration/new",
-        }}
         table_headings={headings}
         telephones={[
           {
             public_id: "tel_1",
             number: "+819012345678",
             status_label: "Verified",
-            edit_link: { label: "Edit", href: "/identity/telephones/tel_1/edit" },
           },
         ]}
       />,
     );
 
     expect(html).toContain("+819012345678");
-    expect(html).toContain('href="/identity/telephones/new"');
-    expect(html).toContain('href="/identity/telephones/registration/new"');
+    expect(html).toContain("Verified");
   });
 
   it("renders the empty telephone row", () => {
@@ -653,119 +233,12 @@ describe("identity telephone screens", () => {
         title="Telephones"
         empty_message="No telephone numbers."
         back_link={backLink}
-        new_link={{ label: "Add", href: "/identity/telephones/new" }}
-        registration_link={{
-          label: "Verification registration",
-          href: "/identity/telephones/registration/new",
-        }}
         table_headings={headings}
         telephones={[]}
       />,
     );
 
     expect(html).toContain("No telephone numbers.");
-  });
-
-  const telephoneFormProps = {
-    title: "Add a telephone number",
-    description: "It is used for verification.",
-    help_text: "Use the international format.",
-    number_label: "Number",
-    number_placeholder: "+819012345678",
-    form: { action: "/identity/telephones", submit_label: "Submit" },
-    cancel_link: { label: "Cancel", href: "/identity/telephones" },
-  };
-
-  it("renders the telephone form", () => {
-    const html = renderToStaticMarkup(
-      <TelephoneNew
-        {...telephoneFormProps}
-        errors={[]}
-      />,
-    );
-
-    expect(html).toContain("Use the international format.");
-    expect(html).not.toContain("<ul");
-  });
-
-  it("renders telephone form errors", () => {
-    const html = renderToStaticMarkup(
-      <TelephoneNew
-        {...telephoneFormProps}
-        errors={["Number is invalid"]}
-      />,
-    );
-
-    expect(html).toContain("Number is invalid");
-  });
-
-  it("renders the telephone removal screen", () => {
-    const html = renderToStaticMarkup(
-      <TelephoneEdit
-        title="Telephone"
-        number="+819012345678"
-        delete={{ label: "Delete", confirm: "Sure?", url: "/identity/telephones/tel_1" }}
-        cancel_link={{ label: "Cancel", href: "/identity/telephones" }}
-      />,
-    );
-
-    expect(html).toContain("Delete");
-  });
-
-  it("renders the registration form and its errors", () => {
-    const html = renderToStaticMarkup(
-      <TelephoneRegistrationNew
-        {...telephoneFormProps}
-        form={{ action: "/identity/telephones/registration", submit_label: "Submit" }}
-        errors={["Number is invalid"]}
-      />,
-    );
-
-    expect(html).toContain("Number is invalid");
-  });
-
-  it("renders the registration form without errors", () => {
-    const html = renderToStaticMarkup(
-      <TelephoneRegistrationNew
-        {...telephoneFormProps}
-        form={{ action: "/identity/telephones/registration", submit_label: "Submit" }}
-        errors={[]}
-      />,
-    );
-
-    expect(html).toContain("Submit");
-  });
-
-  const registrationEditProps = {
-    title: "Verify your telephone number",
-    description: "A code was sent.",
-    code_label: "Verification code",
-    code_placeholder: "123456",
-    delivery_help: "It expires soon.",
-    form: { action: "/identity/telephones/registration", submit_label: "Verify" },
-    cancel_link: { label: "Cancel", href: "/identity/telephones" },
-  };
-
-  it("renders the telephone verification form", () => {
-    const html = renderToStaticMarkup(
-      <TelephoneRegistrationEdit
-        {...registrationEditProps}
-        errors={[]}
-      />,
-    );
-
-    expect(html).toContain("Verification code");
-  });
-
-  it("renders telephone verification errors", () => {
-    const html = renderToStaticMarkup(
-      <TelephoneRegistrationEdit
-        {...registrationEditProps}
-        errors={["Code is invalid"]}
-      />,
-    );
-
-    expect(html).toContain("Code is invalid");
   });
 });
 

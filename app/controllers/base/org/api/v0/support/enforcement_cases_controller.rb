@@ -40,7 +40,6 @@ module Base
             before_action :apply_browser_context
             rescue_from ActionPolicy::Unauthorized, with: :render_forbidden
             rescue_from EnforcementCaseAuthorizationRejected, with: :render_forbidden
-            rescue_from TokenStatusManagement::StepUpEvidenceUnavailable, with: :render_forbidden
             rescue_from ActiveRecord::RecordNotFound, with: :render_not_found
             rescue_from ActionController::BadRequest, with: :render_bad_request
 

@@ -35,27 +35,7 @@ module Base
 
         def create
           authorize!(current_operator, to: :show?)
-          return if reject_step_up_for_authentication_context!
-
-          scope = requested_step_up_scope(StepUpScopeCatalog::ORG)
-          return_to = requested_step_up_return_to(scope: scope, allowed_scopes: StepUpScopeCatalog::ORG)
-          method = params[:registration_method]
-          unless method.is_a?(String) && REGISTRATION_METHODS.include?(method) &&
-              available_step_up_methods(current_operator).blank? && bootstrap_permitted?(scope)
-            return render plain: t("errors.messages.invalid_request"), status: :bad_request
-          end
-
-          issuance = issue_bootstrap_admission!(
-            actor: current_operator, token: current_session_token, scope: scope, return_to: return_to, method: method,
-          )
-          return unless issuance
-
-          redirect_to_surface_url(
-            new_auth_org_verification_setup_url(
-              entry_ref: issuance.reference, ri: params[:ri],
-              host: ENV.fetch("PUBLIC_AUTH_STAFF_URL"), protocol: "https",
-            ), status: :see_other,
-          )
+          raise AccessOpDataUnavailableError
         end
 
         private

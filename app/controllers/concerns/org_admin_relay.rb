@@ -27,7 +27,8 @@ module OrgAdminRelay
     raise ActiveRecord::RecordNotFound, "not found" if result.status == :not_found
     raise ActionController::BadRequest, "bad request" if result.status == :bad_request
 
-    if result.status == :dependency
+    if %i(dependency unavailable).include?(result.status)
+      response.headers["Cache-Control"] = "no-store"
       head :service_unavailable
       return
     end

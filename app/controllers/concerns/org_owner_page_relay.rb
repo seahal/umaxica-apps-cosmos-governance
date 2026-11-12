@@ -43,7 +43,12 @@ module OrgOwnerPageRelay
     # The owner's decision; a refusal goes through the authorization handler as before.
     authorize!(result, to: :show?, with: AvatarRemoteResultPolicy)
     raise ActiveRecord::RecordNotFound, "not found" if result.status == :not_found
-    return head(:service_unavailable) if result.status == :dependency
+
+    if result.status == :dependency
+      response.headers["Cache-Control"] = "no-store"
+      head :service_unavailable
+      return
+    end
 
     if body.key?("redirect")
       redirect_to(body.fetch("redirect"), status: :see_other)

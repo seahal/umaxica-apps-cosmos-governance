@@ -9,9 +9,9 @@ module Preference
     self.fixture_table_names = []
 
     test "resolves preference class from controller path" do
-      assert_equal AppPreference, PreferenceClassRegistry.for_controller_path("core/app/api/v0/preferences")
+      assert_equal AppPreference, PreferenceClassRegistry.for_controller_path("base/app/api/v0/preferences")
       assert_equal ComPreference, PreferenceClassRegistry.for_controller_path("base/com/api/v0/preferences")
-      assert_equal OrgPreference, PreferenceClassRegistry.for_controller_path("core/org/api/v0/preferences")
+      assert_equal OrgPreference, PreferenceClassRegistry.for_controller_path("base/org/api/v0/preferences")
     end
 
     test "resolves option classes by prefix and type" do

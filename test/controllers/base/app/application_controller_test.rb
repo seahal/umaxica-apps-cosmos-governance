@@ -15,7 +15,6 @@ module Base
         assert_includes controller.class, ::AuthorizationClient
         assert_includes controller.class, ::VerificationClient
         assert_includes controller.class, ActionPolicy::Controller
-        assert_includes controller.class, ::OidcSsoInitiator
         assert_includes controller.class, ::ActorSupport
         assert_includes controller.class, ::Finisher
       end
@@ -35,7 +34,6 @@ module Base
         before_filters = callbacks.select { |c| c.kind == :before }.map(&:filter)
 
         expected_order = %i(
-          authenticate_browser_rp_safe_request!
           set_current_context
           reset_flash
           set_preferences_cookie

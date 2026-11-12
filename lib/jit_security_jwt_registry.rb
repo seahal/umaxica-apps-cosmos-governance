@@ -15,53 +15,19 @@ module JitSecurityJwtRegistry
   CURVE = JitSecurityJwtJwk::CURVE
   REQUIRED_JWK_FIELDS = JitSecurityJwtJwk::REQUIRED_PUBLIC_FIELDS
   PRIVATE_JWK_FIELDS = JitSecurityJwtJwk::PRIVATE_FIELDS
-  SURFACE_NAMESPACES = %w(
-    AUTH_APP AUTH_ORG
-    ACME_APP ACME_ORG
-    CORE_APP CORE_ORG
-    WARP_APP WARP_ORG
-    PALM_APP
-    BASE_APP BASE_ORG
-    VISA_APP VISA_ORG
-  ).freeze
+  SURFACE_NAMESPACES = %w(BASE_APP BASE_ORG).freeze
   MAX_JUMP_PUBLISHED_JWKS_KEYS = 4
   MAX_JUMP_PUBLISHED_JWKS_BYTES = 65_536
   MAX_JUMP_KID_LENGTH = 128
-  # Palm signs Jump RTs; its bearer API does not use a surface access-token issuer. Jump issuer
-  # capability is narrower than this list and is owned by JumpRtSurface::ISSUER_NAMESPACES.
-  ACCESS_TOKEN_SURFACE_NAMESPACES = (SURFACE_NAMESPACES - %w(PALM_APP)).freeze
-  OIDC_CLIENT_NAMESPACES = %w(
-    AUTH_APP AUTH_ORG
-    ACME_APP ACME_ORG
-    CORE_APP_JP CORE_ORG_JP
-    BASE_APP BASE_ORG
-    BASE_RP_APP_WW BASE_RP_ORG_WW
-    WARP_APP_JP WARP_ORG_JP
-    EDIT_ORG_WW
-    PALM_APP_JP TECH_ORG_WW
-  ).freeze
-  REQUIRED_OIDC_CLIENT_NAMESPACES = %w(
-    BASE_RP_APP_WW BASE_RP_ORG_WW
-    WARP_APP_JP WARP_ORG_JP
-    TECH_ORG_WW
-  ).freeze
+  ACCESS_TOKEN_SURFACE_NAMESPACES = SURFACE_NAMESPACES.freeze
+  OIDC_CLIENT_NAMESPACES = %w(BASE_RP_APP_WW BASE_RP_ORG_WW TECH_ORG_WW).freeze
+  REQUIRED_OIDC_CLIENT_NAMESPACES = %w(TECH_ORG_WW).freeze
   # Issuer metadata for surface records without Jump issuer capability. Jump issuer records take
   # JumpRtSurface's PUBLIC_* origin instead, so the record that holds a Jump signing key names the
   # same `iss` the RT carries, and an invalid origin fails at boot rather than at request time.
   SURFACE_ISSUER_ORIGINS = {
-    "AUTH_APP" => "https://auth.umaxica.app",
-    "AUTH_ORG" => "https://auth.umaxica.org",
-    "ACME_APP" => "https://www.umaxica.app",
-    "ACME_ORG" => "https://www.umaxica.org",
-    "CORE_APP" => "https://jp.umaxica.app",
-    "CORE_ORG" => "https://jp.umaxica.org",
-    "WARP_APP" => "https://www-jp.umaxica.app",
-    "WARP_ORG" => "https://www-jp.umaxica.org",
-    "PALM_APP" => "https://palm-jp.umaxica.app",
     "BASE_APP" => "https://www.umaxica.app",
     "BASE_ORG" => "https://www.umaxica.org",
-    "VISA_APP" => "https://visa.umaxica.app",
-    "VISA_ORG" => "https://visa.umaxica.org",
   }.freeze
   PREFERENCE_REALM_ISSUERS = {
     "preference_app" => { issuer: "https://www.umaxica.app", audience: "app" },

@@ -1,7 +1,7 @@
 import { Controller } from "@hotwired/stimulus";
 
-import { solveInvisibleTurnstile } from "@/features/auth/passkeys/invisibleTurnstile";
-import { createCredential, passkeysSupported } from "@/features/auth/passkeys/webauthn";
+import { solveInvisibleTurnstile } from "@/features/identity/passkeys/invisibleTurnstile";
+import { createCredential, passkeysSupported } from "@/features/identity/passkeys/webauthn";
 import { readNonEmptyString, readObject, readString } from "@/lib/payload";
 
 import { CEREMONY_REDIRECTED, ceremonyErrorMessage, postCeremonyJson } from "./passkey_ceremony";
@@ -9,7 +9,7 @@ import { CEREMONY_REDIRECTED, ceremonyErrorMessage, postCeremonyJson } from "./p
 // Passkey Registration Controller
 // Handles WebAuthn credential creation for passkey registration.
 //
-// The ceremony itself lives in `@/features/auth/passkeys/*`, which the React passkey screens use as
+// The ceremony itself lives in `@/features/identity/passkeys/*`, which the React passkey screens use as
 // well; this controller is the form around it.
 //
 // Usage:

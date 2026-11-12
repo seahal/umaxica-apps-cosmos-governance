@@ -62,28 +62,4 @@ class AuthenticationContextValueTest < ActiveSupport::TestCase
       assert context.permits_rule?(rule), "#{rule} must follow the ordinary policy rule in a standby session"
     end
   end
-
-  # A Standby token issues the same scopes as the same actor's Normal token;
-  # the sensitive-operation boundary is each operation's Step-Up gate, and the
-  # capability layer neither adds nor removes a scope in either context.
-  test "a standby context issues the same scopes as normal and never adds one" do
-    scopes = %w(authenticated domain:operator read:org write:org)
-
-    assert_equal AuthenticationContextValue.normal.constrain_scopes(scopes),
-                 AuthenticationContextValue.standby.constrain_scopes(scopes)
-    assert_equal scopes, AuthenticationContextValue.standby.constrain_scopes(scopes)
-  end
-
-  test "an unrecognised context keeps structural scopes but no capability-named scope" do
-    context = AuthenticationContextValue.from_claim("elevated")
-    scopes = %w(authenticated domain:operator read:org write:org read:self write:self)
-
-    assert_equal %w(authenticated domain:operator), context.constrain_scopes(scopes)
-  end
-
-  test "a normal context leaves scopes untouched" do
-    scopes = %w(authenticated domain:operator read:org write:org)
-
-    assert_equal scopes, AuthenticationContextValue.normal.constrain_scopes(scopes)
-  end
 end

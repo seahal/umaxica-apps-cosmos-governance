@@ -342,13 +342,7 @@ class PreferenceGlobalParamContextTest < ActionDispatch::IntegrationTest
   end
 
   def internal_links_for(host)
-    allowed_hosts = [
-      host,
-      ENV["PRIVATE_AUTH_SERVICE_URL"],
-      ENV["PRIVATE_AUTH_STAFF_URL"],
-      ENV["EDGE_SERVICE_URL"],
-      ENV["EDGE_STAFF_URL"],
-    ].compact
+    allowed_hosts = [host]
 
     css_select("a[href]").select do |link|
       href = link["href"]

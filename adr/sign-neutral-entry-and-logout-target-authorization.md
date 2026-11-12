@@ -4,6 +4,12 @@
 
 Accepted (2026-10-02)
 
+> **Route-scope supersession (2026-11-10):** The owner-approved local-surface hard reset removes
+> local Auth and Visa routes/controllers described by this decision. Base and Tech RP entry,
+> completion, logout-target authorization, and OP behavior remain governed by their surviving
+> callers and current contracts. External OIDC authorities and registrations are unchanged; this
+> note does not restore a local Auth route.
+
 Amends `adr/logout-ceremony-boundary.md` for RP-initiated logout target selection. Supersedes the
 logged-in direct-entry redirect described in `app/controllers/auth/app/sign/ups_controller.rb` and
 the context-free Auth-to-Base bridge (`app/controllers/concerns/auth_ceremony_admission.rb`) once

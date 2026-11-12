@@ -9,6 +9,9 @@ class RpBaseOrgStepUpAuditOutboxAttempt < RpBaseOrgRecord
 
   validates :attempted_at, presence: true
   validates :attempt_number, numericality: { only_integer: true, greater_than: 0 }
+  validates :attempt_number, uniqueness: { scope: :outbox_id }
+  validates :outbox_id, uniqueness: { conditions: -> { where(outcome: "delivered") } },
+                        if: -> { outcome == "delivered" }
   validates :outcome, inclusion: { in: %w(delivered failed) }
   validates :failure_code, inclusion: { in: StepUpAuditCodesRegistry::DELIVERY_FAILURE_CODES }
   validates :outcome, length: { maximum: 16 }

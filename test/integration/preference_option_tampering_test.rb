@@ -6,6 +6,7 @@ require "test_helper"
 class PreferenceOptionTamperingTest < ActionDispatch::IntegrationTest
   test "theme update ignores invalid option id without changing canonical preference" do
     host! ENV.fetch("PUBLIC_BASE_SERVICE_URL")
+    https!
     patch base_app_preference_region_path(ri: "jp"),
           params: { preference_region: { option_id: "JP" } }
 
@@ -23,6 +24,7 @@ class PreferenceOptionTamperingTest < ActionDispatch::IntegrationTest
 
   test "timezone update ignores invalid timezone without changing canonical preference" do
     host! ENV.fetch("PUBLIC_BASE_SERVICE_URL")
+    https!
     patch base_app_preference_region_path(ri: "jp"),
           params: { preference_region: { option_id: "JP" } }
 
@@ -40,6 +42,7 @@ class PreferenceOptionTamperingTest < ActionDispatch::IntegrationTest
 
   test "timezone update resolves each spelling of an option name to the same option" do
     host! ENV.fetch("PUBLIC_BASE_SERVICE_URL")
+    https!
     patch base_app_preference_region_path(ri: "jp"),
           params: { preference_region: { option_id: "JP" } }
 
@@ -64,6 +67,7 @@ class PreferenceOptionTamperingTest < ActionDispatch::IntegrationTest
 
   test "timezone update accepts a numeric option id given as a string" do
     host! ENV.fetch("PUBLIC_BASE_SERVICE_URL")
+    https!
     patch base_app_preference_region_path(ri: "jp"),
           params: { preference_region: { option_id: "JP" } }
 
@@ -80,6 +84,7 @@ class PreferenceOptionTamperingTest < ActionDispatch::IntegrationTest
 
   test "timezone update treats constant and environment names as unknown options" do
     host! ENV.fetch("PUBLIC_BASE_SERVICE_URL")
+    https!
     patch base_app_preference_region_path(ri: "jp"),
           params: { preference_region: { option_id: "JP" } }
 

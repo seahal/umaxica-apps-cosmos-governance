@@ -19,7 +19,7 @@ class OpAuthorityStopSingleWriterInvariantTest < ActiveSupport::TestCase
       \s*ceremony\.revoke!\s+unless\s+ceremony\.terminal\?\z
     }x,
     %r{\Aapp/services/credential_security_transition\.rb:\s*ceremony\.revoke!\s+unless\s+ceremony\.terminal\?\z},
-    %r{\Aapp/operations/org_iam_owner_mutation\.rb:\s*current\.revoke!\(by: locked_actor, reason_code:\)\z},
+    %r{\Aapp/operations/org_iam_owner_mutation_operation\.rb:\s*current\.revoke!\(by: locked_actor, reason_code:\)\z},
     %r{\Aapp/controllers/concerns/auth_ceremony_context\.rb:\s*current_auth_ceremony_session&\.revoke!\z},
     %r{\Aapp/controllers/concerns/withdrawal_ceremony_authentication\.rb:\s*ceremony\.revoke!\z},
     %r{\Aapp/operations/op_identity_event_invalidator\.rb:.*device_session_record&\.revoke!\(reason:},
@@ -46,13 +46,13 @@ class OpAuthorityStopSingleWriterInvariantTest < ActiveSupport::TestCase
     assert_empty violations, "OP roots and grants are revoked only through OpAuthorityStopCommitter"
   end
 
-  test "the primitive is the only caller of the grant's lock-holding revoke" do
+  test "Governance has no caller of the retired grant lock-holding revoke" do
     callers =
       source_lines.select do |_path, line|
         line.include?("revoke_under_stop_lock!") && line.exclude?("def ")
       end
 
-    assert_equal [PRIMITIVE], callers.map(&:first).uniq
+    assert_empty callers
   end
 
   private

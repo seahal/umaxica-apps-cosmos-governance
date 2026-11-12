@@ -1,5 +1,11 @@
 # OAuth 2.0 Demonstrating Proof of Possession (DPoP)
 
+> **Surface reset update (2026-11-11):** The Auth/Visa/Core/Warp/Palm route descriptions and active
+> DBSC runtime claims below are historical. Those local surfaces and DBSC registration/verification
+> services are no longer mounted. DBSC model fields remain pending the separate model/database
+> review; this document is not a current route map. See the
+> [surface hard-reset report](../../evidence/2026-11-11-governance-round2-R2A7.md).
+
 > **Partially superseded by the Acme / Sign / Core / Base / Palm boundary:** The DPoP vocabulary in
 > this document remains useful as retained implementation detail. It must not assign token authority
 > outside Acme, and it must not be treated as the default entry point for new Core, Base, or Palm
@@ -117,9 +123,9 @@ flows:
 | DBSC      | Browser cookie-based sessions       | Session cookie bound to device key |
 | DPoP      | API access via Authorization header | Access token bound to client key   |
 
-DBSC is the active browser-session binding mechanism. DPoP remains available for
-Authorization-header token binding where an explicitly reviewed native or API flow chooses it. The
-retired Palm bearer API is not a current DPoP consumer.
+DBSC was the browser-session binding mechanism in the former implementation. Its runtime was
+removed; DPoP code remains only where an active caller still uses it. The retired Palm bearer API is
+not a current DPoP consumer.
 
 ## VisitorAccount Token Strategy
 

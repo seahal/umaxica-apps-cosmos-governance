@@ -4,31 +4,6 @@
 require "test_helper"
 
 class SecurityJwtRfc9068AccessTokenProfileTest < ActiveSupport::TestCase
-  test "auth access token header and required claims follow the RFC 9068 profile" do
-    token = AuthenticationToken.encode(
-      clients(:one), host: "example.com", session_public_id: "sid", resource_type: "client",
-    )
-    payload, header = JWT.decode(token, nil, false)
-
-    assert_equal "at+jwt", header["typ"]
-    assert_equal "ES384", header["alg"]
-    assert_predicate header["kid"], :present?
-    %w(iss exp aud sub client_id iat jti).each do |claim|
-      assert payload.key?(claim), "missing #{claim}"
-    end
-    assert_kind_of String, payload["sub"]
-    assert_equal clients(:one).id.to_s, payload["sub"]
-    assert_equal AuthenticationJwtConfiguration.client_id("client"), payload["client_id"]
-    assert_equal AuthenticationJwtConfiguration.issuer, payload["iss"]
-    assert_equal AuthenticationJwtConfiguration.audiences("client"), payload["aud"]
-    assert_equal "authenticated domain:client read:self write:self", payload["scope"]
-    assert_nil payload["scp"]
-    assert_nil payload["typ"]
-    assert_nil payload["act"]
-    assert_equal "aal1", payload["acr"]
-    assert_equal "sid", payload["sid"]
-  end
-
   test "structural claim validation accepts scalar audiences and rejects invalid audience shapes" do
     payload = {
       "iss" => "https://issuer.example",
@@ -49,9 +24,26 @@ class SecurityJwtRfc9068AccessTokenProfileTest < ActiveSupport::TestCase
   end
 
   test "auth access verification rejects wrong JOSE typ, missing typ, and none alg" do
-    token = AuthenticationToken.encode(
-      clients(:one), host: "example.com", session_public_id: "sid", resource_type: "client",
+    payload = {
+      "iss" => AuthenticationJwtConfiguration.issuer,
+      "aud" => AuthenticationJwtConfiguration.audiences("client"),
+      "sub" => "external-client-subject",
+      "client_id" => AuthenticationJwtConfiguration.client_id("client"),
+      "iat" => Time.current.to_i,
+      "nbf" => Time.current.to_i,
+      "exp" => 10.minutes.from_now.to_i,
+      "jti" => "external-token-id",
+      "sid" => "external-session-id",
+      "acr" => "aal1",
+      "scope" => "authenticated domain:client read:self write:self",
+    }
+    token = JWT.encode(
+      payload, AuthenticationJwtConfiguration.private_key, "ES384",
+      { "typ" => "at+jwt", "kid" => JitSecurityJwtKeyring.active_kid },
     )
+
+    assert_predicate AuthenticationToken.decode(token, host: "example.com", resource_type: "client"), :present?
+
     payload, header = JWT.decode(token, nil, false)
     key = AuthenticationJwtConfiguration.private_key
 
@@ -65,9 +57,26 @@ class SecurityJwtRfc9068AccessTokenProfileTest < ActiveSupport::TestCase
   end
 
   test "auth access verification rejects expired tokens and wrong issuer or audience" do
-    token = AuthenticationToken.encode(
-      clients(:one), host: "example.com", session_public_id: "sid", resource_type: "client",
+    payload = {
+      "iss" => AuthenticationJwtConfiguration.issuer,
+      "aud" => AuthenticationJwtConfiguration.audiences("client"),
+      "sub" => "external-client-subject",
+      "client_id" => AuthenticationJwtConfiguration.client_id("client"),
+      "iat" => Time.current.to_i,
+      "nbf" => Time.current.to_i,
+      "exp" => 10.minutes.from_now.to_i,
+      "jti" => "external-token-id",
+      "sid" => "external-session-id",
+      "acr" => "aal1",
+      "scope" => "authenticated domain:client read:self write:self",
+    }
+    token = JWT.encode(
+      payload, AuthenticationJwtConfiguration.private_key, "ES384",
+      { "typ" => "at+jwt", "kid" => JitSecurityJwtKeyring.active_kid },
     )
+
+    assert_predicate AuthenticationToken.decode(token, host: "example.com", resource_type: "client"), :present?
+
     payload, header = JWT.decode(token, nil, false)
     key = AuthenticationJwtConfiguration.private_key
 
@@ -81,9 +90,26 @@ class SecurityJwtRfc9068AccessTokenProfileTest < ActiveSupport::TestCase
   end
 
   test "auth access verification rejects a development issuer when expecting the test issuer" do
-    token = AuthenticationToken.encode(
-      clients(:one), host: "example.com", session_public_id: "sid", resource_type: "client",
+    payload = {
+      "iss" => AuthenticationJwtConfiguration.issuer,
+      "aud" => AuthenticationJwtConfiguration.audiences("client"),
+      "sub" => "external-client-subject",
+      "client_id" => AuthenticationJwtConfiguration.client_id("client"),
+      "iat" => Time.current.to_i,
+      "nbf" => Time.current.to_i,
+      "exp" => 10.minutes.from_now.to_i,
+      "jti" => "external-token-id",
+      "sid" => "external-session-id",
+      "acr" => "aal1",
+      "scope" => "authenticated domain:client read:self write:self",
+    }
+    token = JWT.encode(
+      payload, AuthenticationJwtConfiguration.private_key, "ES384",
+      { "typ" => "at+jwt", "kid" => JitSecurityJwtKeyring.active_kid },
     )
+
+    assert_predicate AuthenticationToken.decode(token, host: "example.com", resource_type: "client"), :present?
+
     payload, header = JWT.decode(token, nil, false)
     key = AuthenticationJwtConfiguration.private_key
     foreign = JWT.encode(

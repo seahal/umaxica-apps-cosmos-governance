@@ -34,8 +34,9 @@ class JumpRtReceiverContractTest < ActiveSupport::TestCase
 
   CONTRACTS.each do |contract_name, contract|
     contract.fetch("url_cases").each do |url_case|
-      accepted = url_case.fetch("accepted") ? "accepted" : "rejected"
-      test "#{contract_name} url case #{url_case.fetch("name")} is #{accepted}" do
+      expected_error = url_case.fetch("accepted") ? "invalid_claim" : "invalid_url"
+      disposition = url_case.fetch("accepted") ? "is blocked by the empty local return graph" : "is rejected as invalid"
+      test "#{contract_name} url case #{url_case.fetch("name")} #{disposition}" do
         iat = @now.to_i
         payload = {
           schema: 1,
@@ -46,7 +47,7 @@ class JumpRtReceiverContractTest < ActiveSupport::TestCase
           nbf: iat,
           exp: iat + contract.fetch("ttl_seconds"),
           jti: "jump-contract-jti",
-          src: "https://auth.umaxica.app",
+          src: "https://www.umaxica.app",
           dst: "internal",
           rpl: "reuse",
           url: url_case.fetch("signed_url"),
@@ -61,8 +62,7 @@ class JumpRtReceiverContractTest < ActiveSupport::TestCase
           now: @now,
         )
 
-        assert_equal url_case.fetch("accepted"), result.success?, result.error
-        assert_equal "invalid_url", result.error unless url_case.fetch("accepted")
+        assert_equal expected_error, result.error
       end
     end
   end
@@ -85,14 +85,10 @@ class JumpRtReceiverContractTest < ActiveSupport::TestCase
     assert_equal candidate.dig("header", "typ"), SecurityJwtJumpRtTokenCodec::TOKEN_TYPE
   end
 
-  test "vendored receiver and upstream graph fixtures retain their pinned source hashes" do
+  test "vendored receiver fixtures retain their pinned source hashes" do
     files = {
       "jump_receiver_contract_0_4_0.json" =>
         "0db02b9412487931465a81e5e292e7bc6f0ca3eb06a1296e558348772cdadb9a",
-      "jump_production_graph_0_4_0.json" =>
-        "3e93ca422c35be5bb034d797ae61ddc9d0befcfd431ba12e3e859a43611588ab",
-      "jump_app_org_candidate_graph.json" =>
-        "1f9f68bf600cc1c018684ffbd5382c4a94d3cb57c8f1767fd957061257fbc179",
       "jump_receiver_contract.json" =>
         "7f884dcc348ff61cd94643b4dfbc0c5e27caa21fbf570abed81084b59471339e",
     }
@@ -104,14 +100,10 @@ class JumpRtReceiverContractTest < ActiveSupport::TestCase
     end
   end
 
-  test "Tech is outside the Jump issuer and navigation graph" do
-    graph = JSON.parse(Rails.root.join("test/fixtures/files/jump_app_org_candidate_graph.json").read)
-
+  test "Tech is not configured as a Jump issuer" do
     assert_raises(JumpRtConfigurationError) do
-      JumpRtSurface.namespace_for_controller("Tech::Org::Sign::EntriesController")
+      JumpRtSurface.namespace_for_controller("Tech::Org::RootsController")
     end
     assert_raises(JumpRtConfigurationError) { JumpRtSurface.normalize_namespace("TECH_ORG") }
-    assert_empty graph.fetch("nodes").keys.grep(/tech/i)
-    assert_empty graph.fetch("edges").flatten.grep(/tech/i)
   end
 end

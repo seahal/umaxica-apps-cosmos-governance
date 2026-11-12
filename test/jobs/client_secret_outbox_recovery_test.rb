@@ -31,12 +31,12 @@ class ClientSecretOutboxRecoveryTest < ActiveSupport::TestCase
 
     assert_equal 0, ClientSecretCredential.where(client_id: actor.id).count
     assert_equal 0, ClientSecretIssuance.where(client_id: actor.id).count
-    RetentionPurgeJob.perform_now(batch_size: 10)
+    assert_raises(AccessOpDataUnavailableError) { RetentionPurgeJob.perform_now(batch_size: 10) }
 
     assert event.reload.delivered_at
     assert Chronicle.exists?(event_uuid: event.event_id, action: "secret.issuance_purged")
     assert_no_difference("Chronicle.count") do
-      RetentionPurgeJob.perform_now(batch_size: 10)
+      assert_raises(AccessOpDataUnavailableError) { RetentionPurgeJob.perform_now(batch_size: 10) }
     end
   ensure
     ENV["APP_SECRET_PURGE_DELAY_SECONDS"] = previous_delay

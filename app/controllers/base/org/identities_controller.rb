@@ -36,20 +36,9 @@ module Base
             items: identity_security_items,
           },
           {
-            heading: t("base.shared.identity.sections.external_services"),
-            items: [
-              { label: t("base_social_identities.title"),
-                href: base_org_identity_social_identities_path(ri: params[:ri]), },
-            ],
-          },
-          {
             heading: t("base.shared.identity.sections.account"),
             items: [
               identity_hub_link(:withdrawal, base_org_identity_withdrawal_path(ri: params[:ri])),
-              {
-                label: t("sign.org.settings.show.logout"),
-                href: new_base_org_sign_out_path(ri: params[:ri]),
-              },
             ],
           },
         ]
@@ -62,8 +51,6 @@ module Base
       def identity_security_items
         [
           identity_hub_link(:passkey, base_org_identity_passkeys_path(ri: params[:ri])),
-          { label: t("base.org.identity.mfa_reset"), href: base_org_identity_mfa_reset_path(ri: params[:ri]) },
-          identity_hub_link(:sessions, base_org_sessions_path(ri: params[:ri])),
           identity_hub_link(:secrets, base_org_identity_secrets_path(ri: params[:ri])),
           identity_hub_link(:activities, base_org_identity_activities_path(ri: params[:ri])),
           identity_hub_link(:standing, base_org_identity_standing_path(ri: params[:ri])),

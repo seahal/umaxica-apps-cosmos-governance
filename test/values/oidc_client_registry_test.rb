@@ -8,11 +8,11 @@ class OidcClientRegistryTest < ActiveSupport::TestCase
   self.fixture_table_names = []
 
   test "find returns a first-party client config for a client account" do
-    client = OidcClientRegistry.find("core-app-jp")
+    client = OidcClientRegistry.find("base-app-ww")
 
     assert_not_nil client
-    assert_equal "core-app-jp", client.client_id
-    assert_equal "core-app-jp", client.aud
+    assert_equal "base-app-ww", client.client_id
+    assert_equal "base-app-ww", client.aud
     assert client.redirect_uris.any? { |uri| uri.end_with?("/oidc/callback") }
     assert_not_predicate client, :public_client?
     assert_predicate client, :confidential_client?
@@ -20,7 +20,7 @@ class OidcClientRegistryTest < ActiveSupport::TestCase
   end
 
   test "each first-party RP registers a callback on its own surface" do
-    AuthBoundaryAuthorityMap.first_party_rp_client_ids.each do |client_id|
+    OidcRpSurfaceMap.first_party_rp_client_ids.each do |client_id|
       client = OidcClientRegistry.find!(client_id)
 
       assert client.redirect_uris.any? { |uri| uri.end_with?("/oidc/callback") },
@@ -30,7 +30,7 @@ class OidcClientRegistryTest < ActiveSupport::TestCase
   end
 
   test "each first-party RP registers only the noun completion path" do
-    AuthBoundaryAuthorityMap.first_party_rp_client_ids.each do |client_id|
+    OidcRpSurfaceMap.first_party_rp_client_ids.each do |client_id|
       client = OidcClientRegistry.find!(client_id)
       registered_paths = client.post_logout_redirect_uris.map { |uri| URI.parse(uri).path }.uniq
 
@@ -50,7 +50,7 @@ class OidcClientRegistryTest < ActiveSupport::TestCase
   end
 
   test "each first-party RP accepts its registered logout URI for its own realm" do
-    AuthBoundaryAuthorityMap.first_party_rp_client_ids.each do |client_id|
+    OidcRpSurfaceMap.first_party_rp_client_ids.each do |client_id|
       client = OidcClientRegistry.find!(client_id)
       client.post_logout_redirect_uris.each do |uri|
         assert OidcClientRegistry.valid_post_logout_redirect_uri?(
@@ -100,10 +100,10 @@ class OidcClientRegistryTest < ActiveSupport::TestCase
     client_audiences = OidcClientRegistry.audiences_for_resource_type("client")
     operator_audiences = OidcClientRegistry.audiences_for_resource_type("staff")
 
-    assert_includes client_audiences, "core-app-jp"
-    assert_not_includes client_audiences, "core-org-jp"
-    assert_includes operator_audiences, "core-org-jp"
-    assert_not_includes operator_audiences, "core-app-jp"
+    assert_includes client_audiences, "base-app-ww"
+    assert_not_includes client_audiences, "base-org-ww"
+    assert_includes operator_audiences, "base-org-ww"
+    assert_not_includes operator_audiences, "base-app-ww"
     assert_equal ["private_key_jwt"], OidcClientRegistry.revocation_endpoint_auth_methods_for("client")
     assert_equal ["private_key_jwt"], OidcClientRegistry.revocation_endpoint_auth_methods_for("operator")
     assert_raises(ArgumentError) { OidcClientRegistry.audiences_for_resource_type("unsupported") }

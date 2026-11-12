@@ -4,6 +4,11 @@
 
 Accepted (2026-10-13). User decision, confirmed by an escalation ruling on the same day.
 
+> **Local-route disposition (2026-11-10):** The owner-approved local-surface hard reset removes the
+> local Core, Warp, Edit, and Palm RP routes/controllers. This supersedes only their local route
+> implementation scope here. Base and Tech behavior remains governed by surviving callers; OP
+> commit ordering and retained external OIDC registrations are not changed by this route decision.
+
 Superseded in part (2026-10-16) by
 `adr/first-party-sign-out-op-commit-and-backchannel-logout-for-separated-rp-stores.md`, only for
 first-party RPs activated with their own session store under the OP/RP separation (release R5). For

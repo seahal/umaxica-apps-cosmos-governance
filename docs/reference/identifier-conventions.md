@@ -1,3 +1,7 @@
+> **Historical social ceremony details:** Social callback/candidate identifiers below describe the
+> retired local provider flows. They are not current route or service contracts; retained model
+> classes are included in the hard-reset evidence pending model/database cleanup.
+
 # Identifier conventions and scoped column classification
 
 The [identifier ADR](../../adr/identifier-contract.md) owns the approved design. The
@@ -213,36 +217,10 @@ focused regression coverage is in
 [`test/models/logout_transaction_test.rb`](../../test/models/logout_transaction_test.rb) and
 [`test/models/enforcement_case_public_id_test.rb`](../../test/models/enforcement_case_public_id_test.rb).
 
-`OrgNormalSignInTransaction` has a separate session-scoped `public_id` used to bind the ORG Entra
-handoff to the next passkey phase. New values use `PublicId.generate`; the value is an internal
-opaque transaction identity, not an Entra/OIDC provider value, protocol secret, nonce, CSRF token,
-PKCE value or database primary key. Existing serialized sessions remain readable, and the signed
-binding continues to enforce its existing ORG flow and phase contract. The focused boundary is
-covered by
-[`test/controllers/auth/org/in/passkeys_controller_test.rb`](../../test/controllers/auth/org/in/passkeys_controller_test.rb)
-and
-[`test/services/org_normal_sign_in_binding_codec_test.rb`](../../test/services/org_normal_sign_in_binding_codec_test.rb).
-
 `SignInSequenceCarrier` stores a separate surface-scoped workflow `id` in the Rails session. New
 sequence starts use `PublicId.generate`; this value is an internal workflow identity and is not a
-provider/protocol value, secret, database primary key or public API reference. Existing UUID-valued
-session payloads remain readable through the compatibility reader. The public `start!` boundary is
-covered by
-[`test/services/sign_in/sequence_carrier_test.rb`](../../test/services/sign_in/sequence_carrier_test.rb).
-
-The pending-MFA payload created by `AuthenticationBase#set_pending_mfa!` has its own session-scoped
-workflow `public_id`. New payloads use `PublicId.generate`; the value is not a provider/protocol
-value, secret, database primary key or public API reference. The existing actor, surface, expiry and
-session-issuance fields remain authoritative, and the public APP challenge boundary covers the
-format contract in
-[`test/controllers/auth/app/in/challenges_controller_test.rb`](../../test/controllers/auth/app/in/challenges_controller_test.rb).
-
-`SocialAuth` stores `social_auth_flow_id` as a separate session-scoped link-intent correlation
-identity. New link intents use `PublicId.generate`; the value is not the OAuth `state`, provider
-value, Apple nonce, PKCE verifier, CSRF token, protocol secret, database primary key or public API
-reference. The existing intent, provider, TTL, callback-state, authorization and cleanup contracts
-remain authoritative. The public SocialAuth link integration boundary covers the NanoID-21 format in
-[`test/integration/social_auth_link_test.rb`](../../test/integration/social_auth_link_test.rb).
+provider/protocol value, secret, database primary key or public API reference. The session key is
+surface-scoped; the removed shared-key compatibility reader is not supported.
 
 The `SocialCeremonyResultAdapter` reference is a short-lived Valkey receiver capability, not a
 durable resource identity. It carries no raw result code and is looked up only through its
@@ -269,17 +247,16 @@ and
 
 `IdentitySocialCeremonyCandidate.ref` is a self-controlled, non-secret capability reference with a
 consumer-specific transition. New candidates use `PublicId.generate` (NanoID-21), while existing
-UUID-v4 rows remain readable and accepted by the Social link-completion boundary. The controller
-uses the candidate model's strict NanoID-or-legacy-UUID pattern; it does not widen the shared
-`AuthAdmissionBinding::REFERENCE_PATTERN` used by unrelated admissions. Provider subject values,
+UUID-v4 rows remain readable to the model-level lookup. The former Social link-completion controller
+used the candidate model's strict NanoID-or-legacy-UUID pattern; no local route or callback consumer
+remains. This model contract does not widen the shared `AuthAdmissionBinding::REFERENCE_PATTERN`
+used by unrelated admissions. Provider subject values,
 OAuth/OIDC state, callback payloads and result identities retain separate contracts, and no old
-candidate is rewritten merely to change its format. The contract is covered by
-[`test/services/identity/social_ceremony_contract_test.rb`](../../test/services/identity/social_ceremony_contract_test.rb)
-and the end-to-end link boundaries in
-[`test/integration/social_auth_link_test.rb`](../../test/integration/social_auth_link_test.rb). The
-shared candidate factory retries only a collision on the named single-column `ref` unique B-tree
-index, inside a savepoint and the finite `PublicId::MAX_COLLISION_RETRIES` budget; unrelated
-validation or uniqueness failures remain errors.
+candidate is rewritten merely to change its format. The retained model contract is covered by
+[`test/models/model_only_line_coverage_test.rb`](../../test/models/model_only_line_coverage_test.rb)
+and
+[`test/models/concerns/social_ceremony_transactionable_test.rb`](../../test/models/concerns/social_ceremony_transactionable_test.rb).
+Candidate records remain in the model/database report pending the separate retirement decision.
 
 Credential-registration Email and Telephone transaction references are a bounded P2 slice of the
 broader ceremony-purpose inventory. The six concrete realm/channel issuer paths now generate a new

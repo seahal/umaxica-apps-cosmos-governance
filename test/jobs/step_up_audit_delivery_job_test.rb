@@ -25,18 +25,18 @@ class StepUpAuditDeliveryJobTest < ActiveSupport::TestCase
   test "writer requires a source transaction and enqueues delivery only after commit" do
     assert_raises(ArgumentError) do
       StepUpAuditOutboxWriter.call(
-        source_key: "op_app", event_type: "step_up.requested", realm: "APP", client_id: "base-app-ww",
+        source_key: "rp_base_app", event_type: "step_up.requested", realm: "APP", client_id: "base-app-ww",
         subject_ref: "subject-ref", context_ref: PublicId.generate, reason_code: "requested",
         payload: { rp_state_ref: PublicId.generate, return_target_kind: "relative" },
       )
     end
 
     assert_no_enqueued_jobs only: StepUpAuditDeliveryJob do
-      assert_no_difference "ClientStepUpAuditOutbox.count" do
-        ClientStepUpAuditOutbox.transaction do
+      assert_no_difference "RpStepUpAuditOutbox.count" do
+        RpStepUpAuditOutbox.transaction do
           assert_raises(ArgumentError) do
             StepUpAuditOutboxWriter.call(
-              source_key: "op_app", event_type: "step_up.requested", realm: "APP", client_id: "base-app-ww",
+              source_key: "rp_base_app", event_type: "step_up.requested", realm: "APP", client_id: "base-app-ww",
               subject_ref: "subject-ref", context_ref: PublicId.generate, reason_code: "requested",
               payload: { rp_state_ref: "short", return_target_kind: "relative" },
             )
@@ -46,8 +46,8 @@ class StepUpAuditDeliveryJobTest < ActiveSupport::TestCase
     end
 
     events = []
-    assert_enqueued_jobs 4, only: StepUpAuditDeliveryJob do
-      StepUpAuditOutboxSourcesRegistry::SOURCES.reject { |key, _| key.start_with?("o9_") }.each do |source_key, source|
+    assert_enqueued_jobs 2, only: StepUpAuditDeliveryJob do
+      StepUpAuditOutboxSourcesRegistry::SOURCES.each do |source_key, source|
         model, realm, _attempt_class, pending_id, _delivered_id = source
         event = nil
         model.transaction do
@@ -79,9 +79,9 @@ class StepUpAuditDeliveryJobTest < ActiveSupport::TestCase
       ],
     ].each do |event_type, reason_code, payload|
       assert_raises(ArgumentError) do
-        ClientStepUpAuditOutbox.transaction do
+        RpStepUpAuditOutbox.transaction do
           StepUpAuditOutboxWriter.call(
-            source_key: "op_app", event_type:, realm: "APP", client_id: "base-app-ww",
+            source_key: "rp_base_app", event_type:, realm: "APP", client_id: "base-app-ww",
             subject_ref: "subject-ref", context_ref: PublicId.generate, reason_code:, payload:,
           )
         end
@@ -101,9 +101,9 @@ class StepUpAuditDeliveryJobTest < ActiveSupport::TestCase
         ],
       ].each do |event_type, reason_code, payload|
         event = nil
-        ClientStepUpAuditOutbox.transaction do
+        RpStepUpAuditOutbox.transaction do
           event = StepUpAuditOutboxWriter.call(
-            source_key: "op_app", event_type:, realm: "APP", client_id: "base-app-ww",
+            source_key: "rp_base_app", event_type:, realm: "APP", client_id: "base-app-ww",
             subject_ref: "subject-ref", context_ref: PublicId.generate, reason_code:, payload:,
           )
         end
@@ -118,109 +118,109 @@ class StepUpAuditDeliveryJobTest < ActiveSupport::TestCase
   test "the recurring sweep delivers a row after its enqueue is lost and repeated delivery is idempotent" do
     event_uuid = SecureRandom.uuid
     @event_uuids << event_uuid
-    event = ClientStepUpAuditOutbox.create!(
+    event = RpStepUpAuditOutbox.create!(
       event_uuid:, event_type: "step_up.requested", realm: "APP", client_id: "base-app-ww",
       subject_ref: "subject-ref", context_ref: PublicId.generate, reason_code: "requested",
       payload: { rp_state_ref: PublicId.generate, return_target_kind: "relative" },
-      occurred_at: ClientStepUpAuditOutbox.database_now,
-      delivery_state_id: ClientStepUpAuditOutboxDeliveryState::PENDING,
+      occurred_at: RpStepUpAuditOutbox.database_now,
+      delivery_state_id: RpStepUpAuditOutboxDeliveryState::PENDING,
     )
 
     assert_enqueued_jobs 0, only: StepUpAuditDeliveryJob do
-      StepUpAuditDeliveryJob.perform_now(source_key: "op_app", batch_size: 1)
+      StepUpAuditDeliveryJob.perform_now(source_key: "rp_base_app", batch_size: 1)
     end
 
-    assert_equal ClientStepUpAuditOutboxDeliveryState::DELIVERED, event.reload.delivery_state_id
+    assert_equal RpStepUpAuditOutboxDeliveryState::DELIVERED, event.reload.delivery_state_id
     assert_equal 1, Chronicle.where(event_uuid: event.event_uuid).count
-    attempt = ClientStepUpAuditOutboxAttempt.find_by!(outbox_id: event.id)
+    attempt = RpStepUpAuditOutboxAttempt.find_by!(outbox_id: event.id)
 
     assert_equal [1, "delivered", "none"], [attempt.attempt_number, attempt.outcome, attempt.failure_code]
 
-    StepUpAuditDeliveryJob.perform_now(source_key: "op_app", batch_size: 1)
+    StepUpAuditDeliveryJob.perform_now(source_key: "rp_base_app", batch_size: 1)
 
     assert_equal 1, Chronicle.where(event_uuid: event.event_uuid).count
-    assert_equal 1, ClientStepUpAuditOutboxAttempt.where(outbox_id: event.id).count
+    assert_equal 1, RpStepUpAuditOutboxAttempt.where(outbox_id: event.id).count
   end
 
   test "Chronicle commit survives a lost source acknowledgement and a later sweep acknowledges once" do
     event_uuid = SecureRandom.uuid
     @event_uuids << event_uuid
-    event = ClientStepUpAuditOutbox.create!(
+    event = RpStepUpAuditOutbox.create!(
       event_uuid:, event_type: "step_up.requested", realm: "APP", client_id: "base-app-ww",
       subject_ref: "subject-ref", context_ref: PublicId.generate, reason_code: "requested",
       payload: { rp_state_ref: PublicId.generate, return_target_kind: "relative" },
-      occurred_at: ClientStepUpAuditOutbox.database_now,
-      delivery_state_id: ClientStepUpAuditOutboxDeliveryState::PENDING,
+      occurred_at: RpStepUpAuditOutbox.database_now,
+      delivery_state_id: RpStepUpAuditOutboxDeliveryState::PENDING,
     )
 
-    ClientStepUpAuditOutbox.transaction(requires_new: true) do
-      StepUpAuditDeliveryJob.perform_now(source_key: "op_app", batch_size: 1)
+    RpStepUpAuditOutbox.transaction(requires_new: true) do
+      StepUpAuditDeliveryJob.perform_now(source_key: "rp_base_app", batch_size: 1)
 
-      assert_equal ClientStepUpAuditOutboxDeliveryState::DELIVERED, event.reload.delivery_state_id
+      assert_equal RpStepUpAuditOutboxDeliveryState::DELIVERED, event.reload.delivery_state_id
       assert_equal 1, Chronicle.where(event_uuid: event.event_uuid).count
       raise ActiveRecord::Rollback
     end
 
-    assert_equal ClientStepUpAuditOutboxDeliveryState::PENDING, event.reload.delivery_state_id
-    assert_equal 0, ClientStepUpAuditOutboxAttempt.where(outbox_id: event.id).count
+    assert_equal RpStepUpAuditOutboxDeliveryState::PENDING, event.reload.delivery_state_id
+    assert_equal 0, RpStepUpAuditOutboxAttempt.where(outbox_id: event.id).count
     assert_equal 1, Chronicle.where(event_uuid: event.event_uuid).count
 
-    StepUpAuditDeliveryJob.perform_now(source_key: "op_app", batch_size: 1)
+    StepUpAuditDeliveryJob.perform_now(source_key: "rp_base_app", batch_size: 1)
 
-    assert_equal ClientStepUpAuditOutboxDeliveryState::DELIVERED, event.reload.delivery_state_id
+    assert_equal RpStepUpAuditOutboxDeliveryState::DELIVERED, event.reload.delivery_state_id
     assert_equal 1, Chronicle.where(event_uuid: event.event_uuid).count
-    assert_equal 1, ClientStepUpAuditOutboxAttempt.where(outbox_id: event.id, outcome: "delivered").count
+    assert_equal 1, RpStepUpAuditOutboxAttempt.where(outbox_id: event.id, outcome: "delivered").count
   end
 
   test "concurrent delivery jobs serialize on the outbox row" do
     event_uuid = SecureRandom.uuid
     @event_uuids << event_uuid
-    event = ClientStepUpAuditOutbox.create!(
+    event = RpStepUpAuditOutbox.create!(
       event_uuid:, event_type: "step_up.requested", realm: "APP", client_id: "base-app-ww",
       subject_ref: "subject-ref", context_ref: PublicId.generate, reason_code: "requested",
       payload: { rp_state_ref: PublicId.generate, return_target_kind: "relative" },
-      occurred_at: ClientStepUpAuditOutbox.database_now,
-      delivery_state_id: ClientStepUpAuditOutboxDeliveryState::PENDING,
+      occurred_at: RpStepUpAuditOutbox.database_now,
+      delivery_state_id: RpStepUpAuditOutboxDeliveryState::PENDING,
     )
     barrier = Queue.new
     workers =
       2.times.map do
         Thread.new do
           barrier.pop
-          StepUpAuditDeliveryJob.perform_now(source_key: "op_app", batch_size: 1)
+          StepUpAuditDeliveryJob.perform_now(source_key: "rp_base_app", batch_size: 1)
         end
       end
     2.times { barrier << true }
     workers.each(&:value)
 
-    assert_equal ClientStepUpAuditOutboxDeliveryState::DELIVERED, event.reload.delivery_state_id
+    assert_equal RpStepUpAuditOutboxDeliveryState::DELIVERED, event.reload.delivery_state_id
     assert_equal 1, Chronicle.where(event_uuid: event.event_uuid).count
-    assert_equal 1, ClientStepUpAuditOutboxAttempt.where(outbox_id: event.id, outcome: "delivered").count
+    assert_equal 1, RpStepUpAuditOutboxAttempt.where(outbox_id: event.id, outcome: "delivered").count
   end
 
   test "retention and result follow each event's explicit mapping" do
     requested_uuid = SecureRandom.uuid
     @event_uuids << requested_uuid
-    requested = ClientStepUpAuditOutbox.create!(
+    requested = RpStepUpAuditOutbox.create!(
       event_uuid: requested_uuid, event_type: "step_up.requested", realm: "APP", client_id: "base-app-ww",
       subject_ref: "subject-ref", context_ref: PublicId.generate, reason_code: "requested",
       payload: { rp_state_ref: PublicId.generate, return_target_kind: "relative" },
-      occurred_at: ClientStepUpAuditOutbox.database_now,
-      delivery_state_id: ClientStepUpAuditOutboxDeliveryState::PENDING,
+      occurred_at: RpStepUpAuditOutbox.database_now,
+      delivery_state_id: RpStepUpAuditOutboxDeliveryState::PENDING,
     )
     committed_uuid = SecureRandom.uuid
     @event_uuids << committed_uuid
-    committed = ClientStepUpAuditOutbox.create!(
+    committed = RpStepUpAuditOutbox.create!(
       event_uuid: committed_uuid, event_type: "step_up.committed", realm: "APP", client_id: "base-app-ww",
       subject_ref: "subject-ref", context_ref: PublicId.generate, reason_code: "completed",
       payload: {
         op_context_ref: PublicId.generate, grant_ref: PublicId.generate, verified_method: "passkey", auth_time: 1,
       },
-      occurred_at: ClientStepUpAuditOutbox.database_now,
-      delivery_state_id: ClientStepUpAuditOutboxDeliveryState::PENDING,
+      occurred_at: RpStepUpAuditOutbox.database_now,
+      delivery_state_id: RpStepUpAuditOutboxDeliveryState::PENDING,
     )
 
-    StepUpAuditDeliveryJob.perform_now(source_key: "op_app", batch_size: 2)
+    StepUpAuditDeliveryJob.perform_now(source_key: "rp_base_app", batch_size: 2)
 
     requested_chronicle = Chronicle.find_by!(event_uuid: requested.event_uuid)
     requested_policy_code = ChronicleRetentionPolicy.find(requested_chronicle.chronicle_retention_policy_id).code
@@ -239,12 +239,12 @@ class StepUpAuditDeliveryJobTest < ActiveSupport::TestCase
   test "an identity conflict remains pending and records only the closed failure code" do
     event_uuid = SecureRandom.uuid
     @event_uuids << event_uuid
-    event = ClientStepUpAuditOutbox.create!(
+    event = RpStepUpAuditOutbox.create!(
       event_uuid:, event_type: "step_up.requested", realm: "APP", client_id: "base-app-ww",
       subject_ref: "subject-ref", context_ref: PublicId.generate, reason_code: "requested",
       payload: { rp_state_ref: PublicId.generate, return_target_kind: "relative" },
-      occurred_at: ClientStepUpAuditOutbox.database_now,
-      delivery_state_id: ClientStepUpAuditOutboxDeliveryState::PENDING,
+      occurred_at: RpStepUpAuditOutbox.database_now,
+      delivery_state_id: RpStepUpAuditOutboxDeliveryState::PENDING,
     )
     policy = ChronicleRecordPolicy.retention_policy_for(action: event.event_type)
     Chronicle.create!(
@@ -255,17 +255,17 @@ class StepUpAuditDeliveryJobTest < ActiveSupport::TestCase
 
     error =
       assert_raises(StepUpAuditIdentityConflictError) do
-        StepUpAuditDeliveryJob.perform_now(source_key: "op_app", batch_size: 1)
+        StepUpAuditDeliveryJob.perform_now(source_key: "rp_base_app", batch_size: 1)
       end
 
     assert_equal "step-up Chronicle event identity conflicts with its source", error.message
-    assert_equal ClientStepUpAuditOutboxDeliveryState::PENDING, event.reload.delivery_state_id
-    attempt = ClientStepUpAuditOutboxAttempt.find_by!(outbox_id: event.id)
+    assert_equal RpStepUpAuditOutboxDeliveryState::PENDING, event.reload.delivery_state_id
+    attempt = RpStepUpAuditOutboxAttempt.find_by!(outbox_id: event.id)
 
     assert_equal ["failed", "event_identity_conflict"], [attempt.outcome, attempt.failure_code]
   end
 
-  test "delivery covers every OP and RP source and rejects invalid bounds or source keys" do
+  test "delivery covers every retained RP source and rejects invalid bounds or source keys" do
     events =
       StepUpAuditOutboxSourcesRegistry::SOURCES.reject { |key, _|
         key.start_with?("o9_")

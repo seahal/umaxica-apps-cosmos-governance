@@ -4,6 +4,7 @@
 class OrgIamOperationOutcome < OrgPrincipalRecord
   validates :operation_id, :operation_kind, :actor_public_id, :subject_public_id, :request_digest, :result,
             presence: true
+  validates :operation_id, uniqueness: true
   validates :operation_kind, inclusion: { in: %w(grant revoke) }
   validates :request_digest, length: { maximum: 64 }
   validates :request_digest, format: { with: /\A[0-9a-f]{64}\z/ }

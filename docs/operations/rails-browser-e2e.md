@@ -1,7 +1,7 @@
 # Rails browser E2E
 
 `bun run test:e2e:rails` owns a real Puma server in `RAILS_ENV=test` and runs TypeScript Playwright
-Test against the Auth app public Inertia/React landing in Chromium. It supplements Minitest,
+Test against the anonymous Base.com Inertia/React landing in Chromium. It supplements Minitest,
 Integration Test and Vitest. `bun run test:e2e` retains its existing meaning. No Capybara or Ruby
 Playwright driver is involved. Existing tests include presentation fixtures and specialized
 Secret/admission scenarios requiring externally supplied runners; this command neither reconfigures
@@ -40,16 +40,16 @@ The runner acquires `tmp/parallel-test-databases.lock`, shared with Minitest, an
 concurrent test process. Do not run database preparation or resets concurrently. It creates and
 drops no PostgreSQL databases. Existing databases from the retired isolated workflow remain
 untouched. The listener `127.0.0.1:3198` is reserved before DB preparation. Chromium uses
-`http://auth.app.localhost:3198`; no remote application URL is configurable. Browser DNS is pinned
-to loopback. Playwright request forwarding connects to the literal loopback address with the Auth
-Host header, so a workstation DNS override cannot redirect the run elsewhere. `webServer` waits for
+`http://base.com.localhost:3198`; no remote application URL is configurable. Browser DNS is pinned
+to loopback. Playwright request forwarding connects to the literal loopback address with the Base
+com Host header, so a workstation DNS override cannot redirect the run elsewhere. `webServer` waits for
 the bootstrap readiness message after Puma starts, and the test then requires a real HTTP 200.
 
 ## Running and inspecting failures
 
 ```bash
 bun run test:e2e:rails
-bun run test:e2e:rails e2e/rails/auth-public.spec.ts
+bun run test:e2e:rails e2e/rails/preference-select-props.spec.ts
 bun run test:e2e:rails --headed
 bun run test:e2e:rails --debug
 node node_modules/playwright/cli.js show-trace tmp/e2e-rails/results/<case>/trace.zip
@@ -95,7 +95,7 @@ isolated-workflow databases and receipt files require separate inventory and cle
 
 ## Boundaries and next scenarios
 
-The bootstrap explicitly prepares only the Auth public availability flag through a shared,
+The bootstrap explicitly prepares only the Base.com public availability flag through a shared,
 process-local test Flipper memory adapter. The ordinary application availability gate remains in
 place; no authentication or provider-availability switch is enabled.
 
@@ -110,12 +110,11 @@ test also verifies Turnstile is absent. This is a declared scenario limit, not a
 challenge. Every other remote request fails the test. Real local responses pass unchanged to
 Chromium through Playwright routing; there is no dummy product page.
 
-The Auth landing's Sign in link deliberately targets HTTPS Base authority. This milestone does not
-click it or rewrite that production contract. A future navigation test needs an explicitly local TLS
-Base origin and an allowlist covering every redirect hop. Sign in/up also need a reviewed
-synthetic-data setup/reset interface, admission/ceremony prerequisites, test-only provider delivery
-inspection, and an artifact policy. Passkeys, full SSO, Jump/Away and Edge remain outside this
-scope.
+The suite covers anonymous Base.com pages and does not click the Base app or org sign-in entries.
+Testing those RP flows needs an explicitly local authority setup and an allowlist covering every
+external redirect hop. It also needs a reviewed synthetic-data setup/reset interface,
+admission/ceremony prerequisites, test-only provider delivery inspection, and an artifact policy.
+Passkeys, full SSO, Jump/Away, and external Edge behavior remain outside this scope.
 
 The existing CI has no Rails browser E2E job. This command is not silently appended to CI or
 `config/ci.rb`: CI must first prepare the ordinary test databases/credentials and install Chromium.

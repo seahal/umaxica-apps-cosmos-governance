@@ -16,18 +16,15 @@ module Base
       include ::BasePreferenceActorProjection
 
       include ::BrowserRpAuthentication
+      include ::BrowserRpUnsafeRequestGuard
       include ::AuthenticationWithdrawalGate
-      include ::BrowserRpSafeRequestRefresh
-      include ::BrowserRpUnsafeRequestRefresh
 
       include ::BaseAdmissionBrowserBinding
       include ::SignErrorResponses
-      include ::SessionLimitGate
       include ::AuthorizationAudit
       include ::AuthorizationOperator
       include ::VerificationOperator
       include ActionPolicy::Controller
-      include ::OidcSsoInitiator
       include SurfaceRouteAliasHelper
       include ::ActorSupport
       include ::Finisher
@@ -45,8 +42,7 @@ module Base
       helper_method :current_resource, :browser_rp_authenticated?, :browser_rp_session_public_id,
                     :current_browser_session_security_context, :current_session_public_id,
                     :current_session, :logged_in?
-      before_action :authenticate_browser_rp_safe_request!
-      prepend_before_action :authenticate_browser_rp_unsafe_request!
+      prepend_before_action :guard_browser_rp_unsafe_request!
 
       class << self
         public
@@ -58,13 +54,12 @@ module Base
 
       authorize :user, through: :current_policy_user
       authorize :actor, through: :current_actor
-      rescue_from AuthenticationBase::LoginCooldownError, with: :render_login_cooldown
       rescue_from ApplicationError, with: :handle_application_error
       rescue_from BaseZenithIdentityResolver::DependencyUnavailable, with: :render_base_zenith_identity_unavailable
       rescue_from ActionController::InvalidCrossOriginRequest, with: :handle_csrf_failure
       rescue_from ActionPolicy::Unauthorized, with: :handle_authorization_error
       helper_method :current_actor, :current_account, :current_session_public_id,
-                    :signed_pt_param, :current_operator, :logged_in?, :active_operator?, :logged_in_operator?
+                    :current_operator, :logged_in?, :active_operator?, :logged_in_operator?
 
       allow_browser versions: :modern
 
@@ -92,6 +87,7 @@ module Base
       before_action :resolve_param_context
       before_action :set_region
 
+      before_action :enforce_withdrawal_gate!
       before_action :set_current_actor
       before_action :hydrate_base_preference_actor_state
 
@@ -120,12 +116,6 @@ module Base
         case state.rp_session
         when RpBaseOrgSession
           BaseZenithIdentityResolver.call(access_state: state, surface: :org)
-        when OpOrgGrant
-          resource = state.resource
-          raise ActiveRecord::RecordNotFound, "Base ORG identity has the wrong type" unless
-            resource.instance_of?(Operator)
-
-          resource
         else
           raise ActiveRecord::RecordNotFound, "Base ORG identity has no recognized session binding"
         end
@@ -170,16 +160,10 @@ module Base
           case controller_path
           when "base/org/identity/secret_credentials"
             "secret_management"
-          when "base/org/identity/sessions", "base/org/identity/revocations/others"
+          when "base/org/identity/sessions"
             "session_management"
           when "base/org/identity/removals"
             "identity_removal"
-          when "base/org/identity/emails/registrations"
-            "contact_registration" if %w(edit create update).include?(action_name)
-          when "base/org/identity/telephones/registrations"
-            "contact_registration" if %w(create update).include?(action_name)
-          when "base/org/identity/telephones"
-            "contact_registration" if action_name == "create"
           end
       end
 
@@ -221,25 +205,6 @@ module Base
 
       def oidc_client_id
         browser_rp_client_id
-      end
-
-      # D-151: path-only `target_link_uri`; no query is carried.
-      def sign_in_url_with_target(pt)
-        target = pt.present? ? RpTargetLinkUri.normalize(URI.parse(decode_pt(pt)).path) : nil
-        base_org_sign_show_path(ri: RequestContextContract.normalize_region(params[:ri]), target_link_uri: target)
-      rescue URI::InvalidURIError
-        base_org_sign_show_path(ri: RequestContextContract.normalize_region(params[:ri]))
-      end
-
-      # The browser is redirected to this host for the OIDC hop, so it has to be the public
-      # Auth origin, matching Base::App::ApplicationController. An internal host here sends
-      # the visitor to a name their browser cannot resolve.
-      def oidc_sign_host
-        ENV.fetch("PUBLIC_AUTH_STAFF_URL")
-      end
-
-      def oidc_visa_authority_host
-        Rails.configuration.x.boot_config.fetch(:hosts).visa_staff.host
       end
 
       private

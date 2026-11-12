@@ -39,7 +39,9 @@ class LiveIdentifierCreationConcurrencyTest < ActiveSupport::TestCase
                   attributes = { owner_key => owner.id, :confirm_policy => true, input_key => input }
                   attributes[:confirm_using_mfa] = true if channel == "telephone"
                   record = model.create!(**attributes)
-                  record.finalize_binding! unless realm == "org"
+                  record.tap { |binding_record|
+                    binding_record.update!(binding_finalized_at: Time.current)
+                  } unless realm == "org"
                 end
                 results << :created
               rescue ActiveRecord::RecordNotUnique

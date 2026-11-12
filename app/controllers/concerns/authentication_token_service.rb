@@ -3,17 +3,13 @@
 
 # Backward-compatible facade for Auth access JWTs.
 #
-# JWT encode/decode behavior lives in `SecurityJwtAuthAccessTokenCodec`;
+# JWT decode behavior lives in `SecurityJwtAuthAccessTokenCodec`;
 # this service keeps the existing public API used by controllers and OIDC services.
 class AuthenticationTokenService
   JWT_ALGORITHM = SecurityJwtAuthAccessTokenCodec::JWT_ALGORITHM
   VALID_RESOURCE_TYPES = SecurityJwtAuthAccessTokenCodec::VALID_RESOURCE_TYPES
 
   class << self
-    def encode(...)
-      codec.encode(...)
-    end
-
     def decode(...)
       codec.decode(...)
     end

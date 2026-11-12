@@ -179,7 +179,7 @@ class ContactAuditDeliveryJobTest < ActiveSupport::TestCase
     contact = ClientEmail.create!(user_id: owner.id, address: "outbox@example.test", confirm_policy: "1")
     operation_ref = SecureRandom.uuid
     ClientEmail.transaction(requires_new: true) do
-      contact.finalize_binding!
+      contact.update_columns(binding_finalized_at: contact.class.database_now)
       ClientContactAuditOutbox.record!(
         contact_kind: "email", event_name: "finalized", owner_ref: owner.public_id,
         contact_ref: contact.public_id, operation_ref: operation_ref,
@@ -200,7 +200,7 @@ class ContactAuditDeliveryJobTest < ActiveSupport::TestCase
     contact = ClientTelephone.create!(user_id: owner.id, number: "+819012345681", confirm_policy: "1")
     assert_raises(ActiveRecord::RecordInvalid) do
       ClientTelephone.transaction(requires_new: true) do
-        contact.finalize_binding!
+        contact.update_columns(binding_finalized_at: contact.class.database_now)
         ClientContactAuditOutbox.record!(
           contact_kind: "telephone", event_name: "unknown", owner_ref: owner.public_id,
           contact_ref: contact.public_id, operation_ref: SecureRandom.uuid, actor_ref: nil,

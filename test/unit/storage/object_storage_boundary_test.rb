@@ -7,7 +7,7 @@ class ObjectStorageBoundaryTest < ActiveSupport::TestCase
   self.fixture_table_names = []
 
   test "registered boundaries match the attachment-owning domains" do
-    assert_equal(%i(avatar publishing), ObjectStorage::Boundary.keys)
+    assert_equal(%i(avatar), ObjectStorage::Boundary.keys)
   end
 
   test "an unregistered boundary raises and names the boundary" do
@@ -38,5 +38,9 @@ class ObjectStorageBoundaryTest < ActiveSupport::TestCase
     assert_raises(KeyError) { ObjectStorage::Boundary.bucket(:avatar) }
   ensure
     Kernel.silence_warnings { ObjectStorage::Boundary.const_set(:REGISTRY, original) }
+  end
+  test "foreign Publishing storage cannot resolve a Governance bucket" do
+    assert_not ObjectStorage::Boundary.registered?(:publishing)
+    assert_raises(ArgumentError) { ObjectStorage::Boundary.bucket_variable(:publishing) }
   end
 end

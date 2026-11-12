@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 class ClientTelephoneHistory < AppPrincipalRecord
-  belongs_to :user, class_name: "Client"
+  belongs_to :user, class_name: "Client", inverse_of: :telephone_histories
   validates :fingerprint, :attached_at, :detached_at, :created_at, presence: true
   before_update :reject_history_update
 

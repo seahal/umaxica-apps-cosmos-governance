@@ -9,7 +9,7 @@ module Security
     self.fixture_table_names = []
 
     class ParentController < ApplicationController
-      include AuthenticationBase
+      include BrowserRpAuthentication
 
       declare_authentication_mode! :open
     end
@@ -18,19 +18,19 @@ module Security
     end
 
     class ConstantController < ApplicationController
-      include AuthenticationBase
+      include BrowserRpAuthentication
 
       AUTHENTICATION_MODE = :guest
     end
 
     class PrivateController < ApplicationController
-      include AuthenticationBase
+      include BrowserRpAuthentication
 
       declare_authentication_mode! :private
     end
 
     class MixedController < ApplicationController
-      include AuthenticationBase
+      include BrowserRpAuthentication
 
       declare_authentication_mode! :deny_all
       declare_authentication_mode! :open, only: :index
@@ -44,7 +44,7 @@ module Security
       assert_equal :deny_all, UndeclaredController.authentication_mode_for(:index)
     end
 
-    test "legacy access policy DSL temporarily maps to authentication mode metadata" do
+    test "access policy declarations map to browser RP authentication mode metadata" do
       assert_equal :private, PrivateController.authentication_mode_for(:show)
     end
 
@@ -58,29 +58,22 @@ module Security
       assert_equal :deny_all, MixedController.authentication_mode_for(:show)
     end
 
-    test "surface application controllers default to deny_all" do
+    test "Base and Tech application controllers default to deny_all" do
       [
-        Auth::App::ApplicationController,
-        Auth::Org::ApplicationController,
         Base::App::ApplicationController,
         Base::Org::ApplicationController,
-        Core::App::ApplicationController,
-        Core::Org::ApplicationController,
-        Warp::App::ApplicationController,
-        Warp::Org::ApplicationController,
+        Tech::Org::ApplicationController,
       ].each do |controller_class|
         assert_equal :deny_all, controller_class.authentication_mode_for(:index), controller_class.name
       end
     end
 
-    # The com surfaces no longer include AuthenticationBase, so the inventory covers the
-    # controllers that still carry an authentication boundary. Anonymous com controllers are checked
-    # by Base::Com::ApplicationControllerTest and the Warp::Com controller tests instead.
+    # The Base com surface has no authentication boundary; Base app, Base org, and Tech org do.
     test "controller files declare a local authentication mode" do
       missing =
         Rails.root.glob("app/controllers/**/*_controller.rb").filter_map do |path|
           controller_class = controller_class_for(path)
-          next unless controller_class&.include?(AuthenticationBase)
+          next unless controller_class&.include?(BrowserRpAuthentication)
 
           relative_path = path.relative_path_from(Rails.root).to_s
           content = File.binread(path).encode("UTF-8", invalid: :replace, undef: :replace)
@@ -128,7 +121,7 @@ module Security
           next if controller_class.blank?
           next unless application_controller_class?(controller_class)
           # Anonymous com controllers carry no authentication boundary to declare.
-          next unless controller_class.include?(AuthenticationBase)
+          next unless controller_class.include?(BrowserRpAuthentication)
           next if controller_class.const_defined?(:AUTHENTICATION_MODE, false)
           next if controller_class.respond_to?(:local_authentication_mode_rules) &&
             controller_class.local_authentication_mode_rules.present?
@@ -147,7 +140,7 @@ module Security
     end
 
     def application_controller_class?(controller_class)
-      controller_class.name.start_with?("Auth::", "Base::", "Core::", "Jump::", "Warp::", "Inertia")
+      controller_class.name.start_with?("Base::", "Tech::")
     end
   end
 end

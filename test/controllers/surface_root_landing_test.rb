@@ -3,17 +3,23 @@
 
 require "test_helper"
 
-# Base Root is the anonymous Home. Auth Root is a public ceremony-service entry. Base Home
-# resolves a missing or unrecognized region in place without redirecting
-# (adr/home-dashboard-authentication-boundary.md).
+# Anonymous Base Home canonicalizes region context before rendering, as required by the
+# 2026-10-25 amendment in adr/home-dashboard-authentication-boundary.md.
 class SurfaceRootLandingTest < ActionDispatch::IntegrationTest
   self.fixture_table_names = []
 
-  test "base app root without a region renders Home without redirect" do
+  test "base app root without a region canonicalizes the same Home path" do
     host = ENV.fetch("PUBLIC_BASE_SERVICE_URL")
     host! host
 
     get base_app_root_url(host: host), headers: { "Host" => host }
+
+    assert_response :found
+    target = URI.parse(response.location)
+
+    assert_equal "/", target.path
+    assert_equal "jp", Rack::Utils.parse_query(target.query).fetch("ri")
+    follow_redirect!
 
     assert_response :success
     assert_nil response.location
@@ -50,34 +56,21 @@ class SurfaceRootLandingTest < ActionDispatch::IntegrationTest
     assert_equal "base/org/roots/index", inertia_component
   end
 
-  test "base app root with an unrecognized region renders Home without redirect" do
+  test "base app root with an unrecognized region canonicalizes the same Home path" do
     host = ENV.fetch("PUBLIC_BASE_SERVICE_URL")
     host! host
 
     get base_app_root_url(ri: "zz", host: host), headers: { "Host" => host }
 
+    assert_response :found
+    target = URI.parse(response.location)
+
+    assert_equal "/", target.path
+    assert_equal "jp", Rack::Utils.parse_query(target.query).fetch("ri")
+    follow_redirect!
+
     assert_response :success
     assert_nil response.location
     assert_equal "base/app/roots/index", inertia_component
-  end
-
-  test "auth app root with a region renders the ceremony-service entry" do
-    host = ENV.fetch("PUBLIC_AUTH_SERVICE_URL")
-    host! host
-
-    get auth_app_root_url(ri: "jp", host: host), headers: { "Host" => host }
-
-    assert_response :success
-    assert_equal "auth/app/roots/index", inertia_component
-  end
-
-  test "auth org root with a region renders the ceremony-service entry" do
-    host = ENV.fetch("PUBLIC_AUTH_STAFF_URL")
-    host! host
-
-    get auth_org_root_url(ri: "jp", host: host), headers: { "Host" => host }
-
-    assert_response :success
-    assert_equal "auth/org/roots/index", inertia_component
   end
 end

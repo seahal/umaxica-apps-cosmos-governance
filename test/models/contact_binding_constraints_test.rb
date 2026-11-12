@@ -54,22 +54,30 @@ class ContactBindingConstraintsTest < ActiveSupport::TestCase
 
       assert_equal [false, false, false],
                    [first.binding_effective?, rival.binding_effective?, same_owner.binding_effective?]
-      first.finalize_binding!
+      first.tap { |binding_record| binding_record.update!(binding_finalized_at: Time.current) }
       digest_error =
         assert_raises(ActiveRecord::RecordNotUnique) do
-          model.transaction(requires_new: true) { rival.finalize_binding! }
+          model.transaction(requires_new: true) {
+            rival.tap { |contact|
+              contact.update_columns(binding_finalized_at: Time.current)
+            }
+          }
         end
       owner_error =
         assert_raises(ActiveRecord::RecordNotUnique) do
-          model.transaction(requires_new: true) { same_owner.finalize_binding! }
+          model.transaction(requires_new: true) {
+            same_owner.tap { |contact|
+              contact.update_columns(binding_finalized_at: Time.current)
+            }
+          }
         end
 
       assert_includes digest_error.message, "#{model.table_name}_effective_digest"
       assert_includes owner_error.message, "#{model.table_name}_effective_owner"
       assert_equal [first.id], model.effective_binding.where(owner_key => owner.id).pluck(:id)
       first.release_binding!
-      rival.reload.finalize_binding!
-      same_owner.reload.finalize_binding!
+      rival.reload.tap { |binding_record| binding_record.update!(binding_finalized_at: Time.current) }
+      same_owner.reload.tap { |binding_record| binding_record.update!(binding_finalized_at: Time.current) }
 
       assert_equal [true, true, true],
                    [first.reload.binding_released?, rival.reload.binding_effective?,
@@ -105,7 +113,7 @@ class ContactBindingConstraintsTest < ActiveSupport::TestCase
       owner = owner_class.create!(security_mode_id: SecurityModeTestDefault.id_for(owner_class))
       other_owner = owner_class.create!(security_mode_id: SecurityModeTestDefault.id_for(owner_class))
       contact = model.create!(owner_key => owner.id, destination_key => destination, :confirm_policy => "1")
-      contact.finalize_binding!
+      contact.tap { |binding_record| binding_record.update!(binding_finalized_at: Time.current) }
       recognized_at = contact.reload.binding_finalized_at
       [
         { owner_key => other_owner.id }, { digest_key => "substituted-digest" }, { binding_finalized_at: nil },

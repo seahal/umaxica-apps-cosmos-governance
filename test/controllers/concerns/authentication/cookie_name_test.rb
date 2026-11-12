@@ -17,13 +17,5 @@ module Authentication
       assert_equal "__Host-auth_access", AuthenticationCookieName.access(production: true)
       assert_equal "__Host-auth_refresh", AuthenticationCookieName.refresh(production: true)
     end
-
-    test "returns non production dbsc cookie name" do
-      assert_equal "auth_dbsc", AuthenticationCookieName.dbsc(production: false)
-    end
-
-    test "returns production dbsc cookie name with host prefix" do
-      assert_equal "__Host-auth_dbsc", AuthenticationCookieName.dbsc(production: true)
-    end
   end
 end

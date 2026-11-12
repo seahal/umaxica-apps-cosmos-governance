@@ -34,6 +34,9 @@ class AvatarTransferReservation < AvatarRecord
   validates :state, inclusion: { in: STATES }
   validates :idempotency_key,
             format: { with: /\A[0-9a-f]{8}-[0-9a-f]{4}-[47][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\z/ }
+  validates :idempotency_key, uniqueness: true
+  validates :avatar_id, uniqueness: { conditions: -> { where(state: "pending") } },
+                        if: -> { state == "pending" }
   validates :request_fingerprint, presence: true
   validate :expiry_follows_request
   validates :state, length: { maximum: 20 }
@@ -47,8 +50,12 @@ class AvatarTransferReservation < AvatarRecord
   private
 
   def expiry_follows_request
-    return if requested_at.blank? || expires_at.blank? || expires_at > requested_at
+    return if requested_at.blank? || expires_at.blank?
 
-    errors.add(:expires_at, "must be after requested_at")
+    if expires_at <= requested_at
+      errors.add(:expires_at, "must be after requested_at")
+    elsif expires_at > requested_at + 120.hours
+      errors.add(:expires_at, "must be within five days of requested_at")
+    end
   end
 end

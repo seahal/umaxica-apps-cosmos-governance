@@ -19,124 +19,19 @@ module EmailContactBinding
   end
 
   def finalize_registration_binding!(transaction:, code:, session_ref:)
-    with_lock do
-      now = self.class.database_now
-      unless !binding_finalized_at && !binding_released? && accessible?(now) &&
-          registration_ceremony_evidence?(transaction, code, session_ref)
-        raise ArgumentError, "verified registration candidate is unavailable"
-      end
-
-      key, pending, verified =
-        case self
-        when ClientEmail then [:user_email_status_id, ClientEmailStatus::UNVERIFIED, ClientEmailStatus::VERIFIED]
-        else raise ArgumentError, "unsupported registration Contact"
-        end
-      raise ArgumentError, "registration candidate is not pending" unless self[key] == pending
-
-      update!(key => verified, :binding_finalized_at => now)
-      self
-    end
+    raise AccessOpDataUnavailableError
   end
 
-  def finalize_binding!(at: self.class.database_now)
-    raise ArgumentError, "released contact binding cannot be finalized" if binding_released_at.present?
-    return self if binding_finalized_at.present?
-
-    update!(binding_finalized_at: at)
-    self
+  def finalize_binding!(at: nil)
+    raise AccessOpDataUnavailableError
   end
 
   def finalize_sign_up_binding!(flow:, session_nonce:)
-    owner, transaction_model, status_key, pending_status, verified_status, realm =
-      sign_up_binding_components(flow)
-    owner.with_lock do
-      transaction_model.connection_owner.connected_to(role: :writing) do
-        flow.with_cycle_lock do
-          with_lock do
-            unless sign_up_parent_authorizes_binding?(flow, owner, session_nonce) &&
-                owner.active? && owner.access_enabled? && owner.accessible?(owner.class.database_now) &&
-                accessible?(self.class.database_now) && !binding_released?
-              raise ArgumentError, "Email signup binding authority is unavailable"
-            end
-
-            session_ref = Digest::SHA256.hexdigest(
-              JSON.generate(
-                ["email_sign_up", flow.public_id,
-                 flow.nonce_digest,],
-              ),
-            )
-            matches = transaction_model.where(
-              surface: realm, operation: "sign_up", purpose: "sign_up", actor_ref: owner.public_id,
-              session_ref: session_ref, email_candidate_ref: public_id, normalized_email_digest: address_digest,
-            )
-            raise ArgumentError, "Email signup ceremony is unavailable" unless matches.exists?
-
-            transaction = matches.sole
-            transaction.with_lock do
-              unless sign_up_consumed_proof?(transaction) &&
-                  sign_up_parent_authorizes_binding?(flow, owner, session_nonce)
-                raise ArgumentError, "Email signup proof is unavailable"
-              end
-
-              if binding_finalized_at
-                unless binding_effective? && self[status_key] == verified_status
-                  raise ArgumentError, "Email signup binding conflicts with committed state"
-                end
-              else
-                unless [pending_status, verified_status].include?(self[status_key])
-                  raise ArgumentError, "Email signup candidate has an unsupported status"
-                end
-
-                update!(status_key => verified_status, :binding_finalized_at => self.class.database_now)
-              end
-            end
-          end
-        end
-      end
-    end
-    self
+    raise AccessOpDataUnavailableError
   end
 
   def mark_sign_up_verified!(flow:, session_nonce:, code:)
-    owner, transaction_model, status_key, pending_status, verified_status, realm =
-      sign_up_binding_components(flow)
-    owner.with_lock do
-      transaction_model.connection_owner.connected_to(role: :writing) do
-        flow.with_cycle_lock do
-          with_lock do
-            now = flow.class.database_now
-            unless sign_up_parent_matches?(flow, owner, session_nonce) &&
-                !flow.sign_up_terminal? && !flow.lapsed?(now) && flow.expires_at > now &&
-                sign_up_source_available?(owner) && !binding_finalized_at &&
-                [pending_status, verified_status].include?(self[status_key])
-              raise ArgumentError, "Email signup verification authority is unavailable"
-            end
-
-            session_ref = Digest::SHA256.hexdigest(
-              JSON.generate(
-                ["email_sign_up", flow.public_id,
-                 flow.nonce_digest,],
-              ),
-            )
-            matches = transaction_model.where(
-              surface: realm, operation: "sign_up", purpose: "sign_up", actor_ref: owner.public_id,
-              session_ref: session_ref, email_candidate_ref: public_id, normalized_email_digest: address_digest,
-            )
-            raise ArgumentError, "Email signup verification ceremony is unavailable" unless matches.exists?
-
-            unless matches.sole.email_otp_verified_evidence?(
-              code: code, purpose: "sign_up", actor_ref: owner.public_id, session_ref: session_ref,
-              operation: "sign_up", candidate_ref: public_id,
-            )
-              raise ArgumentError, "Email signup verification receipt is unavailable"
-            end
-
-            update!(status_key => verified_status) if self[status_key] == pending_status
-          end
-        end
-      end
-    end
-    self
+    raise AccessOpDataUnavailableError
   end
 
   def release_binding!(at: self.class.database_now)
@@ -173,54 +68,6 @@ module EmailContactBinding
   end
 
   private
-
-  def sign_up_binding_components(flow)
-    case [self, flow]
-    in [ClientEmail, ClientSignUpFlow]
-      owner = Client.find(user_id)
-      raise ArgumentError, "Email signup owner does not match flow" unless flow.principal_id == owner.id
-
-      [owner, ClientEmailCeremonyTransaction, :user_email_status_id,
-       ClientEmailStatus::UNVERIFIED_WITH_SIGN_UP, ClientEmailStatus::VERIFIED_WITH_SIGN_UP, "app",]
-    else raise ArgumentError, "unsupported Email signup binding realm"
-    end
-  end
-
-  def sign_up_parent_matches?(flow, owner, session_nonce)
-    session_nonce.is_a?(String) && session_nonce.encoding.ascii_compatible? && session_nonce.valid_encoding? &&
-      session_nonce.present? && flow.nonce_matches?(session_nonce) && flow.principal_id == owner.id &&
-      flow.entry_method == "email" && flow.pending_contact_type == "email" && flow.pending_contact_id == id
-  end
-
-  def sign_up_source_available?(owner)
-    owner.active? && owner.access_enabled? && owner.accessible?(owner.class.database_now) &&
-      accessible?(self.class.database_now) && !binding_released?
-  end
-
-  def sign_up_parent_authorizes_binding?(flow, owner, session_nonce)
-    now = flow.class.database_now
-    sign_up_parent_matches?(flow, owner, session_nonce) &&
-      flow.status_id == ClientSignUpFlowStatus::FINALIZING && flow.requirement_cleared?("otp") &&
-      !flow.lapsed?(now) && flow.expires_at > now
-  end
-
-  def sign_up_consumed_proof?(transaction)
-    now = transaction.class.database_now
-    transaction.status == "pending" && !transaction.consumed_at && transaction.expires_at > now &&
-      transaction.otp_consumed_at.present? && !transaction.otp_cancelled_at && transaction.otp_verifier.nil? &&
-      transaction.otp_receipt_verifier.present? && transaction.otp_generation.present?
-  end
-
-  def registration_ceremony_evidence?(transaction, code, session_ref)
-    owner =
-      case [self, transaction]
-      in [ClientEmail, ClientEmailCeremonyTransaction] then user
-      else raise ArgumentError, "unsupported Email registration ceremony realm"
-      end
-    transaction.normalized_email_digest == address_digest && transaction.email_registration_otp_evidence?(
-      code: code, actor_ref: owner.public_id, session_ref: session_ref, candidate_ref: public_id,
-    )
-  end
 
   def effective_binding_has_digest
     return if binding_finalized_at.blank?

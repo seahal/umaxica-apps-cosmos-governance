@@ -42,7 +42,7 @@ module Security
       test "browser binding is host only and HttpOnly" do
         request = ActionDispatch::TestRequest.create("HTTP_HOST" => "id.app.example")
 
-        options = CoreCookieOptions.for(
+        options = BrowserCookieOptions.for(
           request:, httponly: true, secure: true, same_site: :lax, path: "/",
         )
 

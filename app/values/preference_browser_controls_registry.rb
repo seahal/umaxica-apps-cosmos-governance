@@ -4,11 +4,9 @@
 # Which page families may render the interactive theme and cookie-consent controls, and the
 # same-origin endpoint each control talks to.
 #
-# `app`, `com`, and `org` name a preference domain; they do not say whether a given family's pages
-# may offer the controls. Palm shares the `app` surface with Core but has no browser preference
-# endpoint, so a surface-only decision rendered controls there that called a route the host does not
-# serve. The decision is therefore keyed by family and surface together, and only pairs that exist
-# are listed: asking for an unlisted pair (`palm/com`, `core/dev`) raises instead of guessing.
+# `app`, `com`, and `org` name a preference domain. The decision is keyed by family and surface
+# together; only pairs served by this application's Base routes are listed. Asking for another
+# family or surface raises instead of guessing.
 #
 # The endpoint path is declared here and handed to the browser through the page chrome, so browser
 # code never derives an API path from its own origin. Each path is origin-relative: the request stays
@@ -24,18 +22,8 @@ module PreferenceBrowserControlsRegistry
     theme_endpoint_path: "/api/v0/preferences/theme",
     cookie_endpoint_path: "/api/v0/preferences/cookie",
   )
-  NONE = Controls.new(theme_endpoint_path: nil, cookie_endpoint_path: nil)
-
   MATRIX = {
     "base" => { "app" => API_V0, "com" => API_V0, "org" => API_V0 }.freeze,
-    # Only Base owns browser Preference writes. Other families render verified display state but
-    # do not offer controls that would need a non-authoritative writer.
-    "auth" => { "app" => NONE, "org" => NONE }.freeze,
-    "core" => { "app" => NONE, "org" => NONE }.freeze,
-    "warp" => { "app" => NONE, "com" => NONE, "org" => NONE }.freeze,
-    "palm" => { "app" => NONE }.freeze,
-    "edit" => { "org" => NONE }.freeze,
-    "visa" => { "app" => NONE, "org" => NONE }.freeze,
   }.freeze
 
   module_function

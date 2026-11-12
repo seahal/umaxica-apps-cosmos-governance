@@ -4,8 +4,6 @@ require "test_helper"
 require "timeout"
 
 class WithdrawalOuterTransactionTest < ActiveSupport::TestCase
-  include AuthorityStopCleanup
-
   self.use_transactional_tests = false
   self.fixture_table_names = []
 
@@ -120,56 +118,8 @@ class WithdrawalOuterTransactionTest < ActiveSupport::TestCase
     end
   end
 
-  %i(commit rollback).product(%i(joined savepoint)).each do |outcome, nesting|
-    test "withdrawal suspension inside #{nesting} waits for outer #{outcome}" do
-      actor = Client.create!(security_mode_id: SecurityModeConfigurable::NORMAL, status_id: ClientStatus::ACTIVE)
-      root = ClientToken.create!(user: actor, authentication_epoch: 0)
-      device_id = root.device_session_id
-      flow = ClientWithdrawalFlow.create!(
-        client: actor, status_id: ClientWithdrawalFlowStatus::REQUESTED,
-        began_at: Client.database_now,
-      )
-      occurrences = ClientOccurrence.where(event_type: "withdrawal.deactivated")
-        .where("context ->> 'subject_public_id' = ?", actor.public_id)
-      event_id = nil
-      transition =
-        lambda do
-          WithdrawalLifecycle.suspend!(actor: actor)
-          event_id = AppIdentityAuthenticationEvent.find_by!(actor_ref: actor.id.to_s).event_id
-        end
-
-      Client.transaction do
-        if nesting == :savepoint
-          Client.transaction(requires_new: true) { transition.call }
-        else
-          transition.call
-        end
-
-        assert_not OpAppInboundEventReceipt.exists?(event_id:)
-        assert_not_predicate root.reload, :revoked?
-        assert_empty occurrences
-        raise ActiveRecord::Rollback if outcome == :rollback
-      end
-
-      assert_equal outcome == :commit, OpAppInboundEventReceipt.exists?(event_id:)
-      assert_equal outcome == :commit, root.reload.revoked?
-      assert_equal outcome == :commit, actor.reload.deactivated_at.present?
-      assert_equal outcome == :commit, flow.reload.withdrawal_discarded?
-      assert_equal (outcome == :commit) ? 1 : 0, occurrences.count
-    ensure
-      delete_authority_stops_for!(realm: "app", root_ids: [root&.id])
-      OpAppInboundEventReceipt.where(event_id:).delete_all if event_id
-      AppIdentityAuthenticationEvent.where(actor_ref: actor.id.to_s).delete_all if actor
-      occurrences&.delete_all
-      flow&.destroy!
-      root&.delete
-      ClientDeviceSession.where(id: device_id).delete_all if device_id
-      actor&.delete
-    end
-  end
-
-  %i(commit rollback).product(%i(joined savepoint)).each do |outcome, nesting|
-    test "withdrawal termination inside #{nesting} waits for outer #{outcome}" do
+  %w(suspend terminate).product(%i(commit rollback), %i(joined savepoint)).each do |action, outcome, nesting|
+    test "withdrawal #{action} retains Gov denial and reports absent Access after outer #{outcome} #{nesting}" do
       actor_id = SecureRandom.random_number(1 << 60) + 1_000_000_000
       if ClientNotificationRecord.exists?(user_id: actor_id) || AvatarAssignment.exists?(user_id: actor_id)
         raise ArgumentError, "synthetic actor ID collides with existing cross-database children"
@@ -178,49 +128,72 @@ class WithdrawalOuterTransactionTest < ActiveSupport::TestCase
       past = Client.database_now - 10.days
       actor = Client.create!(
         id: actor_id, security_mode_id: SecurityModeConfigurable::NORMAL, status_id: ClientStatus::ACTIVE,
-        withdrawal_started_at: past, deactivated_at: past, discard_at: past, withdrawn_at: past,
-        purge_eligible_at: 21.days.from_now,
+        created_at: past - 1.day,
       )
-      root = ClientToken.create!(user: actor, authentication_epoch: 0)
-      device_id = root.device_session_id
+      if action == "terminate"
+        actor.update!(
+          withdrawal_started_at: past, deactivated_at: past, discard_at: past, withdrawn_at: past,
+          purge_eligible_at: 21.days.from_now,
+        )
+      end
       flow = ClientWithdrawalFlow.create!(
-        client: actor, status_id: ClientWithdrawalFlowStatus::DISCARDED, began_at: past, discard_at: Float::INFINITY,
+        client: actor,
+        status_id: (action == "suspend") ? ClientWithdrawalFlowStatus::REQUESTED : ClientWithdrawalFlowStatus::DISCARDED,
+        began_at: past, discard_at: Float::INFINITY,
       )
-      occurrences = ClientOccurrence.where(event_type: "withdrawal.terminated")
+      event_type = (action == "suspend") ? "withdrawal.deactivated" : "withdrawal.terminated"
+      occurrences = ClientOccurrence.where(event_type:)
         .where("context ->> 'subject_public_id' = ?", actor.public_id)
-      event_id = nil
-      transition =
-        lambda do
-          WithdrawalLifecycle.terminate!(actor: actor)
-          event_id = AppIdentityAuthenticationEvent.find_by!(actor_ref: actor.id.to_s).event_id
-        end
+      original_actor = actor.reload.attributes
+      original_flow = flow.reload.attributes
+      failure = nil
+      begin
+        Client.transaction do
+          if nesting == :savepoint
+            Client.transaction(requires_new: true) do
+              case action
+              when "suspend" then WithdrawalLifecycle.suspend!(actor:)
+              when "terminate" then WithdrawalLifecycle.terminate!(actor:)
+              end
+            end
+          else
+            case action
+            when "suspend" then WithdrawalLifecycle.suspend!(actor:)
+            when "terminate" then WithdrawalLifecycle.terminate!(actor:)
+            end
+          end
 
-      Client.transaction do
-        if nesting == :savepoint
-          Client.transaction(requires_new: true) { transition.call }
-        else
-          transition.call
+          assert AppIdentityAuthenticationEvent.exists?(actor_ref: actor.id.to_s)
+          assert_empty occurrences
+          raise ActiveRecord::Rollback if outcome == :rollback
         end
-
-        assert_not OpAppInboundEventReceipt.exists?(event_id:)
-        assert_not_predicate root.reload, :revoked?
-        assert_empty occurrences
-        raise ActiveRecord::Rollback if outcome == :rollback
+      rescue AccessOpDataUnavailableError => e
+        failure = e
       end
 
-      assert_equal outcome == :commit, OpAppInboundEventReceipt.exists?(event_id:)
-      assert_equal outcome == :commit, root.reload.revoked?
-      assert_equal outcome == :commit, actor.reload.terminated_at.present?
-      assert_equal outcome == :commit, flow.reload.withdrawal_terminated?
-      assert_equal (outcome == :commit) ? 1 : 0, occurrences.count
+      if action == "terminate"
+        # Access-owned purge state is a prerequisite, so termination must roll back before its stop event.
+        assert_instance_of AccessOpDataUnavailableError, failure
+        assert_equal original_actor, actor.reload.attributes
+        assert_equal original_flow, flow.reload.attributes
+        assert_not AppIdentityAuthenticationEvent.exists?(actor_ref: actor.id.to_s)
+        assert_empty occurrences
+      else
+        if outcome == :commit
+          assert_instance_of AccessOpDataUnavailableError, failure
+        else
+          assert_nil failure
+        end
+
+        assert_equal outcome == :commit, AppIdentityAuthenticationEvent.exists?(actor_ref: actor.id.to_s)
+        assert_equal outcome == :commit, actor.reload.deactivated_at.present?
+        assert_equal outcome == :commit, flow.reload.withdrawal_discarded?
+        assert_equal (outcome == :commit) ? 1 : 0, occurrences.count
+      end
     ensure
-      delete_authority_stops_for!(realm: "app", root_ids: [root&.id])
-      OpAppInboundEventReceipt.where(event_id:).delete_all if event_id
       AppIdentityAuthenticationEvent.where(actor_ref: actor.id.to_s).delete_all if actor
       occurrences&.delete_all
       flow&.destroy!
-      root&.delete
-      ClientDeviceSession.where(id: device_id).delete_all if device_id
       actor&.delete
     end
   end

@@ -1,11 +1,11 @@
 import { Controller } from "@hotwired/stimulus";
 
-import { getAssertion, passkeysSupported } from "@/features/auth/passkeys/webauthn";
+import { getAssertion, passkeysSupported } from "@/features/identity/passkeys/webauthn";
 
 // The step-up passkey assertion, for the surfaces that do not boot React.
 //
 // The ceremony itself -- normalising the server's options, calling the credential API and encoding
-// the assertion the way the server expects -- lives in `@/features/auth/passkeys/webauthn`, which
+// the assertion the way the server expects -- lives in `@/features/identity/passkeys/webauthn`, which
 // the React passkey screens use as well. This controller is only the form: it runs the ceremony,
 // fills the hidden fields and submits.
 export default class extends Controller {

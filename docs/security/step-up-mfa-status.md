@@ -1,20 +1,12 @@
 # Step-Up MFA Status
 
-> **Partially superseded by Identity Authority inversion:** The credential availability vocabulary
-> in this document remains useful only where it does not assign step-up freshness, session, token,
-> or settings authority to `sign/id`. `acme/www` is the Session, Token, Account, Preference,
-> Authorization, and downstream-token Authority. `sign/id` is ceremony-only. Existing sign-side
-> physical tables/models do not imply sign-side authority. Do not use this document to reintroduce
-> sign-side sessions, refresh, preference, dashboard, account lifecycle, token issuance, logout, or
-> step-up freshness.
+> **Current route status (2026-11-11):** Base and Tech OIDC sign-in is unavailable after removal of
+> provider URL configuration and RP callback routes. The credential-availability state and
+> operation-level step-up checks remain local Base behavior; this document does not describe a
+> currently routed sign-in ceremony.
 
-This document describes the current step-up gate used by the `app`, `com`, and `org` sign
-configuration surfaces.
-
-`/verification` is intentionally shared by Acme and Sign. On Acme, `/verification` is the
-authority-side request, completion, and cancellation gate. On Sign, `/verification` is the
-credential-side ceremony and cancellation surface. Passkey/WebAuthn ceremony belongs to `sign/id`,
-and cancellation closes a pending verification request without granting step-up freshness.
+This document describes the credential-availability state used by the Base app and Base org
+surfaces. Base com is anonymous-only; Tech does not expose passkey inventory.
 
 Step-up is the product's current `AAL2` boundary. The broader AAL terminology is defined in
 `docs/security/authentication-assurance-levels.md`.
@@ -46,7 +38,6 @@ The status is recalculated from surface-specific step-up methods:
 | surface | `ACTIVE` when any of these exist                              |
 | ------- | ------------------------------------------------------------- |
 | `app`   | verified user email, active user passkey, or active user TOTP |
-| `com`   | verified visitor email or active visitor passkey              |
 | `org`   | active operator passkey                                       |
 
 When multiple app step-up methods are available, prefer passkey, then TOTP, then email OTP.
@@ -108,9 +99,8 @@ credential registration audit events continue to record the actual registration.
 
 ## MFA Reset Recovery
 
-MFA reset is not a step-up method and must not bypass step-up. When an actor loses all usable MFA
-material, the reset path follows the account-recovery design in
-`docs/security/mfa-reset-account-recovery.md`.
+MFA reset is not a step-up method and must not bypass step-up. The former Base app/org MFA reset
+routes are retired; this repository no longer exposes that account-recovery workflow.
 
 After an approved reset revokes the actor's surface-counting credentials, `multi_factor_status_id`
 is recalculated. If no step-up method remains, the actor returns to `UNCONFIGURED` and must use the

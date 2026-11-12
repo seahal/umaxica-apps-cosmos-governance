@@ -163,9 +163,8 @@
 }
 
 /*
- * Motion. Both animations are referenced by existing markup; `fade-in-up` was used by
- * `auth/org/omniauth/omniauth_callbacks/error.html.erb` without ever being defined, so nothing
- * animated. Declaring them here makes `animate-shake` and `animate-fade-in-up` real utilities.
+ * Motion. Both animations are used by current interface components. Declaring them here makes
+ * `animate-shake` and `animate-fade-in-up` real utilities.
  */
 @theme {
   --animate-shake: shake 0.4s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;

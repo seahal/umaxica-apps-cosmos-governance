@@ -4,22 +4,11 @@
 
 This runbook manages ES384 signing keys for Jump redirect tokens.
 
-Jump RT keys are issuer-surface scoped. Do not reuse one private key or `kid` across issuer
-namespaces or across the `auth`, `base`, `visa`, `core`, `warp` and `palm` issuer groups.
+Jump RT keys are issuer-surface scoped. Do not reuse one private key or `kid` between Base app and
+Base org.
 
-Jump issuers are exactly these eleven namespaces:
-
-- `AUTH_APP`, `AUTH_ORG`
-- `BASE_APP`, `BASE_ORG`
-- `VISA_APP`, `VISA_ORG`
-- `CORE_APP`, `CORE_ORG`
-- `WARP_APP`, `WARP_ORG`
-- `PALM_APP`
-
-The list is `JumpRtSurface::ISSUER_NAMESPACES` (`app/values/jump_rt_surface.rb`). The corporate
-authentication realm has no Jump issuer. `ACME_APP` and `ACME_ORG` remain in the general
-`JitSecurityJwtRegistry::SURFACE_NAMESPACES` registry for other token families, but they are not
-Jump signing authorities and are not rotated by this runbook.
+The retained Jump issuers are `BASE_APP` and `BASE_ORG`, listed in
+`JumpRtSurface::ISSUER_NAMESPACES` (`app/values/jump_rt_surface.rb`). Base com has no Jump issuer.
 
 Issuer registration and permitted destinations are separate contracts. See
 [the directed handoff ADR](../../adr/jump-directed-rails-handoff-contract.md). Issuer identity is
@@ -97,7 +86,7 @@ signer is published only if it is listed in `PUBLIC_KEYSET`.
 ### Phase A: pre-publish K2
 
 1. Generate a new P-384 private key `K2`.
-2. Choose a globally unique `kid`, for example `auth-app-jump-rt-es384-prod-2026-06-a`.
+2. Choose a globally unique `kid`, for example `base-app-jump-rt-es384-prod-2026-06-a`.
 3. Store `K2` as a new, inactive version of the `JWT_<NAMESPACE>_PRIVATE_KEY` secret. Do not switch
    the runtime reference to it yet: a private key that changes while `ACTIVE_KID` still names `K1`
    fails boot as an active/public mismatch.
@@ -215,19 +204,11 @@ the installer-owned keys in `tmp/local_jwt_keysets.json` (kid `development-<name
 `JWT_<NAMESPACE>_*` environment value that does not match that store fails boot, so no other key
 material can be injected locally.
 
-Issuer identity comes from the existing surface setting for the namespace (`PUBLIC_AUTH_*_URL`,
-`PUBLIC_BASE_*_URL`, `PUBLIC_CORE_*_URL`, `PUBLIC_WARP_*_URL`, `PUBLIC_PALM_SERVICE_URL`). For live
-Jump each such setting must be a public HTTPS root origin; localhost, private ingress and IP
-literals fail registry configuration at boot and raise `JumpRtConfigurationError` at issuance and on
-return verification. `Rails.env` does not change the identity, so development may use a canonical
-origin such as `https://www.umaxica.app`. In that case the JWKS at that origin must publish the
-development kid, and the development private key then signs as the canonical issuer with full
-authority; the `development` marker in the kid does not limit it. Otherwise expose a distinct
-origin's Rails JWKS route and browser return through public HTTPS ingress, and register the exact
-issuer, JWKS and kid in Hono separately. Verify DNS, TLS, JWKS accessibility from Jump and the
-published kid before use. An Access login page in front of JWKS does not constitute a fetchable
-keyset. No deployment, trust registration, secret provisioning or key rotation is performed by this
-Rails change.
-
-Edit remains an OIDC assertion client, not a Jump issuer; its OIDC keys and registration are
-independent from this surface key runbook.
+Issuer identity comes from the retained Base app and org settings (`PUBLIC_BASE_SERVICE_URL` and
+`PUBLIC_BASE_STAFF_URL`). Each setting must resolve to a public HTTPS root origin; localhost,
+private ingress and IP literals fail registry configuration at boot and raise
+`JumpRtConfigurationError` at issuance and return verification. `Rails.env` does not change the
+identity. Before production use, verify DNS, TLS, JWKS accessibility from Jump and the published
+`kid`; register the exact issuer, JWKS and `kid` with the gateway. An Access login page in front of
+JWKS does not constitute a fetchable keyset. No deployment, trust registration, secret provisioning
+or key rotation is performed by this Rails change.

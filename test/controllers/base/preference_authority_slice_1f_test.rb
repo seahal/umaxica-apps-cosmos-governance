@@ -5,7 +5,7 @@ require "test_helper"
 # require "helpers/global_test_support"
 
 class BasePreferenceAuthoritySlice1fTest < ActionDispatch::IntegrationTest
-  fixtures :clients, :client_preferences, :client_token_kinds
+  fixtures :clients, :client_preferences
 
   SURFACES = {
     app: {
@@ -256,76 +256,80 @@ class BasePreferenceAuthoritySlice1fTest < ActionDispatch::IntegrationTest
   end
 
   test "base preference write updates app client preference" do
-    host = ENV.fetch("PUBLIC_BASE_SERVICE_URL")
-    host! host
-    user = clients(:one)
-    token = ClientToken.create!(authentication_epoch: 0, user: user, user_token_kind_id: ClientTokenKind::BROWSER_WEB)
+    as_rp_cell("base-app-ww") do
+      host = ENV.fetch("PUBLIC_BASE_SERVICE_URL")
+      host! host
+      user = clients(:one)
 
-    patch base_app_preference_theme_url(host: host),
-          params: { preference_theme: { option_id: ClientPreferenceThemeOption::DARK.to_s } },
-          headers: session_headers(host, token, user),
-          as: :json
+      patch base_app_preference_theme_url(host: host),
+            params: { preference_theme: { option_id: ClientPreferenceThemeOption::DARK.to_s } },
+            headers: as_user_headers(user, host: host),
+            as: :json
 
-    assert_response :ok
-    assert_equal "dr", response.parsed_body.dig("preference", "ct")
-    actor_preference = user.client_preference
+      assert_response :ok
+      assert_equal "dr", response.parsed_body.dig("preference", "ct")
+      actor_preference = user.client_preference
 
-    assert_equal ClientPreferenceThemeOption::DARK, actor_preference.client_preference_theme.option_id
+      assert_equal ClientPreferenceThemeOption::DARK, actor_preference.client_preference_theme.option_id
+    end
   end
 
   test "base preference GET overlay does not overwrite signed in app preference" do
-    host = ENV.fetch("PUBLIC_BASE_SERVICE_URL")
-    host! host
-    user = clients(:one)
-    token = ClientToken.create!(authentication_epoch: 0, user: user, user_token_kind_id: ClientTokenKind::BROWSER_WEB)
-    set_client_preference_option!(user, :language, "ja")
-    set_client_preference_option!(user, :timezone, "Asia/Tokyo")
-    set_client_preference_option!(user, :theme, "light")
+    as_rp_cell("base-app-ww") do
+      host = ENV.fetch("PUBLIC_BASE_SERVICE_URL")
+      host! host
+      user = clients(:one)
+      set_client_preference_option!(user, :language, "ja")
+      set_client_preference_option!(user, :timezone, "Asia/Tokyo")
+      set_client_preference_option!(user, :theme, "light")
 
-    get base_app_preference_url(host: host, ri: "jp", lx: "en", tz: "utc", ct: "dr"),
-        headers: session_headers(host, token, user)
+      get base_app_preference_url(host: host, ri: "jp", lx: "en", tz: "utc", ct: "dr"),
+          headers: as_user_headers(user, host: host)
 
-    assert_response :success
-    user.client_preference.reload
+      assert_response :success
+      user.client_preference.reload
 
-    assert_equal ClientPreferenceLanguageOption::JA,
-                 user.client_preference.client_preference_language.option_id
-    assert_equal ClientPreferenceTimezoneOption::ASIA_TOKYO,
-                 user.client_preference.client_preference_timezone.option_id
-    assert_equal ClientPreferenceThemeOption::LIGHT,
-                 user.client_preference.client_preference_theme.option_id
+      assert_equal ClientPreferenceLanguageOption::JA,
+                   user.client_preference.client_preference_language.option_id
+      assert_equal ClientPreferenceTimezoneOption::ASIA_TOKYO,
+                   user.client_preference.client_preference_timezone.option_id
+      assert_equal ClientPreferenceThemeOption::LIGHT,
+                   user.client_preference.client_preference_theme.option_id
+    end
   end
 
   test "base preference ignores JS readable theme cookie as canonical input" do
-    host = ENV.fetch("PUBLIC_BASE_SERVICE_URL")
-    host! host
-    user = clients(:one)
-    token = ClientToken.create!(authentication_epoch: 0, user: user, user_token_kind_id: ClientTokenKind::BROWSER_WEB)
-    set_client_preference_option!(user, :theme, "light")
-    cookies[PreferenceCookieName.anonymous_experience] = "{\"theme\":\"dark\"}"
+    as_rp_cell("base-app-ww") do
+      host = ENV.fetch("PUBLIC_BASE_SERVICE_URL")
+      host! host
+      user = clients(:one)
+      set_client_preference_option!(user, :theme, "light")
+      cookies[PreferenceCookieName.anonymous_experience] = "{\"theme\":\"dark\"}"
 
-    get base_app_preference_url(host: host, ri: "jp"),
-        headers: session_headers(host, token, user)
+      get base_app_preference_url(host: host, ri: "jp"),
+          headers: as_user_headers(user, host: host)
 
-    assert_response :success
-    assert_equal ClientPreferenceThemeOption::LIGHT,
-                 user.client_preference.reload.client_preference_theme.option_id
+      assert_response :success
+      assert_equal ClientPreferenceThemeOption::LIGHT,
+                   user.client_preference.reload.client_preference_theme.option_id
+    end
   end
 
   test "base preference reset remains destructive and removes app user preference" do
-    host = ENV.fetch("PUBLIC_BASE_SERVICE_URL")
-    host! host
-    user = clients(:one)
-    token = ClientToken.create!(authentication_epoch: 0, user: user, user_token_kind_id: ClientTokenKind::BROWSER_WEB)
-    set_client_preference_option!(user, :theme, "dark")
+    as_rp_cell("base-app-ww") do
+      host = ENV.fetch("PUBLIC_BASE_SERVICE_URL")
+      host! host
+      user = clients(:one)
+      set_client_preference_option!(user, :theme, "dark")
 
-    delete base_app_preference_customization_url(host: host),
-           params: { confirm_reset: "1" },
-           headers: session_headers(host, token, user)
+      delete base_app_preference_customization_url(host: host),
+             params: { confirm_reset: "1" },
+             headers: as_user_headers(user, host: host)
 
-    assert_redirected_to base_app_preference_url(host: host)
-    assert_equal ClientPreferenceStatus::RETIRED,
-                 ClientPreference.find_by!(client_id: user.id).status_id
+      assert_redirected_to base_app_preference_url(host: host)
+      assert_equal ClientPreferenceStatus::RETIRED,
+                   ClientPreference.find_by!(client_id: user.id).status_id
+    end
   end
 
   private
@@ -352,48 +356,6 @@ class BasePreferenceAuthoritySlice1fTest < ActionDispatch::IntegrationTest
   # rather than a form element attribute.
   def preference_form_action_path
     URI.parse(inertia_props.fetch("form").fetch("action")).path
-  end
-
-  def session_headers(host, token, user)
-    rp_cookie =
-      begin
-        fixture_root = token
-        fixture_actor = user
-        fixture_host = host
-        fixture_root.rotate_refresh_token! unless fixture_root.device_session.current_refresh_token_id
-        fixture_client = OidcClientRegistry.find!("base-app-ww")
-        @base_rp_fixture_credentials ||= {}
-        fixture_key = [fixture_client.client_id, fixture_root.public_id]
-        unless @base_rp_fixture_credentials[fixture_key]
-          fixture_now = OpAppGrant.database_now
-          fixture_rp = OpAppGrant.create!(
-            authentication_epoch: 0,
-            client_token: fixture_root, oidc_client_id: fixture_client.client_id,
-            oidc_scope: "openid profile", oidc_jti: SecureRandom.uuid,
-            oidc_nonce: SecureRandom.hex(16), oidc_auth_time: fixture_now,
-            refresh_token_expires_at: fixture_now + 1.hour,
-          )
-          fixture_access = AuthenticationTokenService.encode(
-            fixture_actor, host: fixture_host, resource_type: "client",
-                           session_public_id: fixture_root.public_id, base_session_public_id: fixture_root.public_id,
-                           oidc_sid: fixture_rp.public_id, oidc_jti: fixture_rp.oidc_jti,
-                           expires_at: fixture_now + 1.hour, scopes: %w(openid profile),
-                           issuer: OidcIssuer.for_client(fixture_client), audiences: [fixture_client.aud],
-                           jwt_issuer_id: OidcIssuer.jwt_issuer_id_for_client(fixture_client),
-                           subject: OidcSubject.for(
-                             fixture_actor,
-                             resource_type: "client",
-                           ), client_id: fixture_client.client_id,
-          )
-          fixture_refresh = fixture_rp.issue_refresh_token!
-          @base_rp_fixture_credentials[fixture_key] = [
-            "#{OidcRpBrowserCredentialContract::ACCESS_COOKIE}=#{Rack::Utils.escape(fixture_access)}",
-            "#{OidcRpBrowserCredentialContract::REFRESH_COOKIE}=#{Rack::Utils.escape(fixture_refresh)}",
-          ].join("; ")
-        end
-        @base_rp_fixture_credentials.fetch(fixture_key)
-      end
-    host_headers(host).merge("Cookie" => rp_cookie)
   end
 
   def host_headers(host = nil)

@@ -4,9 +4,9 @@ require "test_helper"
 
 class BaseDashboardImageAuthenticationBoundaryTest < ActionDispatch::IntegrationTest
   [
-    ["app", "PUBLIC_BASE_SERVICE_URL", ClientSignInFlow, ClientToken],
-    ["org", "PUBLIC_BASE_STAFF_URL", OperatorSignInFlow, OperatorToken],
-  ].each do |surface, host_key, flow_model, token_model|
+    ["app", "PUBLIC_BASE_SERVICE_URL", RpBaseAppIdentityBinding, RpBaseAppSession],
+    ["org", "PUBLIC_BASE_STAFF_URL", RpBaseOrgIdentityBinding, RpBaseOrgSession],
+  ].each do |surface, host_key, identity_binding_model, session_model|
     test "#{surface} anonymous image GET and HEAD refuse without interactive Sign for every representation" do
       host! ENV.fetch(host_key)
       path =
@@ -23,8 +23,8 @@ class BaseDashboardImageAuthenticationBoundaryTest < ActionDispatch::Integration
           "X-Inertia-Version" => InertiaRails.configuration.version,
           "Sec-Fetch-Dest" => "empty", },
       ].each do |headers|
-        assert_no_difference(-> { flow_model.count }) do
-          assert_no_difference(-> { token_model.count }) do
+        assert_no_difference(-> { identity_binding_model.count }) do
+          assert_no_difference(-> { session_model.count }) do
             get path, headers: headers
 
             assert_response :unauthorized
@@ -50,7 +50,7 @@ class BaseDashboardImageAuthenticationBoundaryTest < ActionDispatch::Integration
 
       assert_response :unauthorized
       assert_empty response.body
-      assert_no_difference(-> { flow_model.count }) do
+      assert_no_difference(-> { identity_binding_model.count }) do
         get path, headers: {
           "X-Inertia" => "true", "X-Inertia-Version" => "deliberately-mismatched-version",
         }

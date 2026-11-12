@@ -245,17 +245,16 @@ class ClientTelephoneTest < ActiveSupport::TestCase
     first, second = candidates
     first.update!(user_telephone_status_id: ClientTelephoneStatus::VERIFIED)
     assert_difference -> { ClientTelephone.effective_binding.where(user_id: owner.id).count }, 1 do
-      first.finalize_binding!
+      first.tap { |binding_record| binding_record.update!(binding_finalized_at: Time.current) }
     end
     second.update!(user_telephone_status_id: ClientTelephoneStatus::VERIFIED)
-    assert_raises(ActiveRecord::RecordNotUnique) do
-      ClientTelephone.transaction(requires_new: true) { second.finalize_binding! }
-    end
+    assert_raises(ActiveRecord::RecordInvalid) { second.tap { |binding_record| binding_record.update!(binding_finalized_at: Time.current) } }
+    assert second.errors.of_kind?(:user_id, :taken)
     assert_predicate first.reload, :binding_effective?
     assert_not_predicate second.reload, :binding_effective?
     assert_equal 1, ClientTelephone.effective_binding.where(user_id: owner.id).count
     first.release_binding!
-    second.finalize_binding!
+    second.tap { |binding_record| binding_record.update!(binding_finalized_at: Time.current) }
 
     assert_predicate first.reload, :binding_released?
     assert_predicate second.reload, :binding_effective?
@@ -361,13 +360,16 @@ class ClientTelephoneTest < ActiveSupport::TestCase
 
   test "effective telephone numbers are unique at finalization" do
     # Create first telephone
-    ClientTelephone.create!(@valid_attributes.merge(raw_number: "+819012345678")).finalize_binding!
+    ClientTelephone.create!(@valid_attributes.merge(raw_number: "+819012345678")).tap { |contact|
+      contact.update!(binding_finalized_at: Time.current)
+    }
 
     # Try to create with same number but different formatting
     duplicate = ClientTelephone.create!(@valid_attributes.merge(raw_number: "090-1234-5678"))
 
     assert_predicate duplicate, :valid?
-    assert_raises(ActiveRecord::RecordNotUnique) { duplicate.finalize_binding! }
+    assert_raises(ActiveRecord::RecordInvalid) { duplicate.tap { |binding_record| binding_record.update!(binding_finalized_at: Time.current) } }
+    assert duplicate.errors.of_kind?(:number, :taken)
   end
 
   test "sets number_digest from normalized input" do
@@ -381,25 +383,6 @@ class ClientTelephoneTest < ActiveSupport::TestCase
     expected = IdentifierBlindIndex.bidx_for_telephone("+819012345678", realm: :app)
 
     assert_equal expected, user_telephone.number_digest
-  end
-
-  test "ceremony OTP is deliverable immediately below but not at or above its finite expiry" do
-    user_telephone = ClientTelephone.create!(@valid_attributes.merge(raw_number: "+819012345600"))
-    now = ClientTelephoneCeremonyTransaction.database_now
-    ceremony = ClientTelephoneCeremonyTransaction.create_transaction!(
-      actor_ref: @user.public_id, session_ref: "client-telephone-model-browser", operation: "registration",
-      telephone_candidate_ref: user_telephone.public_id, normalized_number_digest: user_telephone.number_digest,
-      now: now, expires_at: now + 30.seconds,
-    )
-    ClientTelephoneCeremonyTransaction.stub(:database_now, now) do
-      ceremony.issue_telephone_otp!(purpose: "credential_registration")
-    end
-
-    [-Rational(1, 1_000_000), 0, Rational(1, 1_000_000)].each do |offset|
-      assert_equal offset.negative?, ceremony.reload.telephone_otp_deliverable?(
-        generation: ceremony.otp_generation, at: now + 30.seconds + offset,
-      )
-    end
   end
 
   test "fifth failed otp attempt locks but fourth does not" do
@@ -516,7 +499,9 @@ class ClientTelephoneTest < ActiveSupport::TestCase
                 configure_identifier_race_connection!(fv5013)
                 fv5011 << true
                 fv5010.pop
-                ClientTelephone.find(fv5012).finalize_binding!
+                ClientTelephone.find(fv5012).tap { |binding_record|
+                  binding_record.update!(binding_finalized_at: Time.current)
+                }
                 fv5008 << { status: :finalized }
               rescue ActiveRecord::RecordInvalid, ActiveRecord::RecordNotUnique, ActiveRecord::LockWaitTimeout => e
                 fv5008 << {
@@ -576,7 +561,9 @@ class ClientTelephoneTest < ActiveSupport::TestCase
                 configure_identifier_race_connection!(fv5005)
                 fv5003 << true
                 fv5002.pop
-                ClientTelephone.find(fv5004).finalize_binding!
+                ClientTelephone.find(fv5004).tap { |binding_record|
+                  binding_record.update!(binding_finalized_at: Time.current)
+                }
                 fv5000 << { status: :finalized }
               rescue ActiveRecord::RecordInvalid, ActiveRecord::RecordNotUnique, ActiveRecord::LockWaitTimeout => e
                 fv5000 << {
@@ -603,11 +590,14 @@ class ClientTelephoneTest < ActiveSupport::TestCase
   end
 
   test "released telephone binding can be reattached without reactivating its history" do
-    original = ClientTelephone.create!(@valid_attributes).finalize_binding!
+    original =
+      ClientTelephone.create!(@valid_attributes).tap { |binding_record|
+        binding_record.update!(binding_finalized_at: Time.current)
+      }
     original.release_binding!
     replacement = ClientTelephone.create!(@valid_attributes.merge(raw_number: original.number))
 
-    replacement.finalize_binding!
+    replacement.tap { |binding_record| binding_record.update!(binding_finalized_at: Time.current) }
 
     assert_not_predicate original.reload, :binding_effective?
     assert_predicate replacement.reload, :binding_effective?

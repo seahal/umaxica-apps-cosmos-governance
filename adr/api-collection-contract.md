@@ -9,6 +9,11 @@ unwrapped single-resource object remain in force.
 > 2026-08-22 — see [Migration constraint](#migration-constraint) and
 > [Implementation 2026-08-22](#implementation-2026-08-22).
 
+> **Local-route disposition (2026-11-10):** The owner-approved local-surface hard reset removes this
+> repository's local publishing and other foreign routes referenced below. The response-shape
+> decision remains only for retained callers and external consumers; it does not establish a current
+> local Publishing API route or authorize restoring one.
+
 ## Status
 
 Accepted (2026-08-16) for the success envelope. **Pagination mechanism superseded** on 2026-09-10 by

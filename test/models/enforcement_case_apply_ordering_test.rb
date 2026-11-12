@@ -1,117 +1,118 @@
-# typed: false
 # frozen_string_literal: true
 
 require "test_helper"
 
-# adr/unified-enforcement.md: apply! commits the state change in a transaction and then performs
-# its side effects outside it, deliberately. A committed security decision must never be rolled
-# back because a downstream effect failed, and end_case! must not release a lock another Case is
-# still holding.
-#
-# These are the two guarantees that survive no matter where apply! and end_case! live, so they are
-# pinned before #871 moves them into app/operations. Both use real failures rather than stubbed
-# collaborators, per generic/no-test-only-code.mdc.
+# Governance keeps defensive Case decisions even when Access delivery is unavailable.
+# Release reconciliation never claims an unlock or rewrites a later local deny decision.
 class EnforcementCaseApplyOrderingTest < ActiveSupport::TestCase
-  test "reconciling a released Case does not clear a later administrative lock" do
+  test "reconciling an ended Case cannot clear a later administrative lock without Access" do
     client = clients(:one)
     operator = operators(:one)
     the_case = blocking_case_for(client, operator_public_id: operator.public_id)
-    EnforcementCaseApplyOperation.call(enforcement_case: the_case, actor_operator_public_id: operator.public_id)
-    EnforcementCaseEndOperation.call(enforcement_case: the_case, reason: "revoked")
-    AdministrativeAccessLock.lock!(account: client, operator: operator, reason_code: "security_incident")
+    assert_raises(AccessOpDataUnavailableError) do
+      EnforcementCaseApplyOperation.call(enforcement_case: the_case, actor_operator_public_id: operator.public_id)
+    end
+    assert_raises(AccessOpDataUnavailableError) do
+      EnforcementCaseEndOperation.call(enforcement_case: the_case, reason: "revoked")
+    end
+    assert_raises(AccessOpDataUnavailableError) do
+      AdministrativeAccessLock.lock!(account: client, operator: operator, reason_code: "security_incident")
+    end
+    before = client.reload.attributes
+    assert_raises(AccessOpDataUnavailableError) do
+      EnforcementCaseEndOperation.new(enforcement_case: the_case, reason: "revoked").reconcile
+    end
+    assert_equal before, client.reload.attributes
+    assert_predicate client, :admin_locked?
+  end
 
-    EnforcementCaseEndOperation.new(enforcement_case: the_case, reason: "revoked").reconcile
-
+  test "end reconciliation cannot publish a release audit before Access can authorize the unlock" do
+    client = clients(:one)
+    operator = operators(:one)
+    the_case = blocking_case_for(client, operator_public_id: operator.public_id)
+    assert_raises(AccessOpDataUnavailableError) do
+      EnforcementCaseApplyOperation.call(enforcement_case: the_case, actor_operator_public_id: operator.public_id)
+    end
+    assert_raises(AccessOpDataUnavailableError) do
+      EnforcementCaseEndOperation.call(enforcement_case: the_case, reason: "revoked")
+    end
+    assert_predicate client.reload, :admin_locked?
+    assert_predicate the_case.reload.ended_at, :present?
+    release_events = AccountAccessEvent.where(
+      account_type: "Client", account_id: client.id,
+      event_type: AccountAccessEvent::EVENT_TYPE_ADMIN_UNLOCK,
+    )
+    assert_no_difference -> { release_events.count } do
+      assert_raises(AccessOpDataUnavailableError) do
+        EnforcementCaseEndOperation.new(enforcement_case: the_case, reason: "revoked").reconcile
+      end
+    end
     assert_predicate client.reload, :admin_locked?
   end
 
-  test "end reconciliation retries a missing release audit after unlock committed" do
+  test "reconciling a pending release does not advance the account cutoff or fabricate repeated unlock events" do
     client = clients(:one)
     operator = operators(:one)
     the_case = blocking_case_for(client, operator_public_id: operator.public_id)
-    EnforcementCaseApplyOperation.call(enforcement_case: the_case, actor_operator_public_id: operator.public_id)
-
-    AccountAccessEvent.stub(:create!, ->(**) { raise ActiveRecord::RecordNotUnique }) do
-      assert_raises(ActiveRecord::RecordNotUnique) do
-        EnforcementCaseEndOperation.call(enforcement_case: the_case, reason: "revoked")
-      end
+    assert_raises(AccessOpDataUnavailableError) do
+      EnforcementCaseApplyOperation.call(enforcement_case: the_case, actor_operator_public_id: operator.public_id)
     end
-
-    assert_predicate client.reload, :access_enabled?
-    assert_predicate the_case.reload.ended_at, :present?
-    EnforcementCaseEndOperation.new(enforcement_case: the_case, reason: "revoked").reconcile
-
-    assert_predicate AccountAccessEvent.where(
-      account_type: "Client", account_id: client.id, event_type: AccountAccessEvent::EVENT_TYPE_ADMIN_UNLOCK,
-    ).where("metadata @> ?::jsonb", { enforcement_case_public_id: the_case.public_id }.to_json), :exists?
-  end
-
-  test "reconciling an already released Case does not advance the account token cutoff" do
-    client = clients(:one)
-    operator = operators(:one)
-    the_case = blocking_case_for(client, operator_public_id: operator.public_id)
-    EnforcementCaseApplyOperation.call(enforcement_case: the_case, actor_operator_public_id: operator.public_id)
-    EnforcementCaseEndOperation.call(enforcement_case: the_case, reason: "revoked")
+    assert_raises(AccessOpDataUnavailableError) do
+      EnforcementCaseEndOperation.call(enforcement_case: the_case, reason: "revoked")
+    end
     cutoff = client.reload.token_valid_after_at
     release_events = AccountAccessEvent.where(
-      account_type: "Client", account_id: client.id, event_type: AccountAccessEvent::EVENT_TYPE_ADMIN_UNLOCK,
+      account_type: "Client", account_id: client.id,
+      event_type: AccountAccessEvent::EVENT_TYPE_ADMIN_UNLOCK,
     )
 
     travel 1.second do
       assert_no_difference -> { release_events.count } do
-        EnforcementCaseEndOperation.new(enforcement_case: the_case, reason: "revoked").reconcile
+        assert_raises(AccessOpDataUnavailableError) do
+          EnforcementCaseEndOperation.new(enforcement_case: the_case, reason: "revoked").reconcile
+        end
       end
     end
-
     assert_equal cutoff, client.reload.token_valid_after_at
   end
 
-  test "a side effect failing after the transaction leaves the case active" do
+  test "a real missing-operator side effect failure preserves the already decided Case" do
     client = clients(:one)
-
-    # A real failure with no stubbing: perform_principal_access_effect! resolves the operator with
-    # find_by!, and presence is all the model validates about that column.
     the_case = blocking_case_for(client, operator_public_id: "operator-that-does-not-exist")
-
-    assert_raises(ActiveRecord::RecordNotFound) { EnforcementCaseApplyOperation.call(enforcement_case: the_case, actor_operator_public_id: the_case.applied_by_operator_public_id) }
-
-    the_case.reload
-
-    assert_equal "active", the_case.state,
-                 "the state change committed before the side effect ran and must not be rolled back"
-    assert_nil the_case.sessions_revoked_at, "the raise happened before the later side effects"
+    assert_raises(ActiveRecord::RecordNotFound) do
+      EnforcementCaseApplyOperation.call(
+        enforcement_case: the_case,
+        actor_operator_public_id: the_case.applied_by_operator_public_id,
+      )
+    end
+    assert_equal "active", the_case.reload.state
+    assert_nil the_case.sessions_revoked_at
     assert_not_predicate client.reload, :admin_locked?
   end
 
-  test "end_case! leaves the account locked while another blocking case is still in force" do
+  test "ending blocking Cases cannot release the local deny or report Access convergence" do
     client = clients(:one)
     operator = operators(:one)
-
     first = blocking_case_for(client, operator_public_id: operator.public_id)
-    EnforcementCaseApplyOperation.call(
-      enforcement_case: first,
-      actor_operator_public_id: first.applied_by_operator_public_id,
-    )
     second = blocking_case_for(client, operator_public_id: operator.public_id)
-    EnforcementCaseApplyOperation.call(
-      enforcement_case: second,
-      actor_operator_public_id: second.applied_by_operator_public_id,
-    )
 
+    [first, second].each do |the_case|
+      assert_raises(AccessOpDataUnavailableError) do
+        EnforcementCaseApplyOperation.call(enforcement_case: the_case, actor_operator_public_id: operator.public_id)
+      end
+    end
     assert_predicate client.reload, :admin_locked?
-
-    EnforcementCaseEndOperation.call(
-      enforcement_case: first, reason: "revoked",
-    )
-
-    assert_predicate client.reload, :admin_locked?,
-                     "the refcount rule: the second Case still holds the lock"
-
-    EnforcementCaseEndOperation.call(
-      enforcement_case: second, reason: "revoked",
-    )
-
-    assert_not_predicate client.reload, :admin_locked?
+    assert_raises(AccessOpDataUnavailableError) do
+      EnforcementCaseEndOperation.call(enforcement_case: first, reason: "revoked")
+    end
+    assert_predicate client.reload, :admin_locked?
+    assert_nil second.reload.ended_at
+    assert_raises(AccessOpDataUnavailableError) do
+      EnforcementCaseEndOperation.call(enforcement_case: second, reason: "revoked")
+    end
+    assert_predicate client.reload, :admin_locked?
+    assert_predicate first.reload.ended_at, :present?
+    assert_predicate second.reload.ended_at, :present?
   end
 
   private

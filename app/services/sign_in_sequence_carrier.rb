@@ -2,7 +2,6 @@
 # frozen_string_literal: true
 
 class SignInSequenceCarrier
-  KEY = :sign_in_sequence
   SURFACE_KEYS = {
     app: :app_sign_in_sequence,
     org: :org_sign_in_sequence,
@@ -44,7 +43,6 @@ class SignInSequenceCarrier
     }.merge(reference_payload(refs))
 
     @session[key_for(surface)] = payload
-    @session.delete(KEY) unless key_for(surface) == KEY
     SignInSequence.new(payload)
   end
 
@@ -80,7 +78,6 @@ class SignInSequenceCarrier
   def clear!
     surface = normalize_surface(@surface)
     @session.delete(key_for(surface)) if surface
-    @session.delete(KEY)
   end
 
   def finish!(terminal_state:)
@@ -104,19 +101,9 @@ class SignInSequenceCarrier
 
   def current_payload
     surface_key = key_for(@surface)
-    payload = @session[surface_key] if surface_key.present?
-    payload.presence || compatible_payload
-  end
+    return unless surface_key
 
-  def compatible_payload
-    payload = @session[KEY]
-    return unless payload.is_a?(Hash)
-    return if @surface.present? && payload["surface"].to_s != @surface.to_s
-    return unless key_for(payload["surface"])
-
-    @session[key_for(payload["surface"])] = payload
-    @session.delete(KEY)
-    payload
+    @session[surface_key]
   end
 
   def key_for(surface)

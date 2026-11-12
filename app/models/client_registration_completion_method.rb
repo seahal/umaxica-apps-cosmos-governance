@@ -5,6 +5,7 @@ class ClientRegistrationCompletionMethod < AppZenithRecord
 
   has_many :completions, class_name: "ClientRegistrationCompletion", foreign_key: :method_id,
                          inverse_of: :completion_method, dependent: :restrict_with_exception
+  validates :key, uniqueness: true, on: :create
   validates :key, inclusion: { in: IDS.keys }
   validates :key, length: { maximum: 16 }
 

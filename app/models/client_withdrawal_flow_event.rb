@@ -39,9 +39,9 @@ class ClientWithdrawalFlowEvent < AppPrincipalRecord
   belongs_to :client,
              class_name: "Client"
   belongs_to :from_status,
-             class_name: "ClientWithdrawalFlowStatus"
+             class_name: "ClientWithdrawalFlowStatus", inverse_of: :events_from_status
   belongs_to :to_status,
-             class_name: "ClientWithdrawalFlowStatus"
+             class_name: "ClientWithdrawalFlowStatus", inverse_of: :events_to_status
 
   validates :from_status_id, inclusion: { in: ClientWithdrawalFlowStatus::DEFAULTS }, allow_nil: true
   validates :to_status_id, inclusion: { in: ClientWithdrawalFlowStatus::DEFAULTS }

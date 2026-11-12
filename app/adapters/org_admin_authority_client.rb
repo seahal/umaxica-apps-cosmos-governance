@@ -5,6 +5,7 @@
 # (R5-WU12, approved pattern 2026-10-17). Each call carries a fresh base-org-ww private_key_jwt
 # bound to the exact URL, the Operator's Access JWT and the browser facts the owner records in its
 # administrative audit (request id, IP, User-Agent). Typed outcomes; writes are never retried.
+# TODO: AUDIT external access: calls the Org admin authority API.
 class OrgAdminAuthorityClient
   # http_status keeps the owner's exact code (e.g. 201/202) for JSON responses relayed as-is.
   Result =

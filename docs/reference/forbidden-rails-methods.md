@@ -44,16 +44,14 @@ Reason:
 If an endpoint needs different protection, place it under the correct public or private controller
 boundary and use the established lifecycle for that surface.
 
-Enforced boundary (the only sanctioned exceptions):
+Enforced boundary (the only sanctioned exception):
 
-- `AuthenticationBase` overrides `skip_before_action` / `skip_action_callback` to **hard-block**
-  skipping `:enforce_access_policy!` (raises `SkipNotAllowedError`). The authorization gate can
-  never be skipped.
-- Skipping `:enforce_verification_if_required`, `:enforce_step_up_prereqs!`, or
-  `:authenticate_client!` is permitted only for controllers in the reviewed
-  `SENSITIVE_SKIP_ALLOWLIST`, mechanically enforced by
-  `test/unit/security/forbidden_rails_patterns_test.rb`. A new file that skips one of these fails
-  that test until the boundary change is deliberately reviewed.
+- `BrowserRpAuthentication` overrides `skip_before_action` to hard-block skipping
+  `:enforce_access_policy!` (raises `SkipNotAllowedError`). The authorization gate cannot be
+  skipped.
+- No authentication or step-up filter skips are currently approved. The empty
+  `SENSITIVE_SKIP_ALLOWLIST` in `test/unit/security/forbidden_rails_patterns_test.rb` is checked by
+  equality, so a new skip fails the test until its boundary is deliberately reviewed.
 - Skipping `:set_region` is permitted only for controllers listed in `RI_SKIP_ALLOWLIST`,
   mechanically enforced by `test/unit/security/ri_routing_contract_test.rb`. The list is compared by
   equality, so both a new skip and a silently removed one fail that test. Every entry must be a
@@ -91,12 +89,9 @@ Reason:
 
 Use the correct API, JSON, or browser controller boundary instead of disabling protection locally.
 
-The Visa APP and ORG OAuth revocation leaves are protocol endpoints authenticated by registered
-client credentials. They inherit directly from `ActionController::API`, which does not install the
-browser forgery-protection callback. This is limited to
-`Visa::App::Oauth::RevocationsController` and `Visa::Org::Oauth::RevocationsController`; it does not
-authorize cookie-based mutation and does not extend to their realm's other OAuth endpoints. Browser
-logout confirmation remains forgery-protected.
+This Rails process has no provider revocation or logout routes. Browser mutations remain under the
+normal Rails CSRF boundary; service-to-service owner APIs use their explicit request authentication
+and do not gain a browser-cookie exception.
 
 ## Models
 

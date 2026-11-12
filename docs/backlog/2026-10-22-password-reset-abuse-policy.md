@@ -3,7 +3,11 @@
 Status: Deferred; recorded at the user's request on 2026-10-22. No implementation change is
 authorized by this entry. Stored in `docs/backlog/` at the user's explicit request.
 
-## Current findings
+> **Route status (2026-11-10):** This backlog's local Auth route/controller inventory is historical
+> after the owner-approved hard reset. The deferred abuse-policy question is preserved, but any
+> future work must first identify a retained caller or external authority.
+
+## Historical findings
 
 The inspected Auth route inventory and credential-gateway documentation do not expose a general
 forgotten-password flow that sends a reset link by email. Existing identity recovery and MFA-reset

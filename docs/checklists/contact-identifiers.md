@@ -37,6 +37,11 @@ deletion, secret rotation or production authority.
 - Required names are `{APP,COM,ORG}_EMAIL_ADDRESS_HMAC_KEY` and
   `{APP,COM,ORG}_TELEPHONE_NUMBER_HMAC_KEY`. Model or explicit realm selects them, not request host.
   Missing required keys fail closed without old global SALT fallback or secret-bearing errors.
+- Governance APP/ORG live Email/Telephone HMAC keys come from encrypted Rails credentials only,
+  including when a same-named ENV entry is present. Missing or blank credentials fail explicitly;
+  ENV is neither a fallback nor an override for these four keys. History-key reuse checks compare
+  against the same authoritative credential source. Basis: owner decision dated 2026-11-10 in
+  `docs/backlog/2026-11-10-secrets-from-credentials-only.md`; this does not change other key families.
 - Exercise an authorized isolated com-Telephone maintenance case: app/org and Email are unaffected;
   ordinary roles cannot use maintenance to alter finalized owner/PII/binding facts. No real secret
   changes are authorized by this criterion.

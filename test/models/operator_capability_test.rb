@@ -91,7 +91,9 @@ class OperatorCapabilityTest < ActiveSupport::TestCase
       starts_at: 1.minute.ago,
       expires_at: 1.day.from_now,
     )
-    AdministrativeAccessLock.lock!(account: @operator, operator: @granter, reason_code: "security_incident")
+    assert_raises(AccessOpDataUnavailableError) do
+      AdministrativeAccessLock.lock!(account: @operator, operator: @granter, reason_code: "security_incident")
+    end
 
     assert_not @operator.reload.capability?(OperatorCapabilityGrant::SUPPORT_CONSOLE_READ)
   end

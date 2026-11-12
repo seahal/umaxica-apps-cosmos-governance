@@ -1,27 +1,13 @@
 # Jump handoff
 
-Applies to Rails issuing return tokens to Jump and verifying tokens returned by Jump, on every Jump
-node surface. The contract is the local Jump 0.4.0 compatibility baseline, not a deployed contract.
-These are durable requirements, not current verification results.
+Status: historical checklist; excluded from the active checklist index.
 
-- JUMP-1: A token is issued only for an explicit `internal` destination. A missing, `external`,
-  array, object or unknown value is refused without inference, rewriting or a direct external
-  redirect.
-- JUMP-2: An issued compact JWT is at most 4,096 characters and its `url` claim at most 2,048 UTF-16
-  code units; the issue TTL is positive and at most 30 seconds. A returned JWT over 8,192 bytes is
-  refused before parsing; `exp - iat` above 30 seconds is refused, and the 5-second clock skew never
-  extends it. Nothing is truncated to fit.
-- JUMP-3: Of the 169 ordered pairs of the thirteen nodes, the 20 pairs of the return graph are
-  allowed and the other 149 are refused.
-- JUMP-4: Duplicate `rt`, `rt[]` and nested forms and duplicated single-value parameters are
-  refused; query order and `%20` / `+` / `%2B` are compared without converting the URL to a Hash.
-  A return URL whose path starts with `//` is refused before it can become a protocol-relative
-  redirect.
-- JUMP-5: A returned token is refused for a bad signature, `alg`, `typ`, unknown or revoked `kid`,
-  issuer, audience, `src`, times, and unknown, missing or wrongly typed claims. `rpl: "reuse"` is
-  kept; one-time semantics belong to the receiving flow. `src` is an origin without a path, query,
-  or fragment.
-- JUMP-6: A fetched Jump JWKS document over 64 KiB or with more than 10 keys is refused.
+This checklist previously described the local Rails 0.4.0 return graph. The owner-approved local
+surface hard reset removed the local issuers and destinations named by that graph. The current
+`JumpRtReturnPolicy::EDGE_CATALOG` is empty, and a correctly signed return token cannot authorize a
+local redirect. `JumpRtReturnVerification` remains on the owned Base and Tech controller boundaries
+and rejects return-token requests that have no approved source edge.
 
-Sources: [Jump handoff contract](../../adr/jump-directed-rails-handoff-contract.md),
-[Jump redirector](../../adr/secure-jump-link-redirector.md).
+The protocol history remains in the [directed Jump handoff decision](../../adr/jump-directed-rails-handoff-contract.md).
+Current surface scope and verification are recorded in the
+[local surface hard reset specification](../../specs/local-surface-hard-reset/spec.md).

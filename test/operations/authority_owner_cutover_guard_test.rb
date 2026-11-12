@@ -57,6 +57,7 @@ class AuthorityOwnerCutoverGuardTest < ActiveSupport::TestCase
     result = AuthorityOwnerCutoverGuard.call(surface: :app, resource_kind: :client_persona)
 
     assert_predicate result, :ready?
+    assert_not_predicate result, :cutover_established?
     assert_equal 1, result.resource_count
     assert_equal 1, result.authoritative_owner_count
     assert_empty result.unresolved_resources

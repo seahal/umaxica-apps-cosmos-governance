@@ -118,6 +118,27 @@ class Client < AppPrincipalRecord
   belongs_to :visibility,
              class_name: "ClientVisibility",
              inverse_of: :users
+  has_many :outgoing_enterprise_ownership_transfer_requests,
+           class_name: "EnterpriseOwnershipTransferRequest", foreign_key: :source_client_id,
+           inverse_of: :source_client, dependent: :restrict_with_error
+  has_many :incoming_enterprise_ownership_transfer_requests,
+           class_name: "EnterpriseOwnershipTransferRequest", foreign_key: :destination_client_id,
+           inverse_of: :destination_client, dependent: :restrict_with_error
+  has_many :outgoing_client_persona_ownership_transfer_requests,
+           class_name: "ClientPersonaOwnershipTransferRequest", foreign_key: :source_client_id,
+           inverse_of: :source_client, dependent: :restrict_with_error
+  has_many :incoming_client_persona_ownership_transfer_requests,
+           class_name: "ClientPersonaOwnershipTransferRequest", foreign_key: :destination_client_id,
+           inverse_of: :destination_client, dependent: :restrict_with_error
+
+  has_many :enforcement_recovery_ceremonies, class_name: "ClientEnforcementRecoveryCeremony",
+                                             inverse_of: :client, dependent: :restrict_with_error
+  has_many :secret_issuances, class_name: "ClientSecretIssuance",
+                              inverse_of: :client, dependent: :restrict_with_error
+  has_many :registration_completions, class_name: "ClientRegistrationCompletion",
+                                      inverse_of: :client, dependent: :restrict_with_error
+  has_many :client_profiles, foreign_key: :user_id, inverse_of: :user, dependent: :restrict_with_error
+
   has_many :client_external_identities,
            dependent: :destroy,
            inverse_of: :client
@@ -167,19 +188,7 @@ class Client < AppPrincipalRecord
   has_many :client_chronicles, # rubocop:disable Rails/HasManyOrHasOneDependent
            foreign_key: :subject_id,
            inverse_of: false
-  has_many :client_tokens,
-           foreign_key: :user_id,
-           dependent: :destroy,
-           inverse_of: :user
-  has_many :client_device_sessions,
-           foreign_key: :user_id,
-           dependent: :destroy,
-           inverse_of: :user
-  has_many :oidc_connections,
-           class_name: "ClientOidcConnection",
-           foreign_key: :user_id,
-           dependent: :destroy,
-           inverse_of: :user
+
   has_many :client_memberships,
            foreign_key: :user_id,
            dependent: :destroy,
@@ -197,7 +206,7 @@ class Client < AppPrincipalRecord
   has_many :clients,
            class_name: "ClientProfile",
            foreign_key: :user_id,
-           dependent: :nullify,
+           dependent: :restrict_with_error,
            inverse_of: false
   has_many :client_banners,
            foreign_key: :user_id,
@@ -242,7 +251,7 @@ class Client < AppPrincipalRecord
   has_many :owned_members,
            class_name: "Member",
            foreign_key: :user_id,
-           dependent: :nullify,
+           dependent: :restrict_with_error,
            inverse_of: :user
   has_many :client_bulletins, foreign_key: :user_id, dependent: :destroy, inverse_of: :user
   has_one :rp_account, class_name: "ClientAccount", foreign_key: :user_id, dependent: :destroy, inverse_of: :user
@@ -261,9 +270,9 @@ class Client < AppPrincipalRecord
   has_many :enterprise_administration_grants, dependent: :restrict_with_error, inverse_of: :client
   has_many :enterprise_delegation_grants, dependent: :restrict_with_error, inverse_of: :client
   has_many :enterprise_view_grants, dependent: :restrict_with_error, inverse_of: :client
-  has_one :core_app_client_bridge,
-          dependent: :destroy,
-          inverse_of: :client
+  has_many :core_app_client_bridges,
+           dependent: :destroy,
+           inverse_of: :client
   has_one :client_preference, class_name: "ClientPreference", dependent: :destroy,
                               inverse_of: :client
   # Cross-database (avatar DB). Join rows are purged explicitly via
@@ -279,6 +288,12 @@ class Client < AppPrincipalRecord
   mfa_status_reference ClientMfaStatus
 
   before_destroy :erase_dead_identifier_histories
+
+  # These checks run after authorized history erasure; retained rows still prevent deletion.
+  has_many :email_histories, class_name: "ClientEmailHistory", foreign_key: :user_id,
+                             inverse_of: :user, dependent: :restrict_with_error
+  has_many :telephone_histories, class_name: "ClientTelephoneHistory", foreign_key: :user_id,
+                                 inverse_of: :user, dependent: :restrict_with_error
 
   def totp_enabled?
     if client_totp_credentials.loaded?
@@ -390,46 +405,11 @@ class Client < AppPrincipalRecord
   public
 
   def finalize_email_sign_up!(email:, flow:)
-    with_lock do
-      unless email.is_a?(ClientEmail) && flow.is_a?(ClientSignUpFlow) &&
-          email.user_id == id && flow.principal_id == id && flow.pending_contact_type == "email" &&
-          flow.pending_contact_id == email.id && flow.status_id == ClientSignUpFlowStatus::FINALIZING &&
-          flow.expires_at > flow.class.database_now && flow.requirement_cleared?(:otp) &&
-          email.binding_effective? && email.user_email_status_id == ClientEmailStatus::VERIFIED_WITH_SIGN_UP &&
-          active? && access_enabled? && accessible?(self.class.database_now)
-        raise ActiveRecord::RecordNotSaved, "APP Email signup owner authority is unavailable"
-      end
-      return self if status_id == ClientStatus::VERIFIED_WITH_SIGN_UP
-
-      unless status_id == ClientStatus::UNVERIFIED_WITH_SIGN_UP
-        raise ActiveRecord::RecordNotSaved, "APP Email signup owner is not pending"
-      end
-
-      update!(status_id: ClientStatus::VERIFIED_WITH_SIGN_UP)
-      self
-    end
+    raise AccessOpDataUnavailableError
   end
 
   def finalize_telephone_sign_up!(telephone:, flow:)
-    with_lock do
-      unless telephone.is_a?(ClientTelephone) && flow.is_a?(ClientSignUpFlow) &&
-          telephone.user_id == id && flow.principal_id == id && flow.pending_contact_type == "telephone" &&
-          flow.pending_contact_id == telephone.id && flow.status_id == ClientSignUpFlowStatus::FINALIZING &&
-          flow.expires_at > flow.class.database_now && flow.requirement_cleared?(:otp) &&
-          telephone.binding_effective? &&
-          telephone.user_telephone_status_id == ClientTelephoneStatus::VERIFIED_WITH_SIGN_UP && active? &&
-          access_enabled? && accessible?(self.class.database_now) && client_passkeys.active.exists?
-        raise ActiveRecord::RecordNotSaved, "APP Telephone signup owner authority is unavailable"
-      end
-      return self if status_id == ClientStatus::VERIFIED_WITH_SIGN_UP
-
-      unless status_id == ClientStatus::UNVERIFIED_WITH_SIGN_UP
-        raise ActiveRecord::RecordNotSaved, "APP Telephone signup owner is not pending"
-      end
-
-      update!(status_id: ClientStatus::VERIFIED_WITH_SIGN_UP)
-      self
-    end
+    raise AccessOpDataUnavailableError
   end
 
   private
@@ -454,6 +434,8 @@ class Client < AppPrincipalRecord
   def erase_dead_identifier_histories
     ClientEmailHistory.where(user_id: id).delete_all
     ClientTelephoneHistory.where(user_id: id).delete_all
+    association(:email_histories).reset
+    association(:telephone_histories).reset
   end
 
   def configured_mfa_level_methods

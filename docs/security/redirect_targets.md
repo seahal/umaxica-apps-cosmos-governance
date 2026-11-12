@@ -30,8 +30,8 @@ Rails MUST classify the final destination against the initiating surface before 
 | Initiating surface and final destination | Required route |
 | --- | --- |
 | Same origin (scheme, host and effective port) | Validated local path; direct navigation is permitted. |
-| Different subdomains of the same registered application domain, such as `www.umaxica.app` to `auth.umaxica.app` | Jump through `https://jump.umaxica.net`; an approved directed edge is also required. |
-| Different TLDs, such as `www.umaxica.app` to `www.umaxica.com` | Away through `https://away.umaxica.net`, including when both sites are first-party. |
+| Different subdomains of the same registered application domain, such as `app.example.test` to `identity.example.test` | Jump through `https://jump.example.test`; an approved directed edge is also required. |
+| Different TLDs, such as `app.example.test` to `www.example.com` | Away through `https://away.example.net`, including when both sites are first-party. |
 | Any other external website | Away through `https://away.umaxica.net`, subject to explicit destination authorization. |
 
 Subdomain changes remain separate trust boundaries even when both hosts are owned by Umaxica.

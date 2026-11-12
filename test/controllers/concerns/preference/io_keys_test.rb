@@ -16,6 +16,5 @@ class PreferenceIoKeysTest < ActiveSupport::TestCase
   test "preference transport keys do not accept refresh parameters" do
     assert_not PreferenceIoKeys::Params.const_defined?(:REFRESH_TOKEN, false)
     assert_not PreferenceIoKeys::Cookies.const_defined?(:REFRESH_BASENAME, false)
-    assert_not PreferenceIoKeys::Cookies.const_defined?(:DBSC_BASENAME, false)
   end
 end

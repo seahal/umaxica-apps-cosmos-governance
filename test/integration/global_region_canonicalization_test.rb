@@ -6,10 +6,7 @@ class GlobalRegionCanonicalizationTest < ActionDispatch::IntegrationTest
   self.fixture_table_names = []
 
   test "Global browser roots canonicalize missing region on GET and HEAD" do
-    %w(base.app.localhost base.com.localhost base.org.localhost
-       auth.app.localhost auth.org.localhost
-       visa.app.localhost visa.org.localhost
-       tech.org.localhost edit.org.localhost).each do |host|
+    %w(base.app.localhost base.com.localhost base.org.localhost tech.org.localhost).each do |host|
       host! host
       get "/", params: { lx: "en", ct: "dr", marker: "retained" }
 
@@ -31,10 +28,8 @@ class GlobalRegionCanonicalizationTest < ActionDispatch::IntegrationTest
     end
   end
 
-  test "Base Auth and Visa roots normalize invalid region inputs and accept both regions" do
-    %w(base.app.localhost base.com.localhost base.org.localhost
-       auth.app.localhost auth.org.localhost
-       visa.app.localhost visa.org.localhost).each do |host|
+  test "Base app and org roots normalize invalid region inputs and accept both regions" do
+    %w(base.app.localhost base.com.localhost base.org.localhost tech.org.localhost).each do |host|
       host! host
       ["", "xx", "j", "jpp", "0", ["jp"], { value: "jp" }].each do |invalid|
         get "/", params: { ri: invalid }
@@ -48,17 +43,6 @@ class GlobalRegionCanonicalizationTest < ActionDispatch::IntegrationTest
         assert_response :ok
         assert_nil response.location
       end
-    end
-  end
-
-  test "Visa protocol metadata does not canonicalize missing region" do
-    %w(visa.app.localhost visa.org.localhost).each do |host|
-      host! host
-      get "/.well-known/openid-configuration"
-
-      assert_response :ok
-      assert_nil response.location
-      assert_equal "application/json", response.media_type
     end
   end
 end

@@ -43,7 +43,7 @@ class VerificationBaseRtIssuerTest < ActiveSupport::TestCase
 
         def current_session_token = session_token
 
-        # mirrors authentication_base: returns the stable session identifier
+        # Mirrors the owned browser RP session contract: return its stable identifier.
         def current_session_public_id = session_token&.public_id.to_s
 
         def actor_verification_path = "/sign/app/verification"

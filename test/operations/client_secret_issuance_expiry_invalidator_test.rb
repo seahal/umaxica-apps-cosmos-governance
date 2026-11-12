@@ -34,7 +34,6 @@ class ClientSecretIssuanceExpiryInvalidatorTest < ActiveSupport::TestCase
     assert_equal issuance.discard_at, candidate.discard_at
     assert_equal 1.day, issuance.purge_eligible_at - issuance.discard_at
     assert_equal issuance.purge_eligible_at, candidate.purge_eligible_at
-    assert_nil ClientSecretLookupQuery.call(client: actor, secret: raw)
     events = ClientSecretAuditOutbox.where(operation_ref: issuance.origin_operation_id).order(:id).to_a
 
     assert_equal [nil, candidate.public_id], events.map(&:credential_ref)

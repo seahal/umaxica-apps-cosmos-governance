@@ -47,8 +47,8 @@ class WithdrawalCeremonySessionTest < ActionDispatch::IntegrationTest
     assert_response :see_other
     assert_predicate ceremony.reload, :consumed?
     assert_nil client.reload.deactivated_at
-    assert_nil cookies[AuthenticationBase::ACCESS_COOKIE_KEY]
-    assert_nil cookies[AuthenticationBase::REFRESH_COOKIE_KEY]
+    assert_nil cookies[AuthenticationCookieName.access]
+    assert_nil cookies[AuthenticationCookieName.refresh]
   end
 
   test "expired revoked and consumed ceremonies are rejected" do
@@ -109,7 +109,7 @@ class WithdrawalCeremonySessionTest < ActionDispatch::IntegrationTest
     assert_predicate ceremony.reload, :active?
   end
 
-  test "termination clears Inertia history on the next app page" do
+  test "termination cannot acknowledge an unavailable Access purge or clear successful history" do
     host = ENV.fetch("PUBLIC_BASE_SERVICE_URL")
     host! host
     client = create_client
@@ -133,12 +133,10 @@ class WithdrawalCeremonySessionTest < ActionDispatch::IntegrationTest
 
     delete base_app_identity_withdrawal_url(ri: "jp", host: host), headers: browser_headers
 
-    assert_response :see_other
-    assert_predicate client.reload, :terminated?
-    get base_app_root_url(ri: "jp", host: host)
-
-    assert_response :success
-    assert inertia_page.fetch("clearHistory")
+    assert_response :service_unavailable
+    assert_not_predicate client.reload, :terminated?
+    assert_predicate ceremony.reload, :active?
+    assert_nil response.location
   end
 
   private

@@ -132,26 +132,11 @@ class EnforcementCaseApplyOperation
   def validate_step_up_pair!
     return if step_up_token.nil? && step_up_actor.nil? && step_up_evidence.nil?
 
-    valid_actor_and_token = step_up_token.is_a?(OperatorToken) && step_up_actor.is_a?(Operator) &&
-      step_up_actor.persisted? && step_up_actor.public_id == actor_operator_public_id &&
-      step_up_token.staff_id == step_up_actor.id
-    raise ArgumentError, "enforcement apply Step-Up actor and token must be supplied together" unless
-      valid_actor_and_token
-    unless %i(create approve).include?(authorization_rule)
-      raise ArgumentError, "enforcement apply requires an explicit authorization rule"
-    end
-    return if step_up_evidence.is_a?(StepUpEvidenceValue)
-    raise TokenStatusManagement::StepUpEvidenceUnavailable, "Enforcement apply requires current Step-Up" if
-      step_up_evidence.nil?
-
-    raise ArgumentError, "enforcement apply Step-Up actor, token and evidence must be supplied together"
+    raise AccessOpDataUnavailableError
   end
 
   def verify_step_up!
-    return if step_up_token.nil?
-    return if StepUpEvidenceVerifier.call(evidence: step_up_evidence, actor: step_up_actor, token: step_up_token)
-
-    raise TokenStatusManagement::StepUpEvidenceUnavailable, "Enforcement apply requires current Step-Up"
+    raise AccessOpDataUnavailableError if step_up_token
   end
 
   # An approved Case records who approved it before it records the apply. Both writes are

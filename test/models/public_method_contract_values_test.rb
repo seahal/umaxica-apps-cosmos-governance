@@ -29,60 +29,6 @@ class PublicMethodContractValuesTest < ActiveSupport::TestCase
     end
   end
 
-  test "taxonomy assignment structural kinds follow their declared vocabulary kind" do
-    single = Publishing::Info::App::RevisionSingleTaxonomyAssignment.new(
-      vocabulary_kind: Publishing::TaxonomyKind::SINGLE_HIERARCHICAL,
-    )
-    multiple = Publishing::Info::App::RevisionMultipleTaxonomyAssignment.new(
-      vocabulary_kind: Publishing::TaxonomyKind::MULTIPLE_ORDERED_FLAT,
-    )
-
-    assert_equal Publishing::TaxonomyKind::SINGLE_HIERARCHICAL, single.structural_kind.key
-    assert_equal Publishing::TaxonomyKind::MULTIPLE_ORDERED_FLAT, multiple.structural_kind.key
-  end
-
-  test "publishing revision and version classes map back to their own entry family" do
-    revision = Publishing::Info::App::EntryRevision.new
-    version = Publishing::Info::App::EntryVersion.new
-
-    assert_equal Publishing::Info::App::Entry, Publishing::ContentFamilies.entry_class_for_revision(revision)
-    assert_equal Publishing::Info::App::Entry, Publishing::ContentFamilies.entry_class_for_version(version)
-  end
-
-  test "passkey result candidate initializes metadata as an empty object by default" do
-    candidate = IdentityPasskeyCeremonyResultIssuer::Candidate.new(
-      webauthn_id: "credential-id",
-      public_key: "public-key",
-      sign_count: 0,
-      description: "Security key",
-      transports: ["internal"],
-    )
-
-    assert_equal({}, candidate.metadata)
-  end
-
-  test "social ceremony grant exposes its validated expiry as UTC time" do
-    now = Time.current.change(usec: 0)
-    expires_at = now + 5.minutes
-    issuer_id = IdentitySocialCeremonyContract.acme_issuer_id("app")
-    attributes = {
-      surface: "app",
-      actor_ref: "actor-reference",
-      session_ref: "session-reference",
-      transaction_id: "transaction-reference",
-      jti: SecureRandom.uuid,
-      operation: "link",
-      provider: "google",
-      exp: expires_at.to_i,
-    }
-    payload = attributes.merge(
-      IdentitySocialCeremonyGrant.default_claims(attributes, issuer_id:, now:),
-    )
-    grant = IdentitySocialCeremonyGrant.new(payload, issuer_id:, now:)
-
-    assert_equal Time.zone.at(expires_at.to_i), grant.expires_at
-  end
-
   test "identifier inventory result serializes its stable public shape" do
     connections = [{ name: "primary", tables: [] }]
     result = IdentifierContractInventoryQuery::Result.new(
@@ -125,11 +71,5 @@ class PublicMethodContractValuesTest < ActiveSupport::TestCase
     assert_equal({ summary:, details: }, JSON.parse(group_result.to_json, symbolize_names: true))
     assert_equal({ summary:, details: }, JSON.parse(backfill_result.to_json, symbolize_names: true))
     assert_equal({ summary:, details: }, JSON.parse(group_backfill_result.to_json, symbolize_names: true))
-  end
-
-  test "published entries query returns an empty relation when locale is absent" do
-    query = PublishingPublishedEntriesQuery.new(entry_class: Publishing::Info::App::Entry, locale: " ")
-
-    assert_empty query.call
   end
 end

@@ -3,6 +3,7 @@
 
 # Base Self-RP client for the account / organization / membership owner (R5-WU15, same approved
 # pattern as R5-WU14). Same transport and outcome rules as AvatarAuthorityClient.
+# TODO: AUDIT external access: calls the Membership authority API.
 class MembershipAuthorityClient
   Result = AvatarAuthorityClient::Result
   CLIENTS = AvatarAuthorityClient::CLIENTS

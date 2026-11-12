@@ -90,4 +90,42 @@ class HandleAssignmentTest < ActiveSupport::TestCase
       )
     end
   end
+
+  test "finite history remains writable beside a current assignment and cannot become a second current row" do
+    now = Time.utc(2026, 11, 12, 12)
+    current = HandleAssignment.create!(avatar: @avatar, handle: @system_handle, valid_from: now)
+    historical = HandleAssignment.new(
+      avatar: @avatar, handle: @system_handle, valid_from: now - 2.days, valid_to: now - 1.day,
+    )
+
+    assert_predicate historical, :valid?
+    historical.save!
+    historical.update!(valid_from: now - 3.days)
+
+    assert_equal now - 3.days, historical.reload.valid_from
+    assert_equal [current.id], HandleAssignment.current.where(avatar: @avatar).pluck(:id)
+
+    historical.valid_to = Float::INFINITY
+
+    assert_not historical.valid?
+    assert historical.errors.of_kind?(:handle_id, :taken)
+    assert historical.errors.of_kind?(:avatar_id, :taken)
+    assert_raises(ActiveRecord::RecordInvalid) { historical.save! }
+    assert_equal now - 1.day, historical.reload.valid_to
+  end
+
+  test "current duplicate is rejected before save and by PostgreSQL when validation is bypassed" do
+    now = Time.utc(2026, 11, 12, 12)
+    HandleAssignment.create!(avatar: @avatar, handle: @system_handle, valid_from: now)
+    duplicate = HandleAssignment.new(avatar: @avatar, handle: @system_handle, valid_from: now)
+
+    assert_not duplicate.valid?
+    assert duplicate.errors.of_kind?(:handle_id, :taken)
+    assert duplicate.errors.of_kind?(:avatar_id, :taken)
+    assert_raises(ActiveRecord::RecordInvalid) { duplicate.save! }
+    assert_raises(ActiveRecord::RecordNotUnique) do
+      HandleAssignment.transaction(requires_new: true) { duplicate.save!(validate: false) }
+    end
+    assert_equal 1, HandleAssignment.current.where(avatar: @avatar).count
+  end
 end

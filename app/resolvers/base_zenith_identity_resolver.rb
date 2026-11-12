@@ -122,7 +122,11 @@ class BaseZenithIdentityResolver
 
           refuse_identity!
         end
-        raise LoginBlocked, "Base identity is not eligible to log in" unless actor.login_allowed?
+        closing_operator = surface == :org && actor.closing? &&
+          Operator::LOGIN_BLOCKED_STATUS_IDS.exclude?(actor.status_id)
+        unless actor.login_allowed? || closing_operator
+          raise LoginBlocked, "Base identity is not eligible to log in"
+        end
 
         actor
       end

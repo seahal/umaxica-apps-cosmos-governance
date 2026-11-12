@@ -4,7 +4,7 @@ require "test_helper"
 
 class RpStepUpStateTransitionTest < ActiveSupport::TestCase
   test "a transition cannot duplicate its target state for one ceremony" do
-    result = RpCallbackCommitter.call(
+    result = seed_rp_cell_session(
       cell: RpCellBinding.fetch("rp_base_app"),
       issuer: "https://www.umaxica.app",
       subject: "step-up-transition-subject",
@@ -13,7 +13,7 @@ class RpStepUpStateTransitionTest < ActiveSupport::TestCase
     )
     owner = RpStepUpState.create!(
       public_id: "123456789abcdefghijkl",
-      rp_session: result.session,
+      rp_session: result,
       state_digest: Digest::SHA256.hexdigest("transition-state"),
       browser_binding_digest: Digest::SHA256.hexdigest("transition-browser"),
       nonce_digest: Digest::SHA256.hexdigest("transition-nonce"),
@@ -36,7 +36,31 @@ class RpStepUpStateTransitionTest < ActiveSupport::TestCase
     }
     RpStepUpStateTransition.create!(attributes)
 
-    assert_raises(ActiveRecord::RecordNotUnique) { RpStepUpStateTransition.create!(attributes) }
+    duplicate = RpStepUpStateTransition.new(attributes)
+
+    assert_not duplicate.valid?
+    assert duplicate.errors.of_kind?(:to_state_id, :taken)
+    assert_raises(ActiveRecord::RecordInvalid) { duplicate.save! }
+    error =
+      assert_raises(ActiveRecord::RecordNotUnique) do
+        RpStepUpStateTransition.transaction(requires_new: true) { duplicate.save!(validate: false) }
+      end
+
+    assert_equal "idx_rp_step_up_state_transitions_owner_to",
+                 error.cause.result.error_field(PG::Result::PG_DIAG_CONSTRAINT_NAME)
+    other_target = RpStepUpStateTransition.create!(
+      attributes.merge(to_state_id: RpStepUpStateStatus::CANCELLED, reason_code: "user_cancelled"),
+    )
+
+    assert_equal RpStepUpStateStatus::CANCELLED, other_target.reload.to_state_id
+    other_owner = owner.dup
+    other_owner.public_id = "223456789abcdefghijkl"
+    other_owner.state_digest = Digest::SHA256.hexdigest("another-transition-owner")
+    other_owner.save!
+    independent = RpStepUpStateTransition.create!(attributes.merge(owner: other_owner))
+
+    assert_equal other_owner.id, independent.reload.owner_id
+    assert_equal RpStepUpStateStatus::DISPATCHING, independent.to_state_id
   end
 
   test "the database rejects a reason code outside the closed contract set" do

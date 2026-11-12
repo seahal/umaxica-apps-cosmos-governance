@@ -36,14 +36,14 @@ class EnforcementReconciliationEndRaceTest < ActiveSupport::TestCase
         original.call(**args, &block)
       end
 
-    OpIdentityEventInvalidator.stub(:deliver, :applied) do
-      AdministrativeAccessLock.stub(:lock!, pause_lock) do
-        worker = Thread.new { EnforcementReconciliationJob.perform_now }
-        Timeout.timeout(10) { ready.pop }
+    AdministrativeAccessLock.stub(:lock!, pause_lock) do
+      worker = Thread.new { EnforcementReconciliationJob.perform_now }
+      Timeout.timeout(10) { ready.pop }
+      assert_raises(AccessOpDataUnavailableError) {
         EnforcementCaseEndOperation.call(enforcement_case: AppEnforcementCase.find(the_case.id), reason: "revoked")
-        proceed << true
-        Timeout.timeout(10) { worker.value }
-      end
+      }
+      proceed << true
+      Timeout.timeout(10) { worker.value }
     end
 
     assert_predicate the_case.reload.ended_at, :present?
@@ -65,7 +65,7 @@ class EnforcementReconciliationEndRaceTest < ActiveSupport::TestCase
     operator&.delete
   end
 
-  test "a new blocking Case prevents an earlier Case from releasing the principal" do
+  test "a new blocking Case retains denial when the earlier Case cannot reach Access" do
     actor = Client.create!(
       id: SecureRandom.random_number(1 << 60) + 1_000_000_000,
       security_mode_id: SecurityModeConfigurable::NORMAL, status_id: ClientStatus::ACTIVE,
@@ -99,22 +99,23 @@ class EnforcementReconciliationEndRaceTest < ActiveSupport::TestCase
         proceed.pop
         original.call(**args, &block)
       end
-
-    OpIdentityEventInvalidator.stub(:deliver, :applied) do
+    assert_raises(AccessOpDataUnavailableError) {
       EnforcementCaseApplyOperation.call(enforcement_case: first, actor_operator_public_id: operator.public_id)
-      AdministrativeAccessLock.stub(:unlock!, pause_unlock) do
-        worker =
-          Thread.new do
-            EnforcementCaseEndOperation.call(
-              enforcement_case: AppEnforcementCase.find(first.id),
-              reason: "revoked",
-            )
-          end
-        Timeout.timeout(10) { ready.pop }
+    }
+    AdministrativeAccessLock.stub(:unlock!, pause_unlock) do
+      worker =
+        Thread.new do
+          EnforcementCaseEndOperation.call(
+            enforcement_case: AppEnforcementCase.find(first.id),
+            reason: "revoked",
+          )
+        end
+      Timeout.timeout(10) { ready.pop }
+      assert_raises(AccessOpDataUnavailableError) {
         EnforcementCaseApplyOperation.call(enforcement_case: second, actor_operator_public_id: operator.public_id)
-        proceed << true
-        Timeout.timeout(10) { worker.value }
-      end
+      }
+      proceed << true
+      assert_raises(AccessOpDataUnavailableError) { Timeout.timeout(10) { worker.value } }
     end
 
     assert_predicate first.reload.ended_at, :present?
@@ -140,7 +141,7 @@ class EnforcementReconciliationEndRaceTest < ActiveSupport::TestCase
     operator&.delete
   end
 
-  test "a new ORG blocking Case prevents an earlier Case from releasing the operator" do
+  test "a new ORG blocking Case retains denial when the earlier Case cannot reach Access" do
     actor = Operator.create!(
       id: SecureRandom.random_number(1 << 60) + 1_000_000_000,
       security_mode_id: SecurityModeConfigurable::ADVANCED, status_id: OperatorStatus::ACTIVE,
@@ -174,22 +175,23 @@ class EnforcementReconciliationEndRaceTest < ActiveSupport::TestCase
         proceed.pop
         original.call(**args, &block)
       end
-
-    OpIdentityEventInvalidator.stub(:deliver, :applied) do
+    assert_raises(AccessOpDataUnavailableError) {
       EnforcementCaseApplyOperation.call(enforcement_case: first, actor_operator_public_id: operator.public_id)
-      AdministrativeAccessLock.stub(:unlock!, pause_unlock) do
-        worker =
-          Thread.new do
-            EnforcementCaseEndOperation.call(
-              enforcement_case: OrgEnforcementCase.find(first.id),
-              reason: "revoked",
-            )
-          end
-        Timeout.timeout(10) { ready.pop }
+    }
+    AdministrativeAccessLock.stub(:unlock!, pause_unlock) do
+      worker =
+        Thread.new do
+          EnforcementCaseEndOperation.call(
+            enforcement_case: OrgEnforcementCase.find(first.id),
+            reason: "revoked",
+          )
+        end
+      Timeout.timeout(10) { ready.pop }
+      assert_raises(AccessOpDataUnavailableError) {
         EnforcementCaseApplyOperation.call(enforcement_case: second, actor_operator_public_id: operator.public_id)
-        proceed << true
-        Timeout.timeout(10) { worker.value }
-      end
+      }
+      proceed << true
+      assert_raises(AccessOpDataUnavailableError) { Timeout.timeout(10) { worker.value } }
     end
 
     assert_predicate first.reload.ended_at, :present?
@@ -215,7 +217,7 @@ class EnforcementReconciliationEndRaceTest < ActiveSupport::TestCase
     operator&.delete
   end
 
-  test "ORG Case end waits for the committed operator lock and then releases it" do
+  test "ORG Case end waits for the committed operator lock and retains denial while Access is unavailable" do
     actor = Operator.create!(
       id: SecureRandom.random_number(1 << 60) + 1_000_000_000,
       security_mode_id: SecurityModeConfigurable::ADVANCED, status_id: OperatorStatus::ACTIVE,
@@ -236,7 +238,6 @@ class EnforcementReconciliationEndRaceTest < ActiveSupport::TestCase
     locked = Queue.new
     proceed = Queue.new
     end_ready = Queue.new
-    source_visible = Queue.new
     worker = ending = nil
     paused = false
     observer =
@@ -248,61 +249,48 @@ class EnforcementReconciliationEndRaceTest < ActiveSupport::TestCase
         proceed.pop
       end
 
-    inspect_delivery =
-      lambda do |event:|
-        reader =
-          Thread.new do
-            OrgIdentityAuthenticationEvent.connection_pool.with_connection(prevent_permanent_checkout: true) do
-              OrgIdentityAuthenticationEvent.exists?(id: event.id)
-            end
-          end
-        source_visible << Timeout.timeout(10) { reader.value }
-        :applied
-      end
-    OpIdentityEventInvalidator.stub(:deliver, inspect_delivery) do
-      ActiveSupport::Notifications.subscribed(observer, "sql.active_record") do
-        worker =
-          Thread.new do
-            EnforcementCaseApplyOperation.call(
-              enforcement_case: the_case,
-              actor_operator_public_id: operator.public_id,
+    ActiveSupport::Notifications.subscribed(observer, "sql.active_record") do
+      worker =
+        Thread.new do
+          EnforcementCaseApplyOperation.call(
+            enforcement_case: the_case,
+            actor_operator_public_id: operator.public_id,
+          )
+        end
+      worker_pid = Timeout.timeout(10) { locked.pop }
+      ending =
+        Thread.new do
+          OrgEnforcementCase.connection_pool.with_connection(prevent_permanent_checkout: true) do |connection|
+            end_ready << connection.select_value("SELECT pg_backend_pid()").to_i
+            EnforcementCaseEndOperation.call(
+              enforcement_case: OrgEnforcementCase.find(the_case.id),
+              reason: "revoked",
             )
           end
-        worker_pid = Timeout.timeout(10) { locked.pop }
-        ending =
-          Thread.new do
-            OrgEnforcementCase.connection_pool.with_connection(prevent_permanent_checkout: true) do |connection|
-              end_ready << connection.select_value("SELECT pg_backend_pid()").to_i
-              EnforcementCaseEndOperation.call(
-                enforcement_case: OrgEnforcementCase.find(the_case.id),
-                reason: "revoked",
+        end
+      ending_pid = Timeout.timeout(10) { end_ready.pop }
+      Timeout.timeout(10) do
+        loop do
+          waiting =
+            OrgEnforcementCase.uncached do
+              OrgEnforcementCase.lease_connection.select_value(
+                "SELECT #{Integer(worker_pid)} = ANY(pg_blocking_pids(#{Integer(ending_pid)}))",
               )
             end
-          end
-        ending_pid = Timeout.timeout(10) { end_ready.pop }
-        Timeout.timeout(10) do
-          loop do
-            waiting =
-              OrgEnforcementCase.uncached do
-                OrgEnforcementCase.lease_connection.select_value(
-                  "SELECT #{Integer(worker_pid)} = ANY(pg_blocking_pids(#{Integer(ending_pid)}))",
-                )
-              end
-            break if waiting
+          break if waiting
 
-            Thread.pass
-          end
+          Thread.pass
         end
-        proceed << true
-        Timeout.timeout(10) { worker.value }
-
-        assert Timeout.timeout(10) { ending.value }
       end
+      proceed << true
+      assert_raises(AccessOpDataUnavailableError) { Timeout.timeout(10) { worker.value } }
+
+      assert_raises(AccessOpDataUnavailableError) { Timeout.timeout(10) { ending.value } }
     end
 
     assert_predicate the_case.reload.ended_at, :present?
-    assert_predicate actor.reload, :access_enabled?
-    assert Timeout.timeout(10) { source_visible.pop }, "the Source event must commit before OP delivery"
+    assert_predicate actor.reload, :admin_locked?
+    assert OrgIdentityAuthenticationEvent.exists?(actor_ref: actor.id.to_s)
   ensure
     proceed << true if proceed
     [worker, ending].compact.each do |thread|
@@ -350,20 +338,20 @@ class EnforcementReconciliationEndRaceTest < ActiveSupport::TestCase
         original.call(**args, &block)
       end
 
-    OpIdentityEventInvalidator.stub(:deliver, :applied) do
-      AdministrativeAccessLock.stub(:lock!, pause_lock) do
-        worker =
-          Thread.new do
-            EnforcementCaseApplyOperation.call(
-              enforcement_case: the_case,
-              actor_operator_public_id: operator.public_id,
-            )
-          end
-        Timeout.timeout(10) { ready.pop }
+    AdministrativeAccessLock.stub(:lock!, pause_lock) do
+      worker =
+        Thread.new do
+          EnforcementCaseApplyOperation.call(
+            enforcement_case: the_case,
+            actor_operator_public_id: operator.public_id,
+          )
+        end
+      Timeout.timeout(10) { ready.pop }
+      assert_raises(AccessOpDataUnavailableError) {
         EnforcementCaseEndOperation.call(enforcement_case: OrgEnforcementCase.find(the_case.id), reason: "revoked")
-        proceed << true
-        Timeout.timeout(10) { worker.value }
-      end
+      }
+      proceed << true
+      Timeout.timeout(10) { worker.value }
     end
 
     assert_predicate the_case.reload.ended_at, :present?
@@ -414,20 +402,20 @@ class EnforcementReconciliationEndRaceTest < ActiveSupport::TestCase
         original.call(**args, &block)
       end
 
-    OpIdentityEventInvalidator.stub(:deliver, :applied) do
-      AdministrativeAccessLock.stub(:lock!, pause_lock) do
-        worker =
-          Thread.new do
-            EnforcementCaseApplyOperation.call(
-              enforcement_case: the_case,
-              actor_operator_public_id: operator.public_id,
-            )
-          end
-        Timeout.timeout(10) { ready.pop }
+    AdministrativeAccessLock.stub(:lock!, pause_lock) do
+      worker =
+        Thread.new do
+          EnforcementCaseApplyOperation.call(
+            enforcement_case: the_case,
+            actor_operator_public_id: operator.public_id,
+          )
+        end
+      Timeout.timeout(10) { ready.pop }
+      assert_raises(AccessOpDataUnavailableError) {
         EnforcementCaseEndOperation.call(enforcement_case: AppEnforcementCase.find(the_case.id), reason: "revoked")
-        proceed << true
-        Timeout.timeout(10) { worker.value }
-      end
+      }
+      proceed << true
+      Timeout.timeout(10) { worker.value }
     end
 
     assert_predicate the_case.reload.ended_at, :present?
@@ -449,7 +437,7 @@ class EnforcementReconciliationEndRaceTest < ActiveSupport::TestCase
     operator&.delete
   end
 
-  test "Case end waits for the committed principal lock and then releases it" do
+  test "Case end waits for the committed principal lock and retains denial while Access is unavailable" do
     actor = Client.create!(
       id: SecureRandom.random_number(1 << 60) + 1_000_000_000,
       security_mode_id: SecurityModeConfigurable::NORMAL, status_id: ClientStatus::ACTIVE,
@@ -470,7 +458,6 @@ class EnforcementReconciliationEndRaceTest < ActiveSupport::TestCase
     locked = Queue.new
     proceed = Queue.new
     end_ready = Queue.new
-    source_visible = Queue.new
     worker = ending = nil
     paused = false
     observer =
@@ -482,61 +469,48 @@ class EnforcementReconciliationEndRaceTest < ActiveSupport::TestCase
         proceed.pop
       end
 
-    inspect_delivery =
-      lambda do |event:|
-        reader =
-          Thread.new do
-            AppIdentityAuthenticationEvent.connection_pool.with_connection(prevent_permanent_checkout: true) do
-              AppIdentityAuthenticationEvent.exists?(id: event.id)
-            end
-          end
-        source_visible << Timeout.timeout(10) { reader.value }
-        :applied
-      end
-    OpIdentityEventInvalidator.stub(:deliver, inspect_delivery) do
-      ActiveSupport::Notifications.subscribed(observer, "sql.active_record") do
-        worker =
-          Thread.new do
-            EnforcementCaseApplyOperation.call(
-              enforcement_case: the_case,
-              actor_operator_public_id: operator.public_id,
+    ActiveSupport::Notifications.subscribed(observer, "sql.active_record") do
+      worker =
+        Thread.new do
+          EnforcementCaseApplyOperation.call(
+            enforcement_case: the_case,
+            actor_operator_public_id: operator.public_id,
+          )
+        end
+      worker_pid = Timeout.timeout(10) { locked.pop }
+      ending =
+        Thread.new do
+          AppEnforcementCase.connection_pool.with_connection(prevent_permanent_checkout: true) do |connection|
+            end_ready << connection.select_value("SELECT pg_backend_pid()").to_i
+            EnforcementCaseEndOperation.call(
+              enforcement_case: AppEnforcementCase.find(the_case.id),
+              reason: "revoked",
             )
           end
-        worker_pid = Timeout.timeout(10) { locked.pop }
-        ending =
-          Thread.new do
-            AppEnforcementCase.connection_pool.with_connection(prevent_permanent_checkout: true) do |connection|
-              end_ready << connection.select_value("SELECT pg_backend_pid()").to_i
-              EnforcementCaseEndOperation.call(
-                enforcement_case: AppEnforcementCase.find(the_case.id),
-                reason: "revoked",
+        end
+      ending_pid = Timeout.timeout(10) { end_ready.pop }
+      Timeout.timeout(10) do
+        loop do
+          waiting =
+            AppEnforcementCase.uncached do
+              AppEnforcementCase.lease_connection.select_value(
+                "SELECT #{Integer(worker_pid)} = ANY(pg_blocking_pids(#{Integer(ending_pid)}))",
               )
             end
-          end
-        ending_pid = Timeout.timeout(10) { end_ready.pop }
-        Timeout.timeout(10) do
-          loop do
-            waiting =
-              AppEnforcementCase.uncached do
-                AppEnforcementCase.lease_connection.select_value(
-                  "SELECT #{Integer(worker_pid)} = ANY(pg_blocking_pids(#{Integer(ending_pid)}))",
-                )
-              end
-            break if waiting
+          break if waiting
 
-            Thread.pass
-          end
+          Thread.pass
         end
-        proceed << true
-        Timeout.timeout(10) { worker.value }
-
-        assert Timeout.timeout(10) { ending.value }
       end
+      proceed << true
+      assert_raises(AccessOpDataUnavailableError) { Timeout.timeout(10) { worker.value } }
+
+      assert_raises(AccessOpDataUnavailableError) { Timeout.timeout(10) { ending.value } }
     end
 
     assert_predicate the_case.reload.ended_at, :present?
-    assert_predicate actor.reload, :access_enabled?
-    assert Timeout.timeout(10) { source_visible.pop }, "the Source event must commit before OP delivery"
+    assert_predicate actor.reload, :admin_locked?
+    assert AppIdentityAuthenticationEvent.exists?(actor_ref: actor.id.to_s)
   ensure
     proceed << true if proceed
     [worker, ending].compact.each do |thread|

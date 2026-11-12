@@ -140,8 +140,14 @@ class AppOrgPreferenceWriteSerializationTest < ActionDispatch::IntegrationTest
         threads.each { |thread| thread.join(8) }
         ids = []
         ids << created_ids.pop(true) while created_ids.present?
-        # Cleanup traverses dependent associations outside the public writer under test.
-        preference_class.where(id: ids).strict_loading(false).find_each(&:destroy!) if ids.any?
+        if ids.any?
+          # These audit subjects and preferences were created by this test outside transactional fixtures.
+          PreferenceClassRegistry.audit_class_for(preference_class).where(
+            subject_type: preference_class.name, subject_id: ids.map(&:to_s),
+          ).delete_all
+          # Cleanup traverses dependent associations outside the public writer under test.
+          preference_class.where(id: ids).strict_loading(false).find_each(&:destroy!)
+        end
       end
     end
   end

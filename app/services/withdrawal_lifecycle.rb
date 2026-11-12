@@ -136,25 +136,25 @@ class WithdrawalLifecycle
 
   attr_reader :actor, :current_session_public_id, :request
 
-  def schedule_suspension_side_effects!(stop_event)
+  def schedule_suspension_side_effects!(_stop_event)
     payload = {
       deactivated_at: actor.deactivated_at,
       discard_at: actor.discard_at,
       purge_eligible_at: actor.purge_eligible_at,
     }
     actor.class.current_transaction.after_commit do
-      OpIdentityEventInvalidator.deliver(event: stop_event)
       notify("suspended", payload)
       record_occurrence!("withdrawal.deactivated")
+      raise AccessOpDataUnavailableError
     end
   end
 
-  def schedule_termination_side_effects!(stop_event)
+  def schedule_termination_side_effects!(_stop_event)
     terminated_at = actor.try(:terminated_at)
     actor.class.current_transaction.after_commit do
-      OpIdentityEventInvalidator.deliver(event: stop_event)
       notify("terminated", terminated_at: terminated_at)
       record_occurrence!("withdrawal.terminated")
+      raise AccessOpDataUnavailableError
     end
   end
 

@@ -12,7 +12,15 @@ class OperatorChronicleSignFlowHaltedTest < ActiveSupport::TestCase
   test "a second SIGN_FLOW_HALTED row for the same transaction and generation is rejected" do
     halt!(transaction: "txn-a", generation: "100")
 
-    assert_raises(ActiveRecord::RecordNotUnique) { halt!(transaction: "txn-a", generation: "100") }
+    duplicate = OperatorChronicle.new(
+      base_attributes.merge(context: { transaction_public_id: "txn-a", halt_generation: "100" }),
+    )
+
+    assert_not duplicate.valid?
+    assert duplicate.errors.of_kind?(:context, :taken)
+    assert_raises(ActiveRecord::RecordNotUnique) do
+      OperatorChronicle.transaction(requires_new: true) { duplicate.save!(validate: false) }
+    end
   end
 
   test "another generation or another transaction is a separate halt" do
@@ -25,8 +33,31 @@ class OperatorChronicleSignFlowHaltedTest < ActiveSupport::TestCase
   end
 
   test "a SIGN_FLOW_HALTED row without its correlation keys is rejected" do
-    assert_raises(ActiveRecord::StatementInvalid) do
-      OperatorChronicle.create!(base_attributes.merge(context: { reason_code: "phase_violation" }))
+    [
+      {},
+      { transaction_public_id: "txn-a" },
+      { halt_generation: "100" },
+      { nested: { transaction_public_id: "txn-a", halt_generation: "100" } },
+      ["transaction_public_id"],
+    ].each do |context|
+      record = OperatorChronicle.new(base_attributes.merge(context: context))
+
+      assert_not record.valid?
+      assert record.errors.of_kind?(:context, :invalid)
+      assert_raises(ActiveRecord::StatementInvalid) do
+        OperatorChronicle.transaction(requires_new: true) { record.save!(validate: false) }
+      end
+    end
+  end
+
+  test "correlation key presence follows PostgreSQL JSON object and array semantics" do
+    [
+      { transaction_public_id: nil, halt_generation: nil },
+      ["transaction_public_id", "halt_generation"],
+    ].each do |context|
+      record = OperatorChronicle.create!(base_attributes.merge(context: context))
+
+      assert_predicate record, :persisted?
     end
   end
 

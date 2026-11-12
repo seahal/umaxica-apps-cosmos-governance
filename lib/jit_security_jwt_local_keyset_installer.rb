@@ -59,7 +59,7 @@ module JitSecurityJwtLocalKeysetInstaller
   end
 
   # An RP cell process (R5-WU03A/WU17) keeps only the private keys RuntimeRole assigns to it; every
-  # other private key the local store just exported (OP/Auth access-token signers, sibling client
+  # other private key the local store just exported (Base access-token signers, sibling client
   # keys, other surfaces' Jump RT keys) is removed from its environment. Other roles are unchanged.
   def drop_private_keys_outside_rp_cell!
     return unless RuntimeRole::RP_ROLES.include?(RuntimeRole.current)

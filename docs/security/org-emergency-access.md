@@ -1,8 +1,14 @@
 # Org Emergency Access (Restricted Mode)
 
-Emergency Access is intended to provide an Entra-free way for an Operator to sign in to the org
+> **Historical route status (2026-11-11):** The local Auth/Visa routes, controllers and provider
+> URL configuration for the Org Standby ceremony described here have been removed under the
+> owner-approved local-surface hard reset. This document preserves the former route/security
+> design; it is not a current endpoint contract. Retained models or policy data do not imply that
+> the ceremony is routed here.
+
+Emergency Access was intended to provide an Entra-free way for an Operator to sign in to the org
 surface and run the resulting ORG Root session under a restricted authentication context. The
-current Auth-to-Visa implementation does not yet carry Standby through Root issuance; see
+pre-reset Auth-to-Visa implementation did not carry Standby through Root issuance; see
 [Current end-to-end issuance status](#current-end-to-end-issuance-status).
 
 It exists for the case where the Entra ID path is unavailable. It is not a convenience alternative
@@ -314,7 +320,7 @@ Three independent layers enforce it:
 2. `StepUpResolver` never reports a requirement as satisfied for an Emergency session, so a session
    that somehow held freshness columns still cannot authorize a sensitive action.
 3. `IdentityStepUpCeremonyFreshnessCommitter` refuses to write freshness onto an Emergency session,
-   which is where acme commits it (`docs/security/step-up-ceremony-delegation.md`). An operation is
+   which is where Base commits it. An operation is
    unavailable to an Emergency session exactly when it carries a Step-Up gate (`step_up only:` or a
    `require_*_step_up!` callback). A sensitive operation without one is reachable from Restricted
    Mode, so adding a sensitive operation means adding its gate. The inventory of write actions that
@@ -383,10 +389,7 @@ what the UI shows.
 
 ## Related
 
-- `adr/acme-sign-core-base-port-boundary.md`
-- `adr/org-entra-id-sign-in-boundary.md`
-- `docs/identity/authority-boundary.md`
-- `docs/security/session-token-authority.md`
-- `docs/security/step-up-ceremony-delegation.md`
+- `docs/architecture/base-auth-seven-rp-boundary.md`
+- `docs/security/step-up-mfa-status.md`
 - `docs/security/webauthn-architecture.md`
 - `docs/security/webauthn-security-invariants.md`

@@ -76,44 +76,9 @@ class AuthenticationContextOperationInventoryTest < ActiveSupport::TestCase
     Actor.reset
   end
 
-  test "the one session capability is step-up, and the named scope privileges stay closed" do
+  test "the one session capability is step-up and standby has none" do
     assert_equal ["step_up"], AuthenticationContextValue::REGISTRY.fetch("normal").capabilities
     assert_empty AuthenticationContextValue::REGISTRY.fetch("standby").capabilities
-    assert_equal %w(read:org write:org read:self write:self),
-                 AuthenticationContextValue::CAPABILITY_NAMED_SCOPES
-    # A standby session is never issued more than the same actor's normal claims.
-    operator_scopes = %w(authenticated domain:operator read:org write:org)
-
-    assert_equal AuthenticationContextValue.normal.constrain_scopes(operator_scopes),
-                 AuthenticationContextValue.standby.constrain_scopes(operator_scopes)
-  end
-
-  test "an ordinary publishing write keeps the active-operator policy in normal and standby" do
-    operator = Operator.new
-
-    assert_predicate operator, :active?
-
-    entry = Publishing::Docs::Org::Entry.new
-    outcomes =
-      {
-        normal: AuthenticationContextValue::NORMAL_KEY,
-        standby: AuthenticationContextValue::STANDBY_KEY,
-        unknown: "elevated",
-      }.to_h do |name, context|
-        claims = {
-          "scope" => "authenticated domain:operator read:org write:org",
-          AuthenticationContextValue::CLAIM => context,
-        }
-        Actor.install_context!(
-          authz: Actor::Authz.new(policy_user: operator, token_claims: claims, surface: "org"),
-        )
-        policy = PublishingEntryPolicy.new(entry, user: operator)
-        [name, !!policy.apply(:create?)]
-      end
-
-    assert_equal({ normal: true, standby: true, unknown: false }, outcomes)
-  ensure
-    Actor.reset
   end
 
   private
@@ -121,7 +86,7 @@ class AuthenticationContextOperationInventoryTest < ActiveSupport::TestCase
   def policy_record(policy_class)
     return nil unless policy_class == Authentication::AccessPolicy
 
-    AuthenticationBase::AccessPolicyContext.new(
+    BrowserRpAuthentication::AccessPolicyContext.new(
       policy: :public_strict,
       options: {},
       controller_name: "PolicyInventoryTestController",

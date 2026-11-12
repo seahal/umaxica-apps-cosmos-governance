@@ -50,8 +50,16 @@ module Base
         end
         authorize!(result, to: :show?, with: AvatarRemoteResultPolicy)
         raise ActiveRecord::RecordNotFound, "not found" if result.status == :not_found
-        return head(:service_unavailable) if result.status == :dependency
-        return head(:unprocessable_content) if result.status == :unprocessable
+
+        if result.status == :dependency
+          response.headers["Cache-Control"] = "no-store"
+          head :service_unavailable
+          return
+        end
+        if result.status == :unprocessable
+          head :unprocessable_content
+          return
+        end
 
         result
       end

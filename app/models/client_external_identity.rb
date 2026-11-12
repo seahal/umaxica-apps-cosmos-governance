@@ -11,9 +11,22 @@ class ClientExternalIdentity < AppPrincipalRecord
   alias_attribute :user_id, :client_id
 
   belongs_to :client, inverse_of: :client_external_identities
+  has_many :client_social_link_source_receipts,
+           inverse_of: :client_external_identity,
+           dependent: :restrict_with_error
   has_many :client_apple_notification_events,
            dependent: :nullify,
            inverse_of: :client_external_identity
+
+  validates :client_id,
+            uniqueness: { conditions: -> { where(released_at: nil) } },
+            if: -> { released_at.nil? && (will_save_change_to_client_id? || will_save_change_to_released_at?) }
+  validates :subject,
+            uniqueness: { scope: :issuer, conditions: -> { where(released_at: nil) } },
+            if: -> {
+              released_at.nil? &&
+                (will_save_change_to_subject? || will_save_change_to_issuer? || will_save_change_to_released_at?)
+            }
 
   validates :provider, inclusion: { in: PROVIDERS }
   validates :issuer, :subject, :audience, :verification_authority, presence: true

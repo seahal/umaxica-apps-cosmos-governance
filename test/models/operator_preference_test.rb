@@ -22,6 +22,13 @@ class OperatorPreferenceTest < ActiveSupport::TestCase
     assert_equal 21, preference.public_id.length
   end
 
+  test "a second active operator preference is rejected by validation" do
+    duplicate = OperatorPreference.new(operator: operators(:one))
+
+    assert_not duplicate.valid?
+    assert duplicate.errors.of_kind?(:operator_id, :taken)
+  end
+
   test "active actor preference uniqueness permits a retired historical row" do
     operator = operators(:one)
     active = operator_preferences(:one)
@@ -32,7 +39,10 @@ class OperatorPreferenceTest < ActiveSupport::TestCase
     assert_equal operator.id, retired.operator_id
     assert_raises(ActiveRecord::RecordNotUnique) do
       OperatorPreference.transaction(requires_new: true) do
-        OperatorPreference.create!(operator:, status_id: OperatorPreferenceStatus::ACTIVE, explicit_fields: [])
+        OperatorPreference.new(
+          operator:, status_id: OperatorPreferenceStatus::ACTIVE,
+          explicit_fields: [],
+        ).save!(validate: false)
       end
     end
     assert_equal OperatorPreferenceStatus::ACTIVE, active.reload.status_id

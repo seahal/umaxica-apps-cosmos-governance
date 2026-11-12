@@ -10,7 +10,6 @@ module Base
         include ::SignSettingsSecretCredentialTurnstileGuard
 
         include ::SignSettingsSecretCredentialCacheControl
-        include ::SignAuthorityRedirect
         include ::SignSettingsSecretCredentialRegistration
         include ::SurfaceInertiaPage
         include ::TurnstilePageProps
@@ -82,8 +81,6 @@ module Base
           render inertia: "base/org/identity/secret_credentials/new",
                  props: new_page_props,
                  status: :unprocessable_content
-        rescue TokenStatusManagement::StepUpEvidenceUnavailable
-          render plain: STEP_UP_REQUIRED_MESSAGE, status: :unauthorized
         end
 
         def update
@@ -111,8 +108,6 @@ module Base
             base_org_identity_secret_path(result.secret_credential.public_id, ri: params[:ri]),
             status: :see_other,
           )
-        rescue TokenStatusManagement::StepUpEvidenceUnavailable
-          render plain: STEP_UP_REQUIRED_MESSAGE, status: :unauthorized
         end
 
         def destroy
@@ -131,8 +126,6 @@ module Base
             request: request,
           )
           redirect_to(base_org_identity_secrets_path(ri: params[:ri]), status: :see_other)
-        rescue TokenStatusManagement::StepUpEvidenceUnavailable
-          render plain: STEP_UP_REQUIRED_MESSAGE, status: :unauthorized
         end
 
         private

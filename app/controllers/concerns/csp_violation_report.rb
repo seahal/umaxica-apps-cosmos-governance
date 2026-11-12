@@ -30,6 +30,14 @@ module CspViolationReport
 
   private
 
+  # The create action already skips CSRF verification. Reflect that exception here so
+  # framework callbacks do not create a CSRF token or session for anonymous reports.
+  def protect_against_forgery?
+    return false if action_name == "create"
+
+    super
+  end
+
   def record_csp_violation!
     return if csp_report_body_too_large?
 

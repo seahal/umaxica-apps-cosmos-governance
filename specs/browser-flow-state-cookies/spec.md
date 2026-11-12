@@ -1,5 +1,9 @@
 # Browser Flow State in Purpose-Specific Encrypted Cookies
 
+**Superseded on 2026-11-10 by `adr/browser-flow-handle-per-tab.md` (owner).** Flow state is no
+longer carried in per-purpose cookies; the Rails session holds one browser binding secret and each
+tab carries its own flow handle. Kept for its analysis and key inventory.
+
 Status: accepted by the owner on 2026-11-06. Work order 1 and the I-1 server-record design are
 complete. Work order 2 is in progress: request tests for the D-12 restart path have been added, but
 AC-13 coverage is partial and the sign-in incident tests for AC-1 to AC-8 have not been completed.

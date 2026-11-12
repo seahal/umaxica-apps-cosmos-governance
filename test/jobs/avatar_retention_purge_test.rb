@@ -34,7 +34,7 @@ class AvatarRetentionPurgeTest < ActiveJob::TestCase
       AvatarRecord.connection.execute("SET CONSTRAINTS ALL IMMEDIATE")
       avatar.update_columns(purge_eligible_at: 1.hour.ago)
 
-      RetentionPurgeJob.perform_now
+      assert_raises(AccessOpDataUnavailableError) { RetentionPurgeJob.perform_now }
 
       assert Avatar.exists?(avatar.id)
       assert AvatarEnterpriseOwnershipPeriod.exists?(period.id)
@@ -43,7 +43,7 @@ class AvatarRetentionPurgeTest < ActiveJob::TestCase
       assert_not_nil deferral
       assert_equal 1, deferral.attempt_count
 
-      RetentionPurgeJob.perform_now
+      assert_raises(AccessOpDataUnavailableError) { RetentionPurgeJob.perform_now }
 
       assert_equal 1, AvatarPurgeDeferral.where(avatar_id: avatar.id, reason_code: "ownership_history").count
       assert_equal 2, deferral.reload.attempt_count

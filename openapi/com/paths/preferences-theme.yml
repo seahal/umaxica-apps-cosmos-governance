@@ -5,7 +5,8 @@ servers:
 get:
   summary: Current color theme
   description: >-
-    Reports the caller's color theme. No session is required. A valid same-TLD preference token identifies the preference.
+    Reports the caller's color theme. No session is required. A valid same-TLD preference token
+    identifies the preference.
   operationId: getPreferencesTheme
   tags: [Preferences]
   security: []
@@ -30,9 +31,9 @@ get:
 patch:
   summary: Update color theme
   description: >-
-    Updates the preference record, creating one when no valid preference token is present.
-    `theme` is `light`, `dark`, or `system` (case-insensitive) or a stored code; any other value,
-    including a missing member, is a 422 with the pointer `/theme`. Unknown members are ignored.
+    Updates the preference record, creating one when no valid preference token is present. `theme`
+    is `light`, `dark`, or `system` (case-insensitive) or a stored code; any other value, including
+    a missing member, is a 422 with the pointer `/theme`. Unknown members are ignored.
   operationId: patchPreferencesTheme
   tags: [Preferences]
   security: []

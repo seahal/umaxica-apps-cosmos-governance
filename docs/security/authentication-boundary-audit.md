@@ -3,6 +3,11 @@
 Audit date: 2026-08-11. Scope: the Rails application only. Edge components (Hono, Next.js,
 Cloudflare Workers) and Cloudflare Access policy configuration were explicitly out of scope.
 
+> **Route status update (2026-11-10):** The local Auth, Visa, Core, Warp, Palm, Edit, Press, Docs, News,
+> Help, Info, and Guid routes/controllers discussed in this audit have since been removed. The
+> findings below describe the 2026-08-11 implementation snapshot and are not a current route map.
+> External identity/OIDC contracts and retained model/database state are outside that route change.
+
 This document records the state of the Rails authentication and authorization boundary at the time
 of the audit, the responsibility split with Cloudflare Access, the Microsoft Entra ID integration,
 and the one finding that required a code change. It is a point-in-time record, not a decision

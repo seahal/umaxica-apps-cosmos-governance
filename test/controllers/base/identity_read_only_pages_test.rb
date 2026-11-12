@@ -8,168 +8,39 @@ require "test_helper"
 # surface is asserted separately so a page that regresses on one surface cannot
 # hide behind another.
 class BaseIdentityReadOnlyPagesTest < ActionDispatch::IntegrationTest
-  fixtures :clients, :client_statuses, :client_token_kinds, :client_token_statuses,
-           :client_token_binding_methods, :client_token_dbsc_statuses,
-           :client_chronicle_events, :client_chronicle_levels,
-           :operators, :operator_statuses, :operator_token_kinds, :operator_token_statuses,
-           :operator_token_binding_methods, :operator_token_dbsc_statuses,
-           :operator_chronicle_events, :operator_chronicle_levels
+  fixtures :clients, :client_statuses, :client_chronicle_events, :client_chronicle_levels, :operators,
+           :operator_statuses, :operator_chronicle_events, :operator_chronicle_levels
 
-  test "app standing page reports the signed-in client's account standing" do
+  test "app standing page reports unavailable external authority for a verified client" do
     host = ENV.fetch("PUBLIC_BASE_SERVICE_URL")
     host! host
     client = clients(:one)
-    token = ClientToken.create!(
-      authentication_epoch: 0,
-      user: client, user_token_kind_id: ClientTokenKind::BROWSER_WEB,
-      user_token_status_id: ClientTokenStatus::ACTIVE, discard_at: 1.day.from_now,
-    )
-    BaseSelectorBootstrapAuthority.call(surface: :app, principal: client)
-    BaseSelectorAuthority.prepare(surface: :app, principal: client, session: token)
-    access_token = AuthenticationToken.encode(
-      client, host: host, session_public_id: token.public_id,
-              resource_type: "client", jwt_issuer_id: "surface:BASE_APP",
-    )
-    cookies[AuthenticationBase::ACCESS_COOKIE_KEY] = access_token
-    # Base pages authenticate by the Browser RP credential; the root cookie alone does not.
-    begin
-      rp_cookie_pairs =
-        begin
-          rp_host = host
-          rp_token = token
-          rp_client = OidcClientRegistry.find!("base-app-ww")
-          rp_key = [rp_client.client_id, rp_token.public_id]
-          @base_browser_rp_credentials ||= {}
-          if @base_browser_rp_credentials[rp_key] ||
-              (rp_token.currently_usable? &&
-                !(rp_token.device_session_id && OpAppGrant.exists?(
-                  device_session_id: rp_token.device_session_id, oidc_client_id: rp_client.client_id, revoked_at: nil,
-                )))
-            unless @base_browser_rp_credentials[rp_key]
-              rp_token.rotate_refresh_token! unless rp_token.device_session_record.current_refresh_token_id
-              rp_now = Time.current
-              rp_session = OpAppGrant.create!(
-                authentication_epoch: 0,
-                client_token: rp_token, oidc_client_id: rp_client.client_id, oidc_scope: "openid profile",
-                oidc_jti: SecureRandom.uuid, oidc_nonce: SecureRandom.hex(16), oidc_auth_time: rp_now,
-                refresh_token_expires_at: rp_now + 10.minutes,
-              )
-              rp_access = AuthenticationTokenService.encode(
-                client, host: rp_host, resource_type: "client",
-                        session_public_id: rp_token.public_id, base_session_public_id: rp_token.public_id,
-                        oidc_sid: rp_session.public_id, oidc_jti: rp_session.oidc_jti,
-                        expires_at: rp_now + 10.minutes, scopes: %w(openid profile),
-                        issuer: OidcIssuer.for_client(rp_client), audiences: [rp_client.aud],
-                        jwt_issuer_id: OidcIssuer.jwt_issuer_id_for_client(rp_client),
-                        subject: OidcSubject.for(client, resource_type: "client"), client_id: rp_client.client_id,
-              )
-              @base_browser_rp_credentials[rp_key] = [rp_access, rp_session.issue_refresh_token!]
-            end
-            rp_access, rp_refresh = @base_browser_rp_credentials.fetch(rp_key)
-            [
-              "#{OidcRpBrowserCredentialContract::ACCESS_COOKIE}=#{Rack::Utils.escape(rp_access)}",
-              "#{OidcRpBrowserCredentialContract::REFRESH_COOKIE}=#{Rack::Utils.escape(rp_refresh)}",
-            ]
-          else
-            []
-          end
-        end
-      cookies.merge(rp_cookie_pairs, URI.parse("https://#{rp_host}/"))
-    end
 
-    get base_app_identity_standing_url(ri: "jp", host: host),
-        headers: {
-          "Authorization" => "Bearer #{access_token}",
-          "Client-Agent" => "Mozilla/5.0",
-          "Host" => host,
-          "X-TEST-SESSION-PUBLIC-ID" => token.public_id,
-        }
+    headers = as_user_headers(client, host: host)
+    get base_app_identity_standing_url(ri: "jp", host: host), headers: headers
 
-    assert_response :success
-    assert_equal "Account Standing", inertia_props.fetch("title")
-    assert_equal(
-      { "label" => I18n.t("actions.up"), "href" => base_app_identity_path(ri: "jp") },
-      inertia_props.fetch("up_link"),
-    )
-    assert_empty inertia_props.fetch("decisions")
+    assert_response :service_unavailable
+    assert_includes response.headers["Cache-Control"], "no-store"
   end
 
-  test "org standing page reports the signed-in operator's account standing" do
+  test "org standing page reports unavailable external authority for a verified operator" do
     host = ENV.fetch("PUBLIC_BASE_STAFF_URL")
     host! host
     operator = operators(:one)
-    token = OperatorToken.create!(
-      authentication_epoch: 0,
-      staff: operator, staff_token_kind_id: OperatorTokenKind::BROWSER_WEB,
-      staff_token_status_id: OperatorTokenStatus::ACTIVE, discard_at: 1.day.from_now,
-    )
-    BaseSelectorBootstrapAuthority.call(surface: :org, principal: operator)
-    BaseSelectorAuthority.prepare(surface: :org, principal: operator, session: token)
-    access_token = AuthenticationToken.encode(
-      operator, host: host, session_public_id: token.public_id,
-                resource_type: "operator", jwt_issuer_id: "surface:BASE_ORG",
-    )
-    cookies[AuthenticationBase::ACCESS_COOKIE_KEY] = access_token
-    # Base pages authenticate by the Browser RP credential; the root cookie alone does not.
-    begin
-      rp_cookie_pairs =
-        begin
-          rp_host = host
-          rp_token = token
-          rp_client = OidcClientRegistry.find!("base-org-ww")
-          rp_key = [rp_client.client_id, rp_token.public_id]
-          @base_browser_rp_credentials ||= {}
-          if @base_browser_rp_credentials[rp_key] ||
-              (rp_token.currently_usable? &&
-                !(rp_token.device_session_id && OpOrgGrant.exists?(
-                  device_session_id: rp_token.device_session_id, oidc_client_id: rp_client.client_id, revoked_at: nil,
-                )))
-            unless @base_browser_rp_credentials[rp_key]
-              rp_token.rotate_refresh_token! unless rp_token.device_session_record.current_refresh_token_id
-              rp_now = Time.current
-              rp_session = OpOrgGrant.create!(
-                authentication_epoch: 0,
-                operator_token: rp_token, oidc_client_id: rp_client.client_id, oidc_scope: "openid profile",
-                oidc_jti: SecureRandom.uuid, oidc_nonce: SecureRandom.hex(16), oidc_auth_time: rp_now,
-                refresh_token_expires_at: rp_now + 10.minutes,
-              )
-              rp_access = AuthenticationTokenService.encode(
-                operator, host: rp_host, resource_type: "operator",
-                          session_public_id: rp_token.public_id, base_session_public_id: rp_token.public_id,
-                          oidc_sid: rp_session.public_id, oidc_jti: rp_session.oidc_jti,
-                          expires_at: rp_now + 10.minutes, scopes: %w(openid profile),
-                          issuer: OidcIssuer.for_client(rp_client), audiences: [rp_client.aud],
-                          jwt_issuer_id: OidcIssuer.jwt_issuer_id_for_client(rp_client),
-                          subject: OidcSubject.for(operator, resource_type: "operator"), client_id: rp_client.client_id,
-              )
-              @base_browser_rp_credentials[rp_key] = [rp_access, rp_session.issue_refresh_token!]
-            end
-            rp_access, rp_refresh = @base_browser_rp_credentials.fetch(rp_key)
-            [
-              "#{OidcRpBrowserCredentialContract::ACCESS_COOKIE}=#{Rack::Utils.escape(rp_access)}",
-              "#{OidcRpBrowserCredentialContract::REFRESH_COOKIE}=#{Rack::Utils.escape(rp_refresh)}",
-            ]
-          else
-            []
-          end
-        end
-      cookies.merge(rp_cookie_pairs, URI.parse("https://#{rp_host}/"))
+
+    as_staff_headers(operator, host: host)
+
+    2.times do |index|
+      OperatorPasskey.create!(
+        staff: operator, webauthn_id: "read-fixture-#{SecureRandom.uuid}", external_id: SecureRandom.uuid,
+        public_key: "read-fixture-key-#{index}", description: "Read fixture", status_id: OperatorPasskeyStatus::ACTIVE,
+      )
     end
+    headers = as_staff_headers(operator, host: host)
+    get base_org_identity_standing_url(ri: "jp", host: host), headers: headers
 
-    get base_org_identity_standing_url(ri: "jp", host: host),
-        headers: {
-          "Authorization" => "Bearer #{access_token}",
-          "Client-Agent" => "Mozilla/5.0",
-          "Host" => host,
-          "X-TEST-SESSION-PUBLIC-ID" => token.public_id,
-        }
-
-    assert_response :success
-    assert_equal "Account Standing", inertia_props.fetch("title")
-    assert_equal(
-      { "label" => I18n.t("actions.up"), "href" => base_org_identity_path(ri: "jp") },
-      inertia_props.fetch("up_link"),
-    )
+    assert_response :service_unavailable
+    assert_includes response.headers["Cache-Control"], "no-store"
   end
 
   test "app activity log lists only normalized activity for the signed-in client" do
@@ -178,13 +49,9 @@ class BaseIdentityReadOnlyPagesTest < ActionDispatch::IntegrationTest
     # Chronicle records can outlive the principal transaction in parallel workers.
     client = Client.create!(
       id: 8_000_000_000_000 + SecureRandom.random_number(1_000_000_000),
-      security_mode_id: SecurityModeConfigurable::NORMAL,
+      security_mode_id: SecurityModeConfigurable::NORMAL, status_id: ClientStatus::ACTIVE,
     )
-    token = ClientToken.create!(
-      authentication_epoch: 0,
-      user: client, user_token_kind_id: ClientTokenKind::BROWSER_WEB,
-      user_token_status_id: ClientTokenStatus::ACTIVE, discard_at: 1.day.from_now,
-    )
+
     ChronicleRecord.connected_to(role: :writing) do
       ClientChronicle.create!(
         subject_id: client.id.to_s, subject_type: "Client", event_id: ClientChronicleEvent::LOGIN_SUCCESS,
@@ -203,66 +70,9 @@ class BaseIdentityReadOnlyPagesTest < ActionDispatch::IntegrationTest
         context: { secret: "refresh-secret-sentinel" }, occurred_at: 1.minute.ago,
       )
     end
-    BaseSelectorBootstrapAuthority.call(surface: :app, principal: client)
-    BaseSelectorAuthority.prepare(surface: :app, principal: client, session: token)
-    access_token = AuthenticationToken.encode(
-      client, host: host, session_public_id: token.public_id,
-              resource_type: "client", jwt_issuer_id: "surface:BASE_APP",
-    )
-    cookies[AuthenticationBase::ACCESS_COOKIE_KEY] = access_token
-    # Base pages authenticate by the Browser RP credential; the root cookie alone does not.
-    begin
-      rp_cookie_pairs =
-        begin
-          rp_host = host
-          rp_token = token
-          rp_client = OidcClientRegistry.find!("base-app-ww")
-          rp_key = [rp_client.client_id, rp_token.public_id]
-          @base_browser_rp_credentials ||= {}
-          if @base_browser_rp_credentials[rp_key] ||
-              (rp_token.currently_usable? &&
-                !(rp_token.device_session_id && OpAppGrant.exists?(
-                  device_session_id: rp_token.device_session_id, oidc_client_id: rp_client.client_id, revoked_at: nil,
-                )))
-            unless @base_browser_rp_credentials[rp_key]
-              rp_token.rotate_refresh_token! unless rp_token.device_session_record.current_refresh_token_id
-              rp_now = Time.current
-              rp_session = OpAppGrant.create!(
-                authentication_epoch: 0,
-                client_token: rp_token, oidc_client_id: rp_client.client_id, oidc_scope: "openid profile",
-                oidc_jti: SecureRandom.uuid, oidc_nonce: SecureRandom.hex(16), oidc_auth_time: rp_now,
-                refresh_token_expires_at: rp_now + 10.minutes,
-              )
-              rp_access = AuthenticationTokenService.encode(
-                client, host: rp_host, resource_type: "client",
-                        session_public_id: rp_token.public_id, base_session_public_id: rp_token.public_id,
-                        oidc_sid: rp_session.public_id, oidc_jti: rp_session.oidc_jti,
-                        expires_at: rp_now + 10.minutes, scopes: %w(openid profile),
-                        issuer: OidcIssuer.for_client(rp_client), audiences: [rp_client.aud],
-                        jwt_issuer_id: OidcIssuer.jwt_issuer_id_for_client(rp_client),
-                        subject: OidcSubject.for(client, resource_type: "client"), client_id: rp_client.client_id,
-              )
-              @base_browser_rp_credentials[rp_key] = [rp_access, rp_session.issue_refresh_token!]
-            end
-            rp_access, rp_refresh = @base_browser_rp_credentials.fetch(rp_key)
-            [
-              "#{OidcRpBrowserCredentialContract::ACCESS_COOKIE}=#{Rack::Utils.escape(rp_access)}",
-              "#{OidcRpBrowserCredentialContract::REFRESH_COOKIE}=#{Rack::Utils.escape(rp_refresh)}",
-            ]
-          else
-            []
-          end
-        end
-      cookies.merge(rp_cookie_pairs, URI.parse("https://#{rp_host}/"))
-    end
 
-    get base_app_identity_activities_url(ri: "jp", host: host),
-        headers: {
-          "Authorization" => "Bearer #{access_token}",
-          "Client-Agent" => "Mozilla/5.0",
-          "Host" => host,
-          "X-TEST-SESSION-PUBLIC-ID" => token.public_id,
-        }
+    headers = as_user_headers(client, host: host)
+    get base_app_identity_activities_url(ri: "jp", host: host), headers: headers
 
     assert_response :success
     assert_equal %w(occurred_at activity device source risk), inertia_props.fetch("columns").keys
@@ -276,7 +86,7 @@ class BaseIdentityReadOnlyPagesTest < ActionDispatch::IntegrationTest
     end
     failure = ->(*) { raise ActiveRecord::ConnectionNotEstablished, "injected Chronicle failure" }
     Chronicle.stub(:where, failure) do
-      get base_app_identity_activities_url(ri: "jp", host: host)
+      get base_app_identity_activities_url(ri: "jp", host: host), headers: headers
 
       assert_response :service_unavailable
       assert_includes response.body, I18n.t("base.shared.identity.activities.unavailable", locale: :ja)
@@ -287,11 +97,7 @@ class BaseIdentityReadOnlyPagesTest < ActionDispatch::IntegrationTest
     host = ENV.fetch("PUBLIC_BASE_STAFF_URL")
     host! host
     operator = operators(:one)
-    token = OperatorToken.create!(
-      authentication_epoch: 0,
-      staff: operator, staff_token_kind_id: OperatorTokenKind::BROWSER_WEB,
-      staff_token_status_id: OperatorTokenStatus::ACTIVE, discard_at: 1.day.from_now,
-    )
+
     ChronicleRecord.connected_to(role: :writing) do
       OperatorChronicle.create!(
         subject_id: operator.id.to_s, subject_type: "Operator", event_id: OperatorChronicleEvent::LOGIN_SUCCESS,
@@ -314,66 +120,17 @@ class BaseIdentityReadOnlyPagesTest < ActionDispatch::IntegrationTest
         context: { secret: "refresh-secret-sentinel" }, occurred_at: 1.minute.ago,
       )
     end
-    BaseSelectorBootstrapAuthority.call(surface: :org, principal: operator)
-    BaseSelectorAuthority.prepare(surface: :org, principal: operator, session: token)
-    access_token = AuthenticationToken.encode(
-      operator, host: host, session_public_id: token.public_id,
-                resource_type: "operator", jwt_issuer_id: "surface:BASE_ORG",
-    )
-    cookies[AuthenticationBase::ACCESS_COOKIE_KEY] = access_token
-    # Base pages authenticate by the Browser RP credential; the root cookie alone does not.
-    begin
-      rp_cookie_pairs =
-        begin
-          rp_host = host
-          rp_token = token
-          rp_client = OidcClientRegistry.find!("base-org-ww")
-          rp_key = [rp_client.client_id, rp_token.public_id]
-          @base_browser_rp_credentials ||= {}
-          if @base_browser_rp_credentials[rp_key] ||
-              (rp_token.currently_usable? &&
-                !(rp_token.device_session_id && OpOrgGrant.exists?(
-                  device_session_id: rp_token.device_session_id, oidc_client_id: rp_client.client_id, revoked_at: nil,
-                )))
-            unless @base_browser_rp_credentials[rp_key]
-              rp_token.rotate_refresh_token! unless rp_token.device_session_record.current_refresh_token_id
-              rp_now = Time.current
-              rp_session = OpOrgGrant.create!(
-                authentication_epoch: 0,
-                operator_token: rp_token, oidc_client_id: rp_client.client_id, oidc_scope: "openid profile",
-                oidc_jti: SecureRandom.uuid, oidc_nonce: SecureRandom.hex(16), oidc_auth_time: rp_now,
-                refresh_token_expires_at: rp_now + 10.minutes,
-              )
-              rp_access = AuthenticationTokenService.encode(
-                operator, host: rp_host, resource_type: "operator",
-                          session_public_id: rp_token.public_id, base_session_public_id: rp_token.public_id,
-                          oidc_sid: rp_session.public_id, oidc_jti: rp_session.oidc_jti,
-                          expires_at: rp_now + 10.minutes, scopes: %w(openid profile),
-                          issuer: OidcIssuer.for_client(rp_client), audiences: [rp_client.aud],
-                          jwt_issuer_id: OidcIssuer.jwt_issuer_id_for_client(rp_client),
-                          subject: OidcSubject.for(operator, resource_type: "operator"), client_id: rp_client.client_id,
-              )
-              @base_browser_rp_credentials[rp_key] = [rp_access, rp_session.issue_refresh_token!]
-            end
-            rp_access, rp_refresh = @base_browser_rp_credentials.fetch(rp_key)
-            [
-              "#{OidcRpBrowserCredentialContract::ACCESS_COOKIE}=#{Rack::Utils.escape(rp_access)}",
-              "#{OidcRpBrowserCredentialContract::REFRESH_COOKIE}=#{Rack::Utils.escape(rp_refresh)}",
-            ]
-          else
-            []
-          end
-        end
-      cookies.merge(rp_cookie_pairs, URI.parse("https://#{rp_host}/"))
-    end
 
-    get base_org_identity_activities_url(ri: "jp", host: host),
-        headers: {
-          "Authorization" => "Bearer #{access_token}",
-          "Client-Agent" => "Mozilla/5.0",
-          "Host" => host,
-          "X-TEST-SESSION-PUBLIC-ID" => token.public_id,
-        }
+    as_staff_headers(operator, host: host)
+
+    2.times do |index|
+      OperatorPasskey.create!(
+        staff: operator, webauthn_id: "read-fixture-#{SecureRandom.uuid}", external_id: SecureRandom.uuid,
+        public_key: "read-fixture-key-#{index}", description: "Read fixture", status_id: OperatorPasskeyStatus::ACTIVE,
+      )
+    end
+    headers = as_staff_headers(operator, host: host)
+    get base_org_identity_activities_url(ri: "jp", host: host), headers: headers
 
     assert_response :success
     assert_equal I18n.t("base.shared.identity.activities.title"), inertia_props.fetch("title")
@@ -389,91 +146,25 @@ class BaseIdentityReadOnlyPagesTest < ActionDispatch::IntegrationTest
     end
     failure = ->(*) { raise ActiveRecord::ConnectionNotEstablished, "injected Chronicle failure" }
     OperatorChronicle.stub(:where, failure) do
-      get base_org_identity_activities_url(ri: "jp", host: host)
+      get base_org_identity_activities_url(ri: "jp", host: host), headers: headers
 
       assert_response :service_unavailable
       assert_includes response.body, I18n.t("base.shared.identity.activities.unavailable", locale: :ja)
     end
   end
 
-  test "app birthdate page sends an unregistered client to Base credential setup without starting a ceremony" do
-    base_host = ENV.fetch("PUBLIC_BASE_SERVICE_URL")
-    host! base_host
-    client = Client.create!(security_mode_id: SecurityModeConfigurable::NORMAL)
-    token = ClientToken.create!(
-      authentication_epoch: 0,
-      user: client, user_token_kind_id: ClientTokenKind::BROWSER_WEB,
-      user_token_status_id: ClientTokenStatus::ACTIVE, discard_at: 1.day.from_now,
-    )
-    BaseSelectorBootstrapAuthority.call(surface: :app, principal: client)
-    BaseSelectorAuthority.prepare(surface: :app, principal: client, session: token)
-    access_token = AuthenticationToken.encode(
-      client, host: base_host, session_public_id: token.public_id,
-              resource_type: "client", jwt_issuer_id: "surface:BASE_APP",
-    )
-    cookies[AuthenticationBase::ACCESS_COOKIE_KEY] = access_token
-    # Base pages authenticate by the Browser RP credential; the root cookie alone does not.
-    begin
-      rp_cookie_pairs =
-        begin
-          rp_host = base_host
-          rp_token = token
-          rp_client = OidcClientRegistry.find!("base-app-ww")
-          rp_key = [rp_client.client_id, rp_token.public_id]
-          @base_browser_rp_credentials ||= {}
-          if @base_browser_rp_credentials[rp_key] ||
-              (rp_token.currently_usable? &&
-                !(rp_token.device_session_id && OpAppGrant.exists?(
-                  device_session_id: rp_token.device_session_id, oidc_client_id: rp_client.client_id, revoked_at: nil,
-                )))
-            unless @base_browser_rp_credentials[rp_key]
-              rp_token.rotate_refresh_token! unless rp_token.device_session_record.current_refresh_token_id
-              rp_now = Time.current
-              rp_session = OpAppGrant.create!(
-                authentication_epoch: 0,
-                client_token: rp_token, oidc_client_id: rp_client.client_id, oidc_scope: "openid profile",
-                oidc_jti: SecureRandom.uuid, oidc_nonce: SecureRandom.hex(16), oidc_auth_time: rp_now,
-                refresh_token_expires_at: rp_now + 10.minutes,
-              )
-              rp_access = AuthenticationTokenService.encode(
-                client, host: rp_host, resource_type: "client",
-                        session_public_id: rp_token.public_id, base_session_public_id: rp_token.public_id,
-                        oidc_sid: rp_session.public_id, oidc_jti: rp_session.oidc_jti,
-                        expires_at: rp_now + 10.minutes, scopes: %w(openid profile),
-                        issuer: OidcIssuer.for_client(rp_client), audiences: [rp_client.aud],
-                        jwt_issuer_id: OidcIssuer.jwt_issuer_id_for_client(rp_client),
-                        subject: OidcSubject.for(client, resource_type: "client"), client_id: rp_client.client_id,
-              )
-              @base_browser_rp_credentials[rp_key] = [rp_access, rp_session.issue_refresh_token!]
-            end
-            rp_access, rp_refresh = @base_browser_rp_credentials.fetch(rp_key)
-            [
-              "#{OidcRpBrowserCredentialContract::ACCESS_COOKIE}=#{Rack::Utils.escape(rp_access)}",
-              "#{OidcRpBrowserCredentialContract::REFRESH_COOKIE}=#{Rack::Utils.escape(rp_refresh)}",
-            ]
-          else
-            []
-          end
-        end
-      cookies.merge(rp_cookie_pairs, URI.parse("https://#{rp_host}/"))
-    end
-    transaction_count = ClientStepUpCeremonyTransaction.count
+  test "app birthdate reports unavailable authority without issuing authentication state" do
+    client = Client.create!(security_mode_id: SecurityModeConfigurable::NORMAL, status_id: ClientStatus::ACTIVE)
+    host = ENV.fetch("PUBLIC_BASE_SERVICE_URL")
+    headers = as_user_headers(client, host: host)
+    original = [RpStepUpState.count, RpStepUpAuditOutbox.count, ClientPasskey.count, ClientTotpCredential.count]
 
-    get base_app_identity_birthdate_url(ri: "jp", host: base_host),
-        headers: {
-          "Authorization" => "Bearer #{access_token}",
-          "Client-Agent" => "Mozilla/5.0",
-          "Host" => base_host,
-          "X-TEST-SESSION-PUBLIC-ID" => token.public_id,
-        }
+    get base_app_identity_birthdate_url(ri: "jp", host: host), headers: headers
 
-    assert_response :redirect
-    uri = URI.parse(response.location)
-
-    assert_equal base_host, uri.host
-    assert_equal "/verification/setup", uri.path
-    assert_equal "settings_birthdate", Rack::Utils.parse_nested_query(uri.query).fetch("scope")
-    assert_equal transaction_count, ClientStepUpCeremonyTransaction.count
+    assert_response :service_unavailable
+    assert_includes response.headers["Cache-Control"], "no-store"
+    assert_equal original,
+                 [RpStepUpState.count, RpStepUpAuditOutbox.count, ClientPasskey.count, ClientTotpCredential.count]
   end
 
   test "app standing page rejects an unauthenticated request" do
@@ -485,7 +176,7 @@ class BaseIdentityReadOnlyPagesTest < ActionDispatch::IntegrationTest
 
     assert_not_equal 200, response.status
   end
-  test "app standing page lists an in-force decision against the client" do
+  test "app standing dependency failure preserves the client in-force decision" do
     host = ENV.fetch("PUBLIC_BASE_SERVICE_URL")
     host! host
     client = clients(:one)
@@ -499,82 +190,18 @@ class BaseIdentityReadOnlyPagesTest < ActionDispatch::IntegrationTest
       enforcement_case: enforcement_case,
       actor_operator_public_id: enforcement_case.applied_by_operator_public_id,
     )
-    token = ClientToken.create!(
-      authentication_epoch: 0,
-      user: client, user_token_kind_id: ClientTokenKind::BROWSER_WEB,
-      user_token_status_id: ClientTokenStatus::ACTIVE, discard_at: 1.day.from_now,
-    )
-    BaseSelectorBootstrapAuthority.call(surface: :app, principal: client)
-    BaseSelectorAuthority.prepare(surface: :app, principal: client, session: token)
-    access_token = AuthenticationToken.encode(
-      client, host: host, session_public_id: token.public_id,
-              resource_type: "client", jwt_issuer_id: "surface:BASE_APP",
-    )
-    cookies[AuthenticationBase::ACCESS_COOKIE_KEY] = access_token
-    # Base pages authenticate by the Browser RP credential; the root cookie alone does not.
-    begin
-      rp_cookie_pairs =
-        begin
-          rp_host = host
-          rp_token = token
-          rp_client = OidcClientRegistry.find!("base-app-ww")
-          rp_key = [rp_client.client_id, rp_token.public_id]
-          @base_browser_rp_credentials ||= {}
-          if @base_browser_rp_credentials[rp_key] ||
-              (rp_token.currently_usable? &&
-                !(rp_token.device_session_id && OpAppGrant.exists?(
-                  device_session_id: rp_token.device_session_id, oidc_client_id: rp_client.client_id, revoked_at: nil,
-                )))
-            unless @base_browser_rp_credentials[rp_key]
-              rp_token.rotate_refresh_token! unless rp_token.device_session_record.current_refresh_token_id
-              rp_now = Time.current
-              rp_session = OpAppGrant.create!(
-                authentication_epoch: 0,
-                client_token: rp_token, oidc_client_id: rp_client.client_id, oidc_scope: "openid profile",
-                oidc_jti: SecureRandom.uuid, oidc_nonce: SecureRandom.hex(16), oidc_auth_time: rp_now,
-                refresh_token_expires_at: rp_now + 10.minutes,
-              )
-              rp_access = AuthenticationTokenService.encode(
-                client, host: rp_host, resource_type: "client",
-                        session_public_id: rp_token.public_id, base_session_public_id: rp_token.public_id,
-                        oidc_sid: rp_session.public_id, oidc_jti: rp_session.oidc_jti,
-                        expires_at: rp_now + 10.minutes, scopes: %w(openid profile),
-                        issuer: OidcIssuer.for_client(rp_client), audiences: [rp_client.aud],
-                        jwt_issuer_id: OidcIssuer.jwt_issuer_id_for_client(rp_client),
-                        subject: OidcSubject.for(client, resource_type: "client"), client_id: rp_client.client_id,
-              )
-              @base_browser_rp_credentials[rp_key] = [rp_access, rp_session.issue_refresh_token!]
-            end
-            rp_access, rp_refresh = @base_browser_rp_credentials.fetch(rp_key)
-            [
-              "#{OidcRpBrowserCredentialContract::ACCESS_COOKIE}=#{Rack::Utils.escape(rp_access)}",
-              "#{OidcRpBrowserCredentialContract::REFRESH_COOKIE}=#{Rack::Utils.escape(rp_refresh)}",
-            ]
-          else
-            []
-          end
-        end
-      cookies.merge(rp_cookie_pairs, URI.parse("https://#{rp_host}/"))
-    end
 
-    get base_app_identity_standing_url(ri: "jp", host: host),
-        headers: {
-          "Authorization" => "Bearer #{access_token}",
-          "Client-Agent" => "Mozilla/5.0",
-          "Host" => host,
-          "X-TEST-SESSION-PUBLIC-ID" => token.public_id,
-        }
+    headers = as_user_headers(client, host: host)
+    get base_app_identity_standing_url(ri: "jp", host: host), headers: headers
 
-    assert_response :success
-    decision = inertia_props.fetch("decisions").first
-
-    assert_equal enforcement_case.public_id, decision.fetch("public_id")
-    assert_equal "Cooldown", decision.fetch("kind")
-    assert_equal "Abuse", decision.fetch("reason")
-    assert_predicate decision.fetch("ends_at"), :present?
+    assert_response :service_unavailable
+    assert_includes response.headers["Cache-Control"], "no-store"
+    assert_equal "active", enforcement_case.reload.state
+    assert_equal "abuse", enforcement_case.reason_code
+    assert_predicate enforcement_case.expires_at, :present?
   end
 
-  test "org standing page lists an in-force decision against the operator" do
+  test "org standing dependency failure preserves the operator in-force decision" do
     host = ENV.fetch("PUBLIC_BASE_STAFF_URL")
     host! host
     operator = operators(:one)
@@ -588,73 +215,18 @@ class BaseIdentityReadOnlyPagesTest < ActionDispatch::IntegrationTest
       enforcement_case: enforcement_case,
       actor_operator_public_id: enforcement_case.applied_by_operator_public_id,
     )
-    token = OperatorToken.create!(
-      authentication_epoch: 0,
-      staff: operator, staff_token_kind_id: OperatorTokenKind::BROWSER_WEB,
-      staff_token_status_id: OperatorTokenStatus::ACTIVE, discard_at: 1.day.from_now,
-    )
-    BaseSelectorBootstrapAuthority.call(surface: :org, principal: operator)
-    BaseSelectorAuthority.prepare(surface: :org, principal: operator, session: token)
-    access_token = AuthenticationToken.encode(
-      operator, host: host, session_public_id: token.public_id,
-                resource_type: "operator", jwt_issuer_id: "surface:BASE_ORG",
-    )
-    cookies[AuthenticationBase::ACCESS_COOKIE_KEY] = access_token
-    # Base pages authenticate by the Browser RP credential; the root cookie alone does not.
-    begin
-      rp_cookie_pairs =
-        begin
-          rp_host = host
-          rp_token = token
-          rp_client = OidcClientRegistry.find!("base-org-ww")
-          rp_key = [rp_client.client_id, rp_token.public_id]
-          @base_browser_rp_credentials ||= {}
-          if @base_browser_rp_credentials[rp_key] ||
-              (rp_token.currently_usable? &&
-                !(rp_token.device_session_id && OpOrgGrant.exists?(
-                  device_session_id: rp_token.device_session_id, oidc_client_id: rp_client.client_id, revoked_at: nil,
-                )))
-            unless @base_browser_rp_credentials[rp_key]
-              rp_token.rotate_refresh_token! unless rp_token.device_session_record.current_refresh_token_id
-              rp_now = Time.current
-              rp_session = OpOrgGrant.create!(
-                authentication_epoch: 0,
-                operator_token: rp_token, oidc_client_id: rp_client.client_id, oidc_scope: "openid profile",
-                oidc_jti: SecureRandom.uuid, oidc_nonce: SecureRandom.hex(16), oidc_auth_time: rp_now,
-                refresh_token_expires_at: rp_now + 10.minutes,
-              )
-              rp_access = AuthenticationTokenService.encode(
-                operator, host: rp_host, resource_type: "operator",
-                          session_public_id: rp_token.public_id, base_session_public_id: rp_token.public_id,
-                          oidc_sid: rp_session.public_id, oidc_jti: rp_session.oidc_jti,
-                          expires_at: rp_now + 10.minutes, scopes: %w(openid profile),
-                          issuer: OidcIssuer.for_client(rp_client), audiences: [rp_client.aud],
-                          jwt_issuer_id: OidcIssuer.jwt_issuer_id_for_client(rp_client),
-                          subject: OidcSubject.for(operator, resource_type: "operator"), client_id: rp_client.client_id,
-              )
-              @base_browser_rp_credentials[rp_key] = [rp_access, rp_session.issue_refresh_token!]
-            end
-            rp_access, rp_refresh = @base_browser_rp_credentials.fetch(rp_key)
-            [
-              "#{OidcRpBrowserCredentialContract::ACCESS_COOKIE}=#{Rack::Utils.escape(rp_access)}",
-              "#{OidcRpBrowserCredentialContract::REFRESH_COOKIE}=#{Rack::Utils.escape(rp_refresh)}",
-            ]
-          else
-            []
-          end
-        end
-      cookies.merge(rp_cookie_pairs, URI.parse("https://#{rp_host}/"))
+
+    2.times do |index|
+      OperatorPasskey.create!(
+        staff: operator, webauthn_id: "read-fixture-#{SecureRandom.uuid}", external_id: SecureRandom.uuid,
+        public_key: "read-fixture-key-#{index}", description: "Read fixture", status_id: OperatorPasskeyStatus::ACTIVE,
+      )
     end
+    headers = as_staff_headers(operator, host: host)
+    get base_org_identity_standing_url(ri: "jp", host: host), headers: headers
 
-    get base_org_identity_standing_url(ri: "jp", host: host),
-        headers: {
-          "Authorization" => "Bearer #{access_token}",
-          "Client-Agent" => "Mozilla/5.0",
-          "Host" => host,
-          "X-TEST-SESSION-PUBLIC-ID" => token.public_id,
-        }
-
-    assert_response :success
-    assert_equal enforcement_case.public_id, inertia_props.fetch("decisions").first.fetch("public_id")
+    assert_response :service_unavailable
+    assert_includes response.headers["Cache-Control"], "no-store"
+    assert_equal "active", enforcement_case.reload.state
   end
 end

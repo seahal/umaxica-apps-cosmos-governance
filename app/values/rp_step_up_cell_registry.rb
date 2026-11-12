@@ -14,7 +14,7 @@ class RpStepUpCellRegistry
       principal_class: RpBaseAppPrincipal, actor_class: Client, state_class: RpStepUpState,
       status_class: RpStepUpStateStatus, transition_class: RpStepUpStateTransition,
       audit_source_key: "rp_base_app", resource_type: "client",
-      callback_path: AuthBoundaryAuthorityMap.step_up_callback_path_for("base-app-ww"),
+      callback_path: OidcRpSurfaceMap.step_up_callback_path_for("base-app-ww"),
     ),
     "rp_base_org" => Entry.new(
       cell: RpCellBinding.fetch("rp_base_org"), record_class: RpBaseOrgRecord, session_class: RpBaseOrgSession,
@@ -22,7 +22,7 @@ class RpStepUpCellRegistry
       principal_class: RpBaseOrgPrincipal, actor_class: Operator, state_class: RpBaseOrgStepUpState,
       status_class: RpBaseOrgStepUpStateStatus, transition_class: RpBaseOrgStepUpStateTransition,
       audit_source_key: "rp_base_org", resource_type: "operator",
-      callback_path: AuthBoundaryAuthorityMap.step_up_callback_path_for("base-org-ww"),
+      callback_path: OidcRpSurfaceMap.step_up_callback_path_for("base-org-ww"),
     ),
   }.freeze
 

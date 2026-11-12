@@ -12,12 +12,12 @@ class BasePreferenceZenithIdentityTest < ActionDispatch::IntegrationTest
     host = ENV.fetch("PUBLIC_BASE_SERVICE_URL")
     actor = clients(:one)
     other_actor = Client.create!(security_mode_id: SecurityModeConfigurable::NORMAL, status_id: ClientStatus::ACTIVE)
-    root_token = authentication_harness_create_token(actor)
     host! host
     https!
 
     as_rp_cell("base-app-ww") do
-      sign_in_rp_cell("base-app-ww", actor:, root_token:)
+      headers = as_user_headers(actor, host:, select_available_app_persona: false)
+      Rack::Utils.parse_cookies_header(headers.fetch("Cookie")).each { |key, value| cookies[key] = value }
       get "/accounts", params: { ri: "jp" }
 
       assert_response :redirect
@@ -84,12 +84,12 @@ class BasePreferenceZenithIdentityTest < ActionDispatch::IntegrationTest
     host = ENV.fetch("PUBLIC_BASE_STAFF_URL")
     actor = operators(:one)
     other_actor = Operator.create!(security_mode_id: SecurityModeConfigurable::ADVANCED, status_id: OperatorStatus::ACTIVE)
-    root_token = authentication_harness_create_token(actor)
     host! host
     https!
 
     as_rp_cell("base-org-ww") do
-      sign_in_rp_cell("base-org-ww", actor:, root_token:)
+      headers = as_staff_headers(actor, host:)
+      Rack::Utils.parse_cookies_header(headers.fetch("Cookie")).each { |key, value| cookies[key] = value }
       get base_org_identity_path(ri: "jp")
 
       assert_response :success
@@ -150,17 +150,18 @@ class BasePreferenceZenithIdentityTest < ActionDispatch::IntegrationTest
   test "Base APP reset retires both Preference rows, issues shared cookies, and clears the binding cookie" do
     host = ENV.fetch("PUBLIC_BASE_SERVICE_URL")
     actor = clients(:one)
-    root_token = authentication_harness_create_token(actor)
     host! host
     https!
 
     as_rp_cell("base-app-ww") do
-      sign_in_rp_cell("base-app-ww", actor:, root_token:)
+      headers = as_user_headers(actor, host:, select_available_app_persona: false)
+      Rack::Utils.parse_cookies_header(headers.fetch("Cookie")).each { |key, value| cookies[key] = value }
       get base_app_preference_path(ri: "jp")
 
       assert_response :success
 
-      patch base_app_preference_theme_path(ri: "jp"), params: { preference_theme: { option_id: "dr" } }
+      patch base_app_preference_theme_path(ri: "jp"), params: { preference_theme: { option_id: "dr" } },
+                                                      headers: headers
 
       assert_response :redirect
       old_token = cookies[PreferenceCookieName.anonymous_jwt]
@@ -175,6 +176,15 @@ class BasePreferenceZenithIdentityTest < ActionDispatch::IntegrationTest
       new_token = cookies[PreferenceCookieName.anonymous_jwt]
       new_claims = PreferenceToken.decode(new_token, host:, jwt_issuer_id: "preference_app")
       new_anonymous = AppPreference.find_by!(public_id: new_claims.fetch("sub"))
+
+      assert AppPreferenceChronicle.exists?(
+        subject_type: "AppPreference", subject_id: old_anonymous.id.to_s,
+        event_id: AppPreferenceChronicleEvent::RESET_BY_USER_DECISION,
+      )
+      assert AppPreferenceChronicle.exists?(
+        subject_type: "AppPreference", subject_id: new_anonymous.id.to_s,
+        event_id: AppPreferenceChronicleEvent::CREATE_NEW_PREFERENCE_TOKEN,
+      )
       cookie_headers = Array(response.headers["Set-Cookie"]).flat_map { |header| header.split("\n") }
 
       assert_not_equal old_anonymous.id, new_anonymous.id
@@ -202,17 +212,18 @@ class BasePreferenceZenithIdentityTest < ActionDispatch::IntegrationTest
   test "Base ORG reset retires both Preference rows, issues shared cookies, and clears the binding cookie" do
     host = ENV.fetch("PUBLIC_BASE_STAFF_URL")
     actor = operators(:one)
-    root_token = authentication_harness_create_token(actor)
     host! host
     https!
 
     as_rp_cell("base-org-ww") do
-      sign_in_rp_cell("base-org-ww", actor:, root_token:)
+      headers = as_staff_headers(actor, host:)
+      Rack::Utils.parse_cookies_header(headers.fetch("Cookie")).each { |key, value| cookies[key] = value }
       get base_org_preference_path(ri: "jp")
 
       assert_response :success
 
-      patch base_org_preference_theme_path(ri: "jp"), params: { preference_theme: { option_id: "dr" } }
+      patch base_org_preference_theme_path(ri: "jp"), params: { preference_theme: { option_id: "dr" } },
+                                                      headers: headers
 
       assert_response :redirect
       old_token = cookies[PreferenceCookieName.anonymous_jwt]
@@ -227,6 +238,15 @@ class BasePreferenceZenithIdentityTest < ActionDispatch::IntegrationTest
       new_token = cookies[PreferenceCookieName.anonymous_jwt]
       new_claims = PreferenceToken.decode(new_token, host:, jwt_issuer_id: "preference_org")
       new_anonymous = OrgPreference.find_by!(public_id: new_claims.fetch("sub"))
+
+      assert OrgPreferenceChronicle.exists?(
+        subject_type: "OrgPreference", subject_id: old_anonymous.id.to_s,
+        event_id: OrgPreferenceChronicleEvent::RESET_BY_USER_DECISION,
+      )
+      assert OrgPreferenceChronicle.exists?(
+        subject_type: "OrgPreference", subject_id: new_anonymous.id.to_s,
+        event_id: OrgPreferenceChronicleEvent::CREATE_NEW_PREFERENCE_TOKEN,
+      )
       cookie_headers = Array(response.headers["Set-Cookie"]).flat_map { |header| header.split("\n") }
 
       assert_not_equal old_anonymous.id, new_anonymous.id

@@ -182,6 +182,28 @@ describe("Base Inertia step-up challenge handling", () => {
 
     errorSpy.mockRestore();
   });
+
+  test("leaves unrelated HTTP exceptions to Inertia's default handling", async () => {
+    vi.clearAllMocks();
+    document.body.innerHTML = "";
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    await bootSurfaceInertiaApp({}, "base/app");
+
+    const listener = vi
+      .mocked(router.on)
+      .mock.calls.find(([event]) => event === "httpException")?.[1];
+    expect(listener).toBeDefined();
+    const event = new CustomEvent("inertia:httpException", {
+      cancelable: true,
+      detail: { response: { status: 500, headers: {} } },
+    });
+
+    expect(listener?.(event)).toBe(true);
+    expect(event.defaultPrevented).toBe(false);
+
+    errorSpy.mockRestore();
+  });
 });
 
 describe("reportInertiaBootFailure", () => {
@@ -321,18 +343,8 @@ describe("surface inertia entrypoint", () => {
 });
 
 describe.each([
-  ["auth/app", "../../src/entrypoints/inertia/auth_app.tsx"],
-  ["auth/com", "../../src/entrypoints/inertia/auth_com.tsx"],
-  ["auth/org", "../../src/entrypoints/inertia/auth_org.tsx"],
   ["base/com", "../../src/entrypoints/inertia/base_com.tsx"],
   ["base/org", "../../src/entrypoints/inertia/base_org.tsx"],
-  ["palm/app", "../../src/entrypoints/inertia/palm_app.tsx"],
-  ["warp/app", "../../src/entrypoints/inertia/warp_app.tsx"],
-  ["warp/com", "../../src/entrypoints/inertia/warp_com.tsx"],
-  ["warp/org", "../../src/entrypoints/inertia/warp_org.tsx"],
-  ["core/app", "../../src/entrypoints/inertia/core_app.tsx"],
-  ["core/com", "../../src/entrypoints/inertia/core_com.tsx"],
-  ["core/org", "../../src/entrypoints/inertia/core_org.tsx"],
 ])("%s inertia entrypoint", (surface, modulePath) => {
   beforeEach(() => {
     vi.resetModules();

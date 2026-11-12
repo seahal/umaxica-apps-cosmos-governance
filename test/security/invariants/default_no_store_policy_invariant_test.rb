@@ -5,61 +5,24 @@ require "test_helper"
 
 # Ownership invariant for adr/global-and-publishing-default-no-store-policy.md.
 #
-# Global and Publishing policy roots declare `DefaultNoStore` once and prepend its callback, so every
+# Base and Tech policy roots declare `DefaultNoStore` once and prepend its callback, so every
 # controller beneath them starts from `Cache-Control: no-store` before any callback can end the
-# request. Standalone protocol API leaves may explicitly opt into the same policy. Regional roots
-# (Core, Palm, Warp) are outside it. These assertions check policy ownership only; they do not assert
-# that excluded roots never send `no-store`.
+# request. Standalone API leaves may explicitly opt into the same policy. These assertions check
+# policy ownership only; they do not assert that excluded roots never send `no-store`.
 module Security
   module Invariants
     class DefaultNoStorePolicyInvariantTest < ActiveSupport::TestCase
       self.fixture_table_names = []
 
       POLICY_ROOTS = [
-        Auth::App::ApplicationController,
-        Auth::Org::ApplicationController,
-        Auth::App::BareController,
-        Auth::Org::BareController,
         Base::App::ApplicationController,
         Base::Com::ApplicationController,
         Base::Org::ApplicationController,
-        Base::App::AuthorityController,
-        Base::Org::AuthorityController,
-        Base::Dev::ApplicationController,
-        Base::Net::ApplicationController,
         Base::App::BareController,
         Base::Com::BareController,
         Base::Org::BareController,
-        Base::Dev::BareController,
-        Base::Net::BareController,
-        Edit::Org::ApplicationController,
-        Edit::Org::BareController,
         Tech::Org::ApplicationController,
         Tech::Org::BareController,
-        Guid::Net::BareController,
-        Info::App::BareController,
-        Info::Com::BareController,
-        Info::Org::BareController,
-        Docs::App::BareController,
-        Docs::Com::BareController,
-        Docs::Org::BareController,
-        News::App::BareController,
-        News::Com::BareController,
-        News::Org::BareController,
-        Help::App::BareController,
-        Help::Com::BareController,
-        Help::Org::BareController,
-        Visa::App::BareController,
-        Visa::Org::BareController,
-        Visa::App::Api::V0::SensitiveAdmissionSessionsController,
-        Visa::App::Api::V0::SensitiveAdmissionsController,
-        Visa::App::Oauth::TokensController,
-        Visa::App::Oauth::RevocationsController,
-        Visa::Org::Api::V0::SensitiveAdmissionSessionsController,
-        Visa::Org::Api::V0::SensitiveAdmissionsController,
-        Visa::Org::Oauth::RevocationsController,
-        Auth::App::Apple::NotificationsController,
-        Base::Org::Oidc::ClosuresController,
         Base::Org::Api::V0::TechCapabilityChecksController,
         Base::Org::Api::V0::Identity::StandingsController,
         Base::Org::Api::V0::Iam::GrantsController,
@@ -74,10 +37,6 @@ module Security
         Base::Org::Api::V0::Avatar::AvatarOwnershipTransfersController,
         Base::Org::Api::V0::Avatar::DashboardIdentitiesController,
         Base::Org::Api::V0::Membership::DirectoryController,
-        Base::Org::Api::V0::Publishing::EntriesController,
-        Base::Org::Api::V0::Publishing::ArchivesController,
-        Base::Org::Api::V0::Publishing::PublicationsController,
-        Base::App::Oidc::ClosuresController,
         Base::App::Api::V0::Avatar::SwitchersController,
         Base::App::Api::V0::Avatar::GroupAvatarMembershipsController,
         Base::App::Api::V0::Avatar::SocialEdgesController,
@@ -91,32 +50,10 @@ module Security
         Base::Org::Api::V0::Support::AreasController,
         Base::App::Api::V0::Identity::SelectionsController,
         Base::Org::Api::V0::Identity::SelectionsController,
-        Edit::Org::Oidc::ClosuresController,
-        Tech::Org::Oidc::ClosuresController,
       ].freeze
 
-      EXCLUDED_ROOTS = [
-        Core::App::ApplicationController,
-        Core::Org::ApplicationController,
-        Core::App::BareController,
-        Core::Org::BareController,
-        Core::Dev::BareController,
-        Core::Net::BareController,
-        Core::App::Api::V0::BaseController,
-        Core::Org::Api::V0::BaseController,
-        Palm::App::ApplicationController,
-        Palm::App::BareController,
-        Warp::App::ApplicationController,
-        Warp::Com::ApplicationController,
-        Warp::Org::ApplicationController,
-        Warp::App::BareController,
-        Warp::Com::BareController,
-        Warp::Org::BareController,
-      ].freeze
-
-      # Global and Publishing namespaces whose ApplicationController / BareController roots must all
-      # carry the policy. A new root added under one of these fails the completeness test below.
-      IN_SCOPE_NAMESPACES = %w(Auth Base Docs Edit Guid Help Info News Tech).freeze
+      # Governance namespaces whose ApplicationController / BareController roots carry the policy.
+      IN_SCOPE_NAMESPACES = %w(Base Tech).freeze
 
       test "every policy root includes DefaultNoStore and runs it as its first before_action" do
         violations =
@@ -173,16 +110,7 @@ module Security
 
         missing = roots - POLICY_ROOTS
 
-        assert_empty missing.map(&:name), "Global/Publishing policy roots without DefaultNoStore"
-      end
-
-      test "excluded Regional, Core, Palm, and Warp roots are not governed by the default policy" do
-        governed =
-          EXCLUDED_ROOTS.flat_map { |root| [root, *root.descendants] }.select do |controller|
-            controller.include?(DefaultNoStore)
-          end
-
-        assert_empty governed.map(&:name)
+        assert_empty missing.map(&:name), "Governance policy roots without DefaultNoStore"
       end
 
       test "the repository-wide ApplicationController does not carry the policy" do

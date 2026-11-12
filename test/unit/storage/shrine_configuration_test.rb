@@ -77,7 +77,7 @@ class ShrineConfigurationTest < ActiveSupport::TestCase
   end
 
   test "verifying registered boundaries uses in-memory storage in test" do
-    assert_equal(%i(avatar publishing), ObjectStorage::Boundary.keys)
+    assert_equal(%i(avatar), ObjectStorage::Boundary.keys)
     assert_nothing_raised { ObjectStorage::ShrineConfiguration.verify_registered_boundaries! }
   end
 

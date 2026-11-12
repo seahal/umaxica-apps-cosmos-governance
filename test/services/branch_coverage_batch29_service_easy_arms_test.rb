@@ -6,65 +6,12 @@ require "test_helper"
 class BranchCoverageBatch29ServiceEasyArmsTest < ActiveSupport::TestCase
   self.fixture_table_names = []
 
-  test "SignSecretVerify blank stored digest mismatch path" do
-    result = SignSecretVerify.call(secret_credential: nil, raw_secret_credential: "secret")
-
-    assert_equal :secret_credential_mismatch, result.reason
-  end
-
-  test "OidcAccessTokenAuthenticator blank token arms" do
-    missing = OidcAccessTokenAuthenticator.new(
-      access_token: nil, resource_type: "client", host: "example.test",
-    ).call
-    blank = OidcAccessTokenAuthenticator.new(
-      access_token: "", resource_type: "client", host: "example.test",
-    ).call
-
-    assert_equal "invalid_token", missing.error
-    assert_not missing.success?
-    assert_equal "invalid_token", blank.error
-  end
-
-  test "DbscVerificationService blank proof arms" do
-    missing_record = DbscVerificationService.new(record: nil, session_id: "s", proof: "p").call
-    record = Struct.new(:dbsc_session_id, :dbsc_public_key, :dbsc_challenge, :dbsc_challenge_issued_at)
-      .new("s", "k", "c", Time.current)
-    missing_proof = DbscVerificationService.new(record: record, session_id: "s", proof: nil).call
-
-    assert_equal "record_missing", missing_record[:error_code]
-    assert_equal "missing_proof", missing_proof[:error_code]
-  end
-
-  test "SignUpStateMachine blank transition guards" do
-    result = SignUpStateMachine.call(ticket: nil, event: :nope, actor_context: {}, payload: {})
-
-    assert_equal :invalid_transition, result.status
-    assert_includes result.errors, "unknown event"
-  end
-
   test "SignRiskEnforcer and SignRiskEmitter blank context arms" do
     assert_nil SignRiskEnforcer.call(nil)
     assert_nil SignRiskEmitter.emit("test")
   end
 
-  test "SocialAuthLoginHandler and LinkHandler blank provider arms" do
-    login_error = assert_raises(ArgumentError) { SocialAuthLoginHandler.new(provider: nil, actor: nil) }
-    link_error = assert_raises(ArgumentError) { SocialAuthLinkHandler.new(provider: nil, actor: nil) }
-
-    assert_match(/missing keyword/, login_error.message)
-    assert_match(/missing keyword/, link_error.message)
-  end
-
-  test "Policies SignUpStepGate and JumpRtReturnPolicy easy refuses" do
-    controller = Object.new
-    controller.define_singleton_method(:current_sign_up_flow_ticket) { nil }
-    controller.define_singleton_method(:session) { {} }
-    gate = SignUpStepGate.new(
-      controller: controller, surface: :app, family: "nope", step: :otp, mode: :show,
-    ).call
-
-    assert_equal :invalid, gate.status
-    assert_includes gate.errors, "unsupported sign-up route"
+  test "JumpRtReturnPolicy rejects non-HTTP origins" do
     assert_nil JumpRtReturnPolicy.normalize_origin("javascript:alert(1)")
   end
 
@@ -82,13 +29,6 @@ class BranchCoverageBatch29ServiceEasyArmsTest < ActiveSupport::TestCase
     assert_nil LocalEnvironment.parse("# comment")[0]
     assert_nil LocalEnvironment.parse("")[0]
     assert_equal %w(FOO bar), LocalEnvironment.parse("FOO=bar")
-  end
-
-  test "RefreshTokenable concern currently_usable false arms" do
-    token = ClientToken.new
-    token.define_singleton_method(:expired?) { |*_args| true }
-
-    assert_not token.currently_usable?
   end
 
   test "AcmeSelectableContext inactive membership next [] arm" do

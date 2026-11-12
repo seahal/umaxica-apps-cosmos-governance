@@ -17,7 +17,6 @@ const requiredEnv = (name: string): string => {
 };
 
 export const baseSurfaceUrl = (): string => requiredEnv("E2E_BASE_SERVICE_URL");
-export const authSurfaceUrl = (): string => requiredEnv("E2E_AUTH_SERVICE_URL");
 
 // Optional: run against a system browser instead of the Chromium build Playwright downloads, for
 // example the development container's /usr/bin/chromium. Unset means Playwright's own build, which

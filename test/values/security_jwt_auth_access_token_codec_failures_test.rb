@@ -19,7 +19,7 @@ class SecurityJwtAuthAccessTokenCodecFailuresTest < ActiveSupport::TestCase
         SecurityJwtAuthAccessTokenCodec.stub(:valid_header?, true) do
           JitSecurityJwtKeyring.stub(:public_key_for, unusable) do
             assert_nil SecurityJwtAuthAccessTokenCodec.decode_with_expiration(
-              "a.b.c", host: "auth.app.localhost", resource_type: "client", verify_exp: true,
+              "a.b.c", host: "base.app.localhost", resource_type: "client", verify_exp: true,
             )
           end
         end
@@ -31,7 +31,7 @@ class SecurityJwtAuthAccessTokenCodecFailuresTest < ActiveSupport::TestCase
 
   test "a blank token or host resolves to no payload without touching the keyring" do
     assert_nil SecurityJwtAuthAccessTokenCodec.decode_with_expiration(
-      "", host: "auth.app.localhost", verify_exp: true,
+      "", host: "base.app.localhost", verify_exp: true,
     )
     assert_nil SecurityJwtAuthAccessTokenCodec.decode_with_expiration(
       "a.b.c", host: "", verify_exp: true,

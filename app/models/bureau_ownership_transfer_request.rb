@@ -9,13 +9,16 @@ class BureauOwnershipTransferRequest < OrgRpRecord
   LIFETIME = 24.hours
 
   belongs_to :bureau, inverse_of: :ownership_transfer_requests
-  belongs_to :source_operator, class_name: "Operator", inverse_of: false
-  belongs_to :destination_operator, class_name: "Operator", inverse_of: false
+  belongs_to :source_operator, class_name: "Operator",
+                               inverse_of: :outgoing_bureau_ownership_transfer_requests
+  belongs_to :destination_operator, class_name: "Operator",
+                                    inverse_of: :incoming_bureau_ownership_transfer_requests
 
   validates :bureau_id,
             uniqueness: { conditions: -> { where(status: PENDING) } },
             on: :create, if: -> { status == PENDING }
 
+  validates :requested_at, :expires_at, presence: true
   validates :status, inclusion: { in: STATUSES }
   validates :expected_ownership_revision, numericality: { only_integer: true, greater_than_or_equal_to: 0 }
   validate :parties_must_differ

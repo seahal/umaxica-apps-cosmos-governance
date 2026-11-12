@@ -9,6 +9,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 type Submission = { url: string; payload: unknown };
 const submissions: Submission[] = [];
 let formErrors: Record<string, string> = {};
+let formProcessing = false;
 const unshaped = (current: Record<string, string>): unknown => current;
 
 vi.mock("@inertiajs/react", () => ({
@@ -25,7 +26,7 @@ vi.mock("@inertiajs/react", () => ({
       setData: (key: string, value: string) =>
         setDataState((current) => ({ ...current, [key]: value })),
       errors: formErrors,
-      processing: false,
+      processing: formProcessing,
       transform: (callback: (current: Record<string, string>) => unknown) => {
         shape.current = callback;
       },
@@ -49,6 +50,7 @@ const context = {
 
 afterEach(() => {
   formErrors = {};
+  formProcessing = false;
   submissions.length = 0;
 });
 
@@ -199,6 +201,7 @@ describe("AdminRecordList", () => {
     render(
       <AdminRecordList
         {...listProps}
+        description="Client records available to this operator."
         rows={[
           { key: "one", cells: ["one", "enabled"], href: "/support/clients/one" },
           { key: "two", cells: ["two", "blocked"], href: null },
@@ -208,6 +211,7 @@ describe("AdminRecordList", () => {
     );
     const table = screen.getByRole("table", { name: "App clients" });
 
+    expect(screen.getByText("Client records available to this operator.")).toBeTruthy();
     expect(within(table).getAllByRole("link")).toHaveLength(1);
     expect(within(table).getByRole("link", { name: "one" }).getAttribute("href")).toBe(
       "/support/clients/one",
@@ -249,6 +253,31 @@ describe("AdminConfirmation", () => {
     acknowledgement: "I have checked the target account and the reason.",
     submit_label: "Open case",
   };
+
+  it("shows the server's in-progress reason while a mutation is processing", () => {
+    const meta = document.createElement("meta");
+    meta.name = "ui-processing";
+    meta.content = "This operation is already being submitted.";
+    document.head.append(meta);
+    formProcessing = true;
+
+    try {
+      render(
+        <AdminConfirmation
+          {...confirmationProps}
+          fields={[]}
+        />,
+      );
+
+      expect(screen.getByText(meta.content)).toBeTruthy();
+      expect(screen.getByRole<HTMLButtonElement>("button", { name: "Open case" }).disabled).toBe(
+        true,
+      );
+    } finally {
+      formProcessing = false;
+      meta.remove();
+    }
+  });
 
   it("explains the acknowledgement requirement without changing disabled or submission behavior", () => {
     const meta = document.createElement("meta");
@@ -355,9 +384,18 @@ describe("AdminConfirmation", () => {
       />,
     );
 
-    expect(screen.getByRole<HTMLSelectElement>("combobox", { name: "Kind" }).value).toBe(
-      "cooldown",
-    );
+    const select = screen.getByRole<HTMLSelectElement>("combobox", { name: "Kind" });
+    expect(select.value).toBe("cooldown");
+    fireEvent.change(select, { target: { value: "suspension" } });
+    fireEvent.click(screen.getByRole("checkbox"));
+    fireEvent.submit(screen.getByRole("button", { name: "Open case" }));
+
+    expect(submissions).toEqual([
+      {
+        url: "/support/enforcement_cases",
+        payload: { enforcement_case: { kind: "suspension" } },
+      },
+    ]);
   });
 
   it("lists the server's validation errors above the form", () => {

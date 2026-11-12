@@ -24,17 +24,19 @@ class ClientSecretLifecycleJobTest < ActiveJob::TestCase
     [-1, "1", 0.5].each do |value|
       assert_raises(ArgumentError) { ClientSecretLifecycleJob.perform_now(through_id: value) }
     end
-    ["", "receipt", 0, [], {}].each do |value|
+    ["", "receipt", "signup", 0, [], {}].each do |value|
       assert_raises(ArgumentError) { ClientSecretLifecycleJob.perform_now(phase: value) }
     end
     assert_raises(ArgumentError) { ClientSecretLifecycleJob.perform_now(after_id: 1, through_id: 0) }
-    %w(credentials signup receipts).each do |phase|
+    %w(credentials receipts).each do |phase|
       [1, 2, 499, 500].each do |batch_size|
         [[0, 0], [0, 1], [1, 1]].each do |after_id, through_id|
           assert_no_enqueued_jobs do
-            ClientSecretLifecycleJob.perform_now(
-              batch_size: batch_size, phase: phase, after_id: after_id, through_id: through_id,
-            )
+            assert_raises(AccessOpDataUnavailableError) do
+              ClientSecretLifecycleJob.perform_now(
+                batch_size: batch_size, phase: phase, after_id: after_id, through_id: through_id,
+              )
+            end
           end
         end
       end
@@ -43,54 +45,7 @@ class ClientSecretLifecycleJobTest < ActiveJob::TestCase
     keys.each { |key| ENV[key] = previous[key] }
   end
 
-  test "signup continuation passes a live allocation and retires a later canceled signup" do
-    keys = %w(APP_SECRET_PURGE_DELAY_SECONDS APP_SECRET_OUTBOX_RETENTION_SECONDS APP_SECRET_PROOF_RETENTION_SECONDS)
-    previous = ENV.to_h.slice(*keys)
-    ENV["APP_SECRET_PURGE_DELAY_SECONDS"] = "86400"
-    ENV["APP_SECRET_OUTBOX_RETENTION_SECONDS"] = "604800"
-    ENV["APP_SECRET_PROOF_RETENTION_SECONDS"] = "2592000"
-    ChronicleRetentionPolicy.find_by(code: "security") ||
-      ChronicleRetentionPolicy.create!(code: "security", name: "Security", duration_days: 365, permanent: false)
-    flows =
-      [clients(:one), clients(:two)].map do |actor|
-        now = ClientSignUpFlow.database_now
-        ClientSignUpFlow.create!(
-          auth_admission_binding: SignUpAdmissionTestFactory.binding_for!(ClientSignUpFlow),
-          principal_id: actor.id, entry_method: "email", state: "STARTED", step: "start",
-          nonce_digest: SecureRandom.hex(32), issued_at: now, expires_at: now + 1.minute,
-          completed_requirements: [],
-        )
-      end
-    canceled_actor = Client.find(flows.last.principal_id)
-    registered_actor_facts = canceled_actor.attributes
-    allocations =
-      flows.map do |flow|
-        ClientSecretIssuance.create!(
-          client_id: flow.principal_id, origin: "passkey_registration", origin_operation_id: SecureRandom.uuid,
-          attempt_number: 1, sign_up_flow_ref: flow.public_id, planned_count: 0,
-        )
-      end
-    flows.last.cancel_sign_up!
-
-    assert_predicate flows.last.reload, :sign_up_cancelled?
-    ClientSecretLifecycleJob.perform_now(batch_size: 1)
-    while enqueued_jobs.any? { |entry| entry.fetch(:job) == ClientSecretLifecycleJob }
-      perform_enqueued_jobs(only: ClientSecretLifecycleJob)
-    end
-
-    assert_equal Float::INFINITY, allocations.first.reload.discard_at
-    assert_not_equal Float::INFINITY, allocations.last.reload.discard_at
-    assert_nil allocations.last.signup_completed_at
-    assert ClientSecretAuditOutbox.exists?(
-      operation_ref: allocations.last.origin_operation_id, event_name: "secret.discarded", reason: "flow_canceled",
-    )
-    assert_equal registered_actor_facts, canceled_actor.reload.attributes
-    assert ClientSignUpFlow.exists?(flows.first.id)
-  ensure
-    keys.each { |key| ENV[key] = previous[key] }
-  end
-
-  test "credential continuation advances past a held row without deleting its audit or reservation" do
+  test "unavailable credential continuation preserves held and unheld evidence without claiming purge" do
     keys = %w(APP_SECRET_PURGE_DELAY_SECONDS APP_SECRET_OUTBOX_RETENTION_SECONDS APP_SECRET_PROOF_RETENTION_SECONDS)
     previous = ENV.to_h.slice(*keys)
     ENV["APP_SECRET_PURGE_DELAY_SECONDS"] = "86400"
@@ -117,16 +72,16 @@ class ClientSecretLifecycleJobTest < ActiveJob::TestCase
       end
     hold = ClientRetentionHold.create!(client: clients(:one), hold_kind: "legal_hold", reason_code: "legal_hold")
     ClientSecretAuditDeliveryJob.perform_now(batch_size: 500, retention_seconds: 604_800)
-    ClientSecretLifecycleJob.perform_now(batch_size: 1)
+    assert_raises(AccessOpDataUnavailableError) { ClientSecretLifecycleJob.perform_now(batch_size: 1) }
     while enqueued_jobs.any? { |entry| entry.fetch(:job) == ClientSecretLifecycleJob }
       perform_enqueued_jobs(only: ClientSecretLifecycleJob)
     end
 
     assert ClientSecretCredential.exists?(credentials.first.id)
-    assert_not ClientSecretCredential.exists?(credentials.last.id)
+    assert ClientSecretCredential.exists?(credentials.last.id)
     assert hold.reload.active_at?(Client.database_now)
     assert ClientSecretIssuance.exists?(credentials.first.issuance_id)
-    assert ClientSecretAuditOutbox.exists?(
+    assert_not ClientSecretAuditOutbox.exists?(
       credential_ref: credentials.last.public_id, event_name: "secret.purged",
     )
   ensure

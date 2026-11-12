@@ -14,7 +14,6 @@ class AcmeSelectorSurfaceConfigTest < ActiveSupport::TestCase
 
     assert_equal :app, config.surface
     assert_equal Client, config.principal_class
-    assert_equal ClientToken, config.token_class
     assert_equal ClientAccount, config.rp_account_class
     assert_equal :user_id, config.rp_account_foreign_key
     assert_equal ClientIdentity, config.identity_class
@@ -37,7 +36,6 @@ class AcmeSelectorSurfaceConfigTest < ActiveSupport::TestCase
 
     assert_equal :org, config.surface
     assert_equal Operator, config.principal_class
-    assert_equal OperatorToken, config.token_class
     assert_equal OperatorAccount, config.rp_account_class
     assert_equal :staff_id, config.rp_account_foreign_key
     assert_equal OperatorIdentity, config.identity_class

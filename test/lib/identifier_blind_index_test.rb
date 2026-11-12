@@ -4,169 +4,80 @@
 require "test_helper"
 
 class IdentifierBlindIndexTest < ActiveSupport::TestCase
-  test "bidx_for_email returns nil for blank email" do
-    assert_nil IdentifierBlindIndex.bidx_for_email("", realm: :app)
-    assert_nil IdentifierBlindIndex.bidx_for_email("   ", realm: :app)
-    assert_nil IdentifierBlindIndex.bidx_for_email(nil, realm: :app)
-  end
+  self.fixture_table_names = []
 
-  test "bidx_for_email returns consistent digest for normalized email" do
-    Rails.app.creds.stub(:option, "email-address-secret_credential") do
-      result1 = IdentifierBlindIndex.bidx_for_email("user@example.com", realm: :app)
-      result2 = IdentifierBlindIndex.bidx_for_email("  USER@Example.COM  ", realm: :app)
-
-      assert_not_nil result1
-      assert_equal result1, result2
+  test "blank identifiers have no lookup digest" do
+    %w(app org).each do |realm|
+      [nil, "", "   "].each do |identifier|
+        assert_nil IdentifierBlindIndex.bidx_for_email(identifier, realm: realm)
+        assert_nil IdentifierBlindIndex.bidx_for_telephone(identifier, realm: realm)
+      end
     end
   end
 
-  test "bidx_for_email prefers email address HMAC key" do
-    option =
-      ->(key, default: nil) do
-        (key == :APP_EMAIL_ADDRESS_HMAC_KEY) ? "email-address-secret_credential" : default
+  %w(app org).each do |realm|
+    %w(email telephone).each do |channel|
+      test "#{realm} #{channel} uses its encrypted credential even when ENV disagrees" do
+        key_name =
+          case channel
+          when "email" then "#{realm.upcase}_EMAIL_ADDRESS_HMAC_KEY"
+          when "telephone" then "#{realm.upcase}_TELEPHONE_NUMBER_HMAC_KEY"
+          end
+        original = ENV[key_name]
+        ENV[key_name] = "synthetic-env-key-must-not-be-used"
+        configured = ->(key) { "synthetic-credential-key" if key == key_name.to_sym }
+        Rails.app.credentials.stub(:option, configured) do
+          case channel
+          when "email"
+            expected = OpenSSL::HMAC.hexdigest(
+              "SHA256", "synthetic-credential-key", "#{realm}:email:user@example.com",
+            )
+
+            assert_equal expected, IdentifierBlindIndex.bidx_for_email(" USER@Example.COM ", realm: realm)
+          when "telephone"
+            expected = OpenSSL::HMAC.hexdigest(
+              "SHA256", "synthetic-credential-key", "#{realm}:telephone:+819012345678",
+            )
+
+            assert_equal expected, IdentifierBlindIndex.bidx_for_telephone("090-1234-5678", realm: realm)
+          end
+        end
+      ensure
+        if original.nil?
+          ENV.delete(key_name)
+        else
+          ENV[key_name] = original
+        end
       end
 
-    Rails.app.creds.stub(:option, option) do
-      expected = OpenSSL::HMAC.hexdigest("SHA256", "email-address-secret_credential", "app:email:user@example.com")
+      [nil, "", "   "].each do |missing|
+        test "#{realm} #{channel} refuses #{missing.inspect} credentials even when ENV has a key" do
+          key_name =
+            case channel
+            when "email" then "#{realm.upcase}_EMAIL_ADDRESS_HMAC_KEY"
+            when "telephone" then "#{realm.upcase}_TELEPHONE_NUMBER_HMAC_KEY"
+            end
+          original = ENV[key_name]
+          ENV[key_name] = "synthetic-env-key-must-not-be-used"
+          Rails.app.credentials.stub(:option, missing) do
+            error =
+              assert_raises(KeyError) do
+                case channel
+                when "email" then IdentifierBlindIndex.bidx_for_email("user@example.com", realm: realm)
+                when "telephone" then IdentifierBlindIndex.bidx_for_telephone("+819012345678", realm: realm)
+                end
+              end
 
-      assert_equal expected, IdentifierBlindIndex.bidx_for_email("USER@example.com", realm: :app)
-    end
-  end
-
-  test "bidx_for_email raises when email address HMAC key is missing" do
-    saved = ENV["APP_EMAIL_ADDRESS_HMAC_KEY"]
-    ENV.delete("APP_EMAIL_ADDRESS_HMAC_KEY")
-    Rails.app.creds.stub(:option, nil) do
-      error =
-        assert_raises(KeyError) do
-          IdentifierBlindIndex.bidx_for_email("USER@example.com", realm: :app)
+            assert_equal "Missing key: [:#{key_name}]", error.message
+          end
+        ensure
+          if original.nil?
+            ENV.delete(key_name)
+          else
+            ENV[key_name] = original
+          end
         end
-
-      assert_equal "Missing key: [:APP_EMAIL_ADDRESS_HMAC_KEY]", error.message
-    end
-  ensure
-    if saved.nil?
-      ENV.delete("APP_EMAIL_ADDRESS_HMAC_KEY")
-    else
-      ENV["APP_EMAIL_ADDRESS_HMAC_KEY"] = saved
-    end
-  end
-
-  test "bidx_for_email raises when email address HMAC key is blank" do
-    saved = ENV["APP_EMAIL_ADDRESS_HMAC_KEY"]
-    ENV.delete("APP_EMAIL_ADDRESS_HMAC_KEY")
-    Rails.app.creds.stub(:option, "") do
-      error =
-        assert_raises(KeyError) do
-          IdentifierBlindIndex.bidx_for_email("USER@example.com", realm: :app)
-        end
-
-      assert_equal "Missing key: [:APP_EMAIL_ADDRESS_HMAC_KEY]", error.message
-    end
-  ensure
-    if saved.nil?
-      ENV.delete("APP_EMAIL_ADDRESS_HMAC_KEY")
-    else
-      ENV["APP_EMAIL_ADDRESS_HMAC_KEY"] = saved
-    end
-  end
-
-  test "bidx_for_email falls back to configured environment key when credentials are missing" do
-    saved = ENV["APP_EMAIL_ADDRESS_HMAC_KEY"]
-    ENV["APP_EMAIL_ADDRESS_HMAC_KEY"] = "env-email-secret_credential"
-    Rails.app.creds.stub(:option, nil) do
-      expected = OpenSSL::HMAC.hexdigest("SHA256", "env-email-secret_credential", "app:email:user@example.com")
-
-      assert_equal expected, IdentifierBlindIndex.bidx_for_email("USER@example.com", realm: :app)
-    end
-  ensure
-    if saved.nil?
-      ENV.delete("APP_EMAIL_ADDRESS_HMAC_KEY")
-    else
-      ENV["APP_EMAIL_ADDRESS_HMAC_KEY"] = saved
-    end
-  end
-
-  test "bidx_for_telephone returns nil for blank telephone" do
-    assert_nil IdentifierBlindIndex.bidx_for_telephone("", realm: :app)
-    assert_nil IdentifierBlindIndex.bidx_for_telephone("   ", realm: :app)
-    assert_nil IdentifierBlindIndex.bidx_for_telephone(nil, realm: :app)
-  end
-
-  test "bidx_for_telephone returns consistent digest for normalized telephone" do
-    Rails.app.creds.stub(:option, "telephone-number-secret_credential") do
-      result1 = IdentifierBlindIndex.bidx_for_telephone("+819012345678", realm: :app)
-      result2 = IdentifierBlindIndex.bidx_for_telephone("090-1234-5678", realm: :app)
-
-      assert_not_nil result1
-      assert_equal result1, result2
-    end
-  end
-
-  test "bidx_for_telephone prefers telephone number HMAC key" do
-    option =
-      ->(key, default: nil) do
-        (key == :APP_TELEPHONE_NUMBER_HMAC_KEY) ? "telephone-number-secret_credential" : default
       end
-
-    Rails.app.creds.stub(:option, option) do
-      expected = OpenSSL::HMAC.hexdigest("SHA256", "telephone-number-secret_credential", "app:telephone:+819012345678")
-
-      assert_equal expected, IdentifierBlindIndex.bidx_for_telephone("090-1234-5678", realm: :app)
-    end
-  end
-
-  test "bidx_for_telephone raises when telephone number HMAC key is missing" do
-    saved = ENV["APP_TELEPHONE_NUMBER_HMAC_KEY"]
-    ENV.delete("APP_TELEPHONE_NUMBER_HMAC_KEY")
-    Rails.app.creds.stub(:option, nil) do
-      error =
-        assert_raises(KeyError) do
-          IdentifierBlindIndex.bidx_for_telephone("090-1234-5678", realm: :app)
-        end
-
-      assert_equal "Missing key: [:APP_TELEPHONE_NUMBER_HMAC_KEY]", error.message
-    end
-  ensure
-    if saved.nil?
-      ENV.delete("APP_TELEPHONE_NUMBER_HMAC_KEY")
-    else
-      ENV["APP_TELEPHONE_NUMBER_HMAC_KEY"] = saved
-    end
-  end
-
-  test "bidx_for_telephone raises when telephone number HMAC key is blank" do
-    saved = ENV["APP_TELEPHONE_NUMBER_HMAC_KEY"]
-    ENV.delete("APP_TELEPHONE_NUMBER_HMAC_KEY")
-    Rails.app.creds.stub(:option, "") do
-      error =
-        assert_raises(KeyError) do
-          IdentifierBlindIndex.bidx_for_telephone("090-1234-5678", realm: :app)
-        end
-
-      assert_equal "Missing key: [:APP_TELEPHONE_NUMBER_HMAC_KEY]", error.message
-    end
-  ensure
-    if saved.nil?
-      ENV.delete("APP_TELEPHONE_NUMBER_HMAC_KEY")
-    else
-      ENV["APP_TELEPHONE_NUMBER_HMAC_KEY"] = saved
-    end
-  end
-
-  test "bidx_for_telephone falls back to configured environment key when credentials are missing" do
-    saved = ENV["APP_TELEPHONE_NUMBER_HMAC_KEY"]
-    ENV["APP_TELEPHONE_NUMBER_HMAC_KEY"] = "env-telephone-secret_credential"
-    Rails.app.creds.stub(:option, nil) do
-      expected = OpenSSL::HMAC.hexdigest("SHA256", "env-telephone-secret_credential", "app:telephone:+819012345678")
-
-      assert_equal expected, IdentifierBlindIndex.bidx_for_telephone("090-1234-5678", realm: :app)
-    end
-  ensure
-    if saved.nil?
-      ENV.delete("APP_TELEPHONE_NUMBER_HMAC_KEY")
-    else
-      ENV["APP_TELEPHONE_NUMBER_HMAC_KEY"] = saved
     end
   end
 end

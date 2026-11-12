@@ -60,6 +60,8 @@ class AvatarOwnershipCutoverOperationTest < ActiveSupport::TestCase
 
       assert_equal "established", first.status
       assert_equal "already_established", second.status
+      assert_predicate first, :established?
+      assert_predicate second, :established?
       assert_equal Time.utc(2030, 1, 1), AvatarOwnershipCutover.current.cutover_at
       assert_equal 1, AvatarOwnershipCutover.count
     end

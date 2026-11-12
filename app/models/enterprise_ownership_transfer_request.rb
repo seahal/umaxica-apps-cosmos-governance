@@ -9,13 +9,16 @@ class EnterpriseOwnershipTransferRequest < AppRpRecord
   LIFETIME = 24.hours
 
   belongs_to :enterprise, inverse_of: :ownership_transfer_requests
-  belongs_to :source_client, class_name: "Client", inverse_of: false
-  belongs_to :destination_client, class_name: "Client", inverse_of: false
+  belongs_to :source_client, class_name: "Client",
+                             inverse_of: :outgoing_enterprise_ownership_transfer_requests
+  belongs_to :destination_client, class_name: "Client",
+                                  inverse_of: :incoming_enterprise_ownership_transfer_requests
 
   validates :enterprise_id,
             uniqueness: { conditions: -> { where(status: PENDING) } },
             on: :create, if: -> { status == PENDING }
 
+  validates :requested_at, :expires_at, presence: true
   validates :status, inclusion: { in: STATUSES }
   validates :expected_ownership_revision, numericality: { only_integer: true, greater_than_or_equal_to: 0 }
   validate :parties_must_differ

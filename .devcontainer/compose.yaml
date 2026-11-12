@@ -5,7 +5,9 @@
 name: umaxicaappsglobaldc
 services:
   core:
-    container_name: global-devcontainer-core
+    container_name: cosmos-governance-devcontainer-core
+    # Identify this repository in SSH shell prompts as well as container listings.
+    hostname: cosmos-governance-devcontainer-core
     build:
       context: "."
       dockerfile: "./Containerfile"
@@ -148,10 +150,10 @@ services:
     # The two are separate decisions
     # (docs/operations/development-host-port-exposure.md).
     ports:
-      - "127.0.0.1:3001:3000"
-      - "127.0.0.1:3036:3036"
-      # noVNC for the browser desktop. The RFB port (5900) is not published.
-      - "127.0.0.1:6080:6080"
+      # Each Cosmos repository has its own Rails host port so their Dev Containers can run side
+      # by side: access 3001, governance 3002, press 3003, sphere 3004. Vite (3036) and noVNC
+      # (6080) are not published.
+      - "127.0.0.1:3002:3000"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
@@ -252,7 +254,7 @@ networks:
   # network no base service used and made a plain `podman compose up` warn
   # `unused networks: outer`.
   outer:
-    name: "${OUTER_DOCKER_NETWORK:-umaxica-apps-global_outer}"
+    name: "${OUTER_DOCKER_NETWORK:-umaxica-apps-cosmos-governance_outer}"
     # Keep this network Compose-managed. Interpolating `external` produces a
     # string, which podman-compose cannot safely treat as the boolean required
     # by the Compose model and causes `up` to fail while building network args.

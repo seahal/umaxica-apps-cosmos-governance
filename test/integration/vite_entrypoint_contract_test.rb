@@ -28,7 +28,7 @@ class ViteEntrypointContractTest < ActiveSupport::TestCase
   test "every Inertia layout loads the entrypoint belonging to its own surface" do
     layouts = inertia_layouts
 
-    assert_equal 13, layouts.size, "expected one Inertia layout per user-facing FQDN"
+    assert_equal 3, layouts.size, "expected one Base Inertia layout per retained Base FQDN"
 
     layouts.each do |layout|
       family, surface = layout.relative_path_from(LAYOUT_ROOT).each_filename.first(2)
@@ -76,9 +76,8 @@ class ViteEntrypointContractTest < ActiveSupport::TestCase
                     "#{source} must resolve pages through the surface resolver"
   end
 
-  # The base family typography is not a surface of its own: it is imported by the three base surface
-  # stylesheets and by nothing else, so a family rule cannot reach the Auth, Warp, Palm, or Core
-  # surfaces.
+  # The Base family typography is imported by the three Base surface stylesheets and by nothing
+  # else, so the family rules cannot reach another surface.
   BASE_FAMILY_IMPORT = %(@import "../base_family.css";)
   BASE_FAMILY_STYLESHEETS = %w(base_app.css base_com.css base_org.css).freeze
 
@@ -103,6 +102,7 @@ class ViteEntrypointContractTest < ActiveSupport::TestCase
   VIEW_ROOT = Rails.root.join("app/views")
   STYLESHEET_ROOT = Rails.root.join("src/styles")
   SURFACE_STYLESHEET_ROOT = Rails.root.join("src/styles/surfaces")
+  RETAINED_BASE_STYLESHEETS = %w(base_app.css base_com.css base_org.css).freeze
   SURFACE_STYLESHEET_REFERENCE = /vite_stylesheet_tag\s+"~\/styles\/surfaces\/([^"]+)"/
 
   test "every template links only the surface stylesheet belonging to its own surface" do
@@ -119,12 +119,14 @@ class ViteEntrypointContractTest < ActiveSupport::TestCase
     end
   end
 
-  test "every surface stylesheet is linked by a template" do
+  test "every retained Base surface stylesheet is linked by a template" do
     referenced = surface_stylesheet_references.values.flatten.uniq
-    present = Dir.glob(SURFACE_STYLESHEET_ROOT.join("*.css")).map { |path| File.basename(path) }
+    present = RETAINED_BASE_STYLESHEETS
+
+    present.each { |name| assert_path_exists SURFACE_STYLESHEET_ROOT.join(name) }
 
     assert_equal present.sort, referenced.sort,
-                 "every surface stylesheet must be linked, and every link must resolve to a file"
+                 "every retained Base stylesheet must be linked, and every link must resolve to a file"
   end
 
   # There is no aggregate stylesheet: every partial reaches the browser because a surface stylesheet

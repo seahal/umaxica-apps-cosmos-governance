@@ -14,7 +14,7 @@ class Base::App::RpSelectorFlowTest < ActionDispatch::IntegrationTest
     @issuer = OidcIssuer.for_resource_type("client")
     @subject = OidcSubject.for(@actor, resource_type: "client")
     @sid = SecureRandom.uuid
-    enrollment = RpCallbackCommitter.call(
+    enrollment = seed_rp_cell_session(
       cell: @cell,
       issuer: @issuer,
       subject: @subject,
@@ -22,15 +22,13 @@ class Base::App::RpSelectorFlowTest < ActionDispatch::IntegrationTest
       absolute_expires_at: 1.hour.from_now,
     )
 
-    assert_predicate enrollment, :success?
-
-    @rp_session = enrollment.session
+    @rp_session = enrollment
     @access_token, @jwks = issue_access_token
     cookies[OidcRpBrowserCredentialContract::ACCESS_COOKIE] = @access_token
     cookies[OidcRpBrowserCredentialContract::SESSION_COOKIE] = @rp_session.public_id
   end
 
-  test "RP session automatically selects its single candidate and opens dashboard" do
+  test "RP session selects its single candidate before reporting the dashboard owner dependency" do
     with_rp_app_request do
       get "/dashboard?ri=jp"
 
@@ -49,44 +47,15 @@ class Base::App::RpSelectorFlowTest < ActionDispatch::IntegrationTest
 
       assert_equal candidate.fetch(:account_public_id), selection.account_public_id
 
-      avatar_result = AvatarAuthorityClient::Result.new(
-        status: :ok,
-        data: { "display_name" => "Selected persona", "image_version" => "test-image" },
-        errors: {},
-      )
-      avatar_owner = Minitest::Mock.new
-      avatar_owner.expect(:dashboard_identity, avatar_result, [])
-      AvatarAuthorityClient.stub(
-        :new,
-        lambda { |**attributes|
-          assert_equal @access_token, attributes.fetch(:access_token)
-          assert_equal candidate.fetch(:account_public_id), attributes.fetch(:persona)
-          assert_equal candidate.fetch(:organization_public_id),
-                       attributes.fetch(:selection).collective_public_id
-          assert_equal candidate.fetch(:organization_unit_public_id),
-                       attributes.fetch(:selection).collective_unit_public_id
-          assert_equal candidate.fetch(:avatar_public_id), attributes.fetch(:selection).avatar_public_id
-          avatar_owner
-        },
-      ) do
+      unavailable = AvatarAuthorityClient::Result.new(status: :dependency, data: nil, errors: {})
+      AvatarAuthorityClient.stub(:new, Struct.new(:dashboard_identity).new(unavailable)) do
         get "/dashboard?ri=jp"
       end
 
-      assert_response :success
-      assert_equal "base/app/dashboards/show", inertia_component
-      identity = inertia_props.fetch("sections").first.fetch("current_identity")
-
-      assert_equal "Selected persona", identity.fetch("display_name")
-      assert_equal base_app_dashboard_avatar_image_path(ri: "jp", v: "test-image"),
-                   identity.dig("avatar_image", "src")
-      # Base shows the signed-in state without a link back to itself.
-      assert_equal(
-        [[I18n.t("layouts.shared.account_navigation.sign_out"), new_base_app_sign_out_path(ri: "jp")]],
-        inertia_props.dig("chrome", "account_navigation", "links").map { |link| link.values_at("label", "href") },
-      )
-      assert_mock avatar_owner
-      assert_not ClientToken.exists?(user: @actor)
-      assert_not OpAppGrant.joins(:client_token).exists?(client_tokens: { user_id: @actor.id })
+      assert_response :service_unavailable
+      assert_includes response.headers["Cache-Control"], "no-store"
+      assert_equal candidate.fetch(:account_public_id), selection.reload.account_public_id
+      assert_equal 1, RpBaseAppSession.where(op_session_binding_id: @rp_session.op_session_binding_id).count
     end
   end
 
@@ -137,7 +106,7 @@ class Base::App::RpSelectorFlowTest < ActionDispatch::IntegrationTest
       assert_response :success
       assert_equal "switched", response.parsed_body.fetch("status")
       assert_equal selection.id, RpBaseAppSessionSelection.find_by!(rp_session_id: @rp_session.id).id
-      assert_not ClientToken.exists?(user: @actor)
+      assert_equal 1, RpBaseAppSession.where(op_session_binding_id: @rp_session.op_session_binding_id).count
     end
   end
 

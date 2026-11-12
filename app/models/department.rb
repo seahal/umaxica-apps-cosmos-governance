@@ -48,11 +48,11 @@ class Department < OrgPrincipalRecord
   belongs_to :workspace, class_name: "OperatorOrganization", inverse_of: :departments, optional: true
   has_many :operator_workspace_accounts,
            class_name: "OperatorWorkspaceAccount",
-           dependent: :nullify,
-           inverse_of: false
+           dependent: :restrict_with_error,
+           inverse_of: :department
   has_many :operators,
            class_name: "OperatorWorkspaceAccount",
-           dependent: :nullify,
+           dependent: :restrict_with_error,
            inverse_of: false
 
   validates :name, presence: true

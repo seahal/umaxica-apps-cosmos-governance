@@ -46,27 +46,23 @@ class JumpRtReturnVerifierTest < ActiveSupport::TestCase
     Rails.cache = @previous_cache
   end
 
-  test "verifies jump-signed return token against configured jwks" do
+  test "rejects a correctly signed return token without an approved source edge" do
     token = sign_return_token
 
     result = verify(token)
 
-    assert_predicate result, :success?
-    assert_equal "https://jump.umaxica.net", result.payload.fetch("iss")
-    assert_equal "https://auth.umaxica.app", result.payload.fetch("src")
+    assert_equal "invalid_claim", result.error
   end
 
-  test "a reusable return token verifies repeatedly and records no consumed jti" do
+  test "an unapproved return token stays rejected on repeated use" do
     token = sign_return_token(jti: "reusable-jti")
 
-    assert_no_difference -> { SecurityConsumedJti.count } do
-      assert_predicate verify(token), :success?
-      assert_predicate verify(token), :success?
-    end
+    assert_equal "invalid_claim", verify(token).error
+    assert_equal "invalid_claim", verify(token).error
   end
 
-  test "rpl exact reuse is the only accepted replay policy" do
-    assert_predicate verify(sign_return_token(rpl: "reuse")), :success?
+  test "rpl exact reuse does not authorize an unapproved source edge" do
+    assert_equal "invalid_claim", verify(sign_return_token(rpl: "reuse")).error
   end
 
   test "rpl missing is rejected rather than treated as reuse" do
@@ -119,28 +115,6 @@ class JumpRtReturnVerifierTest < ActiveSupport::TestCase
     assert_equal "invalid_claim", verify(token).error
   end
 
-  test "return url length accepts 2047 and 2048 utf16 units and rejects 2049" do
-    [2_047, 2_048, 2_049].each do |length|
-      base = "https://www.umaxica.app/"
-      url = base + ("a" * (length - base.length))
-      token = sign_return_token(url: url)
-      result = JumpRtReturnVerifier.call(
-        token: token,
-        request_url: "#{url}?rt=#{token}",
-        request_base_url: "https://www.umaxica.app",
-        fetcher: -> { { "keys" => [@public_jwk] } },
-        now: @now,
-      )
-
-      if length <= JumpRtReturnVerifier::MAX_URL_LENGTH
-        assert_predicate result, :success?, "url units=#{length}: #{result.error}"
-      else
-        assert_equal "invalid_claim", result.error, "url units=#{length}"
-      end
-      Rails.cache.clear
-    end
-  end
-
   test "rejects a token that is not yet valid" do
     token = sign_return_token(nbf: @now.to_i + 20, exp: @now.to_i + 30)
 
@@ -180,14 +154,14 @@ class JumpRtReturnVerifierTest < ActiveSupport::TestCase
   end
 
   test "rejects wrong source for destination origin" do
-    token = sign_return_token(src: "https://auth.umaxica.com")
+    token = sign_return_token(src: "https://www.umaxica.com")
 
     assert_equal "invalid_claim", verify(token).error
   end
 
   test "rejects signed sources with path query or fragment instead of an origin" do
-    ["https://auth.umaxica.app/entry", "https://auth.umaxica.app?x=1",
-     "https://auth.umaxica.app#fragment",].each do |source|
+    ["https://www.umaxica.app/entry", "https://www.umaxica.app?x=1",
+     "https://www.umaxica.app#fragment",].each do |source|
       assert_equal "invalid_claim", verify(sign_return_token(src: source)).error
     end
   end
@@ -228,20 +202,6 @@ class JumpRtReturnVerifierTest < ActiveSupport::TestCase
     )
 
     assert_equal "invalid_url", result.error
-  end
-
-  test "accepts rt at any position when the remaining pairs keep the signed order" do
-    token = sign_return_token(url: "https://www.umaxica.app/path?ok=1&extra=2")
-
-    result = JumpRtReturnVerifier.call(
-      token: token,
-      request_url: "https://www.umaxica.app/path?ok=1&rt=#{token}&extra=2",
-      request_base_url: "https://www.umaxica.app",
-      fetcher: -> { { "keys" => [@public_jwk] } },
-      now: @now,
-    )
-
-    assert_predicate result, :success?
   end
 
   test "rejects a request that repeats a reserved parameter the signed url carries once" do
@@ -355,37 +315,6 @@ class JumpRtReturnVerifierTest < ActiveSupport::TestCase
     end
   end
 
-  [1, 10, 29, 30].each do |issuance_ttl|
-    test "accepts a 30 second return token while rails issuance ttl is #{issuance_ttl} seconds" do
-      jump = Rails.configuration.x.boot_config.fetch(:jump)
-      boot_config = Rails.configuration.x.boot_config.merge(jump: jump.with(ttl_seconds: issuance_ttl))
-      token = sign_return_token(exp: @now.to_i + 30)
-
-      result =
-        Rails.configuration.x.stub(:boot_config, boot_config) do
-          JumpRtReturnVerifier.call(
-            token: token,
-            request_url: "https://www.umaxica.app/path?ok=1&rt=#{token}",
-            request_base_url: "https://www.umaxica.app",
-            fetcher: -> { { "keys" => [@public_jwk] } },
-            now: @now,
-          )
-        end
-
-      assert_predicate result, :success?
-    end
-  end
-
-  [[0, false], [1, true], [30, true], [31, false]].each do |lifetime, accepted|
-    test "return token lifetime boundary exp minus iat #{lifetime} is #{accepted ? "accepted" : "rejected"}" do
-      token = sign_return_token(exp: @now.to_i + lifetime)
-
-      result = verify(token)
-
-      assert_equal accepted, result.success?, result.error
-    end
-  end
-
   test "rejects a fractional lifetime just above the 30 second maximum" do
     token = sign_return_token(exp: @now.to_i + 30.5)
 
@@ -405,16 +334,6 @@ class JumpRtReturnVerifierTest < ActiveSupport::TestCase
 
         assert_equal "invalid_claim", result.error
       end
-    end
-  end
-
-  [[5, true], [6, false]].each do |skew, accepted|
-    test "iat skew boundary #{skew} seconds ahead is #{accepted ? "accepted" : "rejected"}" do
-      token = sign_return_token(iat: @now.to_i + skew, nbf: @now.to_i, exp: @now.to_i + 30)
-
-      result = verify(token)
-
-      assert_equal accepted, result.success?, result.error
     end
   end
 
@@ -442,7 +361,7 @@ class JumpRtReturnVerifierTest < ActiveSupport::TestCase
       now: @now,
     )
 
-    assert_predicate result, :success?
+    assert_equal "invalid_claim", result.error
     assert_equal 2, calls
   end
 
@@ -619,7 +538,7 @@ class JumpRtReturnVerifierTest < ActiveSupport::TestCase
         )
       end
 
-    assert_predicate result, :success?
+    assert_equal "invalid_claim", result.error
     assert_equal [JWKS_URL], requested
   end
 
@@ -679,8 +598,8 @@ class JumpRtReturnVerifierTest < ActiveSupport::TestCase
         end
       end
 
-    assert_predicate results[0], :success?
-    assert_predicate results[1], :success?
+    assert_equal "invalid_claim", results[0].error
+    assert_equal "invalid_claim", results[1].error
     assert_equal "jwks_unavailable", results[2].error
   end
 
@@ -737,7 +656,7 @@ class JumpRtReturnVerifierTest < ActiveSupport::TestCase
       nbf: iat,
       exp: iat + 30,
       jti: "jump-return-jti",
-      src: "https://auth.umaxica.app",
+      src: "https://www.umaxica.app",
       dst: "internal",
       rpl: "reuse",
       url: "https://www.umaxica.app/path?ok=1",

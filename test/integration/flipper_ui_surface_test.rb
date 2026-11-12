@@ -12,7 +12,7 @@ require "test_helper"
 class FlipperUiSurfaceTest < ActionDispatch::IntegrationTest
   self.fixture_table_names = []
 
-  DEVELOPER_HOST = "flipper.core.dev.localhost"
+  DEVELOPER_HOST = "flipper-governance.umaxica.dev"
   MOUNT_PATH = "/"
   TEST_USER = "flipper-test-user"
   TEST_PASSWORD = "flipper-test-password"
@@ -60,8 +60,8 @@ class FlipperUiSurfaceTest < ActionDispatch::IntegrationTest
   end
 
   test "no other surface routes the Flipper mount" do
-    ["base.app.localhost", "base.com.localhost", "base.org.localhost", "base.net.localhost",
-     "base.dev.localhost", "core.dev.localhost", "mission.core.dev.localhost",].each do |host|
+    ["base.app.localhost", "base.com.localhost", "base.org.localhost",
+     "mission-governance.umaxica.dev",].each do |host|
       assert_raises(ActionController::RoutingError, "#{host} must not route #{MOUNT_PATH}") do
         Rails.application.routes.recognize_path("http://#{host}/features", method: :get)
       end

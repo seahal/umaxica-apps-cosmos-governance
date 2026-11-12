@@ -17,15 +17,6 @@ vi.mock("@/lib/turnstile", () => ({
 
 const { default: CredentialIndex } = await import("@/pages/base/org/identity/emails/index");
 const { default: EmailPreferenceEdit } = await import("@/pages/base/org/identity/emails/edit");
-const { default: EmailRegistrationNew } =
-  await import("@/pages/base/org/identity/emails/registrations/new");
-const { default: OtpVerification } =
-  await import("@/pages/base/org/identity/emails/registrations/edit");
-const { default: TelephoneRegistrationNew } =
-  await import("@/pages/base/org/identity/telephones/new");
-const { default: TelephoneEdit } = await import("@/pages/base/org/identity/telephones/edit");
-const { default: SessionIndex } = await import("@/pages/base/org/identity/sessions/index");
-const { default: SessionShow } = await import("@/pages/base/org/identity/sessions/show");
 const { default: BirthdateShow } = await import("@/pages/base/org/identity/birthdates/show");
 const { default: StandingShow } = await import("@/pages/base/org/identity/standings/show");
 const { default: InfoPage } = await import("@/pages/base/org/identity/withdrawals/show");
@@ -37,7 +28,6 @@ const { default: SecretCredentialForm } =
   await import("@/pages/base/org/identity/secret_credentials/new");
 const { default: SelfServiceShell } = await import("@/pages/base/org/accounts/index");
 const { default: WelcomeShow } = await import("@/pages/base/org/welcomes/show");
-const { default: SignOutConfirmation } = await import("@/pages/base/org/sign_outs/edit");
 const { csrfToken } = await import("@/lib/csrf");
 
 const turnstile = { site_key: "site", mode: "execute" as const, action: null, cdata: null };
@@ -47,15 +37,13 @@ describe("credential index", () => {
   const props = {
     title: "Email",
     back_link: backLink,
-    new_link: { label: "Add email address", href: "/identity/emails/registration/new" },
-    columns: { value: "Address", status: "Status", actions: "Actions" },
+    columns: { value: "Address", status: "Status" },
     empty_message: "No email addresses registered.",
     entries: [
       {
         public_id: "eml_1",
         value: "staff@example.test",
         status: "Verified",
-        edit_link: { label: "Edit", href: "/identity/emails/eml_1/edit" },
       },
     ],
   };
@@ -65,7 +53,7 @@ describe("credential index", () => {
 
     expect(markup).toContain("staff@example.test");
     expect(markup).toContain("Verified");
-    expect(markup).toContain('href="/identity/emails/eml_1/edit"');
+    expect(markup).not.toContain('href="/identity/emails/eml_1/edit"');
     expect(markup).not.toContain("No email addresses registered.");
   });
 
@@ -111,235 +99,6 @@ describe("email preference edit", () => {
     expect(markup).toContain('name="_method" value="delete"');
     expect(markup).toContain('name="staff_email[promotional]" checked="" value="1"');
     expect(markup).toContain("Address is invalid");
-  });
-});
-
-describe("email registration", () => {
-  it("asks for the address, then for the code", () => {
-    const newMarkup = renderToStaticMarkup(
-      <EmailRegistrationNew
-        title="Add email address"
-        form={{
-          action: "/identity/emails/registration",
-          scope: "staff_email",
-          address_label: "Address",
-          notifiable: true,
-          notifiable_label: "Notifications",
-          notifiable_description: "Updates.",
-          submit: "Create",
-          turnstile,
-        }}
-        cancel_link={{ label: "Cancel", href: "/identity/emails" }}
-        error_messages={[]}
-      />,
-    );
-
-    expect(newMarkup).toContain('name="staff_email[address]"');
-    expect(newMarkup).not.toContain('role="alert"');
-
-    const editMarkup = renderToStaticMarkup(
-      <OtpVerification
-        title="Verify"
-        description="A code was sent."
-        delivery_help="Check your inbox."
-        form={{
-          action: "/identity/emails/registration",
-          scope: "staff_email",
-          code_label: "Code",
-          code_placeholder: "123456",
-          submit: "Register",
-          turnstile,
-        }}
-        cancel_link={{ label: "Cancel", href: "/identity/emails" }}
-        error_messages={["Code is invalid"]}
-      />,
-    );
-
-    expect(editMarkup).toContain('name="staff_email[pass_code]"');
-    expect(editMarkup).toContain('name="_method" value="patch"');
-    expect(editMarkup).toContain("Code is invalid");
-  });
-});
-
-describe("telephone screens", () => {
-  it("renders the challenge only when the server configured one", () => {
-    const base = {
-      title: "Add telephone number",
-      form: {
-        action: "/identity/telephones",
-        scope: "staff_telephone",
-        number_label: "Number",
-        number_placeholder: "+819012345678",
-        submit: "Submit",
-      },
-      cancel_link: { label: "Cancel", href: "/identity/telephones" },
-      error_messages: [],
-    };
-
-    expect(renderToStaticMarkup(<TelephoneRegistrationNew {...base} />)).not.toContain(
-      "cf-turnstile",
-    );
-    expect(
-      renderToStaticMarkup(
-        <TelephoneRegistrationNew
-          {...base}
-          form={{ ...base.form, turnstile }}
-        />,
-      ),
-    ).toContain("cf-turnstile");
-  });
-
-  it("offers deletion from the single telephone screen", () => {
-    const markup = renderToStaticMarkup(
-      <TelephoneEdit
-        title="Telephone settings"
-        number="+819012345678"
-        delete={{ label: "Delete", href: "/identity/telephones/1", confirm: "Delete?" }}
-        cancel_link={{ label: "Cancel", href: "/identity/telephones" }}
-      />,
-    );
-
-    expect(markup).toContain('name="_method" value="delete"');
-    expect(markup).toContain("+819012345678");
-  });
-});
-
-describe("session inventory", () => {
-  const columns = {
-    device: "Device",
-    mode: "Mode",
-    last_activity: "Last activity",
-    created: "Created",
-    expires_at: "Expires at",
-    status: "Status",
-    action: "Action",
-  };
-
-  const currentRow = {
-    device: "Unknown device",
-    mode: "Emergency",
-    status: "Current session",
-    last_activity: "01/01",
-    created: "01/01",
-    expires_at: "02/01",
-    revoke: null,
-  };
-
-  it("never offers to revoke the current session", () => {
-    const markup = renderToStaticMarkup(
-      <SessionIndex
-        title="Sessions"
-        back_link={backLink}
-        empty_message="No active sessions were found."
-        expires_at_description="This session ends at its expiry and cannot be extended."
-        columns={columns}
-        bulk_revocations={null}
-        sessions={[currentRow]}
-      />,
-    );
-
-    expect(markup).toContain("Emergency");
-    expect(markup).toContain("Current session");
-    expect(markup).toContain("Unknown device");
-    expect(markup).not.toContain("Revoke");
-    expect(markup).not.toContain("DBSC");
-    expect(markup).not.toContain("tok_current");
-  });
-
-  it("offers the bulk and per-session revocations the server sent", () => {
-    const markup = renderToStaticMarkup(
-      <SessionIndex
-        title="Sessions"
-        back_link={backLink}
-        empty_message="No active sessions were found."
-        expires_at_description="This session ends at its expiry and cannot be extended."
-        columns={columns}
-        bulk_revocations={{
-          others: { label: "Revoke others", href: "/identity/other_sessions", confirm: "Sure?" },
-        }}
-        sessions={[
-          currentRow,
-          {
-            ...currentRow,
-            mode: "Normal",
-            status: "Active",
-            revoke: { label: "Revoke", href: "/identity/sessions/tok_other", confirm: "Sure?" },
-          },
-        ]}
-      />,
-    );
-
-    expect(markup).toContain("Revoke others");
-    expect(markup).toContain("Emergency");
-    expect(markup).toContain("Normal");
-    expect(markup).not.toContain(">tok_other<");
-  });
-
-  it("reports an empty inventory", () => {
-    const markup = renderToStaticMarkup(
-      <SessionIndex
-        title="Sessions"
-        back_link={backLink}
-        empty_message="No active sessions were found."
-        expires_at_description="This session ends at its expiry and cannot be extended."
-        columns={columns}
-        bulk_revocations={null}
-        sessions={[]}
-      />,
-    );
-
-    expect(markup).toContain("No active sessions were found.");
-  });
-
-  it("renders the single session screen", () => {
-    const markup = renderToStaticMarkup(
-      <SessionShow
-        title="Session"
-        back_link={backLink}
-        columns={columns}
-        expires_at_description="This session ends at its expiry and cannot be extended."
-        session={currentRow}
-      />,
-    );
-
-    expect(markup).toContain("Emergency");
-    expect(markup).toContain("This session ends at its expiry and cannot be extended.");
-    expect(markup).not.toContain("DBSC");
-  });
-
-  it("keeps the mode column when the session itself carried no mode label", () => {
-    const { mode: unusedMode, ...sessionWithoutMode } = currentRow;
-    void unusedMode;
-    const markup = renderToStaticMarkup(
-      <SessionShow
-        title="Session"
-        back_link={backLink}
-        columns={columns}
-        expires_at_description="This session ends at its expiry and cannot be extended."
-        session={sessionWithoutMode}
-      />,
-    );
-
-    expect(markup).toContain("Mode");
-    expect(markup).toContain("Unknown device");
-    expect(markup).not.toContain("Emergency");
-  });
-
-  it("omits the mode row when the column set has no mode label", () => {
-    const { mode: unusedModeColumn, ...columnsWithoutMode } = columns;
-    void unusedModeColumn;
-    const markup = renderToStaticMarkup(
-      <SessionShow
-        title="Session"
-        back_link={backLink}
-        columns={columnsWithoutMode}
-        expires_at_description="This session ends at its expiry and cannot be extended."
-        session={currentRow}
-      />,
-    );
-
-    expect(markup).not.toContain(">Mode<");
-    expect(markup).toContain("Unknown device");
   });
 });
 
@@ -493,7 +252,7 @@ describe("secret credential screens", () => {
 });
 
 describe("shared self-service screens", () => {
-  it("renders the shell, the welcome and both sign-out screens", () => {
+  it("renders the account shell and welcome page", () => {
     expect(
       renderToStaticMarkup(
         <SelfServiceShell
@@ -511,35 +270,6 @@ describe("shared self-service screens", () => {
         />,
       ),
     ).toContain('href="/dashboard"');
-
-    const confirmation = renderToStaticMarkup(
-      <SignOutConfirmation
-        title="Sign out"
-        active
-        description="Once you log out..."
-        form={{
-          action: "/sign/out",
-          submit: "Sign out",
-          confirm_description: "Once you log out...",
-        }}
-        home_link={{ label: "Home", href: "/" }}
-      />,
-    );
-
-    expect(confirmation).toContain('action="/sign/out" method="post"');
-    expect(confirmation).toContain('name="authenticity_token"');
-
-    const signedOut = renderToStaticMarkup(
-      <SignOutConfirmation
-        title="Sign out"
-        active={false}
-        description="You are already signed out."
-        form={null}
-        home_link={{ label: "Home", href: "/" }}
-      />,
-    );
-
-    expect(signedOut).not.toContain("<form");
   });
 });
 

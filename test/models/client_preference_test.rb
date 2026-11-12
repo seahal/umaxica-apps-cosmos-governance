@@ -22,6 +22,13 @@ class ClientPreferenceTest < ActiveSupport::TestCase
     assert_equal 21, preference.public_id.length
   end
 
+  test "a second active client preference is rejected by validation" do
+    duplicate = ClientPreference.new(client: clients(:one))
+
+    assert_not duplicate.valid?
+    assert duplicate.errors.of_kind?(:client_id, :taken)
+  end
+
   test "active actor preference uniqueness permits a retired historical row" do
     client = clients(:one)
     active = client_preferences(:one)
@@ -32,7 +39,10 @@ class ClientPreferenceTest < ActiveSupport::TestCase
     assert_equal client.id, retired.client_id
     assert_raises(ActiveRecord::RecordNotUnique) do
       ClientPreference.transaction(requires_new: true) do
-        ClientPreference.create!(client:, status_id: ClientPreferenceStatus::ACTIVE, explicit_fields: [])
+        ClientPreference.new(
+          client:, status_id: ClientPreferenceStatus::ACTIVE,
+          explicit_fields: [],
+        ).save!(validate: false)
       end
     end
     assert_equal ClientPreferenceStatus::ACTIVE, active.reload.status_id

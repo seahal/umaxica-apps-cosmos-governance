@@ -5,8 +5,6 @@ require "aws-sdk-sns"
 
 module Outbound
   class SmsDeliveryJob < ApplicationJob
-    OTP_TRANSPORT_TIMEOUT = 15
-
     queue_as :default
 
     retry_on Aws::SNS::Errors::ServiceError, wait: :polynomially_longer, attempts: 5
@@ -20,54 +18,9 @@ module Outbound
 
     def perform(encrypted_payload: nil)
       payload = OutboundSensitivePayload.decrypt_sms_delivery(encrypted_payload)
-      if payload.key?(:otp_binding)
-        case payload.fetch(:otp_binding)[1]
-        when "credential_registration" then return deliver_current_registration_otp(payload)
-        when "sign_up" then return deliver_current_signup_otp(payload)
-        else raise ArgumentError, "unsupported bound SMS purpose"
-        end
-      end
+      raise AccessOpDataUnavailableError if payload.key?(:otp_binding)
+
       OutboundSms.deliver_now(**payload.slice(:to, :title, :body))
-    end
-
-    private
-
-    def deliver_current_signup_otp(payload)
-      binding = TelephoneSignUpOtpDeliveryBindingValue.for_sms(otp_binding: payload.fetch(:otp_binding))
-      flow_model, telephone_model, transaction_model =
-        case binding.surface
-        when "app" then [ClientSignUpFlow, ClientTelephone, ClientTelephoneCeremonyTransaction]
-        else raise ArgumentError, "unsupported Telephone signup delivery realm"
-        end
-      flow = flow_model.find_by(public_id: binding.flow_ref)
-      transaction = transaction_model.find_by(transaction_id: binding.transaction_ref)
-      return false unless flow && transaction
-
-      telephone = telephone_model.find_by(public_id: transaction.telephone_candidate_ref)
-      return false unless telephone
-
-      TelephoneSignUpOtpDeliveryGuard.call(
-        flow: flow, telephone: telephone, transaction: transaction, generation: binding.generation,
-        destination: payload.fetch(:to), code: payload.fetch(:otp_code),
-      ) { OutboundSms.deliver_now(**payload.slice(:to, :title, :body), timeout: OTP_TRANSPORT_TIMEOUT) }
-    end
-
-    def deliver_current_registration_otp(payload)
-      binding = TelephoneCredentialRegistrationOtpDeliveryBindingValue.for_sms(otp_binding: payload.fetch(:otp_binding))
-      transaction_model, telephone_model =
-        case binding.surface
-        when "app" then [ClientTelephoneCeremonyTransaction, ClientTelephone]
-        when "org" then [OperatorTelephoneCeremonyTransaction, OperatorTelephone]
-        else raise ArgumentError, "unsupported Telephone registration delivery realm"
-        end
-      transaction = transaction_model.find_by(transaction_id: binding.transaction_ref)
-      telephone = telephone_model.find_by(public_id: binding.candidate_ref)
-      return false unless transaction && telephone
-
-      TelephoneCredentialRegistrationOtpDeliveryGuard.call(
-        transaction: transaction, telephone: telephone, generation: binding.generation,
-        destination: payload.fetch(:to), code: payload.fetch(:otp_code),
-      ) { OutboundSms.deliver_now(**payload.slice(:to, :title, :body), timeout: OTP_TRANSPORT_TIMEOUT) }
     end
   end
 end

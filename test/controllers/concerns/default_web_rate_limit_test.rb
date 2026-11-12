@@ -6,7 +6,9 @@ require "test_helper"
 
 # Probe controller inheriting the lightest surface base so the surface-wide
 # default_web rate limit (declared on the base) is exercised end-to-end.
-class DefaultWebRateLimitProbeController < Base::Net::ApplicationController
+class Base::App::Identity::DefaultWebRateLimitProbeController < Base::App::ApplicationController
+  AUTHENTICATION_MODE = :open
+
   def index
     render plain: "ok"
   end
@@ -20,6 +22,13 @@ class DefaultWebRateLimitTest < ActionDispatch::IntegrationTest
 
   self.fixture_table_names = []
 
+  EXPECTED_RATE_LIMITED_BASES = %w(
+    app/controllers/base/app/application_controller.rb
+    app/controllers/base/com/application_controller.rb
+    app/controllers/base/org/application_controller.rb
+    app/controllers/tech/org/application_controller.rb
+  ).freeze
+
   setup { Rails.configuration.x.rate_limit.fetch(:store).clear }
   teardown { Rails.configuration.x.rate_limit.fetch(:store).clear }
 
@@ -29,15 +38,15 @@ class DefaultWebRateLimitTest < ActionDispatch::IntegrationTest
 
   test "surface base enforces the 300/min default web limit and renders the json 429" do
     with_routing do |set|
-      set.draw { get "/default_web_probe", to: "default_web_rate_limit_probe#index" }
+      set.draw { get "/default_web_probe", to: "base/app/identity/default_web_rate_limit_probe#index" }
 
       300.times do
-        get "/default_web_probe", headers: { "Host" => "base.net.localhost", "Accept" => "application/json" }
+        get "/default_web_probe", headers: { "Host" => "base.app.localhost", "Accept" => "application/json" }
 
         assert_response :success
       end
 
-      get "/default_web_probe", headers: { "Host" => "base.net.localhost", "Accept" => "application/json" }
+      get "/default_web_probe", headers: { "Host" => "base.app.localhost", "Accept" => "application/json" }
 
       assert_response :too_many_requests
       assert_equal "60", response.headers["Retry-After"]
@@ -48,7 +57,7 @@ class DefaultWebRateLimitTest < ActionDispatch::IntegrationTest
 
       assert_equal "urn:umaxica:problem:rate-limited", body.fetch("type")
       assert_equal I18n.t("errors.rate_limit.exceeded"), body.fetch("detail")
-      assert_not_includes response.body, "base_net_default_web"
+      assert_not_includes response.body, "base_app_default_web"
     end
   end
 
@@ -57,7 +66,9 @@ class DefaultWebRateLimitTest < ActionDispatch::IntegrationTest
       Rails.root.glob("app/controllers/**/application_controller.rb")
         .select { |path| path.read.match?(/include ::RateLimit\b/) }
 
-    assert_operator bases.size, :>=, 11, "expected at least 11 RateLimit-including surface bases"
+    actual = bases.map { |path| path.relative_path_from(Rails.root).to_s }.sort
+
+    assert_equal EXPECTED_RATE_LIMITED_BASES.sort, actual
 
     missing =
       bases.reject do |path|

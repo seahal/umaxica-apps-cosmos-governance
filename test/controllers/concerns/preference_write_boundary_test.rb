@@ -23,18 +23,20 @@ class PreferenceWriteBoundaryTest < ActiveSupport::TestCase
     end
   end
 
-  test "wires the Visa sign_in and sign_out operations for realms that own a Visa read" do
-    result = PreferenceWriteBoundary.authorize!(
-      surface_key: "visa/app", operation: :sign_in, realm_model: "AppPreference",
-    )
+  test "does not authorize preference writers outside owned surfaces" do
+    assert_raises(PreferenceWriteBoundary::UnsupportedSurfaceError) do
+      PreferenceWriteBoundary.authorize!(
+        surface_key: "other/app", operation: :save, realm_model: AppPreference,
+      )
+    end
 
-    assert_equal [:app, :sign_in], result.values_at(:realm, :operation)
-
-    result = PreferenceWriteBoundary.authorize!(
-      surface_key: "visa/org", operation: :sign_out, realm_model: "OrgPreference",
-    )
-
-    assert_equal [:org, :sign_out], result.values_at(:realm, :operation)
+    %i(sign_in sign_out).each do |operation|
+      assert_raises(PreferenceWriteBoundary::UnsupportedOperationError) do
+        PreferenceWriteBoundary.authorize!(
+          surface_key: "base/app", operation:, realm_model: AppPreference,
+        )
+      end
+    end
   end
 
   test "refuses an operation outside the closed enumeration" do
@@ -48,26 +50,26 @@ class PreferenceWriteBoundaryTest < ActiveSupport::TestCase
     assert_match(/unsupported preference operation/, error.message)
   end
 
-  test "refuses a sign-in write pointed at the com realm" do
+  test "refuses a removed sign-in operation" do
     error =
       assert_raises(PreferenceWriteBoundary::UnsupportedOperationError) do
         PreferenceWriteBoundary.authorize!(
-          surface_key: "base/com", operation: :sign_in, realm_model: ComPreference,
+          surface_key: "base/app", operation: :sign_in, realm_model: AppPreference,
         )
       end
 
-    assert_match(/may not use operation :sign_in/, error.message)
+    assert_match(/unsupported preference operation/, error.message)
   end
 
   test "refuses an unlisted surface entirely" do
     error =
       assert_raises(PreferenceWriteBoundary::UnsupportedSurfaceError) do
         PreferenceWriteBoundary.authorize!(
-          surface_key: "core/org", operation: :save, realm_model: OrgPreference,
+          surface_key: "other/org", operation: :save, realm_model: OrgPreference,
         )
       end
 
-    assert_equal "core/org", error.message
+    assert_equal "other/org", error.message
   end
 
   test "refuses a surface that names another realm's model class" do
@@ -163,37 +165,6 @@ class PreferenceWriteBoundaryTest < ActiveSupport::TestCase
       )
 
       assert_equal [realm, :reset], result.values_at(:realm, :operation)
-    end
-  end
-
-  test "static Visa writer authorization is limited to verified results and committed logout confirmations" do
-    {
-      ["visa/app", :sign_in, AppPreference] => Visa::App::Oauth::AuthorizationsController,
-      ["visa/app", :sign_out, AppPreference] => Visa::App::Oidc::Logouts::ConfirmationsController,
-      ["visa/org", :sign_in, OrgPreference] => Visa::Org::Oauth::AuthorizationsController,
-      ["visa/org", :sign_out, OrgPreference] => Visa::Org::Oidc::Logouts::ConfirmationsController,
-    }.each do |(surface_key, operation, realm_model), controller|
-      result = PreferenceWriteBoundary.authorize_writer!(
-        controller:, action: "create", surface_key:, operation:, realm_model:,
-      )
-
-      expected_realm = (realm_model == AppPreference) ? :app : :org
-
-      assert_equal [expected_realm, operation], result.values_at(:realm, :operation)
-    end
-
-    assert_raises(PreferenceWriteBoundary::UnsupportedSurfaceError) do
-      PreferenceWriteBoundary.authorize_writer!(
-        controller: Visa::App::Oauth::AuthorizationsController, action: "show", surface_key: "visa/app",
-        operation: :sign_in, realm_model: AppPreference,
-      )
-    end
-
-    assert_raises(PreferenceWriteBoundary::UnsupportedSurfaceError) do
-      PreferenceWriteBoundary.authorize_writer!(
-        controller: Visa::App::Oidc::LogoutsController, action: "create", surface_key: "visa/app",
-        operation: :sign_out, realm_model: AppPreference,
-      )
     end
   end
 

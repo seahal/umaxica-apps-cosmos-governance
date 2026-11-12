@@ -55,13 +55,8 @@ module IdentifierBlindIndex
   end
 
   def required_secret_credential(key)
-    Rails.app.creds.option(key).presence || required_env_secret_credential(key)
-  end
-
-  def required_env_secret_credential(key)
-    ENV.fetch(key.to_s).presence || raise_missing_secret_credential(key)
-  rescue KeyError
-    raise_missing_secret_credential(key)
+    # Rails.app.creds also reads ENV; live lookup keys have one encrypted source.
+    Rails.app.credentials.option(key).presence || raise_missing_secret_credential(key)
   end
 
   def raise_missing_secret_credential(key)

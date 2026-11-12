@@ -10,6 +10,8 @@ require "test_helper"
 # limit before SQL, and accepts exactly the limit. public_id is excluded: adr/identifier-contract.md
 # fixes it at exactly 21 characters, which each model's test checks with assert_public_id_fixed_length.
 class StringColumnLengthValidationContractTest < ActiveSupport::TestCase
+  self.fixture_table_names = []
+
   EXCLUDED_COLUMNS = %w(public_id).freeze
 
   Rails.application.eager_load!

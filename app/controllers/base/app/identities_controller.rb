@@ -15,7 +15,6 @@ module Base
           title: "Identity",
           description: "Signed in",
           up_link: dashboard_up_link(label: t("base.shared.identity.up_link")),
-          credential_warning: apple_only_credential_warning_props,
           sections: identity_hub_sections,
         }
       end
@@ -26,7 +25,6 @@ module Base
         [
           identity_profile_section,
           identity_security_section,
-          identity_external_services_section,
           identity_account_section,
         ]
       end
@@ -48,26 +46,8 @@ module Base
           items: [
             identity_hub_link(:passkey, base_app_identity_passkeys_path(ri: params[:ri])),
             identity_hub_link(:totp, base_app_identity_totps_path(ri: params[:ri])),
-            { label: t("sign.app.settings.show.mfa"), href: base_app_identity_mfa_challenge_path(ri: params[:ri]) },
-            {
-              label: t("sign.app.settings.mfa.show.reset_title"),
-              href: base_app_identity_mfa_reset_path(ri: params[:ri]),
-            },
-            identity_hub_link(:sessions, base_app_sessions_path(ri: params[:ri])),
             identity_hub_link(:activities, base_app_identity_activities_path(ri: params[:ri])),
             identity_hub_link(:standing, base_app_identity_standing_path(ri: params[:ri])),
-          ],
-        }
-      end
-
-      def identity_external_services_section
-        {
-          heading: t("base.shared.identity.sections.external_services"),
-          items: [
-            { label: t("base_social_identities.title"),
-              href: base_app_identity_social_identities_path(ri: params[:ri]), },
-            identity_auth_link(:google, :auth_app_settings_google_url),
-            identity_auth_link(:apple, :auth_app_settings_apple_url),
           ],
         }
       end
@@ -83,18 +63,6 @@ module Base
 
       def identity_hub_link(key, href)
         { label: t(key, scope: "base.shared.identity.links"), href: href }
-      end
-
-      def identity_auth_link(key, route_helper)
-        {
-          label: t(key, scope: "controller.sign.app.setting.index"),
-          href: public_send(
-            route_helper,
-            ri: params[:ri],
-            host: ENV.fetch("PUBLIC_AUTH_SERVICE_URL"),
-            protocol: "https",
-          ),
-        }
       end
     end
   end

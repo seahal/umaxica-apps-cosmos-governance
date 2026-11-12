@@ -26,53 +26,51 @@ class JumpRtReturnVerificationTest < ActionDispatch::IntegrationTest
     Rails.cache = @previous_cache
   end
 
-  test "rails issued rt can round trip through a stubbed jump gateway and return verifier" do
-    with_env("PRIVATE_AUTH_SERVICE_URL" => "www.umaxica.app") do
-      JumpRtKeyring.stub(:active_kid, "acme-app-test") do
-        JumpRtKeyring.stub(:private_key, @rails_private_key) do
-          app_origin = acme_app_origin
-          rails_rt = JumpRtIssuer.call(
-            namespace: "AUTH_APP",
-            url: "#{app_origin}/",
-            dst: "internal",
-            now: @now,
-            jti: "rails-jti",
-          )
+  test "Base-issued rt return is refused without an approved local source edge" do
+    JumpRtKeyring.stub(:active_kid, "base-app-test") do
+      JumpRtKeyring.stub(:private_key, @rails_private_key) do
+        app_origin = base_app_origin
+        rails_rt = JumpRtIssuer.call(
+          namespace: "BASE_APP",
+          url: "#{app_origin}/",
+          dst: "internal",
+          now: @now,
+          jti: "rails-jti",
+        )
 
-          returned_location = stubbed_jump_location(rails_rt)
-          returned_rt = Rack::Utils.parse_nested_query(URI.parse(returned_location).query).fetch("rt")
-          prime_jump_jwks_cache
+        returned_location = stubbed_jump_location(rails_rt)
+        returned_rt = Rack::Utils.parse_nested_query(URI.parse(returned_location).query).fetch("rt")
+        prime_jump_jwks_cache
 
-          https!
-          prime_jump_jwks_cache
-          get "#{app_origin}/", params: { rt: returned_rt }
-        end
+        https!
+        prime_jump_jwks_cache
+        get "#{app_origin}/", params: { rt: returned_rt }
       end
     end
 
-    assert_response :see_other
-    assert_equal "#{acme_app_origin}/", response.location
+    assert_response :bad_request
+    assert_nil response.location
     assert_match(/no-store/, response.headers.fetch("Cache-Control"))
   end
 
-  test "acme app consumes valid jump return rt and strips it from url" do
-    app_origin = acme_app_origin
+  test "Base app rejects a signed Jump return without an approved source edge" do
+    app_origin = base_app_origin
     https!
     token = sign_return_token(
       aud: app_origin,
-      src: JumpRtSurface.issuer_origin("AUTH_APP"),
+      src: JumpRtSurface.issuer_origin("BASE_APP"),
       url: "#{app_origin}/?ok=1",
     )
 
     prime_jump_jwks_cache
     get "#{app_origin}/", params: { ok: "1", rt: token }
 
-    assert_response :see_other
-    assert_equal "#{app_origin}/?ok=1", response.location
+    assert_response :bad_request
+    assert_nil response.location
   end
 
-  test "acme app rejects invalid jump return rt before normal auth flow" do
-    app_origin = acme_app_origin
+  test "Base app rejects invalid Jump return rt before its normal flow" do
+    app_origin = base_app_origin
     https!
 
     get "#{app_origin}/", params: { rt: "not-a-jwt" }
@@ -81,11 +79,11 @@ class JumpRtReturnVerificationTest < ActionDispatch::IntegrationTest
   end
 
   test "a signed return with a source path is rejected without redirecting" do
-    app_origin = acme_app_origin
+    app_origin = base_app_origin
     https!
     token = sign_return_token(
       aud: app_origin,
-      src: "#{JumpRtSurface.issuer_origin("AUTH_APP")}/unexpected",
+      src: "#{JumpRtSurface.issuer_origin("BASE_APP")}/unexpected",
       url: "#{app_origin}/?ok=1",
     )
     prime_jump_jwks_cache
@@ -96,7 +94,7 @@ class JumpRtReturnVerificationTest < ActionDispatch::IntegrationTest
   end
 
   test "rejected jump return logs do not include the rt token" do
-    app_origin = acme_app_origin
+    app_origin = base_app_origin
     https!
     token = "aaaaaaaa.bbbbbbbb.cccccccc"
     log_io = StringIO.new
@@ -115,47 +113,46 @@ class JumpRtReturnVerificationTest < ActionDispatch::IntegrationTest
     assert_no_match(/rt=#{Regexp.escape(token)}/, joined)
   end
 
-  # Receiver responsibility (adr/jump-directed-rails-handoff-contract.md): a verified return only
-  # removes rt and re-enters the same request URL on the receiving host. A downstream redirect
-  # parameter carried through Jump is never followed by the return step itself.
-  test "a verified Jump return does not follow a downstream redirect parameter off the receiving host" do
-    origin = "https://auth.umaxica.org"
+  # No local return source edge is approved. A valid signature alone must not reach the redirect
+  # step or follow a downstream redirect parameter.
+  test "an unapproved Jump return cannot follow a downstream redirect parameter" do
+    origin = base_app_origin
     url = "#{origin}/?redirect_uri=https%3A%2F%2Fevil.example%2Fcb&ri=us"
-    token = sign_return_token(aud: origin, src: "https://www.umaxica.org", url: url)
+    token = sign_return_token(aud: origin, src: JumpRtSurface.issuer_origin("BASE_APP"), url: url)
     prime_jump_jwks_cache
-    host! "auth.umaxica.org"
+    host! URI.parse(origin).host
     https!
     get "/", params: { redirect_uri: "https://evil.example/cb", ri: "us", rt: token }
 
-    assert_response :see_other
-    location = URI.parse(response.location)
-
-    assert_equal "auth.umaxica.org", location.host
-    assert_equal "https://evil.example/cb", Rack::Utils.parse_nested_query(location.query).fetch("redirect_uri")
-    assert_not_includes Rack::Utils.parse_nested_query(location.query).keys, "rt"
+    assert_response :bad_request
+    assert_nil response.location
   end
 
   test "a Jump return whose source edge is not approved is rejected even with a valid signature" do
-    origin = "https://auth.umaxica.org"
+    origin = base_app_origin
     token = sign_return_token(aud: origin, src: "https://jp.umaxica.com", url: "#{origin}/?ri=us")
     prime_jump_jwks_cache
-    host! "auth.umaxica.org"
+    host! URI.parse(origin).host
     https!
     get "/", params: { ri: "us", rt: token }
 
     assert_response :bad_request
   end
 
-  test "a verified Jump return redirects to the signed target with order and repeated pairs intact" do
-    origin = "https://auth.umaxica.org"
-    token = sign_return_token(aud: origin, src: "https://www.umaxica.org", url: "#{origin}/?ri=us&tag=b&tag=a&q=a%2Bb")
+  test "a signed Jump return cannot redirect when no source edge is approved" do
+    origin = base_app_origin
+    token = sign_return_token(
+      aud: origin,
+      src: JumpRtSurface.issuer_origin("BASE_APP"),
+      url: "#{origin}/?ri=us&tag=b&tag=a&q=a%2Bb",
+    )
     prime_jump_jwks_cache
-    host! "auth.umaxica.org"
+    host! URI.parse(origin).host
     https!
     get "/?ri=us&tag=b&rt=#{token}&tag=a&q=a%2Bb"
 
-    assert_response :see_other
-    assert_equal "#{origin}/?ri=us&tag=b&tag=a&q=a%2Bb", response.location
+    assert_response :bad_request
+    assert_nil response.location
   end
 
   {
@@ -165,10 +162,14 @@ class JumpRtReturnVerificationTest < ActionDispatch::IntegrationTest
     "a duplicated reserved parameter" => "ri=us&tag=b&tag=a&next=%%2Fevil&next=%%2Fevil&rt=%<token>s",
   }.each do |label, query_format|
     test "a Jump-signed return with #{label} is rejected" do
-      origin = "https://auth.umaxica.org"
-      token = sign_return_token(aud: origin, src: "https://www.umaxica.org", url: "#{origin}/?ri=us&tag=b&tag=a")
+      origin = base_app_origin
+      token = sign_return_token(
+        aud: origin,
+        src: JumpRtSurface.issuer_origin("BASE_APP"),
+        url: "#{origin}/?ri=us&tag=b&tag=a",
+      )
       prime_jump_jwks_cache
-      host! "auth.umaxica.org"
+      host! URI.parse(origin).host
       https!
       get "/?#{format(query_format, token: token)}"
 
@@ -177,97 +178,42 @@ class JumpRtReturnVerificationTest < ActionDispatch::IntegrationTest
   end
 
   test "a request whose only return token key is nested is rejected before the normal flow" do
-    host! "auth.umaxica.org"
+    host! URI.parse(base_app_origin).host
     https!
     get "/?rt%5B%5D=a.b.c"
 
     assert_response :bad_request
   end
 
-  test "sign app includes jump return verification" do
-    assert_includes Auth::App::ApplicationController.ancestors, JumpRtReturnVerification
-  end
-
-  test "Auth org and Palm reject invalid returns before their normal flow" do
-    %w(auth.umaxica.org palm-jp.umaxica.app).each do |host|
-      host! host
-      https!
-      get "/", params: { rt: "not-a-jwt" }
-
-      assert_response :bad_request
-    end
-  end
-
-  test "Auth org and Palm verify Base returns and clean the return token" do
-    %w(auth.umaxica.org palm-jp.umaxica.app).each do |host|
-      origin = "https://#{host}"
-      base = "https://www.umaxica.#{host.split(".").last}"
-      token = sign_return_token(aud: origin, src: base, url: "#{origin}/?ri=us&ok=1")
-      prime_jump_jwks_cache
-      host! host
-      https!
-      get "/", params: { ri: "us", ok: "1", rt: token }
-
-      assert_response :see_other
-      assert_equal "#{origin}/?ri=us&ok=1", response.location
-      assert_match(/no-store/, response.headers.fetch("Cache-Control"))
-    end
-  end
-
-  test "sign app consumes valid jump return rt and strips it from url" do
-    sign_origin = sign_app_origin
-    https!
-    token = sign_return_token(
-      aud: sign_origin,
-      src: JumpRtSurface.issuer_origin("BASE_APP"),
-      url: "#{sign_origin}/?ok=1",
-    )
-
-    prime_jump_jwks_cache
-    get "#{sign_origin}/", params: { ok: "1", rt: token }
-
-    assert_response :see_other
-    assert_equal "#{sign_origin}/?ok=1", response.location
-  end
-
-  test "sign app rejects invalid jump return rt before normal auth flow" do
-    sign_origin = sign_app_origin
-    https!
-
-    get "#{sign_origin}/", params: { rt: "not-a-jwt" }
-
-    assert_response :bad_request
-  end
-
-  test "a valid Jump return token does not exempt an unsafe Base request from CSRF" do
+  test "a Jump return token on an unsafe Base request does not exempt it from CSRF" do
     previous = ActionController::Base.allow_forgery_protection
     ActionController::Base.allow_forgery_protection = true
-    base_origin = acme_app_origin
+    base_origin = base_app_origin
     token = sign_return_token(
       aud: base_origin,
-      src: JumpRtSurface.issuer_origin("AUTH_APP"),
-      url: "#{base_origin}/sign",
+      src: JumpRtSurface.issuer_origin("BASE_APP"),
+      url: "#{base_origin}/api/v0/preferences/theme",
     )
     prime_jump_jwks_cache
     https!
 
-    post(
-      "#{base_origin}/sign?rt=#{Rack::Utils.escape(token)}",
+    patch(
+      "#{base_origin}/api/v0/preferences/theme?rt=#{Rack::Utils.escape(token)}",
       headers: {
         "Origin" => base_origin,
         "Sec-Fetch-Site" => "same-origin",
       },
     )
 
-    assert_response :unprocessable_content
+    assert_response :forbidden
     assert_nil response.location
   ensure
     ActionController::Base.allow_forgery_protection = previous
   end
 
-  test "sign app runs jump return verification before set_current_context" do
+  test "Base app runs Jump return verification before set_current_context" do
     before_filters =
-      Auth::App::ApplicationController._process_action_callbacks.filter_map do |callback|
+      Base::App::ApplicationController._process_action_callbacks.filter_map do |callback|
         callback.filter if callback.kind == :before
       end
 
@@ -289,20 +235,10 @@ class JumpRtReturnVerificationTest < ActionDispatch::IntegrationTest
     assert_not_includes before_filters, :verify_jump_return_rt!
   end
 
-  test "core app explicitly runs jump return verification before normal auth flow" do
-    before_filters =
-      Core::App::ApplicationController._process_action_callbacks.filter_map do |callback|
-        callback.filter if callback.kind == :before
-      end
-
-    assert_includes before_filters, :verify_jump_return_rt!
-    assert_operator before_filters.index(:verify_jump_return_rt!), :<, before_filters.index(:set_current_context)
-  end
-
   private
 
   def stubbed_jump_location(rails_rt)
-    rails_issuer = JumpRtSurface.issuer_origin("AUTH_APP")
+    rails_issuer = JumpRtSurface.issuer_origin("BASE_APP")
     payload, header = JWT.decode(
       rails_rt,
       JWT::JWK.import(@rails_public_jwk).public_key,
@@ -318,16 +254,16 @@ class JumpRtReturnVerificationTest < ActionDispatch::IntegrationTest
     )
 
     assert_equal "JWT", header.fetch("typ")
-    assert_equal "acme-app-test", header.fetch("kid")
+    assert_equal "base-app-test", header.fetch("kid")
     assert_equal rails_issuer, payload.fetch("iss")
     assert_equal 1, payload.fetch("schema")
     assert_equal "jump-redirect", payload.fetch("sub")
     assert_equal "internal", payload.fetch("dst")
     assert_equal "reuse", payload.fetch("rpl")
-    assert_equal "#{acme_app_origin}/", payload.fetch("url")
+    assert_equal "#{base_app_origin}/", payload.fetch("url")
 
     return_rt = sign_return_token(
-      aud: acme_app_origin,
+      aud: base_app_origin,
       src: payload.fetch("iss"),
       url: payload.fetch("url"),
       jti: "jump-jti",
@@ -335,7 +271,7 @@ class JumpRtReturnVerificationTest < ActionDispatch::IntegrationTest
       nbf: @now.to_i,
       exp: @now.to_i + 30,
     )
-    "#{acme_app_origin}/?#{Rack::Utils.build_query(rt: return_rt)}"
+    "#{base_app_origin}/?#{Rack::Utils.build_query(rt: return_rt)}"
   end
 
   def prime_jump_jwks_cache
@@ -349,71 +285,22 @@ class JumpRtReturnVerificationTest < ActionDispatch::IntegrationTest
     payload = {
       schema: 1,
       iss: "https://jump.umaxica.net",
-      aud: "https://www.app.localhost",
+      aud: base_app_origin,
       sub: "jump-redirect",
       iat: iat,
       nbf: iat,
       exp: iat + 30,
       jti: "jump-return-jti",
-      src: JumpRtSurface.issuer_origin("AUTH_APP"),
+      src: JumpRtSurface.issuer_origin("BASE_APP"),
       dst: "internal",
       rpl: "reuse",
-      url: "https://www.app.localhost/",
+      url: "#{base_app_origin}/",
     }.merge(overrides)
 
     JWT.encode(payload, @jump_private_key, "ES384", { typ: "JWT", kid: "jump-test" })
   end
 
-  def acme_app_origin
+  def base_app_origin
     JumpRtSurface.issuer_origin("BASE_APP")
-  end
-
-  def sign_app_origin
-    JumpRtSurface.issuer_origin("AUTH_APP")
-  end
-
-  def with_env(values)
-    previous = values.transform_values { |_value| nil }
-    values.each do |key, value|
-      previous[key] = ENV[key]
-      value.nil? ? ENV.delete(key) : ENV[key] = value
-    end
-    yield
-  ensure
-    previous.each do |key, value|
-      value.nil? ? ENV.delete(key) : ENV[key] = value
-    end
-  end
-end
-
-# DAMP local route helper aliases for former shared test support.
-class JumpRtReturnVerificationTest
-  SURFACE_ROUTE_PREFIX_MAP = {
-    "sign_app_" => "auth_app_",
-    "sign_org_" => "auth_org_",
-    "acme_app_" => "base_app_",
-    "acme_org_" => "base_org_",
-  }.freeze unless const_defined?(:SURFACE_ROUTE_PREFIX_MAP, false)
-
-  private
-
-  def method_missing(name, ...)
-    aliased_name = aliased_surface_route_helper_name(name)
-    return public_send(aliased_name, ...) if aliased_name && respond_to?(aliased_name, true)
-
-    super
-  end
-
-  def respond_to_missing?(name, include_private = false)
-    aliased_name = aliased_surface_route_helper_name(name)
-    (aliased_name && respond_to?(aliased_name, include_private)) || super
-  end
-
-  def aliased_surface_route_helper_name(name)
-    helper_name = name.to_s
-    self.class::SURFACE_ROUTE_PREFIX_MAP.each do |source_prefix, target_prefix|
-      return helper_name.sub(source_prefix, target_prefix).to_sym if helper_name.start_with?(source_prefix)
-    end
-    nil
   end
 end

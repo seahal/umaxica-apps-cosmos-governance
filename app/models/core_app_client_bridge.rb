@@ -26,7 +26,7 @@ class CoreAppClientBridge < AppRpRecord
 
   belongs_to :client,
              class_name: "Client",
-             inverse_of: :core_app_client_bridge
+             inverse_of: :core_app_client_bridges
 
   core_rp_bridge(
     actor_association_name: :client,

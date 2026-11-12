@@ -6,41 +6,27 @@ require "test_helper"
 class JumpRtIssuerJwksAuthorityTest < ActionDispatch::IntegrationTest
   self.fixture_table_names = []
 
-  # Retired corporate authentication surfaces have no Jump issuer capability. Every remaining
-  # app/org Jump issuer must publish the same key used by its signing namespace.
-  test "canonical Jump issuers sign RT and the routing surfaces publish the exact signing key" do
-    # Other tests intentionally reload the process-global registry with fixture keys. Rebuild it
-    # from the restored process environment so this cross-host contract is order-independent.
+  ISSUERS = {
+    "BASE_APP" => "PUBLIC_BASE_SERVICE_URL",
+    "BASE_ORG" => "PUBLIC_BASE_STAFF_URL",
+  }.freeze
+
+  test "Base Jump issuers sign RT and publish the matching public signing key" do
     JitSecurityJwtRegistry.reload!
-
-    issuers = {
-      "AUTH_APP" => "https://auth.umaxica.app",
-      "AUTH_ORG" => "https://auth.umaxica.org",
-      "BASE_APP" => "https://www.umaxica.app",
-      "BASE_ORG" => "https://www.umaxica.org",
-      "VISA_APP" => "https://visa.umaxica.app",
-      "VISA_ORG" => "https://visa.umaxica.org",
-      "CORE_APP" => "https://jp.umaxica.app",
-      "CORE_ORG" => "https://jp.umaxica.org",
-      "WARP_APP" => "https://www-jp.umaxica.app",
-      "WARP_ORG" => "https://www-jp.umaxica.org",
-      "PALM_APP" => "https://palm-jp.umaxica.app",
-    }
-
-    assert_equal issuers.keys.sort, JumpRtSurface::ISSUER_NAMESPACES.sort
     published_keys = {}
-    issuers.each do |namespace, origin|
-      tld = namespace.split("_").last.downcase
-      peer = namespace.start_with?("BASE_") ? "auth" : "www"
-      token = JumpRtIssuer.call(namespace: namespace, url: "https://#{peer}.umaxica.#{tld}/", dst: "internal")
+
+    ISSUERS.each do |namespace, host_env|
+      origin = JumpRtSurface.issuer_origin(namespace)
+      host = JumpRtSurface.normalize_host(ENV.fetch(host_env))
+      token = JumpRtIssuer.call(namespace:, url: "https://#{host}/", dst: "internal")
       claims, header = JWT.decode(token, nil, false)
 
       assert_equal origin, claims.fetch("iss"), namespace
       assert_equal "ES384", header.fetch("alg"), namespace
       assert_equal "reuse", claims.fetch("rpl"), namespace
-      host!(URI.parse(origin).host)
+      host! host
       https!
-      get("/.well-known/jwks.json")
+      get "/.well-known/jwks.json"
 
       assert_response :ok
       published = response.parsed_body
@@ -64,19 +50,16 @@ class JumpRtIssuerJwksAuthorityTest < ActionDispatch::IntegrationTest
       verified, = JWT.decode(
         token, nil, true, algorithms: ["ES384"],
                           jwks: JWT::JWK::Set.new(published),
-                          verify_iss: true, iss: origin, verify_aud: true, aud: "https://jump.umaxica.net",
+                          verify_iss: true, iss: origin,
+                          verify_aud: true, aud: Rails.configuration.x.boot_config.fetch(:jump).audience,
       )
 
       assert_equal claims, verified, namespace
     end
 
-    %w(APP ORG).each do |realm|
-      base_keys = published_keys.fetch("BASE_#{realm}")
-      visa_keys = published_keys.fetch("VISA_#{realm}")
-      base_public_material = base_keys.map { |key| key.slice("kty", "crv", "x", "y") }
-      visa_public_material = visa_keys.map { |key| key.slice("kty", "crv", "x", "y") }
+    base_app_material = published_keys.fetch("BASE_APP").map { |key| key.slice("kty", "crv", "x", "y") }
+    base_org_material = published_keys.fetch("BASE_ORG").map { |key| key.slice("kty", "crv", "x", "y") }
 
-      assert_empty base_public_material & visa_public_material, "BASE_#{realm} and VISA_#{realm} JWKS overlap"
-    end
+    assert_empty base_app_material & base_org_material, "Base app and org JWKS must not share public key material"
   end
 end

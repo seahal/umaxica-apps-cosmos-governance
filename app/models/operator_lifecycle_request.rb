@@ -65,18 +65,18 @@ class OperatorLifecycleRequest < OrgPrincipalRecord
 
   # Join requests name a not-yet-existing operator by email; other actions validate this association.
   belongs_to :target_operator,
-             class_name: "Operator", optional: true
+             class_name: "Operator", optional: true, inverse_of: :lifecycle_requests_as_target
   belongs_to :requested_by_operator,
-             class_name: "Operator"
+             class_name: "Operator", inverse_of: :lifecycle_requests_as_requester
   # Pending requests have no approving actor.
   belongs_to :approved_by_operator,
-             class_name: "Operator", optional: true
+             class_name: "Operator", optional: true, inverse_of: :lifecycle_requests_as_approver
   # Requests that were not rejected have no rejecting actor.
   belongs_to :rejected_by_operator,
-             class_name: "Operator", optional: true
+             class_name: "Operator", optional: true, inverse_of: :lifecycle_requests_as_rejector
   # Requests that have not executed have no executing actor.
   belongs_to :executed_by_operator,
-             class_name: "Operator", optional: true
+             class_name: "Operator", optional: true, inverse_of: :lifecycle_requests_as_executor
 
   validates :action, presence: true, inclusion: { in: ACTIONS }
   validates :status, inclusion: { in: STATUSES }

@@ -41,7 +41,7 @@ module Health
     end
 
     # `namespace` names the routed surface that answered, as "<realm>/<surface>"
-    # (for example "core/app"). One Rails process answers on fifteen hostnames and the
+    # (for example "base/app"). One Rails process answers on retained product and operator hosts and the
     # probe bodies were otherwise identical, so a caller that sent the wrong `Host` still
     # saw a 200 and could not tell which surface produced it. The value is derived from the
     # controller that ran, not from a constant listed beside the route, so it cannot drift
@@ -242,26 +242,6 @@ module Health
         OrgRpRecord,
         OrgSettingRecord,
         OrgSignalRecord,
-      ],
-    )
-
-    SignApp = Base.new(
-      cache_key: "sign-app",
-      surface_label: "sign app",
-      record_classes: [
-        AppPrincipalRecord,
-        OpBaseAppRecord,
-        AppSettingRecord,
-      ],
-    )
-
-    SignOrg = Base.new(
-      cache_key: "sign-org",
-      surface_label: "sign org",
-      record_classes: [
-        OrgPrincipalRecord,
-        OpBaseOrgRecord,
-        OrgSettingRecord,
       ],
     )
 

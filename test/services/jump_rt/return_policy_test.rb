@@ -2,311 +2,51 @@
 # frozen_string_literal: true
 
 require "test_helper"
-# require "helpers/global_test_support"
 
 class JumpRtReturnPolicyTest < ActiveSupport::TestCase
-  APP_ORG_CANDIDATE_GRAPH = JSON.parse(
-    Rails.root.join("test/fixtures/files/jump_app_org_candidate_graph.json").read,
-  ).freeze
-
   self.fixture_table_names = []
 
-  test "normalize_origin returns nil for invalid URI" do
-    assert_nil JumpRtReturnPolicy.normalize_origin("not a url")
-  end
-
-  test "normalize_origin returns nil for non-http scheme" do
-    assert_nil JumpRtReturnPolicy.normalize_origin("ftp://example.com")
-  end
-
-  test "normalize_origin returns nil for URI with userinfo" do
-    assert_nil JumpRtReturnPolicy.normalize_origin("https://user:pass@www.umaxica.app")
-  end
-
-  test "origins with a path query or fragment are rejected" do
-    ["https://auth.umaxica.app/", "https://auth.umaxica.app/path",
-     "https://auth.umaxica.app?x=1", "https://auth.umaxica.app#fragment",].each do |origin|
+  test "normalize_origin rejects invalid uri classes" do
+    ["not a url", "ftp://example.test", "https://user:pass@example.test", "https://"].each do |origin|
       assert_nil JumpRtReturnPolicy.normalize_origin(origin), origin
-      assert_not JumpRtReturnPolicy.allowed_source?(destination_origin: "https://www.umaxica.app", source: origin)
     end
   end
 
-  test "normalize_origin normalizes https origin" do
-    result = JumpRtReturnPolicy.normalize_origin("https://www.umaxica.app")
-
-    assert_equal "https://www.umaxica.app", result
-  end
-
-  test "normalize_origin normalizes http origin" do
-    result = JumpRtReturnPolicy.normalize_origin("http://example.com")
-
-    assert_equal "http://example.com", result
-  end
-
-  test "normalize_origin downcases host" do
-    result = JumpRtReturnPolicy.normalize_origin("https://WWW.UMAXICA.APP")
-
-    assert_equal "https://www.umaxica.app", result
-  end
-
-  test "normalize_origin includes non-default port" do
-    result = JumpRtReturnPolicy.normalize_origin("https://www.umaxica.app:8443")
-
-    assert_equal "https://www.umaxica.app:8443", result
-  end
-
-  test "normalize_origin omits default https port" do
-    result = JumpRtReturnPolicy.normalize_origin("https://www.umaxica.app:443")
-
-    assert_equal "https://www.umaxica.app", result
-  end
-
-  test "normalize_origin omits default http port" do
-    result = JumpRtReturnPolicy.normalize_origin("http://example.com:80")
-
-    assert_equal "http://example.com", result
-  end
-
-  test "normalize_origin returns nil for blank host" do
-    assert_nil JumpRtReturnPolicy.normalize_origin("https://")
-  end
-
-  test "allowed_source returns true for valid source matching destination" do
-    assert JumpRtReturnPolicy.allowed_source?(
-      destination_origin: "https://www.umaxica.app",
-      source: "https://auth.umaxica.app",
-    )
-  end
-
-  test "allowed_source returns false for unauthorized source" do
-    assert_not JumpRtReturnPolicy.allowed_source?(
-      destination_origin: "https://www.umaxica.app",
-      source: "https://evil.example.com",
-    )
-  end
-
-  test "allowed_source returns false when destination origin is unknown" do
-    assert_not JumpRtReturnPolicy.allowed_source?(
-      destination_origin: "https://unknown.example.com",
-      source: "https://auth.umaxica.app",
-    )
-  end
-
-  test "default_port_for returns 443 for https" do
-    assert_equal 443, JumpRtReturnPolicy.default_port_for("https")
-  end
-
-  test "default_port_for returns 80 for http" do
-    assert_equal 80, JumpRtReturnPolicy.default_port_for("http")
-  end
-
-  test "only the approved app/org directed graph is allowed across all 81 canonical pairs" do
-    namespaces = {
-      "auth-app-ww" => "AUTH_APP",
-      "auth-org-ww" => "AUTH_ORG",
-      "base-app-ww" => "BASE_APP",
-      "base-org-ww" => "BASE_ORG",
-      "core-app-jp" => "CORE_APP",
-      "core-org-jp" => "CORE_ORG",
-      "palm-app-jp" => "PALM_APP",
-      "warp-app-jp" => "WARP_APP",
-      "warp-org-jp" => "WARP_ORG",
-    }
-    origins = {
-      "auth-app-ww" => "https://auth.umaxica.app",
-      "auth-org-ww" => "https://auth.umaxica.org",
-      "base-app-ww" => "https://www.umaxica.app",
-      "base-org-ww" => "https://www.umaxica.org",
-      "core-app-jp" => "https://jp.umaxica.app",
-      "core-org-jp" => "https://jp.umaxica.org",
-      "palm-app-jp" => "https://palm-jp.umaxica.app",
-      "warp-app-jp" => "https://www-jp.umaxica.app",
-      "warp-org-jp" => "https://www-jp.umaxica.org",
-    }
-    edges = [
-      ["auth-app-ww", "base-app-ww"],
-      ["auth-org-ww", "base-org-ww"],
-      ["base-app-ww", "auth-app-ww"],
-      ["base-app-ww", "core-app-jp"],
-      ["base-app-ww", "palm-app-jp"],
-      ["base-app-ww", "warp-app-jp"],
-      ["base-org-ww", "auth-org-ww"],
-      ["base-org-ww", "core-org-jp"],
-      ["base-org-ww", "warp-org-jp"],
-      ["core-app-jp", "base-app-ww"],
-      ["core-org-jp", "base-org-ww"],
-      ["palm-app-jp", "base-app-ww"],
-      ["warp-app-jp", "base-app-ww"],
-      ["warp-org-jp", "base-org-ww"],
-    ]
-
-    assert_equal 14, edges.size
-    legacy_edges =
-      JumpRtReturnPolicy::ALLOWED_EDGES.reject { |source, destination|
-        source.start_with?("VISA_") ||
-          destination.start_with?("VISA_")
-      }
-
-    assert_equal edges.map { |source, destination| [namespaces.fetch(source), namespaces.fetch(destination)] }.sort,
-                 legacy_edges.sort
-    pairs = origins.keys.product(origins.keys)
-
-    assert_equal 81, pairs.size
-    pairs.each do |source, destination|
-      assert_equal edges.include?([source, destination]),
-                   JumpRtReturnPolicy.allowed_source?(
-                     destination_origin: origins.fetch(destination),
-                     source: origins.fetch(source),
-                   ),
-                   "#{source} -> #{destination}"
+  test "normalize_origin rejects paths queries and fragments" do
+    ["https://example.test/", "https://example.test/path", "https://example.test?x=1",
+     "https://example.test#fragment",].each do |origin|
+      assert_nil JumpRtReturnPolicy.normalize_origin(origin), origin
     end
   end
 
-  test "app/org candidate graph fixture matches the Rails graph across all 81 ordered pairs" do
-    namespace_by_node = {
-      "auth-app-ww" => "AUTH_APP",
-      "auth-org-ww" => "AUTH_ORG",
-      "base-app-ww" => "BASE_APP",
-      "base-org-ww" => "BASE_ORG",
-      "core-app-jp" => "CORE_APP",
-      "core-org-jp" => "CORE_ORG",
-      "warp-app-jp" => "WARP_APP",
-      "warp-org-jp" => "WARP_ORG",
-      "palm-app-jp" => "PALM_APP",
-    }
-    origins = APP_ORG_CANDIDATE_GRAPH.fetch("nodes")
-    edges = APP_ORG_CANDIDATE_GRAPH.fetch("edges")
-    namespaces = origins.keys.index_with { |node| namespace_by_node.fetch(node) }
-    expected_edges = edges.map { |source, destination| [namespaces.fetch(source), namespaces.fetch(destination)] }
+  test "normalize_origin canonicalizes case and default ports" do
+    assert_equal "https://example.test", JumpRtReturnPolicy.normalize_origin("https://EXAMPLE.TEST:443")
+    assert_equal "http://example.test", JumpRtReturnPolicy.normalize_origin("http://EXAMPLE.TEST:80")
+    assert_equal "https://example.test:8443", JumpRtReturnPolicy.normalize_origin("https://EXAMPLE.TEST:8443")
+  end
 
-    assert_equal 9, origins.size
-    assert_equal 14, edges.size
-    legacy_edges =
-      JumpRtReturnPolicy::ALLOWED_EDGES.reject { |source, destination|
-        source.start_with?("VISA_") ||
-          destination.start_with?("VISA_")
-      }
+  test "no cross-surface Jump return edges are configured after the surface reset" do
+    assert_empty JumpRtReturnPolicy::EDGE_CATALOG
+    assert_empty JumpRtReturnPolicy::ALLOWED_EDGES
 
-    assert_equal expected_edges.sort, legacy_edges.sort
-
-    pairs = origins.to_a.product(origins.to_a)
-
-    assert_equal 81, pairs.size
-    pairs.each do |(source, source_origin), (destination, destination_origin)|
-      assert_equal edges.include?([source, destination]),
-                   JumpRtReturnPolicy.allowed_source?(
-                     destination_origin: destination_origin,
-                     source: source_origin,
-                   ),
-                   "#{source} -> #{destination}"
+    [
+      ["https://www.umaxica.app", "https://www.umaxica.app"],
+      ["https://www.umaxica.org", "https://www.umaxica.app"],
+      ["https://unregistered.example.test", "https://www.umaxica.app"],
+    ].each do |source, destination|
+      assert_not JumpRtReturnPolicy.allowed_source?(destination_origin: destination, source: source)
     end
   end
 
-  test "A02-10: the Visa handoff table matches the signed Jump edge catalog" do
-    document = Rails.root.join("docs/operations/jump-rt-visa-edges.md").read
-    rows = document.scan(/^\| `([A-Z_]+)` \| `([^`]+)` \| `([A-Z_]+)` \| `([^`]+)` \| ([^|]+) \|$/)
-    expected =
-      JumpRtReturnPolicy::EDGE_CATALOG.filter_map do |edge|
-        issuer = edge.fetch(:issuer_namespace)
-        destination = edge.fetch(:destination_namespace)
-        next unless issuer.start_with?("VISA_") || destination.start_with?("VISA_")
-
-        [issuer, JumpRtSurface.issuer_origin(issuer), destination, JumpRtSurface.issuer_origin(destination),
-         edge.fetch(:purpose).tr("_", " "),]
-      end
-
-    assert_equal expected.sort, rows.map { |row| row.map(&:strip) }.sort
-    expected.each do |namespace, source, _destination, destination_origin, _purpose|
-      token = JumpRtIssuer.call(namespace: namespace, url: "#{destination_origin}/", dst: "internal")
-      issuer = JitSecurityJwtRegistry.surface(namespace)
-      payload, = JWT.decode(
-        token, JitSecurityJwtRegistry.public_key_for(issuer.id, issuer.current_kid), true,
-        algorithms: ["ES384"], verify_iss: true, iss: source, verify_aud: true,
-        aud: Rails.configuration.x.boot_config.fetch(:jump).audience,
-      )
-
-      assert_equal destination_origin, URI.parse(payload.fetch("url")).origin
-      assert JumpRtReturnPolicy.allowed_source?(destination_origin: destination_origin, source: source)
-    end
-  end
-
-  test "the Jump edge catalog is the source of the allowed graph and names Visa origins" do
-    projected =
-      JumpRtReturnPolicy::EDGE_CATALOG.map do |edge|
-        [edge.fetch(:issuer_namespace), edge.fetch(:destination_namespace)]
-      end
-
-    assert_equal projected.sort, JumpRtReturnPolicy::ALLOWED_EDGES.sort
-    visa_edge_count =
-      JumpRtReturnPolicy::EDGE_CATALOG.count do |edge|
-        edge.fetch(:issuer_namespace).start_with?("VISA_") || edge.fetch(:destination_namespace).start_with?("VISA_")
-      end
-
-    assert_equal 18, visa_edge_count
-
-    JumpRtReturnPolicy::EDGE_CATALOG.select do |edge|
-      edge.fetch(:issuer_namespace).start_with?("VISA_") || edge.fetch(:destination_namespace).start_with?("VISA_")
-    end.each do |edge|
-      issuer = edge.fetch(:issuer_namespace)
-      destination = edge.fetch(:destination_namespace)
-      issuer_origin = JumpRtSurface.issuer_origin(issuer)
-      destination_origin = JumpRtSurface.issuer_origin(destination)
-      token = JumpRtIssuer.call(
-        namespace: issuer, url: "https://jump-contract.example/oauth/authorize",
-        dst: "internal",
-      )
-      payload, = JWT.decode(token, nil, false)
-
-      assert_equal issuer_origin, payload.fetch("iss")
-      assert_equal "https://jump-contract.example/oauth/authorize", payload.fetch("url")
-      assert JumpRtReturnPolicy.allowed_source?(
-        destination_origin: destination_origin,
-        source: issuer_origin,
-      ), "#{issuer} -> #{destination} (#{edge.fetch(:purpose)})"
-    end
-  end
-
-  test "unregistered stale private and sentinel origins are denied in either direction" do
-    [nil, "", "https://zzzz.umaxica.app", "https://www.umaxica.zzz",
-     "https://www-zz.umaxica.app", "https://www.jp.umaxica.app", "https://jpx.umaxica.app",
-     "https://palm.jp.umaxica.app", "https://edit.umaxica.org", "http://base.app.localhost",
-     "https://base.app.localhost", "https://127.0.0.1",].each do |origin|
+  test "private and retired origins are denied in either direction" do
+    [nil, "", "https://unregistered.example.test", "http://base.app.localhost", "https://127.0.0.1"].each do |origin|
       assert_not JumpRtReturnPolicy.allowed_source?(destination_origin: "https://www.umaxica.app", source: origin)
       assert_not JumpRtReturnPolicy.allowed_source?(destination_origin: origin, source: "https://www.umaxica.app")
     end
   end
 
-  test "retired logical ceremony issuer is not a jump return source" do
-    %w(app com org).each do |tld|
-      assert_not JumpRtReturnPolicy.allowed_source?(
-        destination_origin: "https://www.umaxica.#{tld}",
-        source: "https://log.umaxica.#{tld}",
-      ), tld
-      assert_not JumpRtReturnPolicy.allowed_source?(
-        destination_origin: "https://www.jp.umaxica.#{tld}",
-        source: "https://log.umaxica.#{tld}",
-      ), tld
-    end
-  end
-
-  def with_env(values)
-    saved = {}
-    values.each_key { |key| saved[key.to_s] = ENV[key.to_s] }
-    values.each do |key, value|
-      if value.nil?
-        ENV.delete(key)
-      else
-        ENV[key] = value
-      end
-    end
-    yield
-  ensure
-    values.each_key do |key|
-      if saved[key.to_s].nil?
-        ENV.delete(key)
-      else
-        ENV[key] = saved[key.to_s]
-      end
-    end
+  test "default_port_for returns each scheme port" do
+    assert_equal 443, JumpRtReturnPolicy.default_port_for("https")
+    assert_equal 80, JumpRtReturnPolicy.default_port_for("http")
   end
 end

@@ -98,6 +98,38 @@ class Operator < OrgPrincipalRecord
   belongs_to :visibility,
              class_name: "OperatorVisibility",
              inverse_of: :staffs
+  has_many :email_histories, class_name: "OperatorEmailHistory", foreign_key: :staff_id,
+                             inverse_of: :staff, dependent: :restrict_with_error
+  has_many :telephone_histories, class_name: "OperatorTelephoneHistory", foreign_key: :staff_id,
+                                 inverse_of: :staff, dependent: :restrict_with_error
+  has_many :outgoing_bureau_ownership_transfer_requests,
+           class_name: "BureauOwnershipTransferRequest", foreign_key: :source_operator_id,
+           inverse_of: :source_operator, dependent: :restrict_with_error
+  has_many :incoming_bureau_ownership_transfer_requests,
+           class_name: "BureauOwnershipTransferRequest", foreign_key: :destination_operator_id,
+           inverse_of: :destination_operator, dependent: :restrict_with_error
+  has_many :outgoing_agent_ownership_transfer_requests,
+           class_name: "AgentOwnershipTransferRequest", foreign_key: :source_operator_id,
+           inverse_of: :source_operator, dependent: :restrict_with_error
+  has_many :incoming_agent_ownership_transfer_requests,
+           class_name: "AgentOwnershipTransferRequest", foreign_key: :destination_operator_id,
+           inverse_of: :destination_operator, dependent: :restrict_with_error
+  has_many :lifecycle_requests_as_target,
+           class_name: "OperatorLifecycleRequest", foreign_key: :target_operator_id,
+           inverse_of: :target_operator, dependent: :restrict_with_error
+  has_many :lifecycle_requests_as_requester,
+           class_name: "OperatorLifecycleRequest", foreign_key: :requested_by_operator_id,
+           inverse_of: :requested_by_operator, dependent: :restrict_with_error
+  has_many :lifecycle_requests_as_approver,
+           class_name: "OperatorLifecycleRequest", foreign_key: :approved_by_operator_id,
+           inverse_of: :approved_by_operator, dependent: :restrict_with_error
+  has_many :lifecycle_requests_as_rejector,
+           class_name: "OperatorLifecycleRequest", foreign_key: :rejected_by_operator_id,
+           inverse_of: :rejected_by_operator, dependent: :restrict_with_error
+  has_many :lifecycle_requests_as_executor,
+           class_name: "OperatorLifecycleRequest", foreign_key: :executed_by_operator_id,
+           inverse_of: :executed_by_operator, dependent: :restrict_with_error
+
   has_many :staff_emails, class_name: "OperatorEmail", dependent: :restrict_with_error,
                           inverse_of: :staff
   has_many :operator_emails, class_name: "OperatorEmail", foreign_key: :staff_id,
@@ -126,24 +158,12 @@ class Operator < OrgPrincipalRecord
                                       inverse_of: :staff
   has_many :operator_secret_credentials, class_name: "OperatorSecretCredential", foreign_key: :staff_id,
                                          inverse_of: :staff
-  has_many :staff_tokens, class_name: "OperatorToken", dependent: :destroy,
-                          inverse_of: :staff
-  has_many :operator_device_sessions,
-           class_name: "OperatorDeviceSession",
-           foreign_key: :staff_id,
-           dependent: :destroy,
-           inverse_of: :staff
+
   has_one :authority_lock,
           class_name: "OperatorAuthorityLock",
           dependent: :destroy,
           inverse_of: :operator
-  has_many :operator_tokens, class_name: "OperatorToken", foreign_key: :staff_id,
-                             inverse_of: :staff
-  has_many :oidc_connections,
-           class_name: "OperatorOidcConnection",
-           foreign_key: :staff_id,
-           dependent: :destroy,
-           inverse_of: :staff
+
   # Cross-database (org_signal DB). Purged explicitly via
   # RetentionCrossDatabaseChildPurge from the operator purge path, not by an
   # implicit cross-DB AR cascade.
@@ -176,9 +196,9 @@ class Operator < OrgPrincipalRecord
   has_many :bureau_view_grants, dependent: :restrict_with_error, inverse_of: :operator
   has_many :capability_grants, class_name: "OperatorCapabilityGrant", dependent: :restrict_with_error,
                                inverse_of: :operator
-  has_one :core_org_operator_bridge,
-          dependent: :destroy,
-          inverse_of: :operator
+  has_many :core_org_operator_bridges,
+           dependent: :destroy,
+           inverse_of: :operator
   has_one :operator_preference, class_name: "OperatorPreference",
                                 dependent: :destroy, inverse_of: :operator
 

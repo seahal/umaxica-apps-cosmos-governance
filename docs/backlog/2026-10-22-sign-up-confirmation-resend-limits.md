@@ -4,7 +4,11 @@ Status: Deferred; recorded at the user's request on 2026-10-22. No implementatio
 authorized by this entry. `.com` authentication was retired after this entry was recorded; this
 entry now covers `.app` only. Stored in `docs/backlog/` at the user's explicit request.
 
-## Current findings
+> **Route status (2026-11-10):** Local Auth route/controller references below are historical after
+> the owner-approved hard reset. Preserve the candidate and delivery-policy observations as a
+> snapshot; re-scope them to a retained caller or external authority before implementation.
+
+## Historical findings
 
 App email and telephone sign-up issuers enforce a 30-second cooldown on the candidate record under
 locks. This protects repeat issuance for one candidate and is distinct from the login resend

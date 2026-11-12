@@ -34,7 +34,7 @@ class IdentityAuthenticationStopRecorder
 
       cause_for_reason!(reason)
       event_class = EVENT_CLASSES.fetch(actor.class.name)
-      actor.with_lock do
+      actor.with_lock(requires_new: true) do
         cutoff_epoch = actor.authentication_epoch + 1
         updated = actor.update_columns(authentication_epoch: cutoff_epoch) # rubocop:disable Rails/SkipsModelValidations
         raise ActiveRecord::RecordNotSaved, "identity stop epoch update failed" unless updated
@@ -42,7 +42,7 @@ class IdentityAuthenticationStopRecorder
         event_class.create!(
           event_id: SecureRandom.uuid, actor_ref: actor.id.to_s, realm: event_class::REALM, cutoff_epoch:, reason:,
           scope:,
-          committed_at: Time.current,
+          committed_at: event_class.database_now,
         )
       end
     end

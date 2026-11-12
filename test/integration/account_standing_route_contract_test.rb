@@ -16,11 +16,11 @@ class AccountStandingRouteContractTest < ActionDispatch::IntegrationTest
     assert_equal({ controller: "base/org/identity/standings", action: "show" }, route)
   end
 
-  test "app recovery routes are independent no-session resources" do
-    app_route = Rails.application.routes.recognize_path(
-      "http://base.app.localhost/identity/recovery/session/new?ri=jp", method: :get,
-    )
+  test "the retired Access recovery flow is absent from the Base RP" do
+    host = Rails.configuration.x.boot_config.fetch(:hosts).base_service.host
 
-    assert_equal({ controller: "base/app/identity/recovery/sessions", action: "new" }, app_route)
+    assert_raises(ActionController::RoutingError) do
+      Rails.application.routes.recognize_path("https://#{host}/identity/recovery/session/new?ri=jp", method: :get)
+    end
   end
 end

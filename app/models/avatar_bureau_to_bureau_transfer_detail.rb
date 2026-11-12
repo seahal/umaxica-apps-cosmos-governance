@@ -7,7 +7,7 @@ class AvatarBureauToBureauTransferDetail < AvatarRecord
              inverse_of: :bureau_to_bureau_detail
   belongs_to :source_ownership_period,
              class_name: "AvatarBureauOwnershipPeriod",
-             inverse_of: false
+             inverse_of: :bureau_transfer_details
 
   validates :transfer_reservation_id, uniqueness: true, on: :create
 

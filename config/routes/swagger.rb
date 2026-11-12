@@ -2,9 +2,8 @@
 # frozen_string_literal: true
 
 # Swagger owns the rendered view of the bundled OpenAPI descriptions, on its own dedicated host.
-# Public canonical host: swagger.umaxica.dev. Development host: swagger.core.dev.localhost.
-constraints host: [ENV["PUBLIC_SWAGGER_URL"], ENV["PRIVATE_SWAGGER_URL"],
-                   "swagger.core.dev.localhost",].compact do
+# Public canonical host: swagger-governance.umaxica.dev.
+constraints host: ["swagger-governance.umaxica.dev"] do
   # `rswag-ui` and `rswag-api` are `group :development` gems (Gemfile); they are not in the test
   # group's load path, so the engine constants do not exist while running the test suite.
   if defined?(Rswag::Ui::Engine)

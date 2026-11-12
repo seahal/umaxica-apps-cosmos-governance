@@ -9,8 +9,7 @@
 # - `challenge_enabled` / `challenge_response` apply to `verify`, which is what the
 #   CloudflareTurnstile concern calls. The response is only used while enabled, matching
 #   the override this replaced.
-# - `enabled` / `response` apply to every call, including the `verify_for_ceremony` path
-#   used by the social sign-up confirmation controllers. A set response applies on its own.
+# - `enabled` / `response` apply to the generic verifier. A set response applies on its own.
 #
 # Anything not stubbed fails closed. Tests that exercise the real verifier must use an explicit
 # Faraday test adapter (see `OutboundHttpStub`) or stub the connection builder themselves.
@@ -64,10 +63,6 @@ class TurnstileVerifierStub
       # The challenge slot wins: it is the narrower of the two, and the override it
       # replaced was consulted before the verifier-level one.
       challenge_stubbed_response || stubbed_response || unstubbed_failure
-    end
-
-    def verify_for_ceremony(**_arguments)
-      stubbed_response || unstubbed_failure
     end
 
     private

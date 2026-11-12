@@ -16,6 +16,9 @@ class AppEnforcementIdentifierEffect < AppPrincipalRecord
                                 inverse_of: :identifier_effects
 
   validates :identifier_kind, presence: true, inclusion: { in: KINDS }
+  validates :identifier_kind,
+            uniqueness: { scope: :lookup_digest, conditions: -> { where(ended_at: nil) } },
+            if: -> { ended_at.nil? }
   validates :lookup_digest, presence: true
   validates :key_version, :digest_version, :normalization_version, presence: true
   validates :effective_at, presence: true

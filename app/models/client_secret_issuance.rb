@@ -3,7 +3,9 @@
 class ClientSecretIssuance < AppZenithRecord
   include PublicId
 
-  belongs_to :client
+  belongs_to :client, inverse_of: :secret_issuances
+  has_many :credentials, class_name: "ClientSecretCredential", foreign_key: :issuance_id,
+                         inverse_of: :issuance, dependent: :restrict_with_error
 
   attr_readonly :client_id, :origin_operation_id, :origin, :attempt_number,
                 :browser_session_ref, :sign_up_flow_ref, :planned_count, :expires_at

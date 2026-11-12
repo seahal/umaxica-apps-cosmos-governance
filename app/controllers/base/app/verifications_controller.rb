@@ -76,6 +76,8 @@ module Base
           stage: "rp_start",
         )
         render plain: t("sign.app.verification.step_up_refused"), status: :conflict
+      rescue OidcIssuer::UnavailableError
+        render plain: t("sign.app.verification.step_up_unavailable"), status: :service_unavailable
       rescue ActiveRecord::ActiveRecordError => e
         log_step_up_ceremony(
           "refused",

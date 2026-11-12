@@ -12,7 +12,7 @@ class PublicIdCapacityContractTest < ActiveSupport::TestCase
 
   # These tables are not written through the PublicId NanoID concern, so adr/identifier-contract.md's
   # fixed 21-character storage does not apply yet; they keep the earlier 25-character capacity check.
-  NON_NANOID_CAPACITY_TABLES = %w(logout_transactions members post_versions posts).freeze
+  NON_NANOID_CAPACITY_TABLES = %w(members post_versions posts).freeze
   LEGACY_CAPACITY = /char_length\(public_id(?:::text)?\) <= 25/
   FIXED_LENGTH = /char_length\(\(?public_id\)?(?:::text)?\) = 21/
 
@@ -44,7 +44,6 @@ class PublicIdCapacityContractTest < ActiveSupport::TestCase
       operator_workspace_accounts
       org_enforcement_appeals
     ),
-    OpBaseAppRecord => %w(logout_transactions),
     AppSignalRecord => %w(client_notification_records member_notifications),
     OrgSignalRecord => %w(operator_notification_records operator_notifications),
     AvatarRecord => %w(avatar_groups avatars group_avatar_memberships handles post_versions posts),

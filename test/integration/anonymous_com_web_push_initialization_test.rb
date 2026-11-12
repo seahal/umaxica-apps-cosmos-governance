@@ -556,63 +556,6 @@ class AnonymousComWebPushInitializationTest < ActionDispatch::IntegrationTest
     assert_not_includes response.headers["Set-Cookie"].to_s, "#{PreferenceCookieName.anonymous_jwt}="
   end
 
-  test "the read-only corporate host does not clear invalid shared preference cookies or read preference rows" do
-    host!(ENV.fetch("PUBLIC_WARP_CORPORATE_URL"))
-    https!
-    cookies[PreferenceCookieName.anonymous_jwt] = "invalid"
-    cookies[PreferenceIoKeys::Cookies::LANGUAGE] = "en"
-    cookies[PreferenceCookieName.anonymous_experience] = '{"theme":"dark"}'
-    preference_queries = []
-    observer =
-      lambda do |_name, _start, _finish, _id, event|
-        preference_queries << event.fetch(:sql) if event.fetch(:sql).match?(/\bcom_preferences\b/i)
-      end
-    ActiveSupport::Notifications.subscribed(observer, "sql.active_record") do
-      get "/", params: { ri: "jp" }
-    end
-
-    assert_response :success
-    assert_empty preference_queries
-    [PreferenceCookieName.anonymous_jwt, PreferenceIoKeys::Cookies::LANGUAGE,
-     PreferenceCookieName.anonymous_experience,].each do |name|
-      assert_not_includes response.headers["Set-Cookie"].to_s, "#{name}="
-    end
-  end
-
-  test "the read-only corporate host displays a valid shared JWT without preference DB or private key" do
-    base_host = ENV.fetch("PUBLIC_BASE_CORPORATE_URL")
-    host!(base_host)
-    https!
-    patch base_com_preference_theme_path(ri: "jp"), params: { preference_theme: { option_id: "dark" } }
-
-    assert_response :see_other
-    token = cookies[PreferenceCookieName.anonymous_jwt]
-    browser = open_session
-    browser.host!(ENV.fetch("PUBLIC_WARP_CORPORATE_URL"))
-    browser.https!
-    browser.cookies[PreferenceCookieName.anonymous_jwt] = token
-    queries = []
-    observer =
-      lambda do |_name, _start, _finish, _id, event|
-        queries << event.fetch(:sql) if event.fetch(:sql).match?(/\bcom_preference(?:s|_\w+)\b/i)
-      end
-    no_private_key = ->(*) { raise RuntimeError, "private key must not be read by a reader" }
-
-    PreferenceJwtConfiguration.stub(:private_key_for_active, no_private_key) do
-      ActiveSupport::Notifications.subscribed(observer, "sql.active_record") do
-        browser.get("/", params: { ri: "jp" })
-      end
-    end
-
-    assert_equal 200, browser.response.status
-    assert_equal "dark", browser.response.parsed_body.at_css("html")["data-theme"]
-    assert_empty queries
-    [PreferenceCookieName.anonymous_jwt, PreferenceIoKeys::Cookies::LANGUAGE,
-     PreferenceCookieName.anonymous_experience, PreferenceBrowserBinding::COOKIE_NAME,].each do |name|
-      assert_not_includes browser.response.headers["Set-Cookie"].to_s, "#{name}="
-    end
-  end
-
   test "a valid JWT for an unavailable row still supplies display values without cookie deletion" do
     host = ENV.fetch("PUBLIC_BASE_CORPORATE_URL")
     host! host
@@ -903,7 +846,7 @@ class AnonymousComWebPushInitializationTest < ActionDispatch::IntegrationTest
                                                      public_id: SecureRandom.uuid, jti: SecureRandom.uuid,
     )
     failure = ->(*) { raise JitSecurityJwtRegistry::ConfigurationError, "key unavailable" }
-    [base_host, ENV.fetch("PUBLIC_WARP_CORPORATE_URL")].each do |host|
+    [base_host, ENV.fetch("PUBLIC_BASE_CORPORATE_URL")].each do |host|
       browser = open_session
       browser.host!(host)
       browser.https!

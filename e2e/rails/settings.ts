@@ -1,2 +1,2 @@
-// This is a dedicated local listener, never a configurable remote application origin.
-export const railsOrigin = "http://auth.app.localhost:3198";
+// The browser journey uses only the retained Base corporate host on the dedicated local listener.
+export const railsOrigin = "http://base.com.localhost:3198";

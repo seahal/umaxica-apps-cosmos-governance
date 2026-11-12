@@ -44,15 +44,13 @@ class AdministrativeAccessLock < ApplicationService
         admin_locked_reason_note: reason_note,
         token_valid_after_at: now,
       )
-      stop_event = IdentityAuthenticationStopRecorder.call(actor: account, reason: "administrative_access_lock")
+      IdentityAuthenticationStopRecorder.call(actor: account, reason: "administrative_access_lock")
       account.class.current_transaction.after_commit do
-        OpIdentityEventInvalidator.deliver(event: stop_event)
         create_event!(
-          event_type: lock_event_type(previous_state),
-          previous_state: previous_state,
-          next_state: AdministrativeAccessLockable::ACCESS_STATE_ADMIN_LOCKED,
-          occurred_at: now,
+          event_type: lock_event_type(previous_state), previous_state: previous_state,
+          next_state: AdministrativeAccessLockable::ACCESS_STATE_ADMIN_LOCKED, occurred_at: now,
         )
+        raise AccessOpDataUnavailableError
       end
     end
     account
@@ -60,33 +58,7 @@ class AdministrativeAccessLock < ApplicationService
 
   def unlock!
     validate_inputs!
-    now = nil
-    previous_state = nil
-
-    account.class.transaction do
-      account.lock!
-      yield if block_given?
-      now = account.class.database_now
-      previous_state = account.access_state
-      account.update!(
-        access_state: AdministrativeAccessLockable::ACCESS_STATE_ENABLED,
-        admin_locked_at: nil,
-        admin_locked_by_operator_id: nil,
-        admin_locked_reason_code: nil,
-        admin_locked_reason_note: nil,
-        token_valid_after_at: now,
-        reactivated_at: now,
-      )
-      account.class.current_transaction.after_commit do
-        create_event!(
-          event_type: AccountAccessEvent::EVENT_TYPE_ADMIN_UNLOCK,
-          previous_state: previous_state,
-          next_state: AdministrativeAccessLockable::ACCESS_STATE_ENABLED,
-          occurred_at: now,
-        )
-      end
-    end
-    account
+    raise AccessOpDataUnavailableError
   end
 
   private

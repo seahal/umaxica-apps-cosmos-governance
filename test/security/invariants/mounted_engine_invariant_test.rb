@@ -9,7 +9,7 @@ module Security
   module Invariants
     # Third-party Rack apps mounted with `mount` bypass the entire application
     # authorization stack: they subclass ActionController::Base (or are bare Rack
-    # apps), so AuthenticationBase, enforce_access_policy!, surface isolation, and
+    # apps), so BrowserRpAuthentication, enforce_access_policy!, surface isolation, and
     # the per-surface CSRF origin configuration never run for them.
     #
     # This test pins which mounts are allowed to exist outside development, and
@@ -21,14 +21,7 @@ module Security
       # confined to `group :development` in the Gemfile so it is never loaded in
       # test or production.
       #
-      # rails_db: config/routes.rb in the gem calls
-      #   `Rails.application.routes.draw { mount_rails_db_routes }` whenever
-      #   RailsDb.automatic_routes_mount is true (the default), and
-      #   RailsDb.verify_access_proc defaults to `proc { |controller| true }`
-      #   with http_basic_authentication_enabled = false. Mounted, it exposes
-      #   POST /rails/db/execute (arbitrary SQL) and GET /rails/db/tables/:id/truncate.
       UNAUTHENTICATED_ENGINE_CONSTANTS = %w(
-        RailsDb
         Blazer
         PgHero
       ).freeze
@@ -36,6 +29,7 @@ module Security
       # Path prefixes that must not appear in the route set outside development.
       FORBIDDEN_MOUNT_PATHS = %w(
         /rails/db
+        /rails/performance
         /blazer
         /pghero
       ).freeze
@@ -72,21 +66,20 @@ module Security
         "/cable" => "ActionCable::Server::Base",
         # Feature-flag UI on its dedicated hosts (config/routes/flipper.rb). Guarded by
         # Rack::Auth::Basic, which fails closed when credentials are unset.
-        "flipper.umaxica.dev /" => "Rack::Auth::Basic",
-        "flipper.core.dev.localhost /" => "Rack::Auth::Basic",
+        "flipper-governance.umaxica.dev /" => "Rack::Auth::Basic",
         # Solid Queue job-monitoring UI, dedicated host (config/routes/mission.rb). Guarded by
         # MissionControl::Jobs' own HTTP Basic Auth (config/initializers/mission_control_jobs.rb),
         # which fails closed (401) when its credentials are unset. Not loaded in test (the gem is
         # `group :development, :production`), so this entry documents production; it is inert here.
-        "mission.core.dev.localhost /" => "MissionControl::Jobs::Engine",
+        "mission-governance.umaxica.dev /" => "MissionControl::Jobs::Engine",
         # SQL exploration dashboard, dedicated host (config/routes/blazer.rb). `blazer` stays a
         # `group :development` gem (Gemfile) even though it is mounted -- it is not loaded outside
         # development, so this entry is inert in test/production and documents development only.
         # Guarded by Rack::Auth::Basic, which fails closed when credentials are unset.
-        "blazer.core.dev.localhost /" => "Rack::Auth::Basic",
+        "blazer-governance.umaxica.dev /" => "Blazer::Engine",
         # PostgreSQL monitoring dashboard, dedicated host (config/routes/pghero.rb). Same
         # `group :development`-only, mounted-in-dev-only shape as Blazer above.
-        "pghero.core.dev.localhost /" => "Rack::Auth::Basic",
+        "pghero-governance.umaxica.dev /" => "PgHero::Engine",
       }.freeze
 
       # Both the Flipper and Mission Control mounts sit at the path root of their own dedicated
@@ -135,7 +128,7 @@ module Security
       test "the Flipper UI mount is wrapped in an authorization guard" do
         flipper_route =
           Rails.application.routes.routes.find do |route|
-            Array(route.constraints[:host]).include?("flipper.core.dev.localhost")
+            Array(route.constraints[:host]).include?("flipper-governance.umaxica.dev")
           end
 
         assert_not_nil flipper_route, "The protected Flipper control surface must remain mounted"

@@ -240,69 +240,47 @@ class PreferenceReadSymmetryTest < ActionDispatch::IntegrationTest
     assert_select "html[lang=?]", "ja"
   end
 
-  test "signed-in theme read reflects the explicitly saved actor value" do
+  test "signed-in preference writes expose unavailable Access authority without changing the saved actor value" do
     host = ENV.fetch("PUBLIC_BASE_SERVICE_URL")
     user = clients(:one)
-    token = ClientToken.create!(authentication_epoch: 0, user: user, user_token_kind_id: ClientTokenKind::BROWSER_WEB)
-    rp_cookie =
-      begin
-        fixture_root = token
-        fixture_actor = user
-        fixture_host = host
-        fixture_root.rotate_refresh_token! unless fixture_root.device_session.current_refresh_token_id
-        fixture_client = OidcClientRegistry.find!("base-app-ww")
-        @base_rp_fixture_credentials ||= {}
-        fixture_key = [fixture_client.client_id, fixture_root.public_id]
-        unless @base_rp_fixture_credentials[fixture_key]
-          fixture_now = OpAppGrant.database_now
-          fixture_rp = OpAppGrant.create!(
-            authentication_epoch: 0,
-            client_token: fixture_root, oidc_client_id: fixture_client.client_id,
-            oidc_scope: "openid profile", oidc_jti: SecureRandom.uuid,
-            oidc_nonce: SecureRandom.hex(16), oidc_auth_time: fixture_now,
-            refresh_token_expires_at: fixture_now + 1.hour,
-          )
-          fixture_access = AuthenticationTokenService.encode(
-            fixture_actor, host: fixture_host, resource_type: "client",
-                           session_public_id: fixture_root.public_id, base_session_public_id: fixture_root.public_id,
-                           oidc_sid: fixture_rp.public_id, oidc_jti: fixture_rp.oidc_jti,
-                           expires_at: fixture_now + 1.hour, scopes: %w(openid profile),
-                           issuer: OidcIssuer.for_client(fixture_client), audiences: [fixture_client.aud],
-                           jwt_issuer_id: OidcIssuer.jwt_issuer_id_for_client(fixture_client),
-                           subject: OidcSubject.for(
-                             fixture_actor,
-                             resource_type: "client",
-                           ), client_id: fixture_client.client_id,
-          )
-          fixture_refresh = fixture_rp.issue_refresh_token!
-          @base_rp_fixture_credentials[fixture_key] =
-            [
-              "#{OidcRpBrowserCredentialContract::ACCESS_COOKIE}=#{Rack::Utils.escape(fixture_access)}",
-              "#{OidcRpBrowserCredentialContract::REFRESH_COOKIE}=#{Rack::Utils.escape(fixture_refresh)}",
-            ].join("; ")
-        end
-        @base_rp_fixture_credentials.fetch(fixture_key)
-      end
-    headers = { "Cookie" => rp_cookie }
+    headers = as_user_headers(user, host: host)
+    original = ClientPreference.where(client_id: user.id).map(&:attributes)
+    original_themes = ClientPreferenceTheme.all.map(&:attributes)
 
     patch base_app_preference_theme_url(ri: "jp"), headers: headers, as: :json,
                                                    params: { preference_theme: { option_id: AppPreferenceThemeOption::DARK.to_s } }
 
-    assert_response :ok
-    assert_equal "dr", response.parsed_body.dig("preference", "ct"),
-                 "signed-in write's own response must reflect the value it just wrote"
+    assert_response :service_unavailable
+    assert_equal original, ClientPreference.where(client_id: user.id).map(&:attributes)
+    assert_equal original_themes, ClientPreferenceTheme.all.map(&:attributes)
+    assert_nil response.location
+  end
 
-    headers["Cookie"] = ([rp_cookie] + cookies.to_hash.map { |name, value|
-      "#{name}=#{Rack::Utils.escape(value)}"
-    }).join("; ")
-    get base_app_api_v0_preferences_theme_url(ri: "jp"), headers: headers
+  test "the APP RP process saves and reads its authenticated actor preference without OP storage" do
+    as_rp_cell("base-app-ww") do
+      host = ENV.fetch("PUBLIC_BASE_SERVICE_URL")
+      user = clients(:one)
+      headers = as_user_headers(user, host: host)
+      rp_cookie = headers.fetch("Cookie")
+      patch base_app_preference_theme_url(ri: "jp"), headers: headers, as: :json,
+                                                     params: { preference_theme: { option_id: AppPreferenceThemeOption::DARK.to_s } }
 
-    assert_response :success
-    assert_equal "dr", response.parsed_body["theme"],
-                 "signed-in read must reflect the value written through the same session"
+      assert_response :ok
+      assert_equal "dr", response.parsed_body.dig("preference", "ct")
 
-    actor_preference = ClientPreference.includes(:client_preference_theme).find_by!(client_id: user.id)
+      headers["Cookie"] = ([rp_cookie] + cookies.to_hash.map do |name, value|
+        "#{name}=#{Rack::Utils.escape(value)}"
+      end).join("; ")
+      headers["HTTP_COOKIE"] = headers.fetch("Cookie")
+      get base_app_api_v0_preferences_theme_url(ri: "jp"), headers: headers
 
-    assert_equal ClientPreferenceThemeOption::DARK, actor_preference.client_preference_theme.option_id
+      assert_response :success
+      assert_equal "dr", response.parsed_body.fetch("theme")
+      actor_preference = ClientPreference.includes(:client_preference_theme).find_by!(
+        client_id: user.id, status_id: ClientPreferenceStatus::ACTIVE,
+      )
+
+      assert_equal ClientPreferenceThemeOption::DARK, actor_preference.client_preference_theme.option_id
+    end
   end
 end

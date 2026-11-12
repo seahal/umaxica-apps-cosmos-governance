@@ -7,6 +7,11 @@ identifiers retain their established values.
 **Status:** Accepted; Core preference API migration amended (2026-09-15); Base, Auth, and Warp
 preference API migration amended (decision approved 2026-10-01; implemented 2026-10-02)
 
+> **Route-scope supersession (2026-11-10):** The owner-approved local-surface hard reset removes
+> this repository's local Auth, Core, and Warp API routes/controllers. This supersedes their local
+> route assignments below. Base/Tech API behavior remains governed by current callers; external API
+> and OIDC contracts are not retired by this route decision.
+
 > The original decision recorded a route-naming direction only. Its implementation amendment below
 > records the first separately reviewed migration slice; the remaining legacy namespaces are still
 > governed by the original decision.

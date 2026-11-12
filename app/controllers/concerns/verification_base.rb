@@ -208,7 +208,7 @@ module VerificationBase
       "WWW-Authenticate",
       'Bearer error="insufficient_user_authentication", ' \
       'error_description="step-up authentication is required", ' \
-      'acr_values="https://visa.umaxica.app/acr/reauthentication", max_age="300"',
+      'acr_values="urn:umaxica:base:step-up", max_age="300"',
     )
     response.set_header("Cache-Control", "private, no-store")
 
@@ -557,7 +557,7 @@ module VerificationBase
   end
 
   def verification_model
-    actor_operator? ? OperatorVerification : ClientVerification
+    raise AccessOpDataUnavailableError
   end
 
   def verification_token_foreign_key
@@ -603,8 +603,7 @@ module VerificationBase
   end
 
   def signed_in_client_without_step_up_methods?
-    current_verification_actor.is_a?(Client) && current_session_token.is_a?(ClientToken) &&
-      current_session_token.established_authentication_method == "secret"
+    raise AccessOpDataUnavailableError
   end
 
   def step_up_bootstrap_unconfigured?(actor = current_verification_actor)
@@ -685,15 +684,15 @@ module VerificationBase
   end
 
   def actor_verification_path(**args)
-    actor_operator? ? auth_org_verification_path(**args) : auth_app_verification_path(**args)
+    actor_operator? ? base_org_verification_path(**args) : base_app_verification_path(**args)
   end
 
   def actor_verification_setup_path(**args)
-    actor_operator? ? new_auth_org_verification_setup_path(**args) : new_auth_app_verification_setup_path(**args)
+    actor_operator? ? base_org_verification_setup_path(**args) : base_app_verification_setup_path(**args)
   end
 
   def actor_root_path(**args)
-    actor_operator? ? auth_org_root_path(**args) : auth_app_root_path(**args)
+    actor_operator? ? base_org_root_path(**args) : base_app_root_path(**args)
   end
 
   def actor_dashboard_path(**args)

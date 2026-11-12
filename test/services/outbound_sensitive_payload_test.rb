@@ -40,8 +40,8 @@ class OutboundSensitivePayloadTest < ActiveSupport::TestCase
   end
 
   test "registration OTP SMS uses version four and preserves its original ceremony tuple" do
-    %w(app com).each do |surface|
-      binding = [surface, "credential_registration", SecureRandom.uuid, "contact", SecureRandom.uuid]
+    %w(app org).each do |surface|
+      binding = [surface, "credential_registration", SecureRandom.uuid, PublicId.generate, SecureRandom.uuid]
       token = OutboundSensitivePayload.encrypt_sms_delivery(
         to: "+819012345678",
         title: "Verification code",
@@ -62,7 +62,9 @@ class OutboundSensitivePayloadTest < ActiveSupport::TestCase
   test "registration OTP SMS rejects missing malformed and mixed original ceremony bindings" do
     valid = ["app", "credential_registration", SecureRandom.uuid, "contact", SecureRandom.uuid]
 
-    [valid.take(4), valid + ["extra"], valid.dup.tap { |tuple| tuple[2] = "other" },
+    [valid.dup.tap { |tuple| tuple[0] = "com" }, valid.take(4), valid + ["extra"], valid.dup.tap { |tuple|
+      tuple[2] = "other"
+    },
      valid.dup.tap { |tuple| tuple[1] = "unknown" }, valid.dup.tap { |tuple| tuple[4] = "01" },].each do |binding|
       assert_raises(ArgumentError) do
         OutboundSensitivePayload.encrypt_sms_delivery(

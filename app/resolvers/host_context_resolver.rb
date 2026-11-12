@@ -6,7 +6,7 @@ class HostContextResolver
 
   def self.call(request)
     Context.new(
-      surface: CoreSurface.current(request),
+      surface: SurfaceHost.current(request),
       account: nil,
       tenant: nil,
     )

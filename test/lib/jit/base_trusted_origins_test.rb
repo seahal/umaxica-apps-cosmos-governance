@@ -8,14 +8,14 @@ class BaseTrustedOriginsTest < ActiveSupport::TestCase
     Rails.stub(:env, ActiveSupport::StringInquirer.new("production")) do
       app_origins = JitHostOriginEnv.trusted_origins(
         "base.umaxica.app",
-        "auth.umaxica.app",
+        "www.umaxica.app",
         "localhost",
         "https://127.0.0.1:3000",
       )
       org_origins = JitHostOriginEnv.trusted_origins("base.umaxica.org")
       com_origins = JitHostOriginEnv.trusted_origins("base.umaxica.com")
 
-      assert_equal ["https://base.umaxica.app", "https://auth.umaxica.app"], app_origins
+      assert_equal ["https://base.umaxica.app", "https://www.umaxica.app"], app_origins
       assert_equal ["https://base.umaxica.org"], org_origins
       assert_equal ["https://base.umaxica.com"], com_origins
       assert_not_includes app_origins, "http://base.umaxica.app"

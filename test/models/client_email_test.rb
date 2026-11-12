@@ -104,11 +104,14 @@ class ClientEmailTest < ActiveSupport::TestCase
   end
 
   test "effective email addresses are unique at finalization" do
-    ClientEmail.create!(@valid_attributes).finalize_binding!
+    ClientEmail.create!(@valid_attributes).tap { |binding_record|
+      binding_record.update!(binding_finalized_at: Time.current)
+    }
     duplicate_email = ClientEmail.create!(@valid_attributes)
 
     assert_predicate duplicate_email, :valid?
-    assert_raises(ActiveRecord::RecordNotUnique) { duplicate_email.finalize_binding! }
+    assert_raises(ActiveRecord::RecordInvalid) { duplicate_email.tap { |binding_record| binding_record.update!(binding_finalized_at: Time.current) } }
+    assert duplicate_email.errors.of_kind?(:address, :taken)
   end
 
   test "deleted sign-up email does not reserve address forever" do
@@ -151,13 +154,9 @@ class ClientEmailTest < ActiveSupport::TestCase
     assert_equal IdentifierBlindIndex.bidx_for_email("digest-order@example.com", realm: :app), user_email.address_digest
   end
 
-  test "new Email candidates initialize failures while only a typed ceremony owns OTP proof defaults" do
+  test "new Email candidates initialize failures" do
     user_email = ClientEmail.new(@valid_attributes)
-    ceremony = ClientEmailCeremonyTransaction.new
 
-    assert_nil ceremony.otp_generation
-    assert_nil ceremony.otp_verifier
-    assert_nil ceremony.otp_expires_at
     assert_equal 0, user_email.otp_attempts_count
   end
 
@@ -220,17 +219,16 @@ class ClientEmailTest < ActiveSupport::TestCase
     first, second = candidates
     first.update!(user_email_status_id: ClientEmailStatus::VERIFIED)
     assert_difference -> { ClientEmail.effective_binding.where(user_id: owner.id).count }, 1 do
-      first.finalize_binding!
+      first.tap { |binding_record| binding_record.update!(binding_finalized_at: Time.current) }
     end
     second.update!(user_email_status_id: ClientEmailStatus::VERIFIED)
-    assert_raises(ActiveRecord::RecordNotUnique) do
-      ClientEmail.transaction(requires_new: true) { second.finalize_binding! }
-    end
+    assert_raises(ActiveRecord::RecordInvalid) { second.tap { |binding_record| binding_record.update!(binding_finalized_at: Time.current) } }
+    assert second.errors.of_kind?(:user_id, :taken)
     assert_predicate first.reload, :binding_effective?
     assert_not_predicate second.reload, :binding_effective?
     assert_equal 1, ClientEmail.effective_binding.where(user_id: owner.id).count
     first.release_binding!
-    second.finalize_binding!
+    second.tap { |binding_record| binding_record.update!(binding_finalized_at: Time.current) }
 
     assert_predicate first.reload, :binding_released?
     assert_predicate second.reload, :binding_effective?
@@ -262,25 +260,6 @@ class ClientEmailTest < ActiveSupport::TestCase
     user_email = ClientEmail.create!(@valid_attributes)
 
     assert_equal user_email.public_id, user_email.to_param
-  end
-
-  test "Email ceremony OTP is active immediately below but not at or above its finite expiry" do
-    user_email = ClientEmail.create!(@valid_attributes.merge(address: "otp-expiry@example.com"))
-    now = ClientEmailCeremonyTransaction.database_now
-    ceremony = ClientEmailCeremonyTransaction.create_transaction!(
-      actor_ref: @user.public_id, session_ref: "client-email-model-browser", operation: "registration",
-      email_candidate_ref: user_email.public_id, normalized_email_digest: user_email.address_digest,
-      now: now, expires_at: now + 30.seconds,
-    )
-    ClientEmailCeremonyTransaction.stub(:database_now, now) do
-      ceremony.issue_email_otp!(purpose: "credential_registration")
-    end
-
-    [-Rational(1, 1_000_000), 0, Rational(1, 1_000_000)].each do |offset|
-      assert_equal offset.negative?, ceremony.reload.email_otp_deliverable?(
-        generation: ceremony.otp_generation, at: now + 30.seconds + offset,
-      )
-    end
   end
 
   test "fifth failed otp attempt locks but fourth does not" do
@@ -397,7 +376,9 @@ class ClientEmailTest < ActiveSupport::TestCase
                 configure_identifier_race_connection!(fv5013)
                 fv5011 << true
                 fv5010.pop
-                ClientEmail.find(fv5012).finalize_binding!
+                ClientEmail.find(fv5012).tap { |binding_record|
+                  binding_record.update!(binding_finalized_at: Time.current)
+                }
                 fv5008 << { status: :finalized }
               rescue ActiveRecord::RecordInvalid, ActiveRecord::RecordNotUnique, ActiveRecord::LockWaitTimeout => e
                 fv5008 << {
@@ -445,7 +426,9 @@ class ClientEmailTest < ActiveSupport::TestCase
                 configure_identifier_race_connection!(fv5005)
                 fv5003 << true
                 fv5002.pop
-                ClientEmail.find(fv5004).finalize_binding!
+                ClientEmail.find(fv5004).tap { |binding_record|
+                  binding_record.update!(binding_finalized_at: Time.current)
+                }
                 fv5000 << { status: :finalized }
               rescue ActiveRecord::RecordInvalid, ActiveRecord::RecordNotUnique, ActiveRecord::LockWaitTimeout => e
                 fv5000 << {
@@ -472,11 +455,14 @@ class ClientEmailTest < ActiveSupport::TestCase
   end
 
   test "released email binding can be reattached without reactivating its history" do
-    original = ClientEmail.create!(@valid_attributes).finalize_binding!
+    original =
+      ClientEmail.create!(@valid_attributes).tap { |binding_record|
+        binding_record.update!(binding_finalized_at: Time.current)
+      }
     original.release_binding!
     replacement = ClientEmail.create!(@valid_attributes.merge(address: original.address))
 
-    replacement.finalize_binding!
+    replacement.tap { |binding_record| binding_record.update!(binding_finalized_at: Time.current) }
 
     assert_not_predicate original.reload, :binding_effective?
     assert_predicate replacement.reload, :binding_effective?

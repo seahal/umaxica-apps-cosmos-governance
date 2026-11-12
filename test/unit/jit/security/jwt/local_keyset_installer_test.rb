@@ -101,38 +101,38 @@ module Jit
 
         test "partial surface env is repaired from local store as one matching set" do
           JitSecurityJwtLocalKeysetInstaller.install!(store_path: @store_path)
-          original_private_key = ENV.fetch("JWT_AUTH_APP_PRIVATE_KEY")
-          original_public_keyset = ENV.fetch("JWT_AUTH_APP_PUBLIC_KEYSET")
+          original_private_key = ENV.fetch("JWT_BASE_APP_PRIVATE_KEY")
+          original_public_keyset = ENV.fetch("JWT_BASE_APP_PUBLIC_KEYSET")
 
-          ENV["JWT_AUTH_APP_PRIVATE_KEY"] = nil
+          ENV["JWT_BASE_APP_PRIVATE_KEY"] = nil
 
           JitSecurityJwtLocalKeysetInstaller.install!(store_path: @store_path)
 
-          assert_equal original_private_key, ENV["JWT_AUTH_APP_PRIVATE_KEY"]
-          assert_equal original_public_keyset, ENV["JWT_AUTH_APP_PUBLIC_KEYSET"]
+          assert_equal original_private_key, ENV["JWT_BASE_APP_PRIVATE_KEY"]
+          assert_equal original_public_keyset, ENV["JWT_BASE_APP_PUBLIC_KEYSET"]
           JitSecurityJwtRegistry.reload!
 
-          assert JitSecurityJwtRegistry.private_key_for("surface:AUTH_APP")
-          assert JitSecurityJwtRegistry.public_key_for("surface:AUTH_APP", ENV.fetch("JWT_AUTH_APP_ACTIVE_KID"))
+          assert JitSecurityJwtRegistry.private_key_for("surface:BASE_APP")
+          assert JitSecurityJwtRegistry.public_key_for("surface:BASE_APP", ENV.fetch("JWT_BASE_APP_ACTIVE_KID"))
         end
 
         test "partial oidc client env is repaired from local store as one matching set" do
           JitSecurityJwtLocalKeysetInstaller.install!(store_path: @store_path)
-          original_private_key = ENV.fetch("OIDC_CLIENT_ACME_APP_PRIVATE_KEY")
-          original_public_keyset = ENV.fetch("OIDC_CLIENT_ACME_APP_PUBLIC_KEYSET")
+          original_private_key = ENV.fetch("OIDC_CLIENT_BASE_RP_APP_WW_PRIVATE_KEY")
+          original_public_keyset = ENV.fetch("OIDC_CLIENT_BASE_RP_APP_WW_PUBLIC_KEYSET")
 
-          ENV["OIDC_CLIENT_ACME_APP_PRIVATE_KEY"] = nil
+          ENV["OIDC_CLIENT_BASE_RP_APP_WW_PRIVATE_KEY"] = nil
 
           JitSecurityJwtLocalKeysetInstaller.install!(store_path: @store_path)
 
-          assert_equal original_private_key, ENV["OIDC_CLIENT_ACME_APP_PRIVATE_KEY"]
-          assert_equal original_public_keyset, ENV["OIDC_CLIENT_ACME_APP_PUBLIC_KEYSET"]
+          assert_equal original_private_key, ENV["OIDC_CLIENT_BASE_RP_APP_WW_PRIVATE_KEY"]
+          assert_equal original_public_keyset, ENV["OIDC_CLIENT_BASE_RP_APP_WW_PUBLIC_KEYSET"]
           JitSecurityJwtRegistry.reload!
 
-          assert JitSecurityJwtRegistry.private_key_for("oidc_client:ACME_APP")
+          assert JitSecurityJwtRegistry.private_key_for("oidc_client:BASE_RP_APP_WW")
           assert JitSecurityJwtRegistry.public_key_for(
-            "oidc_client:ACME_APP",
-            ENV.fetch("OIDC_CLIENT_ACME_APP_ACTIVE_KID"),
+            "oidc_client:BASE_RP_APP_WW",
+            ENV.fetch("OIDC_CLIENT_BASE_RP_APP_WW_ACTIVE_KID"),
           )
         end
 
@@ -234,7 +234,7 @@ module Jit
 
         test "a surface kid preset in ENV is refused even when a store already exists" do
           JitSecurityJwtLocalKeysetInstaller.install!(store_path: @store_path)
-          ENV["JWT_PALM_APP_ACTIVE_KID"] = "production-palm-app-es384-a"
+          ENV["JWT_BASE_APP_ACTIVE_KID"] = "production-base-app-es384-a"
 
           assert_raises(ArgumentError) do
             JitSecurityJwtLocalKeysetInstaller.install!(store_path: @store_path)
@@ -256,11 +256,11 @@ module Jit
 
         test "installing twice in one process accepts the values the installer exported" do
           JitSecurityJwtLocalKeysetInstaller.install!(store_path: @store_path)
-          kid = ENV.fetch("JWT_AUTH_ORG_ACTIVE_KID")
+          kid = ENV.fetch("JWT_BASE_ORG_ACTIVE_KID")
 
           JitSecurityJwtLocalKeysetInstaller.install!(store_path: @store_path)
 
-          assert_equal kid, ENV.fetch("JWT_AUTH_ORG_ACTIVE_KID")
+          assert_equal kid, ENV.fetch("JWT_BASE_ORG_ACTIVE_KID")
         end
 
         test "explicit local jwt env values are not replaced" do

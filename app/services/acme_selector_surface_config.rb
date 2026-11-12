@@ -4,7 +4,6 @@
 AcmeSelectorSurfaceConfig = Data.define(
   :surface,
   :principal_class,
-  :token_class,
   :rp_account_class,
   :rp_account_foreign_key,
   :identity_class,
@@ -39,7 +38,6 @@ AcmeSelectorSurfaceConfig::CONFIGS = {
   app: AcmeSelectorSurfaceConfig.new(
     surface: :app,
     principal_class: ::Client,
-    token_class: ::ClientToken,
     rp_account_class: ::ClientAccount,
     rp_account_foreign_key: :user_id,
     identity_class: ::ClientIdentity,
@@ -70,7 +68,6 @@ AcmeSelectorSurfaceConfig::CONFIGS = {
   org: AcmeSelectorSurfaceConfig.new(
     surface: :org,
     principal_class: ::Operator,
-    token_class: ::OperatorToken,
     rp_account_class: ::OperatorAccount,
     rp_account_foreign_key: :staff_id,
     identity_class: ::OperatorIdentity,

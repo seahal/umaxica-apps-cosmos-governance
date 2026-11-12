@@ -16,7 +16,7 @@ class RetentionPurgeLegalHoldTest < ActiveJob::TestCase
     ClientRetentionHold.create!(client: client, reason_code: "legal_hold")
     privacy_request = ClientPrivacyRequest.create!(client: client)
 
-    RetentionPurgeJob.perform_now(batch_size: 10)
+    assert_raises(AccessOpDataUnavailableError) { RetentionPurgeJob.perform_now(batch_size: 10) }
 
     assert_nil client.reload.terminated_at
     assert_equal ClientPrivacyRequest.status_id_for("BLOCKED_BY_LEGAL_HOLD"), privacy_request.reload.status_id

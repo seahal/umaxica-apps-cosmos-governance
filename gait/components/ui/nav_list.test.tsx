@@ -42,6 +42,29 @@ describe("NavList", () => {
     expect(screen.getByText("Recovery code")).toBeTruthy();
   });
 
+  it("omits an empty description from a row without a destination", () => {
+    render(<NavList items={[{ label: "Unavailable method", href: null, description: "" }]} />);
+
+    const row = screen.getByRole("listitem");
+
+    expect(row.textContent).toBe("Unavailable method");
+    expect(row.querySelectorAll("span")).toHaveLength(3);
+  });
+
+  it("shows the description for a row that does not have a destination", () => {
+    render(
+      <NavList
+        items={[
+          { label: "Unavailable method", href: null, description: "Setup is not available." },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("Unavailable method")).toBeTruthy();
+    expect(screen.getByText("Setup is not available.")).toBeTruthy();
+    expect(screen.queryByRole("link")).toBeNull();
+  });
+
   it("keeps the description out of the link's accessible name only when absent", () => {
     render(
       <NavList

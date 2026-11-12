@@ -9,6 +9,11 @@ in credentials. The `tid + oid` lookup key, no JIT provisioning, the exclusion o
 email/UPN/`preferred_username`, the `acct = 0` requirement, `org_zenith` placement, default-inactive
 records, and the callback boundary discipline are unchanged and still govern.
 
+> **Local-route disposition (2026-11-10):** The owner-approved local-surface hard reset removes the
+> local Auth/Visa routes and controllers that implemented the Rails sign-in ceremony described
+> below. This does not retire Entra identity records, external authority contracts, or retained
+> model/database state; it also does not restore a local sign-in route.
+
 ## Context
 
 Enterprise customers whose staff accounts are managed in Microsoft Entra ID have requested SSO for

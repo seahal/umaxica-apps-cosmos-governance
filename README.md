@@ -5,23 +5,21 @@
 
 ## Routing
 
-- `app`: end-user application; Palm is its browser relying party
-- `org`: staff and organization surface; Tech is its global operator relying party
-- `com`: anonymous public and corporate surface; it serves public preference entry and public
-  read-only pages, with no credential, session, admission, or OIDC relying-party boundary
-- `visa`: OpenID Provider and browser-bound authority for the app and org realms
-- `www`: Base browser relying party and identity/session-management surface for the app and org
-  realms
-- `net`: network-facing surface supporting other TLDs (`app`/`com`/`org`), including
-  cookie-authentication-less access
-- `dev`: support and status surface
+- `base.app`, `base.com`, and `base.org`: Base-owned browser RP, identity, preference, and public
+  surfaces. The anonymous `base.com` surface is intentionally retained.
+- `tech.org`: the separate global operator browser RP.
+- `mission`, `flipper`, `blazer`, `pghero`, `swagger`, and `coverband`: Governance's
+  host-constrained operator tools.
+- Auth and Visa URL configuration and local routes have been removed. Base and Tech sign-in is
+  unavailable.
+- Other former product surfaces are not served here. Their route files and controllers have been
+  removed; the retained database/model inventory is documented in the hard-reset evidence.
 
-Multi-domain Rails application serving these audience surfaces. Routing is host-constrained, so
+This multi-domain Rails application serves its owned surfaces. Routing is host-constrained, so the
 domain and subdomain matter in both development and production.
 
-The OIDC authority is hosted by Visa (`visa.umaxica.app`, `.org`). Base is the separate browser RP
-and identity/session surface (`www.umaxica.app`, `.org`); its host-only cookies are never shared
-with Visa. `www.umaxica.com` is the anonymous preference entry, not an identity or session surface.
+Base and Tech remain separate route and authorization boundaries. Their OIDC sign-in, callback, and
+logout routes are removed, and no external Auth or Visa URL is configured here.
 
 ## Stack
 
@@ -171,15 +169,12 @@ services to loopback as well (`5432`, `5433`, and `6379` to `6381` by default) s
 can use them; containers continue to use Compose DNS names. See
 `docs/operations/development-host-port-exposure.md`.
 
-| Surface                    | URL                                                                                                              |
-| :------------------------- | :--------------------------------------------------------------------------------------------------------------- |
-| Base                       | `http://base.{app,com,org}.localhost:3000`                                                                       |
-| Visa (OIDC authority)      | `http://visa.{app,org}.localhost:3000`                                                                           |
-| Base (developer / network) | `http://base.{dev,net}.localhost:3000`                                                                           |
-| Auth                       | `http://auth.{app,org}.localhost:3000`                                                                           |
-| Core                       | `http://core.{app,org,net,dev}.localhost:3000`                                                                   |
-| Warp / Palm / Tech         | `http://warp.{app,com,org}.localhost:3000` / `http://palm.app.localhost:3000` / `http://tech.org.localhost:3000` |
-| Info / Help / Docs / News  | `http://{info,help,docs,news}.{app,com,org}.localhost:3000`                                                      |
+| Surface                    | URL                                                                                      |
+| :------------------------- | :--------------------------------------------------------------------------------------- |
+| Base                       | `http://base.{app,com,org}.localhost:3000`                                               |
+| Tech                       | `http://tech.org.localhost:3000`                                                        |
+| Operator tools             | `http://{mission,flipper,blazer,pghero,swagger,coverband}-governance.umaxica.dev:3000` |
+| Operator tools (public)    | `https://<tool>-governance.umaxica.dev`                                                 |
 
 The application contract supplies PUBLIC and PRIVATE URL values in both supported modes; Compose
 supplies only service topology. Each route host constraint lists the configured host alongside its
@@ -189,8 +184,9 @@ Access, not Host Authorization, keeps the development listener non-public. See
 `research/implementation/2026-08-10-development-tunnel-access-verification.md` for the measured
 end-to-end evidence.
 
-`sign.{app,org}.localhost` resolves only when `AUTH_*_URL` and `PUBLIC_AUTH_*_URL` are unset. Under
-Compose the canonical local names for the credential gateway are `auth.*`.
+Base and Tech verification, identity and authenticated-session routes remain. Their OIDC sign-in,
+callback and logout entrypoints were removed with the Auth and Visa dependencies, so this process
+cannot start a new OIDC sign-in flow.
 
 ## Code Quality
 
@@ -334,7 +330,7 @@ run in CI, not in the hooks.
 | :--------------------------------------- | :--------------------------------------------------------------------------- |
 | Tailwind changes are not reflected       | Run `bin/rails assets:clobber` and restart `bin/dev`                         |
 | Tests fail because databases are missing | Run `bin/rails db:prepare`                                                   |
-| `bin/dev` stops during boot              | Check `PUBLIC_AUTH_*_URL` and database availability                          |
+| `bin/dev` stops during boot              | Check Base and Tech surface URL configuration and database availability       |
 | Credentials cannot be decrypted          | Obtain the key; see `docs/operations/development-credential-provisioning.md` |
 
 ## Repository Knowledge Base
@@ -354,5 +350,5 @@ ownership, authority and lifecycle.
 ## Acknowledgement
 
 - Secrets must stay in Rails credentials; do not commit plaintext secrets.
-- WebAuthn origins are derived from `PUBLIC_AUTH_*_URL`; `TRUSTED_ORIGINS` is additive only.
+- WebAuthn RP IDs and exact origins are configured per retained surface; `TRUSTED_ORIGINS` is additive only.
 - Public availability of this repository is not guaranteed permanently.

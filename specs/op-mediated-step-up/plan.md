@@ -3,6 +3,11 @@
 Status: accepted (owner, 2026-11-03) with `spec.md`. Implementation starts only from an
 owner-approved instruction file. No unit authorizes an external or production action.
 
+> **Route-ownership clarification (2026-11-10):** The local Auth/Visa routes/controllers referenced
+> by this external authority flow have been removed from this repository. The accepted design still
+> describes Base app/org RP callers and external authority contracts; it does not authorize restoring
+> local Auth/Visa routes. Any Tech caller follows its own accepted contract.
+
 ## Design in one view
 
 1. A protected action's controller declares step-up. A shared RP verifier checks the exact class,

@@ -2,6 +2,12 @@
 
 Status: implementing
 
+> **Disposition (2026-11-10):** The local Auth route/controller writers covered by this spec are
+> removed under the owner-approved local-surface hard reset. This does not revoke the approved
+> receipt shape or authorize deleting its models, migrations, or history. Route integration is
+> superseded; retained persistence is classified in the hard-reset model/database report for a later
+> decision. Do not restore removed routes to satisfy this spec.
+
 ## Authority and scope
 
 On 2026-11-02 the owner approved the existing receipt shape and local migration and assigned issue 1

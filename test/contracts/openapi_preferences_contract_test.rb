@@ -3,16 +3,15 @@
 require "test_helper"
 require_relative "../support/openapi_contract"
 
-# Validates `/api/v0/preferences/{theme,cookie}` against each surface description on every host that
-# serves it. The com surface is anonymous and serves the API only from Base; app and org keep the
-# Base, Auth, Core, and Warp hosts, all answering with the same contract.
+# Validates `/api/v0/preferences/{theme,cookie}` against the descriptions served by Governance.
+# The com surface is anonymous and serves the API only from Base.
 class OpenapiPreferencesContractTest < ActionDispatch::IntegrationTest
   include OpenapiContract
 
   SURFACE_HOST_KEYS = { "app" => "SERVICE", "com" => "CORPORATE", "org" => "STAFF" }.freeze
   JSON_HEADERS = { "Accept" => "application/json", "Content-Type" => "application/json" }.freeze
 
-  (%w(base auth core warp).product(%w(app org)) + [["base", "com"]]).each do |family, surface|
+  [["base", "app"], ["base", "org"], ["base", "com"]].each do |family, surface|
     test "#{family} #{surface} preference endpoints conform to the #{surface} description" do
       self.openapi_surface = surface
       host! ENV.fetch("PUBLIC_#{family.upcase}_#{SURFACE_HOST_KEYS.fetch(surface)}_URL")
@@ -42,13 +41,8 @@ class OpenapiPreferencesContractTest < ActionDispatch::IntegrationTest
       patch "/api/v0/preferences/cookie", params: { cookie: { consented: true, functional: false } }.to_json,
                                           headers: JSON_HEADERS
 
-      if surface == "com"
-        assert_response :ok
-        assert_openapi_conform 200
-      else
-        assert_response :no_content
-        assert_openapi_conform 204
-      end
+      assert_response :ok
+      assert_openapi_conform 200
 
       patch "/api/v0/preferences/theme", params: { theme: "sepia" }.to_json, headers: JSON_HEADERS
 
@@ -62,24 +56,26 @@ class OpenapiPreferencesContractTest < ActionDispatch::IntegrationTest
       assert_openapi_response_conform 415
     end
   end
-  test "base com Web Push preference conforms to the com description" do
-    self.openapi_surface = "com"
-    host! ENV.fetch("PUBLIC_BASE_CORPORATE_URL")
+  SURFACE_HOST_KEYS.each do |surface, host_key|
+    test "base #{surface} Web Push preference conforms to the #{surface} description" do
+      self.openapi_surface = surface
+      host! ENV.fetch("PUBLIC_BASE_#{host_key}_URL")
 
-    get "/api/v0/preferences/web_push", headers: { "Accept" => "application/json" }
+      get "/api/v0/preferences/web_push", headers: { "Accept" => "application/json" }
 
-    assert_response :ok
-    assert_openapi_conform 200
+      assert_response :ok
+      assert_openapi_conform 200
 
-    patch "/api/v0/preferences/web_push", params: { web_push: "enabled" }.to_json, headers: JSON_HEADERS
+      patch "/api/v0/preferences/web_push", params: { web_push: "enabled" }.to_json, headers: JSON_HEADERS
 
-    assert_response :ok
-    assert_openapi_conform 200
+      assert_response :ok
+      assert_openapi_conform 200
 
-    patch "/api/v0/preferences/web_push", params: { web_push: "invalid" }.to_json, headers: JSON_HEADERS
+      patch "/api/v0/preferences/web_push", params: { web_push: "invalid" }.to_json, headers: JSON_HEADERS
 
-    assert_response :unprocessable_content
-    assert_openapi_response_conform 422
+      assert_response :unprocessable_content
+      assert_openapi_response_conform 422
+    end
   end
 
   test "com preference APIs describe ambiguous cookie and storage failure responses" do

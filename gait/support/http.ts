@@ -74,18 +74,6 @@ export function requestWithMethod(fetchMock: FetchMock, method: string) {
   return call ? { url: urlOf(call[0]), body: jsonBody(call[1]) } : undefined;
 }
 
-/** Installs a `fetch` that answers the queued responses in order, then repeats the last one. */
-export function stubFetchQueue(...responses: Response[]) {
-  const fetchMock = vi.fn<typeof fetch>();
-  responses.forEach((response) => fetchMock.mockResolvedValueOnce(response));
-  const last = responses.at(-1);
-  if (last) {
-    fetchMock.mockResolvedValue(last);
-  }
-  vi.stubGlobal("fetch", fetchMock);
-  return fetchMock;
-}
-
 /**
  * Installs a `fetch` that answers by request method, for the specs whose subject both reads and
  * writes. `pending` is left unresolved so a spec can decide when the read lands.

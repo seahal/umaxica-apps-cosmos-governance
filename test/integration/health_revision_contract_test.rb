@@ -21,14 +21,13 @@ require "test_helper"
 class HealthRevisionContractTest < ActionDispatch::IntegrationTest
   REVISION = "0123456789abcdef0123456789abcdef01234567"
 
-  APP_HOST = ENV.fetch("PUBLIC_BASE_SERVICE_URL", "base.app.localhost")
-  COM_HOST = ENV.fetch("PUBLIC_BASE_CORPORATE_URL", "base.com.localhost")
-  EDIT_HOST = ENV.fetch("PUBLIC_EDIT_STAFF_URL", "edit.org.localhost")
+  HOSTS = Rails.configuration.x.boot_config.fetch(:hosts)
+  APP_HOST = HOSTS.base_service.host
+  COM_HOST = HOSTS.base_corporate.host
 
   SURFACES = {
     APP_HOST => Health::Profiles::App,
     COM_HOST => Health::Profiles::Com,
-    EDIT_HOST => Health::Profiles::Org,
   }.freeze
 
   PROBES = %w(startup liveness readiness).freeze

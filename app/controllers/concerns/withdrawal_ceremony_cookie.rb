@@ -13,14 +13,14 @@ module WithdrawalCeremonyCookie
   end
 
   def withdrawal_ceremony_cookie_options
-    CoreCookieOptions.for(
+    BrowserCookieOptions.for(
       request: request, same_site: :strict, path: "/",
       expires: WithdrawalCeremonyRecordable::TTL.from_now,
     )
   end
 
   def withdrawal_ceremony_cookie_deletion_options
-    CoreCookieOptions.for(
+    BrowserCookieOptions.for(
       request: request, same_site: :strict, path: "/",
     ).except(:expires, :httponly)
   end

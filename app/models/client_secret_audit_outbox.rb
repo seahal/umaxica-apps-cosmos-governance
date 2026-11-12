@@ -17,6 +17,7 @@ class ClientSecretAuditOutbox < AppZenithRecord
                 :occurred_at, :reason, :item_count, :issuance_origin,
                 :issuance_browser_session_ref, :issuance_sign_up_flow_ref
 
+  validates :event_id, uniqueness: true
   validates :event_id, :client_ref, :operation_ref, :occurred_at, presence: true
   validates :event_name, inclusion: { in: EVENTS }
   validates :reason, inclusion: { in: REASONS }, allow_nil: true

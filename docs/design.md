@@ -30,16 +30,10 @@ Use the following small model without a configuration engine:
 | Edition identity | Preserve formal names and app/com/org tint; never infer permissions from TLD | Existing edition stylesheet; ERB `data-edition` |
 | Documented exception | Preserve special rendering and behavior when ordinary chrome is inappropriate | Plain responses, offline, relay, vendor UI, provider buttons |
 
-Identity, Preference, Switcher, Logout is the authenticated menu ordering when existing data
-provides those destinations. This presentation work does not create absent props, fetch identity,
-add authentication options, or move ceremony cancellation into generic navigation.
-
-Relying-party surfaces (Base, Core, Warp, Palm and Edit; not their anonymous com, dev or net
-surfaces) show the visitor's sign-in state at the right of the header, from
-`chrome.account_navigation`, in one of three states: a sign-up/sign-in link to the surface's own
-sign-in entry when signed out; links to Base and to sign out when signed in (Base omits the link to
-itself); and nothing on the surface's own sign-in, sign-out and OIDC callback pages, which are the
-procedure those links would start. Auth and Visa are that procedure and do not show it.
+Identity, Preference, and Switcher remain the authenticated menu ordering where a retained page
+supplies those destinations. Surface chrome does not create sign-in navigation or fetch identity.
+Local sign-in entry, OIDC callback, and logout routes are unavailable; Base and Tech OIDC sign-in
+and sign-out are unavailable by owner decision.
 
 ## Layout and typography
 

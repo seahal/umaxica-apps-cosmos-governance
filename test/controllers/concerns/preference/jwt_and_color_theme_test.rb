@@ -50,7 +50,7 @@ class PreferenceJwtConfigurationTest < ActiveSupport::TestCase
 end
 
 class PreferenceTokenTest < ActiveSupport::TestCase
-  test "token issued on id host decodes on same TLD sibling when audience is configured" do
+  test "token issued on an app realm host decodes on an app realm sibling" do
     host = "base.app.localhost"
     token = PreferenceToken.encode(
       SecurityJwtPreferenceTokenCodec::ANONYMOUS_PREFERENCE_VALUES.transform_values(&:first),
@@ -63,7 +63,7 @@ class PreferenceTokenTest < ActiveSupport::TestCase
     )
 
     assert token
-    assert PreferenceToken.decode(token, host: "visa.app.localhost", jwt_issuer_id: "preference_app")
+    assert PreferenceToken.decode(token, host: "sibling.app.localhost", jwt_issuer_id: "preference_app")
     assert_nil PreferenceToken.decode(token, host: "base.com.localhost", jwt_issuer_id: "preference_com")
   end
 

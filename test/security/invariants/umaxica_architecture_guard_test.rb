@@ -29,10 +29,6 @@ module Security
 
       AVATAR_PROVISIONING_CREATE_PATH = "app/services/avatar_provisioning/create.rb"
       AVATAR_BACKFILL_LEGACY_CLIENT_BINDINGS_PATH = "app/services/avatar_backfill/backfill_legacy_client_bindings.rb"
-      NON_PERSISTENT_AVATAR_FORM_BUILDS = [
-        "app/controllers/base/app/avatars_controller.rb",
-      ].freeze
-
       FORBIDDEN_AVATAR_UGC_TABLES = %w(
         posts comments replies captions stories videos short_videos messages reactions feeds
         timelines ranking_events
@@ -137,7 +133,6 @@ module Security
         offenders =
           production_ruby_paths.flat_map do |path|
             relative_path = path.relative_path_from(Rails.root).to_s
-            next [] if NON_PERSISTENT_AVATAR_FORM_BUILDS.include?(relative_path)
 
             File.readlines(path, chomp: true).each_with_index.filter_map do |line, index|
               next unless line.match?(/Avatar\.new\(/)

@@ -86,24 +86,7 @@ class OperatorEmail < OrgPrincipalRecord
   end
 
   def finalize_email_registration!(transaction:, code:, session_ref:)
-    with_lock do
-      unless transaction.is_a?(OperatorEmailCeremonyTransaction) &&
-          transaction.bootstrap_ceremony_transaction_ref.nil? &&
-          transaction.normalized_email_digest == address_digest &&
-          transaction.email_registration_otp_evidence?(
-            code: code, actor_ref: staff.public_id, session_ref: session_ref, candidate_ref: public_id,
-          )
-        raise ArgumentError, "ORG Email registration evidence is unavailable"
-      end
-      return self if staff_email_status_id == OperatorEmailStatus::VERIFIED
-
-      unless staff_email_status_id == OperatorEmailStatus::UNVERIFIED
-        raise ArgumentError, "ORG Email registration candidate is not pending"
-      end
-
-      update!(staff_email_status_id: OperatorEmailStatus::VERIFIED)
-      self
-    end
+    raise AccessOpDataUnavailableError
   end
 
   def to_param

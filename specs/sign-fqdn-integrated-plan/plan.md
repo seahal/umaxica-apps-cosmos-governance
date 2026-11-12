@@ -3,6 +3,12 @@
 Status: active. P0 re-baseline done 2026-10-02 against `845f84b281663786c4d4e0f6473fcf3ab2040b74`
 plus uncommitted work. P3 has not started; its gate is in section 7.
 
+> **Disposition (2026-11-10):** The owner-approved local-surface hard reset supersedes this plan's
+> requirements for local Auth, Visa, and Palm routes/controllers. Base and Tech RP entry, logout,
+> completion, and OP behavior remain governed by their current callers and accepted ADRs. This plan
+> does not restore removed local routes or alter external OIDC registrations and authority
+> contracts; its remaining route assignments are historical unless a retained caller confirms them.
+
 The two inputs named by the request (`umaxica-sign-fqdn-integrated-plan-2026-10-03.md` and
 `umaxica-sign-plan-review-addendum-2026-10-03.md`) were not found, and the user confirmed on
 2026-10-02 that they cannot be located. This file is therefore the sole canonical plan. The S01–S28

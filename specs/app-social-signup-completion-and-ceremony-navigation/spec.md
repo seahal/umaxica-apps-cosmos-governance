@@ -1,6 +1,13 @@
 # APP social signup completion and ceremony navigation
 
-Status: implementing
+Status: superseded (local route/controller scope, 2026-11-10)
+
+> **Disposition (2026-11-10):** The local Auth route/controller implementation covered by this spec
+> is superseded by the owner-approved local-surface hard reset. The Auth signup/sign-in and emergency
+> Passkey screens are no longer local routes here, so their route, controller, and navigation
+> acceptance criteria do not authorize restoring those surfaces. Retained social/registration
+> models remain for the model/database report; external OIDC contracts are unchanged by this route
+> decision and remain governed by their owning ADRs.
 
 ## Purpose and authorization
 

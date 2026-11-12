@@ -24,7 +24,7 @@ module FeatureFlags
   #   :suspension   ON = the effect is stopped. Unset = normal operation (fail-open).
   #                 A flag store that has never been written must not take the
   #                 product down.
-  #   :availability ON = the ceremony is permitted. Unset = closed (fail-closed).
+  #   :availability ON = the surface is available. Unset = closed (fail-closed).
   #                 A lost flag must not let an authentication ceremony through.
   Flag = Data.define(:name, :polarity, :effect)
 
@@ -49,36 +49,8 @@ module FeatureFlags
         effect: "Stops the irreversible deletes and anonymization in RetentionPurgeJob.",
       ),
       Flag.new(
-        name: :sign_in_available_app, polarity: :availability,
-        effect: "Permits new sign-in ceremonies on the app surface.",
-      ),
-      Flag.new(
-        name: :sign_up_available_app, polarity: :availability,
-        effect: "Permits new sign-up ceremonies on the app surface.",
-      ),
-      Flag.new(
-        name: :sign_in_available_org, polarity: :availability,
-        effect: "Permits new sign-in ceremonies on the org surface.",
-      ),
-      Flag.new(
-        name: :sign_up_available_org, polarity: :availability,
-        effect: "Permits new sign-up ceremonies on the org surface.",
-      ),
-      Flag.new(
         name: :turnstile_degraded_mode, polarity: :suspension,
         effect: "Accepts requests that failed Turnstile verification while the provider is degraded.",
-      ),
-      Flag.new(
-        name: :social_ceremony_app_apple, polarity: :availability,
-        effect: "Permits the Apple ceremony on the app surface.",
-      ),
-      Flag.new(
-        name: :social_ceremony_app_google, polarity: :availability,
-        effect: "Permits the Google ceremony on the app surface.",
-      ),
-      Flag.new(
-        name: :social_ceremony_org_entra, polarity: :availability,
-        effect: "Permits the Entra ceremony on the org surface.",
       ),
       *FqdnAvailabilityRegistry::SLOT_NAMES.map do |slot|
         Flag.new(

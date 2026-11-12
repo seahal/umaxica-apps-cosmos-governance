@@ -1,5 +1,9 @@
 # Japan SaaS Legal Triage
 
+> **Product-scope update (2026-11-10):** This triage predates removal of local Auth, Visa, Core,
+> Warp, Palm, Edit, Press, and Guid routes/controllers. It is not a current route inventory. Recheck
+> product-scope claims against [the current surface map](subdomains.md) before relying on them.
+
 ## Abstract (EN)
 
 This document is a Japan-specific legal triage note for this repository. It separates legal work

@@ -87,106 +87,42 @@ class Base::App::Api::V0::Preferences::ThemeControllerTest < ActionDispatch::Int
     assert_response :ok
 
     assert_predicate cookies[PreferenceCookieName.anonymous_jwt], :present?
-    assert_nil cookies[AuthenticationBase::ACCESS_COOKIE_KEY]
+    assert_nil cookies[AuthenticationCookieName.access]
   end
 
   # A signed-in actor who has never had a preference row gets one created on the first
   # write, together with the child records every preference type expects.
   test "PATCH update creates the actor preference record on a signed-in first write" do
     client = Client.create!(security_mode_id: SecurityModeConfigurable::NORMAL, status_id: ClientStatus::ACTIVE)
-    root_token = ClientToken.create!(
-      authentication_epoch: 0, user: client,
-      user_token_kind_id: ClientTokenKind::BROWSER_WEB,
-      user_token_status_id: ClientTokenStatus::ACTIVE,
-      user_token_binding_method_id: ClientTokenBindingMethod::LEGACY,
-      user_token_dbsc_status_id: ClientTokenDbscStatus::NOTHING,
-    )
-    BaseSelectorBootstrapAuthority.call(surface: :app, principal: client)
-    BaseSelectorAuthority.prepare(surface: :app, principal: client, session: root_token)
-
-    cell = RpCellBinding.for_client("base-app-ww")
-    prior_runtime_role = ENV["UMAXICA_RUNTIME_ROLE"]
-    prior_browser_admission = ENV["UMAXICA_RP_BROWSER_ADMISSION"]
     prior_forgery_protection = ActionController::Base.allow_forgery_protection
-    ENV["UMAXICA_RUNTIME_ROLE"] = "#{cell.connection.tr("_", "-")}-#{cell.region}"
-    ENV["UMAXICA_RP_BROWSER_ADMISSION"] = "open"
     ActionController::Base.allow_forgery_protection = true
-    OidcOpJwksClient::CLIENTS.clear
-
-    begin
-      browser_client = OidcClientRegistry.find!("base-app-ww")
-      verifier = SecureRandom.urlsafe_base64(48)
-      authorization_params = {
-        client_id: browser_client.client_id,
-        redirect_uri: browser_client.redirect_uris.first,
-        response_type: "code",
-        scope: "openid",
-        state: SecureRandom.hex(16),
-        nonce: SecureRandom.hex(16),
-        code_challenge_method: "S256",
-        code_challenge: Base64.urlsafe_encode64(Digest::SHA256.digest(verifier), padding: false),
-      }
-      code = OidcAuthorizationCodeIssuer.call(
-        client: browser_client, params: authorization_params, resource: client,
-        session_token: root_token, authentication_event_at: 1.minute.ago,
-      )
-      resource_type = OidcIssuer.resource_type_for_client(browser_client)
-      token_exchange =
-        OidcClientRegistry.stub(:authenticate_assertion, ->(*, **) { true }) do
-          OidcTokenExchangeCoordinator.call(
-            grant_type: "authorization_code", code: code.code, redirect_uri: code.redirect_uri,
-            client_id: browser_client.client_id,
-            client_assertion_type: OidcClientAssertionJwt::ASSERTION_TYPE,
-            client_assertion: "controller-test-assertion",
-            token_endpoint_uri: OidcIssuer.token_endpoint(resource_type), code_verifier: verifier,
-            expected_resource_type: resource_type,
-          )
-        end
-
-      assert_predicate token_exchange, :success?
-
-      token_response = token_exchange.token_response
-      id_payload, = JWT.decode(token_response.fetch(:id_token), nil, false)
-      enrollment = RpCallbackCommitter.call(
-        cell: cell, issuer: id_payload.fetch("iss"), subject: id_payload.fetch("sub"), sid: id_payload.fetch("sid"),
-        absolute_expires_at: 1.hour.from_now,
-      )
-
-      assert_predicate enrollment, :success?, enrollment.outcome.to_s
-      cookies[OidcRpBrowserCredentialContract::ACCESS_COOKIE] = token_response.fetch(:access_token)
-      cookies[OidcRpBrowserCredentialContract::REFRESH_COOKIE] = token_response.fetch(:refresh_token)
-      cookies[OidcRpBrowserCredentialContract::SESSION_COOKIE] = enrollment.session.public_id
-
-      get(edit_base_app_sign_out_path(ri: "jp"))
+    as_rp_cell("base-app-ww") do
+      headers = as_user_headers(client, host: @host)
+      headers.fetch("Cookie").split("; ").each do |pair|
+        name, value = pair.split("=", 2)
+        cookies[name] = Rack::Utils.unescape(value)
+      end
+      get(base_app_preference_path(ri: "jp"))
 
       assert_response :success
+      csrf_token = response.parsed_body.at_css('meta[name="csrf-token"]')&.[]("content")
 
-      csrf_token = response.parsed_body.at_css('meta[name="csrf-token"]')&.[]("content") ||
-        response.body[/name="authenticity_token" value="([^"]+)"/, 1]
-
-      assert_predicate csrf_token, :present?, response.body[0, 500]
+      assert_predicate csrf_token, :present?
 
       assert_difference -> { ClientPreference.where(client_id: client.id).count }, 1 do
         patch(
-          base_app_api_v0_preferences_theme_path,
-          params: { theme: "dark" }.to_json,
-          headers: {
-            "Accept" => "application/json",
-            "Content-Type" => "application/json",
-            "Origin" => "https://#{@host}",
-            "Sec-Fetch-Site" => "same-origin",
-            "X-CSRF-Token" => csrf_token,
-          },
+          base_app_api_v0_preferences_theme_path, params: { theme: "dark" }.to_json,
+                                                  headers: {
+                                                    "Accept" => "application/json",
+                                                    "Content-Type" => "application/json",
+                                                    "Origin" => "https://#{@host}",
+                                                    "Sec-Fetch-Site" => "same-origin",
+                                                    "X-CSRF-Token" => csrf_token,
+                                                  },
         )
       end
 
       assert_response :ok
-    ensure
-      OidcOpJwksClient::CLIENTS.clear
-      prior_runtime_role.nil? ? ENV.delete("UMAXICA_RUNTIME_ROLE") : ENV["UMAXICA_RUNTIME_ROLE"] = prior_runtime_role
-      prior_browser_admission.nil? ? ENV.delete("UMAXICA_RP_BROWSER_ADMISSION") :
-        ENV["UMAXICA_RP_BROWSER_ADMISSION"] = prior_browser_admission
-      ActionController::Base.allow_forgery_protection = prior_forgery_protection
     end
 
     actor_preference = ClientPreference.find_by!(client_id: client.id)
@@ -196,6 +132,8 @@ class Base::App::Api::V0::Preferences::ThemeControllerTest < ActionDispatch::Int
                  PreferenceClassRegistry.record_class("Client", :theme).find_by!(
                    preference_id: actor_preference.id,
                  ).option_id
+  ensure
+    ActionController::Base.allow_forgery_protection = prior_forgery_protection
   end
 
   private
@@ -245,11 +183,11 @@ class Base::App::Api::V0::Preferences::ThemeControllerTest
   end
 
   def set_access_cookie(token)
-    cookies[AuthenticationBase::ACCESS_COOKIE_KEY] = token
+    cookies[AuthenticationCookieName.access] = token
   end
 
   def set_refresh_cookie(token)
-    cookies[AuthenticationBase::REFRESH_COOKIE_KEY] = token
+    cookies[AuthenticationCookieName.refresh] = token
   end
 
   def jump_rt_url_from_location(location)
@@ -293,34 +231,6 @@ class Base::App::Api::V0::Preferences::ThemeControllerTest
     ClientPasskeyStatus.find_or_create_by!(id: ClientPasskeyStatus::ACTIVE)
   end
 
-  def ensure_user_token_reference_records!
-    ClientTokenKind.find_or_create_by!(id: ClientTokenKind::BROWSER_WEB)
-    ClientTokenStatus.find_or_create_by!(id: ClientTokenStatus::ACTIVE)
-    ClientTokenBindingMethod.find_or_create_by!(id: ClientTokenBindingMethod::LEGACY)
-    ClientTokenDbscStatus.find_or_create_by!(id: ClientTokenDbscStatus::NOTHING)
-  end
-
-  def ensure_staff_token_reference_records!
-    OperatorTokenKind.find_or_create_by!(id: OperatorTokenKind::BROWSER_WEB)
-    OperatorTokenStatus.find_or_create_by!(id: OperatorTokenStatus::ACTIVE)
-    OperatorTokenBindingMethod.find_or_create_by!(id: OperatorTokenBindingMethod::LEGACY)
-    OperatorTokenDbscStatus.find_or_create_by!(id: OperatorTokenDbscStatus::NOTHING)
-  end
-
-  def satisfy_user_verification(token, scope: nil)
-    _verification, raw_token = ClientVerification.issue_for_token!(token: token)
-    cookies[ClientVerification.cookie_name] = raw_token
-    mark_token_step_up_satisfied_for_test(token, scope: scope)
-    true
-  end
-
-  def satisfy_staff_verification(token, scope: nil)
-    _verification, raw_token = OperatorVerification.issue_for_token!(token: token)
-    cookies[OperatorVerification.cookie_name] = raw_token
-    mark_token_step_up_satisfied_for_test(token, scope: scope)
-    true
-  end
-
   def mark_token_step_up_satisfied_for_test(token, scope: nil, at: Time.current)
     return unless token.respond_to?(:update_columns)
 
@@ -334,7 +244,7 @@ class Base::App::Api::V0::Preferences::ThemeControllerTest
   def load_jump_rt_env!
     @jump_rt_env_originals ||= {}
     jump_rt_key = Base64.strict_encode64(OpenSSL::PKey::EC.generate("secp384r1").to_der)
-    %w(AUTH_APP AUTH_ORG ACME_APP ACME_ORG CORE_APP CORE_ORG BASE_APP BASE_ORG).each do |namespace|
+    %w(FOREIGN_APP FOREIGN_ORG BASE_APP BASE_ORG).each do |namespace|
       ENV["JWT_#{namespace}_ACTIVE_KID"] = "#{namespace.downcase.tr("_", "-")}-test"
       ENV["JWT_#{namespace}_PRIVATE_KEY"] = jump_rt_key
     end
@@ -402,13 +312,5 @@ class Base::App::Api::V0::Preferences::ThemeControllerTest
     rescue NameError
       nil
     end
-  end
-
-  def setup_google_mock_auth(uid: "google_uid_123", email: "google@example.com")
-    OmniAuth.config.mock_auth[:google_app] =
-      OmniAuth::AuthHash.new(
-        provider: "google_app", uid: uid, info: { email: email, name: "Google Client" },
-        credentials: { token: "google_token", expires_at: 1.hour.from_now.to_i },
-      )
   end
 end

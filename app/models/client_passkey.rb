@@ -56,8 +56,14 @@ class ClientPasskey < AppPrincipalRecord
   mfa_status_owner :user
   belongs_to :status, class_name: "ClientPasskeyStatus"
 
+  enum :backup_eligibility, { unknown: "unknown", ineligible: "ineligible", eligible: "eligible" },
+       prefix: true, validate: true
+  enum :backup_observation, { unknown: "unknown", not_backed_up: "not_backed_up", backed_up: "backed_up" },
+       prefix: true, validate: true
+
   validates :webauthn_id, presence: true, uniqueness: true
   validates :external_id, presence: true
+  validates :external_id, uniqueness: true, if: :will_save_change_to_external_id?
   validates :public_key, presence: true
   validates :description, presence: true
   validate :within_passkey_limit, on: :create

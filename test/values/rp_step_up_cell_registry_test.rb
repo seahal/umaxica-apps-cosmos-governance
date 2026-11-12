@@ -11,7 +11,7 @@ class RpStepUpCellRegistryTest < ActiveSupport::TestCase
     assert_equal RpBaseAppRecord, entry.record_class
 
     assert_raises(ArgumentError) { RpStepUpCellRegistry.fetch("rp_base_app") }
-    assert_raises(ArgumentError) { RpStepUpCellRegistry.fetch(RpCellBinding.fetch("rp_core_app")) }
+    assert_raises(ArgumentError) { RpStepUpCellRegistry.fetch(RpCellBinding.fetch("rp_tech_org")) }
     assert_raises(ArgumentError) do
       RpStepUpCellRegistry.fetch(base_cell.with(client_id: "foreign-client"))
     end

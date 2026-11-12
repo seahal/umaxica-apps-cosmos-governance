@@ -8,10 +8,10 @@ class SignRiskEnforcer
     return unless resource
 
     score =
-      if resource.respond_to?(:staff_tokens)
-        SignRiskEngine.score(staff_id: resource.id)
-      else
-        SignRiskEngine.score(user_id: resource.id)
+      case resource
+      when Operator then SignRiskEngine.score(staff_id: resource.id)
+      when Client then SignRiskEngine.score(user_id: resource.id)
+      else raise ArgumentError, "unsupported risk subject"
       end
 
     if score >= 100
@@ -26,32 +26,16 @@ class SignRiskEnforcer
   def self.revoke!(resource)
     delivery_result = nil
     resource.class.transaction do
-      event = IdentityAuthenticationStopRecorder.call(actor: resource.class.lock.find(resource.id), reason: "sign_risk")
+      IdentityAuthenticationStopRecorder.call(actor: resource.class.lock.find(resource.id), reason: "sign_risk")
       resource.class.current_transaction.after_commit do
-        delivery_result = OpIdentityEventInvalidator.deliver(event:)
+        raise AccessOpDataUnavailableError
       end
     end
     delivery_result
   end
 
-  def self.require_step_up!(resource)
-    require_step_up_for_token_set(resource.client_tokens) if resource.respond_to?(:client_tokens)
-    require_step_up_for_token_set(resource.staff_tokens) if resource.respond_to?(:staff_tokens)
-
-    Rails.logger.info(
-      JitLogEvent.format(
-        "sign.risk.enforcer.step_up_required",
-        resource_type: resource.class.name,
-        resource_id: resource.id,
-      ),
-    )
-  end
-
-  # Risk-triggered force re-step-up. acme/www owns freshness mutation.
-  def self.require_step_up_for_token_set(tokens)
-    tokens.currently_usable_at.find_each do |token|
-      IdentityStepUpCeremonyFreshnessRevoker.call!(token)
-    end
+  def self.require_step_up!(_resource)
+    raise AccessOpDataUnavailableError
   end
 
   def self.feature_enabled?
@@ -60,6 +44,4 @@ class SignRiskEnforcer
     enabled_config = Rails.configuration.try(:x).try(:risk_enforcement).try(:enabled)
     enabled_config || ENV["RISK_ENFORCEMENT_ENABLED"] == "true" || Rails.env.production?
   end
-
-  private_class_method :require_step_up_for_token_set
 end

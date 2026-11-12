@@ -27,7 +27,7 @@ class ClientSecretAuditOutboxPurgeJobTest < ActiveJob::TestCase
     end
   end
 
-  test "a dependent first row retains its evidence while a queued bounded continuation collects later rows" do
+  test "unavailable audit purge preserves all delivered evidence without enqueuing false progress" do
     actor = clients(:one)
     ChronicleRetentionPolicy.find_by(code: "security") ||
       ChronicleRetentionPolicy.create!(code: "security", name: "Security", duration_days: 365, permanent: false)
@@ -46,17 +46,10 @@ class ClientSecretAuditOutboxPurgeJobTest < ActiveJob::TestCase
     Timeout.timeout(3) do
       sleep 0.01 while Client.database_now < events.map { |event| event.reload.purge_eligible_at }.max
     end
-    assert_enqueued_jobs 1, only: ClientSecretAuditOutboxPurgeJob do
-      ClientSecretAuditOutboxPurgeJob.perform_now(batch_size: 1)
+    assert_no_enqueued_jobs do
+      assert_raises(AccessOpDataUnavailableError) { ClientSecretAuditOutboxPurgeJob.perform_now(batch_size: 1) }
     end
     assert events.all? { |event| ClientSecretAuditOutbox.exists?(event.id) }
-    # Each invocation processes one bounded batch; flush the complete durable cursor chain.
-    while enqueued_jobs.any? { |entry| entry.fetch(:job) == ClientSecretAuditOutboxPurgeJob }
-      perform_enqueued_jobs(only: ClientSecretAuditOutboxPurgeJob)
-    end
-
-    assert ClientSecretAuditOutbox.exists?(events.first.id)
-    assert_not ClientSecretAuditOutbox.uncached { ClientSecretAuditOutbox.exists?(events.last.id) }
     assert Chronicle.exists?(event_uuid: events.last.event_id)
   end
 end

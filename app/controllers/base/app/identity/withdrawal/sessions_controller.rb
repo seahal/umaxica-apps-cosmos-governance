@@ -68,12 +68,6 @@ module Base
 
           def identity_email_model = ClientEmail
 
-          def withdrawal_email_ceremony_model = ClientEmailCeremonyTransaction
-
-          def withdrawal_subject_from_email(email) = Client.find_by(id: email&.user_id)
-
-          def withdrawal_reentry_surface = :app
-
           def withdrawal_ceremony_class = ClientWithdrawalCeremony
 
           def withdrawal_new_path(extra_params = {})
@@ -82,7 +76,7 @@ module Base
 
           def withdrawal_edit_path = edit_base_app_identity_withdrawal_path(ri: params[:ri])
 
-          def withdrawal_public_fallback_path = auth_app_sign_in_path
+          def withdrawal_public_fallback_path = base_app_root_path(ri: params[:ri])
         end
       end
     end

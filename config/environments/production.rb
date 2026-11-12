@@ -101,6 +101,9 @@ Rails.application.configure do
     url: valkey.cache.url,
     namespace: cache_namespace,
     error_handler: Umaxica::Valkey::StoreErrorHandler.lambda_for("cache"),
+    # Not Marshal: a value written into Valkey must never deserialize into code on read
+    # (docs/runbooks/valkey-protection.md).
+    serializer: :message_pack,
   }
   rate_limit_namespace = [
     "rate_limit",
@@ -113,6 +116,9 @@ Rails.application.configure do
       url: valkey.rate_limit.url,
       namespace: rate_limit_namespace,
       error_handler: Umaxica::Valkey::StoreErrorHandler.lambda_for("rate_limit"),
+      # Not Marshal: a value written into Valkey must never deserialize into code on read
+      # (docs/runbooks/valkey-protection.md).
+      serializer: :message_pack,
     )
 
   # Replace the default in-process and non-durable queuing backend for Active Job.
@@ -157,44 +163,16 @@ Rails.application.configure do
     boot_hosts.base_service.host,
     boot_hosts.base_corporate.host,
     boot_hosts.base_staff.host,
-    boot_hosts.visa_service.host,
-    boot_hosts.visa_corporate.host,
-    boot_hosts.visa_staff.host,
-    boot_hosts.sign_service.host,
-    boot_hosts.sign_corporate.host,
-    boot_hosts.sign_staff.host,
-    boot_hosts.core_service.host,
-    boot_hosts.core_corporate.host,
-    boot_hosts.core_staff.host,
     boot_hosts.tech_staff.host,
-    "auth.umaxica.app",
-    "auth.umaxica.com",
-    "auth.umaxica.org",
-    "www-jp.umaxica.app",
-    "www-jp.umaxica.com",
-    "www-jp.umaxica.org",
     "www.umaxica.app",
     "www.umaxica.com",
     "www.umaxica.org",
-    # Core public authority uses only the canonical jp.* host family.
-    "jp.umaxica.app",
-    "jp.umaxica.com",
-    "jp.umaxica.org",
-    boot_hosts.palm_service.host,
-    boot_hosts.docs_service.host,
-    boot_hosts.docs_corporate.host,
-    boot_hosts.docs_staff.host,
-    boot_hosts.news_service.host,
-    boot_hosts.news_corporate.host,
-    boot_hosts.news_staff.host,
-    boot_hosts.help_service.host,
-    boot_hosts.help_corporate.host,
-    boot_hosts.help_staff.host,
-    boot_hosts.info_service.host,
-    boot_hosts.info_corporate.host,
-    boot_hosts.info_staff.host,
-    boot_hosts.guid_service.host,
-    boot_hosts.edit_staff.host,
+    "mission-governance.umaxica.dev",
+    "flipper-governance.umaxica.dev",
+    "blazer-governance.umaxica.dev",
+    "pghero-governance.umaxica.dev",
+    "swagger-governance.umaxica.dev",
+    "coverband-governance.umaxica.dev",
   ]
   # Skip DNS rebinding protection for the internal health probes, and only for them.
   #

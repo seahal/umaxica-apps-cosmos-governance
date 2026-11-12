@@ -59,9 +59,6 @@ class PreferenceTokenModelTest < ActiveSupport::TestCase
             decoded = PreferenceToken.decode(token, host: @host, jwt_issuer_id: "preference_app")
 
             assert_equal claims, decoded
-            assert_equal claims, PreferenceToken.decode(
-              token, host: ENV.fetch("PUBLIC_CORE_SERVICE_URL"), jwt_issuer_id: "preference_app",
-            )
             assert_nil PreferenceToken.decode(
               token, host: ENV.fetch("PUBLIC_BASE_STAFF_URL"), jwt_issuer_id: "preference_org",
             )

@@ -2,17 +2,14 @@
 
 require "test_helper"
 
-# The ERB application layouts of Base and Auth derive Preference control endpoints from the
-# registry. Read-only Auth layouts receive no write endpoint, so browser code cannot choose one.
+# Base's ERB application layouts derive Preference control endpoints from the registry.
 class ErbLayoutPreferenceControlsTest < ActiveSupport::TestCase
   LAYOUTS = [
     { family: "base", surface: "app", controller: Base::App::ApplicationController, host: "PUBLIC_BASE_SERVICE_URL" },
     { family: "base", surface: "org", controller: Base::Org::ApplicationController, host: "PUBLIC_BASE_STAFF_URL" },
-    { family: "auth", surface: "app", controller: Auth::App::ApplicationController, host: "PUBLIC_AUTH_SERVICE_URL" },
-    { family: "auth", surface: "org", controller: Auth::Org::ApplicationController, host: "PUBLIC_AUTH_STAFF_URL" },
   ].freeze
 
-  test "Base layouts render controls and read-only Auth layouts omit them" do
+  test "Base layouts render their registered Preference controls" do
     LAYOUTS.each do |layout|
       family = layout.fetch(:family)
       surface = layout.fetch(:surface)

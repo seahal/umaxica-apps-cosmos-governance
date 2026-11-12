@@ -224,4 +224,23 @@ describe("TurnstileWidget", () => {
 
     expect(api.remove).toHaveBeenCalledWith("widget-1");
   });
+
+  it("does not publish a token after the challenge component has unmounted", async () => {
+    const onToken = vi.fn();
+    const screen = mount(
+      <TurnstileWidget
+        site_key="site-key"
+        onToken={onToken}
+      />,
+    );
+    await settle();
+    const callback = rendered[0]?.options.callback;
+
+    screen.unmount();
+    act(() => {
+      callback?.("late-token");
+    });
+
+    expect(onToken).not.toHaveBeenCalled();
+  });
 });

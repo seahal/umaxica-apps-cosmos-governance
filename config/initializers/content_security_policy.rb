@@ -19,20 +19,7 @@ Rails.application.configure do
         boot_config.fetch(:hosts).base_corporate.to_s,
         boot_config.fetch(:hosts).base_staff.to_s,
       ]
-    visa_form_hosts =
-      [
-        boot_config.fetch(:hosts).visa_service.to_s,
-        boot_config.fetch(:hosts).visa_staff.to_s,
-      ]
-    sign_form_hosts =
-      [
-        boot_config.fetch(:hosts).sign_service.to_s,
-        boot_config.fetch(:hosts).sign_staff.to_s,
-      ].uniq
-    # The jump gateway is the first-party redirect broker that validates signed `rt`
-    # tokens. Sign-flow form submissions (e.g. the sign-up birthdate checkpoint) finalize
-    # by redirecting cross-host through it. Without this origin, `form-action` blocks that
-    # redirect and the form navigation silently stalls on the submitting page.
+    # The jump gateway is the first-party redirect broker that validates signed `rt` tokens.
     jump_form_hosts = [boot_config.fetch(:jump).origin.to_s]
 
     policy.default_src(:self)
@@ -74,19 +61,7 @@ Rails.application.configure do
     policy.font_src(:self, :https, :data)
     policy.form_action(
       :self,
-      "https://accounts.google.com",
-      "https://appleid.apple.com",
-      # The org-surface Microsoft Entra ID ceremony starts as a browser-posted form to the
-      # same-origin OmniAuth request phase (/social/entra), which answers with a redirect to
-      # login.microsoftonline.com. Firefox applies form-action across that redirect, the same way
-      # it does for the Auth-to-Base handoff, so the Entra authorize origin has to be named here
-      # or staff sign-in stalls on the submitting page. Google and Apple are listed above for the
-      # identical reason. See lib/omniauth/strategies/umaxica_entra.rb and
-      # adr/org-entra-id-sign-in-boundary.md.
-      "https://login.microsoftonline.com",
       *base_form_hosts,
-      *visa_form_hosts,
-      *sign_form_hosts,
       *jump_form_hosts,
     )
     policy.frame_ancestors(:self)
@@ -116,7 +91,7 @@ Rails.application.configure do
     #    policy.style_src *policy.style_src, :unsafe_inline if Rails.env.development?
 
     policy.style_src_elem(:self, :https)
-    # `:self` rather than `:none` because the base and auth surfaces register a same-origin service
+    # `:self` rather than `:none` because the Base surfaces register a same-origin service
     # worker for the offline fallback page. `worker-src` governs `ServiceWorker` scripts, so `:none`
     # blocks `navigator.serviceWorker.register()` outright. `:self` admits only same-origin scripts,
     # which for these surfaces means the Rails-rendered /service-worker and nothing else: this

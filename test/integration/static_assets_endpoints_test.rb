@@ -7,57 +7,31 @@ require "test_helper"
 class StaticAssetsEndpointsTest < ActionDispatch::IntegrationTest
   ROBOTS_SURFACES = [
     {
-      host: ENV.fetch("PUBLIC_BASE_CORPORATE_URL", "base.com.localhost"),
+      host: Rails.configuration.x.boot_config.fetch(:hosts).base_corporate.host,
       controller: "base/com/robots",
     },
     {
-      host: ENV.fetch("PUBLIC_BASE_STAFF_URL", "base.org.localhost"),
-      controller: "base/org/robots",
+      host: Rails.configuration.x.boot_config.fetch(:hosts).base_service.host,
+      controller: "base/app/robots",
     },
     {
-      host: ENV.fetch("PUBLIC_PALM_SERVICE_URL"),
-      controller: "palm/app/robots",
+      host: Rails.configuration.x.boot_config.fetch(:hosts).base_staff.host,
+      controller: "base/org/robots",
     },
   ].freeze
 
-  # Every surface that still declares a sitemaps controller belongs here. Core no longer routes
-  # `/robots.txt` or `/sitemap.xml`; those files are an Edge/Next concern on Core hosts.
   SITEMAP_SURFACES = [
     {
-      host: ENV.fetch("PUBLIC_AUTH_SERVICE_URL", "auth.app.localhost"),
-      controller: "auth/app/sitemaps",
-    },
-    {
-      host: ENV.fetch("PUBLIC_AUTH_STAFF_URL", "auth.org.localhost"),
-      controller: "auth/org/sitemaps",
-    },
-    {
-      host: ENV.fetch("PUBLIC_BASE_SERVICE_URL", "base.app.localhost"),
+      host: Rails.configuration.x.boot_config.fetch(:hosts).base_service.host,
       controller: "base/app/sitemaps",
     },
     {
-      host: ENV.fetch("PUBLIC_BASE_CORPORATE_URL", "base.com.localhost"),
+      host: Rails.configuration.x.boot_config.fetch(:hosts).base_corporate.host,
       controller: "base/com/sitemaps",
     },
     {
-      host: ENV.fetch("PUBLIC_BASE_STAFF_URL", "base.org.localhost"),
+      host: Rails.configuration.x.boot_config.fetch(:hosts).base_staff.host,
       controller: "base/org/sitemaps",
-    },
-    {
-      host: ENV.fetch("PUBLIC_PALM_SERVICE_URL"),
-      controller: "palm/app/sitemaps",
-    },
-    {
-      host: ENV.fetch("PUBLIC_WARP_SERVICE_URL", "warp.app.localhost"),
-      controller: "warp/app/sitemaps",
-    },
-    {
-      host: ENV.fetch("PUBLIC_WARP_CORPORATE_URL", "warp.com.localhost"),
-      controller: "warp/com/sitemaps",
-    },
-    {
-      host: ENV.fetch("PUBLIC_WARP_STAFF_URL", "warp.org.localhost"),
-      controller: "warp/org/sitemaps",
     },
   ].freeze
 
@@ -76,7 +50,7 @@ class StaticAssetsEndpointsTest < ActionDispatch::IntegrationTest
     end
   end
 
-  test "sitemap.xml is served on every surface that declares a sitemaps controller" do
+  test "sitemap.xml is served on every Base surface" do
     SITEMAP_SURFACES.each do |surface|
       host! surface[:host]
 
@@ -92,7 +66,7 @@ class StaticAssetsEndpointsTest < ActionDispatch::IntegrationTest
   end
 
   test "robots and sitemap responses set long cache headers" do
-    host! ENV.fetch("PUBLIC_PALM_SERVICE_URL")
+    host! Rails.configuration.x.boot_config.fetch(:hosts).base_service.host
 
     get "/sitemap.xml"
 

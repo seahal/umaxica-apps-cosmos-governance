@@ -5,11 +5,10 @@
 #
 # A process booted with an `rp-*` runtime role authenticates only from its own cell: the Access JWT
 # verified against the OP's public JWKS plus the opaque local session cookie bound to it
-# (RpRequestAuthenticator). It never reads the OP store or the canonical actor. The callback commits
-# the verified (issuer, subject, sid) into the cell store (RpCallbackCommitter).
+# (RpRequestAuthenticator). It never reads the OP store or the canonical actor.
 #
 # The shared role uses the local cell for Base APP and ORG RP-owned routes. Other shared
-# routes and the Base OP role retain the OP-chain path.
+# routes cannot resolve OP authority while the Access query API is unavailable.
 module RpCellLocalSession
   extend ActiveSupport::Concern
 
@@ -44,26 +43,6 @@ module RpCellLocalSession
       local_session_id: cookies[OidcRpBrowserCredentialContract::SESSION_COOKIE],
       issuer: rp_cell_issuer, jwks_client: rp_cell_jwks_client,
     )
-  end
-
-  # Commits the verified ID Token into the cell store and installs the local session cookie.
-  def commit_rp_cell_callback!(id_token_payload, absolute_expires_at:)
-    cell = rp_cell
-    # The callback is a GET (reading role by default); the commit is a write on the cell writer.
-    result =
-      "#{cell.record_prefix}Record".constantize.connected_to(role: :writing) do
-        RpCallbackCommitter.call(
-          cell:, issuer: id_token_payload.fetch("iss"), subject: id_token_payload.fetch("sub"),
-          sid: id_token_payload.fetch("sid"), absolute_expires_at:,
-        )
-      end
-    return result unless result.success?
-
-    cookies[OidcRpBrowserCredentialContract::SESSION_COOKIE] =
-      OidcRpBrowserCredentialContract.session_cookie_options(expires_at: absolute_expires_at).merge(
-        value: result.session.public_id,
-      )
-    result
   end
 
   def clear_rp_cell_session_cookie!

@@ -28,26 +28,6 @@ scope module: :tech, as: :tech do
           resource :revision, only: :show, path: "revision.json", format: false
         end
       end
-
-      # R5-WU16 matching-session RP cookie purge after OP logout.
-      namespace :oidc do
-        resource :callback, only: :show
-        # R5-WU10 server-to-server OIDC Back-Channel Logout receiver for this RP cell.
-        resources :closures, only: :create
-      end
-
-      scope path: "sign", as: :sign do
-        get "", to: "sign/entries#show", as: :show
-        post "", to: "sign/entries#create", as: :create
-        # D-153: one generic landing for expected abnormal endings of the sign flow.
-        resource :interruption, only: :show, module: :sign
-      end
-
-      namespace :sign do
-        resource :out, only: %i(show create), controller: :outs
-        resource :out_completion, only: :show, path: "out/completion",
-                                  controller: "out/completions"
-      end
     end
   end
 end

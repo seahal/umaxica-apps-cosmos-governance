@@ -3,7 +3,11 @@
 Status: Deferred; recorded at the user's request on 2026-10-22. No implementation change is
 authorized by this entry. Stored in `docs/backlog/` at the user's explicit request.
 
-## Current findings
+> **Route status (2026-11-10):** Any local Auth route/controller references below are historical
+> after the owner-approved hard reset. Preserve the Step-Up delivery observations as a snapshot;
+> verify a retained caller or external authority before implementation.
+
+## Historical findings
 
 IdentityStepUpEmailCodeIssuer implements a 60-second credential-scoped issuance interval under
 locks, shared across transactions and browser changes. It records issuance before enqueue.

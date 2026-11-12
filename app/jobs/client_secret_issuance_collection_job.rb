@@ -33,10 +33,7 @@ class ClientSecretIssuanceCollectionJob < ApplicationJob
 
   def collect!(issuance)
     if issuance.sign_up_flow_ref && issuance.signup_completed_at.nil? && issuance.discard_at != Float::INFINITY
-      ClientSecretIssuancePurger.call_terminated_signup!(
-        issuance: issuance, executor_job_id: job_id, retention_after: ClientSecretLifetimesValue.proof_retention,
-      )
-      return
+      raise AccessOpDataUnavailableError
     end
 
     case issuance.state(at: Client.database_now)

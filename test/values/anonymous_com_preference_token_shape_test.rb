@@ -403,7 +403,7 @@ class AnonymousComPreferenceTokenShapeTest < ActiveSupport::TestCase
       DISPLAY_SNAPSHOT.merge({ "theme" => "dark" }), host: "www.umaxica.com", preference_type: "ComPreference",
                                                      issued_at: Time.current,
                                                      public_id: "AiM4xUN1G", jti: SecureRandom.uuid,
-                                                     jwt_issuer_id: "surface:AUTH_APP",
+                                                     jwt_issuer_id: "surface:BASE_APP",
     )
   end
 
@@ -415,15 +415,15 @@ class AnonymousComPreferenceTokenShapeTest < ActiveSupport::TestCase
     )
 
     claims, header = JWT.decode(token, nil, false)
-    issuer = JitSecurityJwtRegistry.issuer("surface:AUTH_APP")
+    issuer = JitSecurityJwtRegistry.issuer("surface:BASE_APP")
     unrelated = JWT.encode(
-      claims, JitSecurityJwtRegistry.private_key_for("surface:AUTH_APP"), header.fetch("alg"),
+      claims, JitSecurityJwtRegistry.private_key_for("surface:BASE_APP"), header.fetch("alg"),
       header.merge("kid" => issuer.current_kid).except("alg"),
     )
 
     assert_predicate SecurityJwtPreferenceTokenCodec.decode(token, host: "www.umaxica.com"), :present?
     assert_nil SecurityJwtPreferenceTokenCodec.decode(
-      unrelated, host: "www.umaxica.com", jwt_issuer_id: "surface:AUTH_APP",
+      unrelated, host: "www.umaxica.com", jwt_issuer_id: "surface:BASE_APP",
     )
   end
 

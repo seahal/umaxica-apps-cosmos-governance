@@ -15,23 +15,6 @@ class IdentityEmailCeremonyContractTest < ActiveSupport::TestCase
     travel_back
   end
 
-  test "valid grant and result serialize and verify" do
-    travel_to @now do
-      grant_token = IdentityEmailCeremonyGrant.issue(valid_grant_claims, issuer_id: acme_issuer_id, now: @now)
-      grant = IdentityEmailCeremonyGrant.decode(grant_token, issuer_id: acme_issuer_id, now: @now)
-
-      assert_equal "email_ceremony", grant["purpose"]
-      assert_equal IdentityEmailCeremonyContract.sign_audience("app"), grant["aud"]
-
-      result_token = IdentityEmailCeremonyResult.issue(valid_result_claims, issuer_id: sign_issuer_id, now: @now)
-      result = IdentityEmailCeremonyResult.decode(result_token, issuer_id: sign_issuer_id, now: @now)
-
-      assert_equal "email_ceremony_result", result["purpose"]
-      assert_equal "email_otp", result["proof_method"]
-      assert_equal IdentityEmailCeremonyContract.acme_audience("app"), result["aud"]
-    end
-  end
-
   test "grant rejects binding, audience, purpose, surface, operation, expiry, and forbidden fields" do
     assert_email_ceremony_error("actor_ref") do
       IdentityEmailCeremonyGrant.new(valid_grant_claims.except("actor_ref"), now: @now)
@@ -86,7 +69,7 @@ class IdentityEmailCeremonyContractTest < ActiveSupport::TestCase
       token = IdentityEmailCeremonyGrant.issue(valid_grant_claims, issuer_id: acme_issuer_id, now: @now)
 
       assert_email_ceremony_error("kid is unknown") do
-        IdentityEmailCeremonyGrant.decode(token, issuer_id: "surface:ACME_COM", now: @now)
+        IdentityEmailCeremonyGrant.decode(token, issuer_id: "surface:BASE_ORG", now: @now)
       end
 
       tampered_payload = valid_grant_claims.merge("actor_ref" => "attacker")

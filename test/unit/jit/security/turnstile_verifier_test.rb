@@ -40,37 +40,6 @@ module Jit
         end
       end
 
-      test "verify_for_ceremony requires binding and a ceremony id" do
-        TurnstileVerifierStub.enabled = false
-        missing_ceremony = JitSecurityTurnstileVerifier.new(
-          token: "tok",
-          remote_ip: "1.2.3.4",
-          secret_key: "secret",
-          ceremony_id: "",
-        )
-        missing_ceremony.stub(:verify, { "success" => true, "hostname" => "www.umaxica.app", "action" => "login" }) do
-          result = missing_ceremony.verify_for_ceremony
-
-          assert_not result["success"]
-          assert_equal "missing ceremony binding", result["error"]
-        end
-
-        verifier = JitSecurityTurnstileVerifier.new(
-          token: "tok",
-          remote_ip: "1.2.3.4",
-          secret_key: "secret",
-          ceremony_id: "ceremony-1",
-          expected_hostname: "www.umaxica.app",
-          expected_action: "login",
-        )
-        verifier.stub(:verify, { "success" => true, "hostname" => "other.example", "action" => "login" }) do
-          result = verifier.verify_for_ceremony
-
-          assert_not result["success"]
-          assert_equal "turnstile binding mismatch", result["error"]
-        end
-      end
-
       test "injected verifier returns the stubbed response" do
         TurnstileVerifierStub.response = { "success" => true, "mock" => true }
         result = Turnstile::VerifierFactory.current.verify(token: "foo", remote_ip: "127.0.0.1")
@@ -234,101 +203,6 @@ module Jit
           end
         end
         logger.verify
-      end
-
-      test "verify_for_ceremony rejects hostname action and cdata mismatches" do
-        TurnstileVerifierStub.enabled = false
-
-        response = {
-          "success" => true,
-          "hostname" => "id.app.localhost",
-          "action" => "social_signup_confirmation",
-          "cdata" => "ceremony-123",
-          "challenge_ts" => "2026-06-19T00:00:00Z",
-        }.to_json
-
-        mock_response_body = response
-
-        JitSecurityTurnstileConfig.stub(:visible_secret_key, "visible-secret") do
-          [
-            ["wrong.host", "social_signup_confirmation", "ceremony-123"],
-            ["id.app.localhost", "wrong_action", "ceremony-123"],
-            ["id.app.localhost", "social_signup_confirmation", "another-ceremony"],
-          ].each do |hostname, action, cdata|
-            stub_turnstile_response(mock_response_body) do
-              failure = JitSecurityTurnstileVerifier.verify_for_ceremony(
-                token: "tok",
-                remote_ip: "1.2.3.4",
-                ceremony_id: "ceremony-123",
-                expected_action: action,
-                expected_hostname: hostname,
-                expected_cdata: cdata,
-              )
-
-              assert_not failure["success"]
-              assert_equal "turnstile binding mismatch", failure["error"]
-            end
-          end
-        end
-      end
-
-      test "verify_for_ceremony consumes replay token once and rejects replay" do
-        TurnstileVerifierStub.enabled = false
-
-        response = {
-          "success" => true,
-          "hostname" => "id.app.localhost",
-          "action" => "social_signup_confirmation",
-          "cdata" => "ceremony-123",
-          "challenge_ts" => "2026-06-19T00:00:00Z",
-        }.to_json
-
-        mock_response_body = response
-        mock_response2_body = response
-
-        consumed = []
-        TurnstileReplayStore.stub(
-          :consume!, ->(**kwargs) {
-                       consumed << kwargs
-                       true
-                     },
-        ) do
-          JitSecurityTurnstileConfig.stub(:visible_secret_key, "visible-secret") do
-            stub_turnstile_response(mock_response_body) do
-              ok = JitSecurityTurnstileVerifier.verify_for_ceremony(
-                token: "tok",
-                remote_ip: "1.2.3.4",
-                ceremony_id: "ceremony-123",
-                expected_action: "social_signup_confirmation",
-                expected_hostname: "id.app.localhost",
-                expected_cdata: "ceremony-123",
-              )
-
-              assert ok["success"]
-            end
-          end
-        end
-
-        assert_equal 1, consumed.length
-        assert_equal "ceremony-123", consumed.first[:ceremony_id]
-
-        TurnstileReplayStore.stub(:consume!, ->(**_) { raise ActiveRecord::RecordNotUnique }) do
-          JitSecurityTurnstileConfig.stub(:visible_secret_key, "visible-secret") do
-            stub_turnstile_response(mock_response2_body) do
-              replay = JitSecurityTurnstileVerifier.verify_for_ceremony(
-                token: "tok",
-                remote_ip: "1.2.3.4",
-                ceremony_id: "ceremony-123",
-                expected_action: "social_signup_confirmation",
-                expected_hostname: "id.app.localhost",
-                expected_cdata: "ceremony-123",
-              )
-
-              assert_not replay["success"]
-              assert_equal "turnstile replay detected", replay["error"]
-            end
-          end
-        end
       end
 
       test "does not log response details outside development" do

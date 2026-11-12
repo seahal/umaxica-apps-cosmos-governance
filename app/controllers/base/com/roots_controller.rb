@@ -30,8 +30,6 @@ module Base
           title: nil,
           heading: "Base Com",
           description: t("landing.thin_endpoint"),
-          sign_in: nil,
-          sign_up: nil,
           links: [
             {
               label: t("ui_presentation.navigation.preferences"),

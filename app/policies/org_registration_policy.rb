@@ -15,7 +15,7 @@ class OrgRegistrationPolicy
   end
 
   def self.validate!(invitation_code:, email: nil)
-    new(invitation_code: invitation_code, email: email).validate!
+    raise AccessOpDataUnavailableError
   end
 
   def initialize(invitation_code:, email: nil)
@@ -24,40 +24,14 @@ class OrgRegistrationPolicy
   end
 
   def allowed?
-    return false if @invitation_code.blank?
-
-    result = OrgInvitationService.validate(code: @invitation_code, email: @email)
-    result.success?
+    raise AccessOpDataUnavailableError
   end
 
   def validate!
-    raise InvitationRequiredError, "Invitation code is required" if @invitation_code.blank?
-
-    result = OrgInvitationService.validate(code: @invitation_code, email: @email)
-
-    unless result.success?
-      invitation = OrganizationInvitation.find_by(code: @invitation_code)
-
-      if invitation&.consumed?
-        raise InvitationConsumedError, "Invitation has already been used"
-      elsif invitation&.expired?
-        raise InvitationExpiredError, "Invitation has expired"
-      else
-        raise InvalidInvitationError, "Invalid invitation code"
-      end
-    end
-
-    result.invitation
+    raise AccessOpDataUnavailableError
   end
 
   def consume!
-    invitation = validate!
-    result = OrgInvitationService.consume(code: @invitation_code, email: @email)
-
-    unless result.success?
-      raise InvalidInvitationError, "Failed to process invitation"
-    end
-
-    invitation
+    raise AccessOpDataUnavailableError
   end
 end

@@ -38,8 +38,8 @@ class ApplicationPolicy < ActionPolicy::Base
 end
 ```
 
-Each surface ApplicationController supplies the actor, for example in
-`app/controllers/core/app/application_controller.rb`:
+The Base app ApplicationController supplies the actor, for example in
+`app/controllers/base/app/application_controller.rb`:
 
 ```ruby
 authorize :actor, through: :current_actor

@@ -4,6 +4,11 @@ Status: Accepted
 
 Date: 2026-09-12
 
+> **Route-scope supersession (2026-11-10):** The owner-approved local-surface hard reset supersedes
+> this ADR's local Rails route/controller assignments for Auth, Core, and Side/Warp. Base app/com/org,
+> Tech, and operator-tool ownership remain local as currently routed. This amendment does not remove
+> external OIDC authorities, client registrations, redirect-URI contracts, or model/database state.
+
 ## Context
 
 The app realm spans four host-constrained Rails surfaces: Core/App, Auth/App, Base/App, and

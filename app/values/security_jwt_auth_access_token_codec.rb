@@ -15,62 +15,6 @@ class SecurityJwtAuthAccessTokenCodec
   DEFAULT_JWT_ISSUER_ID = "auth"
 
   class << self
-    def encode(resource, host:, resource_type: nil, dpop_jkt: nil, expires_at: nil,
-               session_public_id: nil, session_id: nil, base_session_public_id: nil,
-               oidc_sid: nil, oidc_jti: nil, scopes: nil, acr: nil,
-               amr: nil, access_token_ttl: SecurityTokenLifetimes::AUTH_ACCESS_JWT_TTL,
-               jwt_issuer_id: nil, issuer: nil, audiences: nil,
-               subject: nil, auth_time: nil, step_up_until: nil, client_id: nil,
-               authentication_context: nil)
-      resource_type ||=
-        case resource
-        when ::Client then "client"
-        when ::Operator then "operator"
-        end
-
-      return nil unless valid_encode_params?(resource, host)
-
-      oidc_jti ||= oidc_jti_for_session(resource_type, session_public_id)
-
-      issued_at = Time.current
-      payload = AuthorizationTokenClaims.build(
-        resource: resource,
-        session_id: session_id,
-        session_public_id: session_public_id,
-        base_session_public_id: base_session_public_id,
-        oidc_sid: oidc_sid,
-        oidc_jti: oidc_jti,
-        resource_type: resource_type,
-        issued_at: issued_at,
-        access_token_ttl: access_token_ttl,
-        expires_at: expires_at,
-        scopes: scopes,
-        acr: acr,
-        amr: amr,
-        dpop_jkt: dpop_jkt,
-        issuer: issuer,
-        audiences: audiences,
-        subject: subject,
-        auth_time: auth_time,
-        step_up_until: step_up_until,
-        client_id: client_id,
-        authentication_context: authentication_context,
-      )
-
-      JitSecurityJwtKeyring.encode(payload, typ: TOKEN_TYPE, issuer_id: resolve_jwt_issuer_id(jwt_issuer_id))
-    rescue JWT::EncodeError, OpenSSL::PKey::PKeyError, ArgumentError, TypeError => e
-      Rails.logger.error(
-        JitLogEvent.format(
-          "authentication.token.encoding.error",
-          error_class: e.class.name,
-          message: e.message,
-          resource_type: resource_type,
-          resource_id: resource&.id,
-        ),
-      )
-      nil
-    end
-
     def decode(token, host:, resource_type: nil, issuer: nil, audiences: nil, jwt_issuer_id: nil)
       decode_with_expiration(
         token, host: host, resource_type: resource_type, issuer: issuer,
@@ -212,38 +156,8 @@ class SecurityJwtAuthAccessTokenCodec
 
     private
 
-    def valid_encode_params?(resource, host)
-      return false if resource.nil? || host.blank?
-
-      # Ensure resource is Client or Operator
-      resource.is_a?(::Client) || resource.is_a?(::Operator)
-    end
-
-    def oidc_jti_for_session(resource_type, session_public_id)
-      return nil if resource_type.blank? || session_public_id.blank?
-
-      token_class = token_class_for_resource_type(resource_type)
-      return nil unless token_class&.column_names&.include?("oidc_jti")
-
-      lookup = lambda { token_class.where(public_id: session_public_id).pick(:oidc_jti) }
-      token_connection_owner(token_class).connected_to(role: :writing, &lookup)
-    end
-
-    def token_class_for_resource_type(resource_type)
-      case resource_type.to_s
-      when "client" then ::ClientToken
-      when "operator" then ::OperatorToken
-      end
-    end
-
     def resolve_jwt_issuer_id(jwt_issuer_id)
       jwt_issuer_id.presence || DEFAULT_JWT_ISSUER_ID
-    end
-
-    def token_connection_owner(token_class)
-      klass = token_class
-      klass = klass.superclass until klass.connection_class?
-      klass
     end
 
     def decode_options(resource_type, issuer, audiences, verify_exp:)

@@ -1,5 +1,10 @@
 # UI normalization implementation and deviation record
 
+> **Historical scope (2026-11-11):** This record describes the repository before the surface hard
+> reset. References to retired Auth, Core, Edit and other surfaces below document that earlier
+> implementation state; they are not current routes, host configuration or runnable instructions.
+> See [current surface ownership](subdomains.md) for the active host contract.
+
 Executed locally on 2026-10-05 against branch `feature`, HEAD
 `7de33215b055bc8f0f2721b86a04b428a049220e`, with existing and concurrent uncommitted work.
 The initial status and SHA-256 source snapshot are retained at
@@ -87,8 +92,10 @@ bin/rails test test/unit/views test/integration/vite_asset_nonce_test.rb test/in
 bin/rails test test/integration/layout_rendered_title_smoke_test.rb test/integration/routes/edit_org_publishing_management_route_contract_test.rb
 RAILS_ENV=test bin/vite build --mode=test --force
 bin/rails runner -e test scripts/ui-test-server.rb
-E2E_BASE_SERVICE_URL=http://base.app.localhost:3188/ E2E_AUTH_SERVICE_URL=http://auth.app.localhost:3188/ node node_modules/playwright/cli.js test e2e/ui-erb-presentation.spec.ts e2e/ui-application.spec.ts e2e/ui-presentation.spec.ts e2e/ui-authenticated-presentation.spec.ts e2e/ui-ceremony-presentation.spec.ts e2e/ui-secret-reveal-presentation.spec.ts --reporter=list --output=/tmp/umaxica-ui-normalization-continuation/final-browser
 ```
+
+The historical browser invocation that required a retired Auth host is omitted from the current
+command list. Its recorded result below remains a result from the pre-reset tree.
 
 - Full Vitest after continuation: **98 files, 1126 tests passed**; no snapshots blindly updated or tests skipped.
 - Typecheck and production build passed, **2369 modules**. Forced test-mode build also passed; its existing large-chunk warning was not suppressed by changing configuration.

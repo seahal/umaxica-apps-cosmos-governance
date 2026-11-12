@@ -5,11 +5,11 @@ Health endpoints return the shared runtime health contract from the `Health` ser
 As of the 2026-09-05 text+JSON contract there are two families:
 
 - **Text probes** (`text/plain; charset=utf-8`, `Cache-Control: no-store`, no redirect, no auth, no
-  `.txt` suffix, never JSON or HTML). Each surface mounts:
+  `.txt` suffix, never JSON or HTML). Each Base and Tech application surface mounts:
   - `GET /health` — aggregate. Body is exactly seven lines in a fixed order:
     ```
     title: Health status
-    namespace: auth/app
+    namespace: base/app
     status: ok
     startup: ok
     liveness: ok
@@ -37,10 +37,6 @@ object owns serialization (`as_public_json`) and the 200/503 decision (`http_sta
 controllers (`HealthCheckRendering`, `app/controllers/concerns/health_check_rendering.rb`) only
 render it.
 
-The bootstrap GUID profile deliberately declares no database dependency because no authoritative
-GUID store exists yet. Its readiness check remains process-local until the persistence boundary is
-specified; adding that store also requires adding its bounded readiness dependency here.
-
 These endpoints are internal-only checkpoints for orchestrators and monitoring, not a user-facing
 contract; public traffic to them is blocked at the edge. User-facing availability is served by a
 separate integrated status page (external service). See
@@ -56,7 +52,7 @@ separate integrated status page (external service). See
     "liveness": { "status": "pass" },
     "readiness": { "status": "pass" }
   },
-  "namespace": "docs/app",
+    "namespace": "base/app",
   "timestamp": "2026-09-05T12:00:00Z"
 }
 ```
@@ -105,6 +101,5 @@ endpoints) so it also covers the `406` returned for a non-JSON `Accept` on the m
 health response is a verdict about one instance at one instant: a stored `200` keeps an orchestrator
 sending traffic to an instance that has since failed readiness, and a stored `503` keeps traffic
 away from one that has recovered. Rails would otherwise default these to
-`max-age=0, private, must-revalidate`, which permits storage. On Global and Publishing surfaces the
-policy-root default (`docs/reference/http-cache-policy.md`) also applies `no-store`; the health
-contract does not depend on it, because Core, Palm, and Warp are outside that default.
+`max-age=0, private, must-revalidate`, which permits storage. The health contract sets `no-store`
+explicitly and does not depend on a surface-root cache default.

@@ -8,6 +8,11 @@ Accepted (2026-07-16)
 
 2026-07-16
 
+> **Local-route disposition (2026-11-10):** The owner-approved local-surface hard reset removes this
+> repository's local Edit/Docs/News/Help/Info route and controller delivery. The Publishing
+> authority, database/model contracts, existing data, and external consumers are not retired by
+> this route decision; do not infer a schema or OIDC-registration change from it.
+
 ## Context
 
 Content persistence was duplicated:

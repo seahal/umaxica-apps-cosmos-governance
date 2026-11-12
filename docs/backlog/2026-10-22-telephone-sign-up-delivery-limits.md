@@ -4,7 +4,11 @@ Status: Deferred; recorded at the user's request on 2026-10-22. No implementatio
 authorized by this entry. `.com` authentication was retired after this entry was recorded; this
 entry now covers `.app` only. Stored in `docs/backlog/` at the user's explicit request.
 
-## Current findings
+> **Route status (2026-11-10):** Local Auth route/controller references below are historical after
+> the owner-approved hard reset. Preserve these delivery-policy observations as a snapshot; re-scope
+> them to a retained caller or external authority before implementation.
+
+## Historical findings
 
 App telephone sign-up issuance checks a 30-second cooldown on the individual telephone candidate
 under a database lock. TelephoneSignUpCandidateCreator creates a new owner and candidate; its

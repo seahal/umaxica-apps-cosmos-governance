@@ -15,18 +15,15 @@ module Base
       include ::BasePreferenceActorProjection
 
       include ::BrowserRpAuthentication
+      include ::BrowserRpUnsafeRequestGuard
       include ::AuthenticationWithdrawalGate
-      include ::BrowserRpSafeRequestRefresh
-      include ::BrowserRpUnsafeRequestRefresh
 
       include ::BaseAdmissionBrowserBinding
       include ::SignErrorResponses
-      include ::SessionLimitGate
       include ::AuthorizationAudit
       include ::AuthorizationClient
       include ::VerificationClient
       include ActionPolicy::Controller
-      include ::OidcSsoInitiator
       include SurfaceRouteAliasHelper
       include ::ActorSupport
       include ::Finisher
@@ -44,8 +41,7 @@ module Base
       helper_method :current_resource, :browser_rp_authenticated?, :browser_rp_session_public_id,
                     :current_browser_session_security_context, :current_session_public_id,
                     :current_session, :logged_in?
-      before_action :authenticate_browser_rp_safe_request!
-      prepend_before_action :authenticate_browser_rp_unsafe_request!
+      prepend_before_action :guard_browser_rp_unsafe_request!
 
       class << self
         public
@@ -57,14 +53,12 @@ module Base
 
       authorize :user, through: :current_policy_user
       authorize :actor, through: :current_actor
-      rescue_from AuthenticationBase::LoginCooldownError, with: :render_login_cooldown
       rescue_from ApplicationError, with: :handle_application_error
       rescue_from BaseZenithIdentityResolver::DependencyUnavailable, with: :render_base_zenith_identity_unavailable
       rescue_from ActionController::InvalidCrossOriginRequest, with: :handle_csrf_failure
       rescue_from ActionPolicy::Unauthorized, with: :handle_authorization_error
       helper_method :current_actor, :current_account, :current_session_public_id,
-                    :signed_pt_param, :current_client, :logged_in?, :active_client?, :logged_in_client?,
-                    :apple_only_credential?
+                    :current_client, :logged_in?, :active_client?, :logged_in_client?
 
       allow_browser versions: :modern
 
@@ -122,12 +116,6 @@ module Base
         case state.rp_session
         when RpBaseAppSession
           BaseZenithIdentityResolver.call(access_state: state, surface: :app)
-        when OpAppGrant
-          resource = state.resource
-          raise ActiveRecord::RecordNotFound, "Base APP identity has the wrong type" unless
-            resource.instance_of?(Client)
-
-          resource
         else
           raise ActiveRecord::RecordNotFound, "Base APP identity has no recognized session binding"
         end
@@ -175,14 +163,7 @@ module Base
         case controller_path
         when "base/app/secrets", "base/app/secret_issuances", "base/app/secret_presentations"
           "secret_management"
-        when "base/app/identity/emails/registrations", "base/app/identity/emails/redeliveries",
-             "base/app/identity/telephones/registrations"
-          "contact_registration"
-        when "base/app/identity/emails"
-          "contact_mutation" if %w(update destroy).include?(action_name)
-        when "base/app/identity/totps"
-          "totp_registration" if action_name == "create"
-        when "base/app/identity/sessions", "base/app/identity/revocations/others"
+        when "base/app/identity/sessions"
           "session_management"
         when "base/app/verifications", "base/app/verification/setups"
           "secret_verification" if secret_verification_request?
@@ -242,60 +223,7 @@ module Base
         browser_rp_client_id
       end
 
-      # D-151: path-only `target_link_uri`; no query is carried.
-      def sign_in_url_with_target(pt)
-        target = pt.present? ? RpTargetLinkUri.normalize(URI.parse(decode_pt(pt)).path) : nil
-        base_app_sign_show_path(ri: RequestContextContract.normalize_region(params[:ri]), target_link_uri: target)
-      rescue URI::InvalidURIError
-        base_app_sign_show_path(ri: RequestContextContract.normalize_region(params[:ri]))
-      end
-
-      def oidc_sign_host
-        ENV.fetch("PUBLIC_AUTH_SERVICE_URL")
-      end
-
-      def oidc_visa_authority_host
-        Rails.configuration.x.boot_config.fetch(:hosts).visa_service.host
-      end
-
       private
-
-      def apple_only_credential?
-        AppleOnlyCredentialStatus.call(current_client)
-      end
-
-      # The Inertia props for the "add another sign-in method" prompt, or nil when the actor already
-      # has another credential. Returning nil keeps the decision on the server: a page that is not
-      # given the prop cannot show the prompt.
-      def apple_only_credential_warning_props
-        return unless apple_only_credential?
-
-        {
-          heading: t("base.app.identity.credential_warning.heading"),
-          body: t("base.app.identity.credential_warning.body"),
-          items: [
-            {
-              label: t("base.app.identity.credential_warning.passkey"),
-              href: new_base_app_identity_passkey_url(
-                ri: params[:ri], host: ENV.fetch("PUBLIC_BASE_SERVICE_URL"), protocol: "https",
-              ),
-            },
-            {
-              label: t("base.app.identity.credential_warning.google"),
-              href: apple_only_credential_auth_url(:edit_auth_app_settings_google_url),
-            },
-          ],
-        }
-      end
-
-      def apple_only_credential_auth_url(route_helper)
-        public_send(
-          route_helper,
-          ri: params[:ri],
-          host: ENV.fetch("PUBLIC_AUTH_SERVICE_URL"),
-          protocol: "https",
-        )
-      end
 
       def actor_verification_path(**args)
         base_app_verification_path(**args)

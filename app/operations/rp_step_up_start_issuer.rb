@@ -4,7 +4,7 @@
 class RpStepUpStartIssuer
   Result = Data.define(:authorization_url, :state_ref, :return_target)
 
-  STEP_UP_ACR = "https://visa.umaxica.app/acr/reauthentication"
+  STEP_UP_ACR = OidcAuthorizeRequestResolver::STEP_UP_ACR
   PENDING_TTL = 15.minutes
 
   class Refused < StandardError

@@ -11,22 +11,6 @@ class WithdrawalLifecycleTest < ActiveSupport::TestCase
     @session_public_id = "test-session-public-id"
   end
 
-  class WithdrawalLifecycleTest::TestTokenScope
-    class Filter < Struct.new(:scope)
-      def not(**) = scope
-    end
-
-    def initialize(records = []) = @records = records
-
-    def find_each(&) = @records.each(&)
-
-    def klass = ClientToken
-
-    def where(**) = Filter.new(self)
-
-    def column_names = []
-  end
-
   test "start! creates a requested withdrawal flow for a client" do
     client = clients(:one)
 
@@ -99,7 +83,7 @@ class WithdrawalLifecycleTest < ActiveSupport::TestCase
     client = clients(:one)
     WithdrawalLifecycle.start!(actor: client, current_session_public_id: @session_public_id, request: @request)
 
-    AuthenticationSessionRevoker.stub(:tokens_for, TestTokenScope.new) do
+    assert_raises(AccessOpDataUnavailableError) do
       WithdrawalLifecycle.suspend!(actor: client, current_session_public_id: @session_public_id, request: @request)
     end
 
@@ -128,7 +112,7 @@ class WithdrawalLifecycleTest < ActiveSupport::TestCase
     client = clients(:one)
     client.client_withdrawal_flows.create!(status_id: ClientWithdrawalFlowStatus::REQUESTED, began_at: Time.current)
 
-    AuthenticationSessionRevoker.stub(:tokens_for, TestTokenScope.new) do
+    assert_raises(AccessOpDataUnavailableError) do
       WithdrawalLifecycle.suspend!(actor: client, current_session_public_id: @session_public_id, request: @request)
     end
 
@@ -142,7 +126,7 @@ class WithdrawalLifecycleTest < ActiveSupport::TestCase
     client.update_columns(deactivated_at: nil, purge_eligible_at: future_purge_eligible_at)
     WithdrawalLifecycle.start!(actor: client, current_session_public_id: @session_public_id, request: @request)
 
-    AuthenticationSessionRevoker.stub(:tokens_for, TestTokenScope.new) do
+    assert_raises(AccessOpDataUnavailableError) do
       WithdrawalLifecycle.suspend!(actor: client, current_session_public_id: @session_public_id, request: @request)
     end
 
@@ -155,7 +139,7 @@ class WithdrawalLifecycleTest < ActiveSupport::TestCase
     client.update_columns(created_at: 3.days.ago, deactivated_at: deactivated_at, purge_eligible_at: Float::INFINITY)
     WithdrawalLifecycle.start!(actor: client, current_session_public_id: @session_public_id, request: @request)
 
-    AuthenticationSessionRevoker.stub(:tokens_for, TestTokenScope.new) do
+    assert_raises(AccessOpDataUnavailableError) do
       WithdrawalLifecycle.suspend!(actor: client, current_session_public_id: @session_public_id, request: @request)
     end
 
@@ -274,7 +258,7 @@ class WithdrawalLifecycleTest < ActiveSupport::TestCase
       discard_at: Float::INFINITY,
     )
 
-    AuthenticationSessionRevoker.stub(:tokens_for, TestTokenScope.new) do
+    assert_raises(AccessOpDataUnavailableError) do
       WithdrawalPersonalDataAnonymizer.stub(:call, ->(actor:) { actor }) do
         WithdrawalLifecycle.terminate!(actor: client, request: @request)
       end

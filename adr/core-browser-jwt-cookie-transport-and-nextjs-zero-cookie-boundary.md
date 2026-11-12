@@ -8,6 +8,11 @@ their established values.
 
 Accepted (2026-06-14)
 
+> **Local-route disposition (2026-11-10):** The owner-approved local-surface hard reset removes the
+> Rails Core routes/controllers described by this contract. Its local Rails transport implementation
+> is no longer a current endpoint contract. External Next.js/Cloudflare boundaries, retained OIDC
+> registrations, and model/database state are not changed by this route decision.
+
 ## TanStack UI-Origin Supersession (2026-10-03)
 
 `adr/tanstack-start-zero-cookie-ui-origin-boundary.md` supersedes this record's Core UI-origin and

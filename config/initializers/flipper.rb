@@ -12,10 +12,7 @@ require "flipper/adapters/active_record"
 # `primary` has no replica on purpose. A flag is read immediately after it is
 # toggled, so replication lag would surface as a flip that did not apply.
 #
-# The reading role points at the same database rather than being omitted: the
-# DatabaseSelector middleware (config/initializers/multi_db.rb) wraps GET requests in
-# `connected_to(role: :reading)`, and a model without a reading pool raises
-# ActiveRecord::ConnectionNotDefined there.
+# Both roles point at the same database so any explicit read uses the authoritative flag store.
 #
 # Wrapped in the same load hook the adapter uses to define its models: the adapter
 # defers `Flipper::Adapters::ActiveRecord::Model` until ActiveRecord::Base is loaded,

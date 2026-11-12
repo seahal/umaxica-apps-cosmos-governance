@@ -1,17 +1,15 @@
 # Authentication Assurance Levels
 
-> **Partially superseded by Identity Authority inversion:** The AAL vocabulary in this document
-> remains useful only where it does not assign session, token, authorization, or step-up freshness
-> authority to `sign/id`. `acme/www` is the Session, Token, Account, Preference, Authorization, and
-> downstream-token Authority. `sign/id` is ceremony-only. Existing sign-side physical tables/models
-> do not imply sign-side authority. Do not use this document to reintroduce sign-side sessions,
-> refresh, preference, dashboard, account lifecycle, token issuance, logout, or step-up freshness.
+> **Current route status (2026-11-11):** Base and Tech OIDC sign-in is unavailable. This repository
+> no longer contains provider URL configuration, RP callback routes or local sign-in entrypoints.
+> The sign-in method and ceremony policy tables below describe the previous integration; retained
+> session, token and authorization state remains governed by its current owners.
 
 Fresh Umaxica step-up, achieved AAL, phishing resistance, allowed methods, and freshness are
 independent conditions. Email OTP may complete APP normal step-up but has no achieved NIST AAL;
 TOTP alone and current UV passkey ceremonies record AAL1, while passkey is phishing-resistant.
 
-## Surface policy
+## Historical surface policy
 
 | surface | sign-up / sign-in                                                | normal step-up                                         | passkey UV                                             |
 | ------- | ---------------------------------------------------------------- | ------------------------------------------------------ | ------------------------------------------------------ |
@@ -223,12 +221,11 @@ behavior.
 - AAL3 remains unsupported until a future ADR defines it.
 - Contact-identifier inventory is independent from authentication assurance.
 
-## WebAuthn User Verification Policy
+## Historical WebAuthn User Verification Policy
 
-Passkey ceremonies resolve their `userVerification` requirement through the closed
-`Webauthn::UvPolicy` registry (`app/values/webauthn/uv_policy.rb`); call sites never pass raw policy
-strings. Server-side enforcement (`verify(..., user_verification: true)` plus explicit
-`user_verified?` / `user_present?` re-checks) follows the same policy.
+The former local ceremony integration used the following User Verification policy. Its verifier
+routes and registry code were removed with the surface reset; this table records that prior design
+and does not describe a currently routed ceremony.
 
 | Purpose             | Flow                                          | Policy   |
 | ------------------- | --------------------------------------------- | -------- |
@@ -238,11 +235,10 @@ strings. Server-side enforcement (`verify(..., user_verification: true)` plus ex
 | `ordinary_step_up`  | step-up verification for sensitive settings   | required |
 | `high_risk_step_up` | reserved for future high-risk operations      | required |
 
-The purposes are deliberately distinct so a future decision can relax exactly one of them (e.g.
-`ordinary_step_up`) without changing the UV-required sign-in and registration paths; any such change
-requires updating `docs/security/webauthn-security-invariants.md` and `adr/passkey-uv-policy.md`
-first. Only a user-verified, user-present assertion supports the AAL2-aligned claim
-(`Webauthn::AuthenticationContext#aal2_aligned?`).
+The purposes were deliberately distinct so a future verifier could relax exactly one of them
+without changing the sign-in and registration policy. The current local RP configuration and
+signed-result boundary are documented in
+[`webauthn-architecture.md`](webauthn-architecture.md).
 
 ## Delivered reconciliation (2026-10-06)
 

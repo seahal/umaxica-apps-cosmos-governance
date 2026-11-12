@@ -43,24 +43,10 @@ class OperatorPasskeyPolicy < ApplicationPolicy
     relation.where(staff_id: user.id)
   end
   def management_requirement(token:)
-    unless user.is_a?(Operator) && user.persisted? && token.is_a?(OperatorToken) && token.persisted? &&
-        token.staff_id == user.id
-      raise ArgumentError, "Passkey management requires a bound org actor and session"
-    end
-
-    StepUpRequirement.new(
-      step_up_required: true, scope: "settings_passkey", allowed_methods: [:passkey],
-      phishing_resistant_required: false, user_verification_required: false,
-      full_reauthentication_required: false, session_binding: token.public_id, token_binding: token.public_id,
-      ttl: 15.minutes, purpose: "step_up", audience: "step_up:org", require_session_binding: true,
-      actor_ref: user.public_id, resource_ref: (record.is_a?(OperatorPasskey) ? record.external_id : nil),
-      tenant_ref: nil,
-    )
+    raise AccessOpDataUnavailableError
   end
 
   def management_authorized?(token:, now:)
-    device = OperatorDeviceSession.find_by(id: token.device_session_id, staff_id: user.id)
-    user.login_allowed? && token.active_status?(now) && device.usable? &&
-      device.current_refresh_token_id == token.id
+    raise AccessOpDataUnavailableError
   end
 end

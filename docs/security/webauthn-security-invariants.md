@@ -1,113 +1,40 @@
 # WebAuthn Security Invariants
 
-This document is the authority for the invariants mechanically checked by
-`test/unit/security/webauthn_invariants_test.rb` and for duplicate-registration and User
-Verification guarantees enforced by the data and ceremony layers. The prohibited patterns have
-previously shipped as defects, so static tests reject their reintroduction.
+These rules describe the retained RP configuration and signed-result boundary. This Rails
+application does not expose browser WebAuthn sign-in, registration-start or assertion-verification
+routes. Base and Tech OIDC sign-in is unavailable after removal of its provider URLs and callback
+routes. Persisted passkey records and their migrations are retained.
 
-## User Verification (UV)
+## Surface and origin binding
 
-- Resolve every ceremony's UV policy through the closed `Webauthn::UvPolicy` registry. Call sites
-  must not directly specify `"required"`, `"preferred"`, or `"discouraged"` strings.
-- Every current registry entry is `required`: `registration`, `direct_sign_in`, `emergency_sign_in`,
-  `mfa_challenge`, `ordinary_step_up`, and `high_risk_step_up`. Purposes are separated so that only
-  `ordinary_step_up` can be relaxed by a future explicit decision. Such a change must update this
-  document and `adr/passkey-uv-policy.md`.
-- Enforce UV on the server as well as in client options. In addition to
-  `credential.verify(..., user_verification: true)`, verifiers explicitly recheck `user_verified?`
-  and `user_present?` in `RegistrationVerifier` and `AssertionVerifier`.
-- Never accept a response with UV=false for a purpose whose registry policy requires UV. Record
-  achieved assurance separately from UV, freshness, phishing resistance, and step-up completion; UV
-  alone does not imply AAL2.
+- Resolve RP ID and origin from an explicit app or org surface. Never derive either value from
+  `request.host` or `request.base_url`.
+- Reject shared RP ID or origin environment keys. Each active surface has its own configuration.
+- Do not infer the surface from a controller class name or mutate global `WebAuthn.configure`
+  state.
+- The RP ID must equal the configured origin host. Origin checks compare scheme, host and effective
+  port.
+- A browser WebAuthn verifier must receive an explicit relying-party instance if one is
+  reintroduced.
 
-## Ceremony Purposes Are Namespaces
+`test/unit/security/webauthn_invariants_test.rb` guards these source-level boundaries, and
+`test/unit/webauthn/relying_party_config_test.rb` exercises the configuration value.
 
-- `Webauthn::ChallengeStore::PURPOSES` is closed, and a challenge issued for one purpose is rejected
-  by every other verifier in both directions. Consumption deletes the entry before any binding is
-  checked, so a rejected attempt still burns the challenge.
-- Org Emergency Access uses `emergency_sign_in`, distinct from normal sign-in's `authentication` and
-  from `step_up`. A new purpose must state what it may not be confused with; the exhaustive
-  cross-purpose check lives in `test/unit/webauthn/challenge_store_test.rb`.
-- Emergency Access must not grow a parallel verifier, challenge store, or credential store. It is a
-  different authentication policy running the same cryptographic implementation
-  (`docs/security/org-emergency-access.md`).
+## Signed-result consumption
 
-## Duplicate Registration by Credential ID
+- A passkey result must have the expected token type, issuer, audience and purpose.
+- Bind the result to the same surface, actor, session and transaction as the pending completion.
+- Reject expired or already consumed transactions before writing a credential.
+- Route credential writes through `PasskeyRegistrationOperation`; it locks the owning actor and
+  records the audit outbox event in the same transaction.
+- Keep `webauthn_id` unique per app or org credential store. A credential cannot move between
+  owners or surfaces through metadata or browser-supplied identifiers.
 
-- Store the Base64URL credential ID in `webauthn_id`. Each surface table (`client_passkeys`,
-  `visitor_passkeys`, and `operator_passkeys`) has a UNIQUE index independent of owner. Within one
-  surface, the same credential cannot be registered twice to either the same or a different account.
-- Defense has three layers: model validation with `uniqueness: true`; a database UNIQUE index that
-  maps a racing `RecordNotUnique` to HTTP 409; and registration `excludeCredentials` containing
-  **every credential, including revoked and disabled entries**, so the browser raises
-  `InvalidStateError`.
-- Continue rejecting the credential ID of a revoked or disabled row until that row is purged. No
-  reactivation flow is provided.
-- An AAGUID identifies an authenticator product line, not an instance. **Never use an AAGUID,
-  provider name, or product name for duplicate detection.** Multiple credentials with one AAGUID are
-  valid, including two physical keys of the same product or multiple passkeys from one provider.
-- WebAuthn cannot reliably determine whether one physical authenticator generated a new credential
-  ID, especially with `attestation: "none"`. This is an accepted protocol limitation.
-- RP IDs differ across app/org, so one authenticator creates separate credentials for each
-  active surface. Cross-surface credential sharing and duplication do not occur within this architecture;
-  see `docs/security/webauthn-rp-id-origin-boundary.md`.
-- The com authentication surface was retired on 2026-11-07. It is absent from the active WebAuthn
-  registry; existing visitor credential records remain persisted data and are not an active surface.
+## Metadata and authority
 
-## Discoverable Direct Sign-in
+Authenticator metadata is limited to the explicit display columns accepted by
+`Webauthn::AuthenticatorMetadata.permit`. AAGUID, provider name, transports, backup flags and
+attachment data do not grant access, establish an actor, or satisfy step-up by themselves.
 
-- APP direct Passkey options are identifier-first and anonymous above that: the identifier selects a
-  candidate Identity, and the `allowCredentials` response is empty, so no real credential ID,
-  credential count, credential length, or account/Passkey existence is disclosed during options
-  issuance.
-- APP verification resolves the app-local passkey from the assertion credential ID, then verifies
-  the assertion with that row's saved public key. The browser's `userHandle`, any submitted
-  identifier, and client-side metadata are not identity authorities beyond the initial selection.
-- Verification rechecks ACTIVE credential status, active actor state, verified-PII and existing
-  session-limit rules (full-access limit, waiting slot, refusal) before establishing a session. A disabled, revoked,
-  unknown, or cross-surface credential fails with the existing generic unauthorized contract.
-- Every Passkey surface requires discoverable credentials (`residentKey: "required"`) at
-  registration. Existing non-discoverable app credentials need re-registration. Existing
-  non-discoverable Org keys retain normal Entra-bound sign-in but require re-registration for
-  Emergency Access.
-- Org Emergency options return no credential descriptors and retain fixed-length selected-Operator
-  binding, including a non-authenticating sentinel for unknown/ineligible selections. Org normal
-  sign-in, MFA and Step-Up retain their actor-scoped descriptor behavior and security checks.
-  See [response nondisclosure](../../adr/credential-response-nondisclosure.md).
-
-## User Handle
-
-- WebAuthn `user.id` uses the actor's `webauthn_user_handle`, generated with
-  `SecureRandom.urlsafe_base64(32)`, constrained UNIQUE, and immutable after creation.
-- Never use an internal bigint primary key or PII such as an email address as a user handle. The
-  former implementation exposed the primary key.
-- The authenticator stores this handle. Rotating it would orphan existing credentials, so changing
-  it is prohibited.
-
-## Authenticator Metadata (Display Only)
-
-- `aaguid`, `transports`, `backup_eligible`, `backup_state`, `authenticator_attachment`,
-  `provider_name`, and `metadata_source` support display and inventory only. With
-  `attestation: "none"`, these are self-asserted values and must not affect authorization, duplicate
-  detection, or security policy.
-- Keep the catalog-resolved `provider_name` separate from the user-provided `description`. Metadata
-  must never overwrite the user's label.
-- A zero or unknown AAGUID and any name-resolution failure must not fail registration.
-
-## RP Configuration
-
-- RP ID and origin come only from an explicit surface declaration such as `webauthn_surface :app`
-  and the matching `WEBAUTHN_<APP|ORG>_*` configuration. Prohibit `request.host` fallback,
-  shared environment keys, class-name regex surface inference, and mutation of global
-  `WebAuthn.configure` state.
-- `from_get` and `from_create` always receive an explicit `relying_party:` argument.
-- Origin comparison requires an exact scheme, host, and effective port match.
-
-## Delivered reconciliation (2026-10-06)
-
-These invariants now cover the shared assertion path as well as registration: decoded returned
-`userHandle` bytes must equal the stored opaque Identity handle, and actor-known assertions must
-belong to the current Identity. Passkey registration is a separate bootstrap or credential-
-registration transaction and never silently becomes step-up freshness. The implementation and
-tests are current for app, com and org; real authenticator/provider deployment verification is
-still an operational prerequisite.
+See [Passkey inventory and signed results](passkeys.md) for current route behavior and
+[RP ID and Origin boundary](webauthn-rp-id-origin-boundary.md) for the configuration contract.

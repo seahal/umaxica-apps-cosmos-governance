@@ -16,21 +16,25 @@ class TechCapabilityCheckQueryTest < ActiveSupport::TestCase
     end
   end
 
-  test "an Access JWT that does not authenticate is denied" do
+  test "an authenticated client receives explicit unavailability while Access verification is missing" do
     OidcClientRegistry.stub(:authenticate_assertion, true) do
-      assert_not TechCapabilityCheckQuery.call(
-        access_token: "not-a-jwt", client_assertion: "a",
-        endpoint_uri: ENDPOINT, host: "www.umaxica.org",
-      )
+      assert_raises(AccessOpDataUnavailableError) do
+        TechCapabilityCheckQuery.call(
+          access_token: "not-a-jwt", client_assertion: "a",
+          endpoint_uri: ENDPOINT, host: "www.umaxica.org",
+        )
+      end
     end
   end
 
-  test "an authority database failure denies instead of permitting" do
+  test "an authority database failure propagates instead of masquerading as a denial" do
     OidcClientRegistry.stub(:authenticate_assertion, ->(*) { raise ActiveRecord::ConnectionNotEstablished }) do
-      assert_not TechCapabilityCheckQuery.call(
-        access_token: "t", client_assertion: "a", endpoint_uri: ENDPOINT,
-        host: "www.umaxica.org",
-      )
+      assert_raises(ActiveRecord::ConnectionNotEstablished) do
+        TechCapabilityCheckQuery.call(
+          access_token: "t", client_assertion: "a", endpoint_uri: ENDPOINT,
+          host: "www.umaxica.org",
+        )
+      end
     end
   end
 
@@ -44,7 +48,9 @@ class TechCapabilityCheckQueryTest < ActiveSupport::TestCase
                   b.adapter(:test, stubs)
                 },
       ) do
-        TestSupport::OutboundHttpGuard.allow { assert_not TechCapabilityClient.allowed?(access_token: "t") }
+        TestSupport::OutboundHttpGuard.allow do
+          assert_raises(AccessOpDataUnavailableError) { TechCapabilityClient.allowed?(access_token: "t") }
+        end
       end
     end
   end

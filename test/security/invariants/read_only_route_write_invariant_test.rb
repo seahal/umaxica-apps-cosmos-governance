@@ -27,11 +27,10 @@ module Security
             paths: [
               ["/", :success],
               # Anonymous Base Dashboard redirects to passive Sign (accepted ADR amendment 2026-10-08).
-              ["/dashboard", :found],
+              ["/dashboard", :unauthorized],
               ["/preference", :success],
               ["/preference/region/edit", :success],
               ["/preference/theme/edit", :success],
-              ["/sign/out/edit", :success],
             ],
           },
           "com" => {
@@ -47,11 +46,10 @@ module Security
             host: "base.org.localhost",
             paths: [
               ["/", :success],
-              ["/dashboard", :found],
+              ["/dashboard", :unauthorized],
               ["/preference", :success],
               ["/preference/region/edit", :success],
               ["/preference/theme/edit", :success],
-              ["/sign/out/edit", :success],
             ],
           },
         }

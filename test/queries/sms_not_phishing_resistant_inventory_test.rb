@@ -5,11 +5,6 @@ require "test_helper"
 
 class SmsNotPhishingResistantInventoryTest < ActiveSupport::TestCase
   test "telephone SMS is an amr value and is not a phishing-resistant method" do
-    assert_equal ["sms"],
-                 AuthenticationBase::ESTABLISHED_AUTHENTICATION_METHOD_AMR_MAP.fetch("telephone")
-    assert_equal ["passkey"],
-                 AuthenticationBase::ESTABLISHED_AUTHENTICATION_METHOD_AMR_MAP.fetch("passkey")
-
     actor = clients(:one)
     result = AuthenticationCredentialInventory.new(actor).call
 

@@ -4,6 +4,9 @@
 class ClientPrivacyRequestStatus < AppPrincipalRecord
   include ReferenceRecord
 
+  has_many :client_privacy_requests, foreign_key: :status_id, inverse_of: :status,
+                                     dependent: :restrict_with_error
+
   RECEIVED = 10
   VERIFICATION_REQUIRED = 20
   VERIFIED = 30

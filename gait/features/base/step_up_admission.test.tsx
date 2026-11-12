@@ -51,4 +51,41 @@ describe("Base step-up admission", () => {
       meta.remove();
     }
   });
+
+  it("does not synthesize a CSRF value when the browser no longer has the hidden field", () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    try {
+      act(() => {
+        root.render(
+          <StepUpAdmission
+            title="Verify identity"
+            description="Confirm before continuing."
+            form={{
+              action: "/verification?ri=jp",
+              scope: "settings_birthdate",
+              pt: "signed-return-path",
+              return_target: "/settings/birthdate",
+              submit_label: "Continue",
+            }}
+            cancel={{ href: "/identity?ri=jp", label: "Cancel" }}
+          />,
+        );
+      });
+      const form = container.querySelector("form");
+      expect(form).not.toBeNull();
+      container.querySelector('input[name="authenticity_token"]')?.remove();
+
+      expect(() => {
+        act(() => {
+          form?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+        });
+      }).not.toThrow();
+      expect([...new FormData(form!)].map(([name]) => name)).not.toContain("authenticity_token");
+    } finally {
+      act(() => root.unmount());
+      container.remove();
+    }
+  });
 });

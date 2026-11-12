@@ -1,3 +1,7 @@
+> **Current route status (2026-11-10):** Local Auth sign-in and sign-up endpoints described below are
+> no longer served by this repository. Base identity and secret-issuance routes remain local;
+> credential ceremony and authentication endpoints are external.
+
 # app Secret implementation boundary
 
 Physical collection of an unconfirmed candidate requires both its own discarded audit and its

@@ -43,8 +43,8 @@ class HandleAssignment < AvatarRecord
   belongs_to :handle_assignment_status
 
   validates :valid_from, presence: true
-  validates :handle_id, uniqueness: { conditions: -> { current } }
-  validates :avatar_id, uniqueness: { conditions: -> { current } }
+  validates :handle_id, uniqueness: { conditions: -> { current } }, if: :current_temporal_row?
+  validates :avatar_id, uniqueness: { conditions: -> { current } }, if: :current_temporal_row?
 
   delegate :name, to: :handle
 
@@ -52,5 +52,11 @@ class HandleAssignment < AvatarRecord
 
   def self.current_attributes
     [:handle_id, :avatar_id]
+  end
+
+  private
+
+  def current_temporal_row?
+    valid_to == Float::INFINITY
   end
 end

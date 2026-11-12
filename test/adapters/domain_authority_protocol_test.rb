@@ -103,9 +103,6 @@ class DomainAuthorityProtocolTest < ActiveSupport::TestCase
   test "domain clients preserve owner objects and refuse non-object JSON as dependency failures" do
     browser_request = ActionDispatch::TestRequest.create
     clients = [
-      -> {
-        PublishingAuthorityClient.new(surface: "app", audience: "help", access_token: "synthetic").entries(page: 1)
-      },
       -> { AvatarAuthorityClient.new(surface: "app", access_token: "synthetic", persona: "persona").groups },
       -> { MembershipAuthorityClient.new(surface: "app", access_token: "synthetic", persona: "persona").accounts },
       -> {
@@ -141,7 +138,11 @@ class DomainAuthorityProtocolTest < ActiveSupport::TestCase
       OidcClientAssertionJwt.stub(:issue, "synthetic-assertion") do
         OutboundHttp::Connection.stub(:build, connection) do
           connection.stub(:post, response) do
-            assert_equal body == { "allowed" => true }, TechCapabilityClient.allowed?(access_token: "synthetic")
+            if body.is_a?(Hash) && [true, false].include?(body["allowed"])
+              assert_equal body["allowed"], TechCapabilityClient.allowed?(access_token: "synthetic")
+            else
+              assert_raises(AccessOpDataUnavailableError) { TechCapabilityClient.allowed?(access_token: "synthetic") }
+            end
           end
         end
       end
@@ -174,5 +175,22 @@ class DomainAuthorityProtocolTest < ActiveSupport::TestCase
                  [sent.scheme, sent.host, sent.port, sent.path, built.sole.fetch(:require_https)]
     # Base checks the audience against the URL it receives, so the assertion names the same URL.
     assert_equal [[TechCapabilityClient::CLIENT_ID, sent.to_s]], audiences
+  end
+  test "Tech distinguishes permission refusal from unavailable authority status" do
+    connection = Faraday.new
+    [401, 403, 500, 503].each do |status|
+      response = Faraday::Response.new(status:, body: "{}")
+      OidcClientAssertionJwt.stub(:issue, "synthetic-assertion") do
+        OutboundHttp::Connection.stub(:build, connection) do
+          connection.stub(:post, response) do
+            if [401, 403].include?(status)
+              assert_not TechCapabilityClient.allowed?(access_token: "synthetic")
+            else
+              assert_raises(AccessOpDataUnavailableError) { TechCapabilityClient.allowed?(access_token: "synthetic") }
+            end
+          end
+        end
+      end
+    end
   end
 end

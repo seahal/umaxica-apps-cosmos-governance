@@ -3,6 +3,11 @@
 Date: 2026-08-11 Scope: this Rails repository only. No Next.js, Edge, Workers, Cloudflare
 Dashboard/Access/Tunnel, or DNS change was made or is proposed here.
 
+> **Route status update (2026-11-10):** This audit describes an earlier Rails implementation.
+> Local Auth, Visa, Core, Warp, Palm, Edit, Docs, News, Help, Info, and Guid routes/controllers
+> discussed below have since been removed. Its implementation findings are a dated snapshot, not a
+> current route/controller inventory.
+
 > **Note (2026-09-03):** this audit describes the health probes as JSON and the `/health` aggregate
 > as an HTML/`406` snapshot. That is superseded by the 2026-09-03 text+JSON health contract — the
 > probes are now `text/plain` and a separate `/api/v0/health.json` + `/api/v0/revision.json` family

@@ -7,7 +7,7 @@ require "webauthn/fake_client"
 # payloads with the gem's FakeClient so tests exercise the actual signature,
 # RP ID, origin, and flag verification paths instead of stubbing #verify.
 module WebauthnFakeClientHelper
-  def webauthn_fake_client(origin: "https://auth.umaxica.app", authenticator: nil)
+  def webauthn_fake_client(origin: "https://www.umaxica.app", authenticator: nil)
     authenticator ||= WebAuthn::FakeAuthenticator.new
     WebAuthn::FakeClient.new(origin, encoding: :base64url, authenticator: authenticator)
   end

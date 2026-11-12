@@ -14,5 +14,5 @@ class ClientRetentionHold < AppPrincipalRecord
   STATUS_IDS = STATUSES.values.freeze
 
   belongs_to :client, inverse_of: :client_retention_holds
-  belongs_to :status, class_name: "ClientRetentionHoldStatus"
+  belongs_to :status, class_name: "ClientRetentionHoldStatus", inverse_of: :client_retention_holds
 end

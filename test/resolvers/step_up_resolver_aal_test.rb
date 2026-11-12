@@ -17,78 +17,38 @@ class StepUpResolverAalTest < ActiveSupport::TestCase
     end
   end
 
-  test "an AAL label cannot satisfy a phishing resistance requirement without its verified property" do
-    actor = Client.create!(security_mode_id: SecurityModeConfigurable::NORMAL, status_id: ClientStatus::ACTIVE)
-    token = ClientToken.create!(authentication_epoch: 0, user: actor, root_login_established_at: Time.current)
-    token.update!(
-      last_step_up_at: Time.current, last_step_up_scope: "settings_email", last_step_up_method: "passkey",
-      last_step_up_session_public_id: token.public_id, last_step_up_purpose: "step_up",
-      last_step_up_audience: "step_up:resolver", last_step_up_credential_ref: SecureRandom.uuid,
-      last_step_up_phishing_resistant: false, last_step_up_user_verified: true,
-      last_step_up_full_reauthentication: false,
-    )
-    %w(aal1 aal2 aal3).each do |level|
-      token.update!(last_step_up_aal: level)
-      result = StepUpResolver.call(token: token, scope: "settings_email", phishing_resistant_required: true)
-
-      assert result.usable_token
-      assert_not result.satisfied
-      assert_nil result.required_aal
+  test "supplied legacy token proof refuses unavailable Access before reading its attributes" do
+    assert_raises(AccessOpDataUnavailableError) do
+      StepUpResolver.call(token: Object.new, scope: "settings_email")
     end
   end
 
-  test "verified properties satisfy the requirement independently of a missing or lower AAL label" do
-    actor = Client.create!(security_mode_id: SecurityModeConfigurable::NORMAL, status_id: ClientStatus::ACTIVE)
-    token = ClientToken.create!(authentication_epoch: 0, user: actor, root_login_established_at: Time.current)
-    token.update!(
-      last_step_up_at: Time.current, last_step_up_scope: "settings_email", last_step_up_method: "passkey",
-      last_step_up_session_public_id: token.public_id, last_step_up_purpose: "step_up",
-      last_step_up_audience: "step_up:resolver", last_step_up_credential_ref: SecureRandom.uuid,
-      last_step_up_phishing_resistant: true, last_step_up_user_verified: true,
-      last_step_up_full_reauthentication: false,
+  test "anonymous absence of proof remains unsatisfied without inventing authority" do
+    result = StepUpResolver.call(
+      token: nil, scope: "settings_email", session_binding: "required-session", token_binding: "required-token",
     )
-    [nil, "aal1"].each do |level|
-      token.update!(last_step_up_aal: level)
-      result = StepUpResolver.call(token: token, scope: "settings_email", phishing_resistant_required: true)
 
-      assert result.satisfied
-      assert_nil result.required_aal
-      assert_equal "settings_email", result.scope
-    end
-  end
-
-  test "an absent evidence property refuses even a labeled session" do
-    actor = Client.create!(security_mode_id: SecurityModeConfigurable::NORMAL, status_id: ClientStatus::ACTIVE)
-    token = ClientToken.create!(authentication_epoch: 0, user: actor, root_login_established_at: Time.current)
-    token.update!(
-      last_step_up_at: Time.current, last_step_up_scope: "settings_email", last_step_up_method: "passkey",
-      last_step_up_aal: "aal2", last_step_up_session_public_id: token.public_id, last_step_up_purpose: "step_up",
-      last_step_up_audience: "step_up:resolver", last_step_up_credential_ref: SecureRandom.uuid,
-      last_step_up_phishing_resistant: true, last_step_up_user_verified: nil,
-      last_step_up_full_reauthentication: false,
-    )
-    result = StepUpResolver.call(token: token, scope: "settings_email")
-
-    assert result.usable_token
     assert_not result.satisfied
-    assert_nil result.required_aal
-  end
-
-  test "a historical restricted session cannot satisfy Step-Up even with valid evidence" do
-    actor = Client.create!(security_mode_id: SecurityModeConfigurable::NORMAL, status_id: ClientStatus::ACTIVE)
-    token = ClientToken.create!(authentication_epoch: 0, user: actor, root_login_established_at: Time.current)
-    token.update!(
-      user_token_status_id: ClientTokenStatus::RESTRICTED,
-      last_step_up_at: Time.current, last_step_up_scope: "settings_email", last_step_up_method: "passkey",
-      last_step_up_session_public_id: token.public_id, last_step_up_purpose: "step_up",
-      last_step_up_audience: "step_up:resolver", last_step_up_credential_ref: SecureRandom.uuid,
-      last_step_up_phishing_resistant: true, last_step_up_user_verified: true,
-      last_step_up_full_reauthentication: false,
-    )
-
-    result = StepUpResolver.call(token: token, scope: "settings_email")
-
     assert_not result.usable_token
-    assert_not result.satisfied
+    assert_nil result.required_aal
+    assert_nil result.satisfied_at
+    assert_nil result.expires_at
+    assert_nil result.method
+    assert_equal "settings_email", result.scope
+    assert_not result.session_bound
+    assert_not result.token_bound
+  end
+
+  test "an explicitly disabled requirement needs no proof but never becomes a usable token" do
+    requirement = StepUpRequirement.new(step_up_required: false)
+    result = StepUpResolver.call(token: nil, requirement:)
+
+    assert result.satisfied
+    assert_not result.usable_token
+    assert_nil result.required_aal
+    assert_nil result.satisfied_at
+    assert_nil result.expires_at
+    assert_nil result.method
+    assert_nil result.scope
   end
 end

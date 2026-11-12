@@ -10,43 +10,23 @@ class StylesheetTagsTest < ActiveSupport::TestCase
     "app/views/layouts/base/app/application.html.erb" => "entrypoints/base/app",
     "app/views/layouts/base/com/application.html.erb" => "entrypoints/base/com",
     "app/views/layouts/base/org/application.html.erb" => "entrypoints/base/org",
-    "app/views/layouts/auth/app/application.html.erb" => "entrypoints/sign/app",
-    "app/views/layouts/auth/org/application.html.erb" => "entrypoints/sign/org",
+    "app/views/layouts/tech/org/application.html.erb" => "entrypoints/base/org",
   }.freeze
+
+  BASE_APPLICATION_LAYOUTS = APPLICATION_LAYOUTS.except("app/views/layouts/tech/org/application.html.erb").freeze
 
   # One Inertia layout per user-facing FQDN, each loading only its own surface entrypoint.
   INERTIA_LAYOUTS = %w(
     base/app base/com base/org
-    auth/app auth/org
-    warp/app warp/com warp/org
-    core/app core/org
-    palm/app
   ).to_h do |surface|
     family, boundary = surface.split("/")
     ["app/views/layouts/#{surface}/inertia.html.erb", "entrypoints/inertia/#{family}_#{boundary}.tsx"]
   end.freeze
 
-  # The chrome-free application layouts (Warp, core, jump, palm). They carry no shared header or
-  # footer, but they load the Propshaft baseline stylesheet exactly like the chrome-bearing ones,
-  # so a missing app/assets/stylesheets/application.css 500s them the same way.
-  MINIMAL_APPLICATION_LAYOUTS = %w(
-    app/views/layouts/warp/app/application.html.erb
-    app/views/layouts/warp/com/application.html.erb
-    app/views/layouts/warp/org/application.html.erb
-    app/views/layouts/core/app/application.html.erb
-    app/views/layouts/core/org/application.html.erb
-    app/views/layouts/jump/app/application.html.erb
-    app/views/layouts/jump/com/application.html.erb
-    app/views/layouts/jump/org/application.html.erb
-    app/views/layouts/palm/app/application.html.erb
-  ).freeze
-
   TURNSTILE_LAYOUTS = %w(
     app/views/layouts/base/app/application.html.erb
     app/views/layouts/base/com/application.html.erb
     app/views/layouts/base/org/application.html.erb
-    app/views/layouts/auth/app/application.html.erb
-    app/views/layouts/auth/org/application.html.erb
   ).freeze
 
   FORBIDDEN_TAILWIND_FRAGMENTS = %w(
@@ -111,7 +91,7 @@ class StylesheetTagsTest < ActiveSupport::TestCase
   end
 
   test "every importmap application layout loads the Propshaft baseline stylesheet and it resolves" do
-    (APPLICATION_LAYOUTS.keys + MINIMAL_APPLICATION_LAYOUTS).each do |path|
+    APPLICATION_LAYOUTS.each_key do |path|
       contents = Rails.root.join(path).read
 
       assert_includes contents, 'stylesheet_link_tag "application"',
@@ -120,9 +100,7 @@ class StylesheetTagsTest < ActiveSupport::TestCase
       assert_not_includes contents, "vite_", "#{path} must not mix in the Vite stack"
     end
 
-    # app/assets/stylesheets/application.css has been deleted and re-added several times during the
-    # frontend-stack churn. Every layout above raises Propshaft::MissingAssetError without it -- that
-    # is the reported failure on Warp::App::Sign::Outs#edit. Pin the file and its resolution.
+    # Every Importmap layout needs the Propshaft baseline stylesheet to render.
     assert_predicate Rails.root.join("app/assets/stylesheets/application.css"), :file?,
                      "the Propshaft baseline stylesheet every importmap layout links must exist"
     assert Rails.application.assets.load_path.find("application.css"),
@@ -130,7 +108,7 @@ class StylesheetTagsTest < ActiveSupport::TestCase
   end
 
   test "target layouts include shared chrome and semantic landmarks" do
-    APPLICATION_LAYOUTS.each_key do |path|
+    BASE_APPLICATION_LAYOUTS.each_key do |path|
       contents = Rails.root.join(path).read
 
       assert_includes contents, "<header>", "layout #{path} must include a header"
@@ -148,7 +126,7 @@ class StylesheetTagsTest < ActiveSupport::TestCase
     end
   end
 
-  test "sign and base application layouts own turnstile api loading" do
+  test "Base application layouts own turnstile api loading" do
     TURNSTILE_LAYOUTS.each do |path|
       contents = Rails.root.join(path).read
 
@@ -167,7 +145,7 @@ class StylesheetTagsTest < ActiveSupport::TestCase
   end
 
   test "application layouts keep the turbo refresh contract" do
-    APPLICATION_LAYOUTS.each_key do |path|
+    BASE_APPLICATION_LAYOUTS.each_key do |path|
       contents = Rails.root.join(path).read
 
       assert_includes contents, 'meta name="turbo-refresh-method" content="morph"',

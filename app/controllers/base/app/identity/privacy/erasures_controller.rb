@@ -48,7 +48,7 @@ module Base
             new_base_app_identity_withdrawal_session_path({ ri: params[:ri] }.merge(extra_params))
           end
 
-          def withdrawal_public_fallback_path = auth_app_sign_in_path
+          def withdrawal_public_fallback_path = base_app_root_path(ri: params[:ri])
         end
       end
     end

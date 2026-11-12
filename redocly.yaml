@@ -30,10 +30,10 @@ extends:
   - recommended
 
 rules:
-  # Every surface deliberately has no root `servers`. Only the Core paths have a host that is
-  # real, public, and knowable from the repository, so `servers` is declared per Path Item.
-  # A root default would attach a host to paths it does not serve, which is the defect
-  # adr/api-versioning-and-client-conventions.md section 4 exists to prevent.
+  # Every surface deliberately has no root `servers`. Only the Base preference paths have a host
+  # that is real, public, and knowable from the repository, so `servers` is declared per Path Item.
+  # A root default would attach a host to paths it does not serve, which the
+  # adr/api-versioning-and-client-conventions.md section 4 contract prevents.
   no-empty-servers: off
 
   # The health probes answer 200 or 503 and nothing else

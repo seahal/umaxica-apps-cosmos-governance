@@ -21,7 +21,7 @@ module OrgStandbyAccessPolicy
   def eligible?(operator)
     return false unless operator.is_a?(::Operator)
     return false unless operator.login_allowed?
-    return false if AuthenticationCurrentResourceResolver.administratively_locked?(operator)
+    return false if operator.admin_locked?
 
     true
   end

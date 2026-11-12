@@ -56,11 +56,9 @@ const minimalChrome: SurfaceChrome = {
   surface: "app",
   brand: { name: "Umaxica", href: "https://umaxica.app/" },
   banner: null,
-  restricted_mode: null,
   footer_navigation: null,
   cookie_controls: cookieControls,
   theme_controls: themeControls,
-  account_navigation: null,
   copyright: "(c) Umaxica",
 };
 
@@ -118,45 +116,16 @@ describe("SurfaceLayout", () => {
     expect(document.documentElement.lang).toBe("ja");
   });
 
-  test("shows a signed-out relying party the way into sign-in in the header", () => {
-    render({
-      ...minimalChrome,
-      account_navigation: {
-        label: "Account",
-        signed_in: false,
-        links: [{ label: "Sign in", href: "/sign?ri=jp" }],
-      },
-    });
+  test("rejects a public COM locale outside the server contract", () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
-    const account = within(screen.getByRole("banner")).getByRole("navigation", { name: "Account" });
-    expect(within(account).getByRole("link", { name: "Sign in" }).getAttribute("href")).toBe(
-      "/sign?ri=jp",
-    );
-    expect(within(account).getAllByRole("link")).toHaveLength(1);
-  });
-
-  test("shows a signed-in relying party the way to Base and to sign out in the header", () => {
-    render({
-      ...minimalChrome,
-      account_navigation: {
-        label: "Account",
-        signed_in: true,
-        links: [
-          { label: "Go to BASE", href: "https://www.umaxica.app/dashboard?ri=jp" },
-          { label: "Sign out", href: "/sign/out/new?ri=jp" },
-        ],
-      },
-    });
-
-    const account = within(screen.getByRole("banner")).getByRole("navigation", { name: "Account" });
-    expect(
-      within(account)
-        .getAllByRole("link")
-        .map((link) => [link.textContent, link.getAttribute("href")]),
-    ).toEqual([
-      ["Go to BASE", "https://www.umaxica.app/dashboard?ri=jp"],
-      ["Sign out", "/sign/out/new?ri=jp"],
-    ]);
+    try {
+      expect(() => render({ ...minimalChrome, surface: "com", locale: "fr" })).toThrow(
+        "com page locale is missing or unsupported",
+      );
+    } finally {
+      errorSpy.mockRestore();
+    }
   });
 
   test("renders no account navigation where the server sent none", () => {
@@ -226,35 +195,6 @@ describe("SurfaceLayout", () => {
     expect(screen.queryByRole("navigation", { name: "Footer navigation" })).toBeNull();
     // The surface layout carries no primary/header navigation at all.
     expect(screen.queryByRole("navigation", { name: "Primary" })).toBeNull();
-  });
-
-  // Restricted Mode is session state, published once by the server and rendered here for the whole
-  // life of the session. A page cannot supply it and therefore cannot drop it.
-  test("renders no restricted mode indicator for an ordinary session", () => {
-    render(minimalChrome);
-
-    expect(screen.queryByRole("region", { name: "制限モード — Emergency Access" })).toBeNull();
-  });
-
-  test("renders the restricted mode indicator above everything else in the header", () => {
-    render({
-      ...minimalChrome,
-      restricted_mode: {
-        label: "制限モード — Emergency Access",
-        description: "段階的認証は利用できません。",
-        sign_out: { label: "サインアウトして通常モードでサインインし直す", href: "/sign/out/new" },
-      },
-    });
-
-    const indicator = screen.getByRole("region", { name: "制限モード — Emergency Access" });
-    expect(within(indicator).getByText("段階的認証は利用できません。")).toBeTruthy();
-
-    // The only way back to a normal session is to end this one; there is no in-place switch.
-    const signOut = within(indicator).getByRole("link", {
-      name: "サインアウトして通常モードでサインインし直す",
-    });
-    expect(signOut.getAttribute("href")).toBe("/sign/out/new");
-    expect(indicator.textContent).not.toContain("解除");
   });
 
   test("renders the banner with its title", () => {

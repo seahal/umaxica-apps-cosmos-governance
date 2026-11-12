@@ -147,6 +147,17 @@ describe("TextField", () => {
     expect(screen.getByLabelText("Address").getAttribute("name")).toBe("client[email]");
   });
 
+  it("forwards a placeholder when the server supplies one", () => {
+    render(
+      <TextField
+        label="Address"
+        placeholder="name@example.test"
+      />,
+    );
+
+    expect(screen.getByLabelText("Address").getAttribute("placeholder")).toBe("name@example.test");
+  });
+
   it("forwards autoCapitalize onto the control when the field asks for it", () => {
     render(
       <TextField

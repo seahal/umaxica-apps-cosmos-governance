@@ -10,6 +10,8 @@ require "test_helper"
 # guards. Each has a matching uniqueness validation, so a record created with an explicit id that
 # is already taken in that scope fails validation instead of reaching the database index.
 class PrimaryKeyUniqueIndexValidationContractTest < ActiveSupport::TestCase
+  self.fixture_table_names = []
+
   APP_ROOT = Rails.root.join("app").to_s
 
   Rails.application.eager_load!

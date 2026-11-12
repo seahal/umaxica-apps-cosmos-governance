@@ -6,22 +6,7 @@
 # also replays fixed reference catalogs after a schema-only load, because migration markers
 # suppress the original data inserts. The remaining content is development/test sample data.
 
-# A SQL structure load records the migration version without its reference rows.
-# Reuse the migration's fixed catalog on the Ticket writer after a schema-only load.
-require Rails.root.join("db/op_base_app_migrate/20261006160000_seed_app_sign_flow_reference_data").to_s
-require Rails.root.join("db/op_base_org_migrate/20261006160002_seed_org_sign_flow_reference_data").to_s
-SeedAppSignFlowReferenceData.seed_into(
-  OpBaseAppRecord.lease_connection,
-  tables: %i(client_sign_in_flow_states client_sign_up_flow_statuses client_sign_up_flow_cleanup_statuses),
-)
-SeedOrgSignFlowReferenceData.seed_into(
-  OpBaseOrgRecord.lease_connection,
-  tables: %i(operator_sign_in_flow_states operator_sign_up_flow_statuses),
-)
-
 [
-  [ClientTokenKind, ClientTokenStatus, ClientTokenBindingMethod, ClientTokenDbscStatus,
-   OperatorTokenKind, OperatorTokenStatus, OperatorTokenBindingMethod, OperatorTokenDbscStatus,],
   [PersonaMembershipKind, PersonaMembershipState, PersonaMembershipRevokeReason,
    AgentMembershipKind, AgentMembershipState, AgentMembershipRevokeReason,
    OperatorEntraIdentityState, OrganizationEntraConnectionState,
@@ -78,44 +63,6 @@ end
   table = connection.quote_table_name(model.table_name)
   ids.each do |id|
     connection.execute("INSERT INTO #{table} (id) VALUES (#{connection.quote(id)}) ON CONFLICT (id) DO NOTHING")
-  end
-end
-
-require Rails.root.join(
-  "db/op_base_app_migrate/20261006140000_normalize_client_session_limit_resolution_transactions",
-).to_s
-require Rails.root.join(
-  "db/op_base_org_migrate/20261006140002_create_operator_session_limit_resolution_transactions",
-).to_s
-[
-  [OpBaseAppRecord, :client_session_limit_resolution_states, NormalizeClientSessionLimitResolutionTransactions::STATE_IDS],
-  [OpBaseOrgRecord, :operator_session_limit_resolution_states, CreateOperatorSessionLimitResolutionTransactions::STATE_IDS],
-].each do |record_class, table, ids|
-  connection = record_class.lease_connection
-  quoted_table = connection.quote_table_name(table)
-  ids.each do |id|
-    connection.execute(
-      "INSERT INTO #{quoted_table} (id, created_at, updated_at) " \
-      "VALUES (#{connection.quote(id)}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) ON CONFLICT (id) DO NOTHING",
-    )
-  end
-end
-
-require Rails.root.join("db/op_base_app_migrate/20261025120000_create_op_authority_stops_op_base_app").to_s
-require Rails.root.join("db/op_base_org_migrate/20261025120000_create_op_authority_stops_op_base_org").to_s
-[
-  [OpBaseAppRecord, "app", CreateOpAuthorityStopsOpBaseApp],
-  [OpBaseOrgRecord, "org", CreateOpAuthorityStopsOpBaseOrg],
-].each do |record_class, realm, catalog|
-  connection = record_class.lease_connection
-  reference_sets = {
-    causes: catalog::CAUSES, scopes: catalog::SCOPES, participant_statuses: catalog::PARTICIPANT_STATUSES,
-  }
-  reference_sets.each do |suffix, ids|
-    table = connection.quote_table_name("op_#{realm}_authority_stop_#{suffix}")
-    ids.each_key do |id|
-      connection.execute("INSERT INTO #{table} (id) VALUES (#{connection.quote(id)}) ON CONFLICT (id) DO NOTHING")
-    end
   end
 end
 
@@ -193,50 +140,9 @@ staff_secret.staff_identity_secret_status_id = OperatorSecretCredentialStatus::A
 staff_secret.password = sample_staff_secret
 staff_secret.save!
 
-# Flipper stores nothing until a feature is written, so a fresh primary database shows an
-# empty feature list and every external authentication ceremony reads as disabled. Register
-# the ceremony kill switches so they appear in the Flipper UI and local sign-in works.
-#
-# Development only, and deliberately not extended to production: the flags are kill switches
-# for external authentication ceremonies, and their production state must be an explicit
-# operator decision rather than a side effect of running seeds. `enable` is idempotent, so a
-# flag an operator disabled locally is re-enabled by the next seed run.
-ExternalAuthentication::FlipperProviderAvailabilityAdapter::PROVIDER_FEATURE_NAMES
-  .each_value { |feature_name| Flipper.enable(feature_name) }
-
 # `fqdn_available_*` carries the same `:availability` polarity, so an unwritten flag closes the
 # FQDN: a fresh primary database answers every request with 503 `fqdn_unavailable` before routing.
 # Every slot the router serves is opened here so a freshly seeded development environment serves the
 # hosts its own routes declare. Production is untouched (this file returns above) -- switching a
 # public FQDN on stays an explicit operator decision made through the Flipper UI.
 FqdnAvailabilityRegistry.flag_names.each { |feature_name| Flipper.enable(feature_name) }
-
-# Sign Entry Sentry switches have the same polarity: an unwritten flag answers every Sign In and
-# Sign Up entry with 503 `sentry_blocked`. Open all six so local sign-in and sign-up work.
-SignEntrySentryResolver::ENTRY_FLAGS.each_value { |feature_name| Flipper.enable(feature_name) }
-
-# Deterministic development CMS documents so all twelve public content cells have
-# a published entry. Uses the normal draft -> promote -> publish lifecycle.
-# Keep this out of test: `db:prepare` seeds newly created test databases, and the
-# welcome rows then leak into every worker clone and break empty-table assertions.
-if Rails.env.development?
-  locales = %w(ja en)
-
-  Publishing::ContentFamilies::ENTRY_CLASSES.product(locales).each do |entry_class, locale|
-    slug = "welcome"
-    next if entry_class.reflect_on_association(:slugs).klass.exists?(locale:, slug:)
-
-    title = "#{entry_class::SURFACE.capitalize} #{entry_class::AUDIENCE} (#{locale})"
-    entry = entry_class.create!(locale:)
-    entry.slugs.create!(locale:, slug:, state: "canonical", canonicalized_at: Time.current)
-    revision = entry.revisions.create!(
-      locale:, title:, summary: "#{title} summary",
-      body: { "text" => "#{title} body" }, schema_version: 1,
-      content_digest: Digest::SHA256.hexdigest("#{entry_class::AUDIENCE}-#{entry_class::SURFACE}-#{locale}-welcome"),
-      sequence: 1,
-    )
-    entry.update!(current_revision: revision)
-    version = Publishing::PromoteRevisionOperation.call(revision:)
-    entry.publications.create!(entry_version: version, effective_from: 1.hour.ago)
-  end
-end

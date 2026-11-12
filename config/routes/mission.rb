@@ -2,9 +2,8 @@
 # frozen_string_literal: true
 
 # Mission owns the Solid Queue job-monitoring surface (Mission Control Jobs) for this
-# application's own Global job queue. Public canonical host: mission.umaxica.dev.
-# Development host: mission.core.dev.localhost.
-constraints host: [ENV["PUBLIC_MISSION_URL"], ENV["PRIVATE_MISSION_URL"], "mission.core.dev.localhost"].compact do
+# application's own Governance job queue. Public canonical host: mission-governance.umaxica.dev.
+constraints host: ["mission-governance.umaxica.dev"] do
   # Cloudflare Access fronts this host, but the mounted engine's controllers are not this
   # application's own: MissionControl::Jobs::ApplicationController inherits ::ApplicationController
   # directly and never runs FqdnAvailabilityGate or RateLimit. HTTP Basic Auth

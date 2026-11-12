@@ -19,32 +19,11 @@ module TelephoneContactBinding
   end
 
   def finalize_registration_binding!(transaction:, code:, session_ref:)
-    with_lock do
-      now = self.class.database_now
-      unless !binding_finalized_at && !binding_released? && accessible?(now) &&
-          registration_ceremony_evidence?(transaction, code, session_ref)
-        raise ArgumentError, "verified registration candidate is unavailable"
-      end
-
-      key, pending, verified =
-        case self
-        when ClientTelephone
-          [:user_telephone_status_id, ClientTelephoneStatus::UNVERIFIED, ClientTelephoneStatus::VERIFIED]
-        else raise ArgumentError, "unsupported registration Contact"
-        end
-      raise ArgumentError, "registration candidate is not pending" unless self[key] == pending
-
-      update!(key => verified, :binding_finalized_at => now)
-      self
-    end
+    raise AccessOpDataUnavailableError
   end
 
-  def finalize_binding!(at: self.class.database_now)
-    raise ArgumentError, "released contact binding cannot be finalized" if binding_released_at.present?
-    return self if binding_finalized_at.present?
-
-    update!(binding_finalized_at: at)
-    self
+  def finalize_binding!(at: nil)
+    raise AccessOpDataUnavailableError
   end
 
   def release_binding!(at: self.class.database_now)
@@ -81,17 +60,6 @@ module TelephoneContactBinding
   end
 
   private
-
-  def registration_ceremony_evidence?(transaction, code, session_ref)
-    owner =
-      case [self, transaction]
-      in [ClientTelephone, ClientTelephoneCeremonyTransaction] then Client.find(user_id)
-      else raise ArgumentError, "unsupported Telephone registration ceremony realm"
-      end
-    transaction.normalized_number_digest == number_digest && transaction.telephone_registration_otp_evidence?(
-      code: code, actor_ref: owner.public_id, session_ref: session_ref, candidate_ref: public_id,
-    )
-  end
 
   def effective_binding_has_digest
     return if binding_finalized_at.blank?

@@ -2,6 +2,11 @@
 # frozen_string_literal: true
 
 class BlindIndexUniquenessValidator < ActiveModel::EachValidator
+  def self.kind
+    :uniqueness
+  end
+  public_class_method :kind
+
   def validate_each(record, attribute, value)
     return if value.blank?
 

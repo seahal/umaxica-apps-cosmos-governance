@@ -5,21 +5,13 @@ require "test_helper"
 
 class CycleCloseAuthenticatedRootsTest < ActionDispatch::IntegrationTest
   ROOTS = [
-    ["PUBLIC_AUTH_SERVICE_URL", "auth.app.localhost"],
-    ["PUBLIC_AUTH_STAFF_URL", "auth.org.localhost"],
     ["PUBLIC_BASE_SERVICE_URL", "base.app.localhost"],
     ["PUBLIC_BASE_CORPORATE_URL", "base.com.localhost"],
     ["PUBLIC_BASE_STAFF_URL", "base.org.localhost"],
-    ["PUBLIC_CORE_SERVICE_URL", "core.app.localhost"],
-    ["PUBLIC_CORE_STAFF_URL", "core.org.localhost"],
-    ["PUBLIC_WARP_SERVICE_URL", "warp.app.localhost"],
-    ["PUBLIC_WARP_CORPORATE_URL", "warp.com.localhost"],
-    ["PUBLIC_WARP_STAFF_URL", "warp.org.localhost"],
-    ["PUBLIC_EDIT_STAFF_URL", "edit.org.localhost"],
-    ["PUBLIC_PALM_SERVICE_URL", "palm.app.localhost"],
+    ["PUBLIC_TECH_STAFF_URL", "tech.org.localhost"],
   ].freeze
 
-  test "twelve in-scope roots answer on their host and do not open-redirect" do
+  test "Governance roots answer on their host and do not open-redirect" do
     ROOTS.each do |env_key, fallback|
       host = ENV.fetch(env_key, fallback)
       get "/", params: { ri: "jp" }, headers: { "Host" => host }
@@ -34,12 +26,12 @@ class CycleCloseAuthenticatedRootsTest < ActionDispatch::IntegrationTest
     end
   end
 
-  test "anonymous Base Dashboard enters passive sign and the retired lobby remains absent" do
+  test "anonymous Base Dashboard is unauthorized and the retired lobby remains absent" do
     host = ENV.fetch("PUBLIC_BASE_SERVICE_URL", "base.app.localhost")
     get "/dashboard", params: { ri: "jp" }, headers: { "Host" => host }
 
-    assert_response :redirect, "/dashboard"
-    assert_equal "/sign", URI.parse(response.location).path
+    assert_response :unauthorized, "/dashboard"
+    assert_nil response.location
 
     get "/lobby", params: { ri: "jp" }, headers: { "Host" => host }
 

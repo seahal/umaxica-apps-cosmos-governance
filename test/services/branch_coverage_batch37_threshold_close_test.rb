@@ -8,11 +8,6 @@ require "test_helper"
 class BranchCoverageBatch37ThresholdCloseTest < ActiveSupport::TestCase
   self.fixture_table_names = []
 
-  test "AppleOnlyCredentialStatus returns false for blank client" do
-    assert_not AppleOnlyCredentialStatus.call(nil)
-    assert_not AppleOnlyCredentialStatus.new(false).call
-  end
-
   test "OrgOperatorLifecycleApprove rejects non-pending requests" do
     request = Object.new
     request.define_singleton_method(:pending?) { false }
@@ -21,26 +16,6 @@ class BranchCoverageBatch37ThresholdCloseTest < ActiveSupport::TestCase
 
     assert_not result.success
     assert_match(/pending/i, result.error.to_s)
-  end
-
-  test "Publishing ArchiveEntryOperation refuses active publications" do
-    publications = Object.new
-    publications.define_singleton_method(:active) { publications }
-    publications.define_singleton_method(:exists?) { true }
-
-    entry = Object.new
-    entry.define_singleton_method(:archived?) { false }
-    entry.define_singleton_method(:publications) { publications }
-    entry.define_singleton_method(:with_lock) { |&block| block.call }
-
-    result = Publishing::ArchiveEntryOperation.new(
-      entry: entry,
-      reason: "cleanup",
-      operator_public_id: "op-1",
-    ).call
-
-    assert_not result.ok?
-    assert_match(/published entry cannot be archived/i, result.errors[:base].to_s)
   end
 
   test "OperatorPreferenceDensityOption name covers STANDARD id" do
@@ -78,21 +53,6 @@ class BranchCoverageBatch37ThresholdCloseTest < ActiveSupport::TestCase
     assert_equal "app", ctx["surface"]
     assert_equal "req-1", ctx["request_id"]
     assert_predicate ctx["user_agent_digest"], :present?
-  end
-
-  test "Webauthn AuthenticatorMetadata nil resolution safe navigation then arms" do
-    context = Object.new
-    %i(
-      aaguid transports backup_eligible backup_state authenticator_attachment
-    ).each do |m|
-      context.define_singleton_method(m) { nil }
-    end
-    Webauthn::AuthenticatorNameResolver.stub(:resolve, nil) do
-      result = Webauthn::AuthenticatorMetadata.attributes_from(context)
-
-      assert_nil result[:provider_name]
-      assert_nil result[:metadata_source]
-    end
   end
 end
 

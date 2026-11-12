@@ -7,7 +7,7 @@ require "test_helper"
 # shared props are built in a controller, which cannot call a view helper. These cases came with it.
 class CurrentBannerQueryTest < ActiveSupport::TestCase
   test "rejects invalid banner inputs" do
-    error = assert_raises(ArgumentError) { CurrentBannerQuery.call(tld: :bad, region: :jp, domain: :news) }
+    error = assert_raises(ArgumentError) { CurrentBannerQuery.call(tld: :bad, region: :jp, domain: :acme) }
 
     assert_match(/Invalid tld/, error.message)
 
@@ -15,17 +15,19 @@ class CurrentBannerQueryTest < ActiveSupport::TestCase
 
     assert_match(/Invalid domain/, error.message)
 
-    error = assert_raises(ArgumentError) { CurrentBannerQuery.call(tld: :app, region: :us, domain: :sign) }
+    error = assert_raises(ArgumentError) { CurrentBannerQuery.call(tld: :app, region: :jp, domain: :acme) }
 
     assert_match(/Invalid region/, error.message)
   end
 
-  test "normalizes a global region to ww for the sign and acme domains" do
+  test "normalizes a global region to ww for the Base domain" do
     travel_to Time.zone.parse("2026-03-18 00:00:00 UTC") do
-      assert_equal client_banners(:newer_current_user_banner),
-                   CurrentBannerQuery.call(tld: :app, region: :global, domain: :sign)
       assert_equal client_banners(:newer_current_user_banner),
                    CurrentBannerQuery.call(tld: :app, region: :global, domain: :acme)
     end
+  end
+
+  test "Base com has no banner model" do
+    assert_nil CurrentBannerQuery.call(tld: :com, region: :global, domain: :acme)
   end
 end

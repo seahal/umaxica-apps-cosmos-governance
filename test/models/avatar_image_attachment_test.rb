@@ -40,9 +40,6 @@ class AvatarImageAttachmentTest < ActiveSupport::TestCase
     )
 
     assert_not_nil persisted
-    assert_equal 0, PublishingRecord.lease_connection.select_value(
-      "SELECT COUNT(*) FROM information_schema.columns WHERE table_name = 'avatars'",
-    )
   end
 
   test "a non-image is rejected" do

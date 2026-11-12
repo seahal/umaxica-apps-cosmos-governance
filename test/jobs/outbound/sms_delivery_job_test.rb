@@ -83,25 +83,22 @@ module Outbound
       assert_match(/unknown keywords?/, reported.fetch(0).message)
     end
 
-    test "retired corporate OTP deliveries are reported without sending" do
+    test "OP bound OTP deliveries raise unavailable without sending" do
       generation = SecureRandom.uuid
       [
-        ["com", "sign_up", "flow", SecureRandom.uuid, generation],
-        ["com", "credential_registration", SecureRandom.uuid, "contact", generation],
+        ["app", "sign_up", "flow", SecureRandom.uuid, generation],
+        ["org", "credential_registration", SecureRandom.uuid, "A" * 21, generation],
       ].each do |binding|
         payload = OutboundSensitivePayload.encrypt_sms_delivery(
           to: "+819012345678", title: "Verification code", body: "Your verification code: 123456",
           otp_binding: binding, otp_code: "123456",
         )
-        reported = []
+
         OutboundSms.stub(:deliver_now, ->(**) { flunk("must not deliver") }) do
-          ActiveSupport.error_reporter.stub(:report, ->(error, **) { reported << error }) do
+          assert_raises(AccessOpDataUnavailableError) do
             SmsDeliveryJob.perform_now(encrypted_payload: payload)
           end
         end
-
-        assert_equal 1, reported.length
-        assert_instance_of ArgumentError, reported.first
       end
     end
 

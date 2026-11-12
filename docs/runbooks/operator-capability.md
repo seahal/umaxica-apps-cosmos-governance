@@ -48,9 +48,8 @@ operator becoming ineligible. When nobody holds them any more, bootstrap again.
 Grant every other capability through `/iam/grants/new`, which requires Step-Up and lets a granter
 delegate only what they hold.
 
-Tech's initial `tech.access` grant and publication prerequisites are described in the
-[Tech Browser RP runbook](tech-browser-rp.md). Its initial development grant uses the same audited
-bootstrap; subsequent delegation requires the granter's own current `tech.access`.
+Tech's initial `tech.access` grant uses the same audited bootstrap; subsequent delegation requires
+the granter's own current `tech.access`.
 
 ## Checking grants
 

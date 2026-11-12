@@ -7,24 +7,23 @@ require "test_helper"
 # they are published for. Each route is requested on the first host its own host constraint lists,
 # so a 404 means the route no longer answers on its host rather than that it was sent elsewhere.
 class StaticGetRouteResponseTest < ActionDispatch::IntegrationTest
-  SKIP = %r{/(callback|oauth|social|action_mailbox|conductor|historical_location)\b}
-
-  # Anonymous answers that are the route's own contract rather than a miss or a crash.
-  EXPECTED_ANONYMOUS_STATUS = {
-    # Warp answers an anonymous direct dashboard request with 404 rather than a redirect; see
-    # test/controllers/warp/*/dashboards_controller_test.rb.
-    [ENV.fetch("PUBLIC_WARP_SERVICE_URL"), "/dashboard"] => 404,
-    [ENV.fetch("PUBLIC_WARP_CORPORATE_URL"), "/dashboard"] => 404,
-    [ENV.fetch("PUBLIC_WARP_STAFF_URL"), "/dashboard"] => 404,
-    # The sign-out completion is one-shot and answers 404 without a pending sign-out notice; see
-    # OidcRpLogoutLauncher#complete_oidc_rp_logout!.
-    [ENV.fetch("PUBLIC_EDIT_STAFF_URL"), "/sign/out"] => 404,
-    [ENV.fetch("PUBLIC_EDIT_STAFF_URL"), "/sign/out/completion"] => 404,
-    # The Core browser API answers 503 while it is not enabled; see CoreBrowserApiBoundary.
-    [ENV.fetch("PUBLIC_CORE_SERVICE_URL"), "/api/v0/session"] => 503,
-    [ENV.fetch("PUBLIC_CORE_CORPORATE_URL"), "/api/v0/session"] => 503,
-    [ENV.fetch("PUBLIC_CORE_STAFF_URL"), "/api/v0/session"] => 503,
+  UNAVAILABLE_OWNER_PATHS = {
+    "app" => %w(
+      /api/v0/identity/standing /api/v0/identity/selection
+      /api/v0/membership/app/accounts /api/v0/membership/app/organizations
+      /api/v0/avatar/app/switcher /api/v0/avatar/app/dashboard-identity
+      /api/v0/avatar/app/selected-image /api/v0/avatar/app/avatars /api/v0/avatar/app/groups
+    ).freeze,
+    "org" => %w(
+      /api/v0/identity/standing /api/v0/identity/selection
+      /api/v0/membership/org/accounts /api/v0/membership/org/organizations
+      /api/v0/support /api/v0/iam/grants /api/v0/iam/grant-screen
+      /api/v0/avatar/org/dashboard-identity /api/v0/avatar/org/switcher
+      /api/v0/avatar/org/selected-avatar /api/v0/avatar/org/selected-image
+    ).freeze,
   }.freeze
+
+  SKIP = %r{/(callback|oauth|social)\b}
 
   test "static GET routes answer on their own host without a server error or a routing miss" do
     routes = static_get_routes_by_host
@@ -36,8 +35,15 @@ class StaticGetRouteResponseTest < ActionDispatch::IntegrationTest
       host! host
       paths.each do |path|
         get(path)
-        next if EXPECTED_ANONYMOUS_STATUS[[host, path]] == response.status
-
+        owner_paths = {
+          ENV.fetch("PUBLIC_BASE_SERVICE_URL") => UNAVAILABLE_OWNER_PATHS.fetch("app"),
+          ENV.fetch("PUBLIC_BASE_STAFF_URL") => UNAVAILABLE_OWNER_PATHS.fetch("org"),
+        }
+        if owner_paths.fetch(host, []).include?(path)
+          assert_response :service_unavailable
+          assert_includes response.headers["Cache-Control"], "no-store"
+          next
+        end
         failures << "GET #{host}#{path}: #{response.status}" if response.server_error? || response.not_found?
       rescue StandardError => e
         failures << "GET #{host}#{path}: #{e.class}: #{e.message}"

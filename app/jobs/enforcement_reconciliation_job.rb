@@ -80,7 +80,9 @@ class EnforcementReconciliationJob < ApplicationJob
     return unless effect&.access_blocking?
 
     principal = enforcement_case.class.principal_class.find_by!(public_id: enforcement_case.principal_public_id)
-    return if principal.admin_locked? && principal_access_recorded?(enforcement_case, principal)
+    if principal.admin_locked? && principal_access_recorded?(enforcement_case, principal)
+      raise AccessOpDataUnavailableError
+    end
 
     EnforcementCaseApplyOperation.new(
       enforcement_case: enforcement_case,

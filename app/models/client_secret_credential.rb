@@ -12,7 +12,7 @@ class ClientSecretCredential < AppZenithRecord
   has_secure_password algorithm: :argon2, validations: false
 
   belongs_to :client, inverse_of: :client_secret_credentials
-  belongs_to :issuance, class_name: "ClientSecretIssuance"
+  belongs_to :issuance, class_name: "ClientSecretIssuance", inverse_of: :credentials
 
   attr_readonly :public_id, :client_id, :issuance_id, :password_digest
 
@@ -24,6 +24,7 @@ class ClientSecretCredential < AppZenithRecord
   validate :terminal_issuance_cannot_confirm_candidate
   validate :confirmation_has_source_audit, on: :update
   validate :persisted_confirmation_is_immutable, on: :update
+  validates :claim_operation_id, :claim_sign_in_flow_ref, uniqueness: true, allow_nil: true
   validates :claim_sign_in_flow_ref, length: { maximum: 21 }
 
   scope :available_at, ->(at) {
@@ -34,60 +35,11 @@ class ClientSecretCredential < AppZenithRecord
   public
 
   def commit_sign_in_claim!(actor_context:, flow:, ceremony:, at:)
-    unless ClientSignInFlow.lease_connection.transaction_open? && flow.is_a?(ClientSignInFlow) &&
-        ceremony.is_a?(ClientAuthCeremonySession)
-      raise InvalidTransition, "Secret claim requires its locked durable Ticket transaction"
-    end
-
-    flow = ClientSignInFlow.lock.find_by!(id: flow.id, public_id: flow.public_id)
-    ceremony = ClientAuthCeremonySession.lock.find(ceremony.id)
-    verify_claim_binding!(actor_context, flow, ceremony, at)
-
-    @authentication_fact_write = true
-    self.claimed_at = at
-    self.claim_operation_id = SecureRandom.uuid
-    self.claim_sign_in_flow_ref = flow.public_id
-    self.claim_ceremony_session_id = ceremony.id
-    ClientSecretAuditOutbox.record!(
-      actor_context: actor_context, client_ref: actor_context.subject.public_id, credential_ref: public_id,
-      operation_ref: claim_operation_id, occurred_at: at, event_name: "secret.claimed",
-    )
-    save!
-    self
-  ensure
-    @authentication_fact_write = false
+    raise AccessOpDataUnavailableError
   end
 
   def commit_sign_in_retirement!(actor_context:, at:, purge_at:, successful:, flow:, reason:)
-    unless ClientSignInFlow.lease_connection.transaction_open? && flow.is_a?(ClientSignInFlow)
-      raise InvalidTransition, "Secret retirement requires its locked durable Ticket transaction"
-    end
-
-    flow = ClientSignInFlow.lock.find_by!(id: flow.id, public_id: flow.public_id)
-    unless self.class.lease_connection.transaction_open? && claimed_at && discard_at == Float::INFINITY &&
-        at >= claimed_at && purge_at > at && actor_context.subject.is_a?(Client) &&
-        actor_context.subject.id == client_id &&
-        flow.public_id == claim_sign_in_flow_ref &&
-        flow.principal_id == client_id
-      raise InvalidTransition, "Secret retirement requires its terminal claim decision"
-    end
-
-    verify_retirement_outcome!(flow, successful, reason)
-
-    @authentication_fact_write = true
-    self.consumed_at = at if successful
-    self.discard_at = at
-    self.purge_eligible_at = purge_at
-    events = successful ? %w(secret.consumed secret.discarded) : %w(secret.discarded)
-    events.each do |event|
-      ClientSecretAuditOutbox.record!(
-        actor_context: actor_context, client_ref: actor_context.subject.public_id, credential_ref: public_id,
-        operation_ref: claim_operation_id, occurred_at: at, event_name: event, reason: reason,
-      )
-    end
-    save!
-  ensure
-    @authentication_fact_write = false
+    raise AccessOpDataUnavailableError
   end
 
   # confirmed_at needs a validated transition, so fixed Rails writer guards
@@ -235,69 +187,6 @@ class ClientSecretCredential < AppZenithRecord
   end
 
   private
-
-  def verify_claim_binding!(actor_context, flow, ceremony, at)
-    unless self.class.lease_connection.transaction_open? && available_at?(at: at) &&
-        flow.principal_id == client_id && flow.sign_in_primary_pending? &&
-        !flow.expired?(ClientSignInFlow.database_now) &&
-        ceremony.active?(now: ClientAuthCeremonySession.database_now) &&
-        ceremony.admitted? && claim_ceremony_matches?(flow, ceremony) && !ceremony.authentication_evidence_recorded? &&
-        actor_context.subject.id == client_id
-      raise InvalidTransition, "Secret claim requires the owning admitted browser flow"
-    end
-  end
-
-  def claim_ceremony_matches?(flow, ceremony)
-    return false unless ceremony.admission_purpose == "authentication_handoff"
-
-    transaction = ClientOidcAuthorizationTransaction.lock.find_by(
-      transaction_id: ceremony.authorization_transaction_ref, secret_sign_in_flow_id: flow.id,
-    )
-    now = ClientOidcAuthorizationTransaction.database_now
-    transaction&.pending? &&
-      !transaction.expired?(now: now) && !transaction.login_challenge_expired?(now: now)
-  end
-
-  def verify_retirement_outcome!(flow, successful, reason)
-    receipt = ClientSecretSignInReceipt.find_by(operation_id: claim_operation_id)
-    if successful
-      flow_token_ref = ClientToken.where(id: flow.token_id, user_id: client_id).pick(:public_id)
-      unless receipt && receipt.credential_ref == public_id && receipt.sign_in_flow_id == flow.id &&
-          flow.sign_in_completed? && receipt.root_token_ref == flow_token_ref &&
-          receipt.committed_at == flow.session_issued_at
-        raise InvalidTransition, "Secret consumption requires its durable successful receipt"
-      end
-    elsif receipt || !terminal_flow?(flow)
-      raise InvalidTransition, "Unsuccessful Secret retirement requires its terminal flow"
-    end
-    verify_cancellation_outcome!(flow) if reason == "flow_canceled"
-    valid_reason =
-      successful ? reason == "login_committed" : %w(flow_failed flow_halted flow_expired
-                                                    flow_canceled).include?(reason)
-    return if valid_reason && (reason != "flow_expired" || flow.expired?(ClientSignInFlow.database_now))
-
-    raise InvalidTransition, "Secret retirement requires its verified terminal outcome reason"
-  end
-
-  def verify_cancellation_outcome!(flow)
-    ceremony = ClientAuthCeremonySession.lock.find_by(id: claim_ceremony_session_id)
-    if ceremony&.admitted? && ceremony.admission_purpose == "authentication_handoff"
-      transaction = ClientOidcAuthorizationTransaction.find_by(
-        secret_sign_in_flow_id: flow.id, transaction_id: ceremony.authorization_transaction_ref,
-      )
-      return if transaction && transaction.base_finalized_at.nil? && transaction.browser_session_ref.nil? &&
-        ClientSessionLimitResolutionTransaction.where(
-          oidc_authorization_transaction_id: transaction.id,
-          state_id: ClientSessionLimitResolutionTransaction::CANCELLED,
-        ).where.not(cancelled_at: nil).exists?
-    end
-
-    raise InvalidTransition, "Secret cancellation requires its durable canceled ceremony"
-  end
-
-  def terminal_flow?(flow)
-    flow.sign_in_failed? || flow.sign_in_expired? || flow.sign_in_cancelled? || flow.sign_in_halted?
-  end
 
   def storage_confirmation_context_matches?(context)
     owned_issuance = ClientSecretIssuance.find_by(id: issuance_id, client_id: client_id)

@@ -10,14 +10,10 @@ CI.run do
        "env RAILS_ENV=test bin/rails db:create"
   step "Setup: test database",
        "POSTGRESQL_TEST_PREPARE_DATABASES=" \
-       "test_primary_db,test_publishing_db,test_app_zenith_db," \
-       "test_org_zenith_db,test_app_setting_db,test_com_setting_db,test_org_setting_db," \
-       "test_op_base_app_db,test_op_base_org_db,test_app_signal_db," \
-       "test_rp_base_app_db,test_rp_core_app_db,test_rp_warp_app_db,test_rp_palm_app_db," \
-       "test_rp_base_org_db,test_rp_core_org_db,test_rp_warp_org_db," \
-       "test_rp_edit_org_db,test_rp_tech_org_db," \
-       "test_org_signal_db,test_avatar_db,test_chronicle_db," \
-       "test_occurrence_db,test_queue_db,test_search_db,test_storage_db " \
+       "test_primary_db,test_app_zenith_db,test_org_zenith_db,test_app_setting_db," \
+       "test_com_setting_db,test_org_setting_db,test_app_signal_db,test_org_signal_db," \
+       "test_avatar_db,test_chronicle_db,test_occurrence_db,test_queue_db," \
+       "test_storage_db,test_rp_base_app_db,test_rp_base_org_db,test_rp_tech_org_db " \
        "env RAILS_ENV=test bin/rails db:test:prepare"
 
   step "Style: JavaScript", "bun run check"
@@ -89,7 +85,7 @@ CI.run do
   step "Tests: JavaScript", "bun run test:coverage"
 
   if ENV["COVERAGE"] == "true"
-    step "Tests: Rails with coverage", "env COVERAGE=true bin/rails test test/"
+    step "Tests: Rails with coverage", "env COVERAGE=true bin/rails test"
   else
     step "Tests: Rails", "bin/rails test"
   end

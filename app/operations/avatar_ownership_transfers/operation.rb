@@ -11,19 +11,7 @@ module AvatarOwnershipTransfers
     private
 
     def validate_step_up_context!(actor:, token:, evidence:)
-      return if token_belongs_to_actor?(actor, token) && evidence.is_a?(StepUpEvidenceValue)
-
-      raise InvalidTransfer, "Avatar transfer Step-Up binding is invalid"
-    end
-
-    def token_belongs_to_actor?(actor, token)
-      return false unless token&.persisted?
-
-      case [actor, token]
-      in [Client, ClientToken] then token.user_id == actor.id
-      in [Operator, OperatorToken] then token.staff_id == actor.id
-      else false
-      end
+      raise AccessOpDataUnavailableError
     end
 
     def verify_step_up!(actor:, token:, evidence:)

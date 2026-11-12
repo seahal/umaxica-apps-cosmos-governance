@@ -155,69 +155,32 @@ class Base::Org::Api::V0::Preferences::WebPushesControllerTest < ActionDispatch:
 
   test "an ORG RP session requires two active operator passkeys before changing browser web push" do
     actor = Operator.create!(security_mode_id: SecurityModeConfigurable::ADVANCED, status_id: OperatorStatus::ACTIVE)
-    root_token = OperatorToken.create!(
-      authentication_epoch: 0, staff: actor, staff_token_kind_id: OperatorTokenKind::BROWSER_WEB,
-      staff_token_status_id: OperatorTokenStatus::ACTIVE,
-    )
-    BaseSelectorBootstrapAuthority.call(surface: :org, principal: actor)
-    BaseSelectorAuthority.prepare(surface: :org, principal: actor, session: root_token)
-    client = OidcClientRegistry.find!("base-org-ww")
-    verifier = SecureRandom.urlsafe_base64(48)
-    code = OidcAuthorizationCodeIssuer.call(
-      client:, resource: actor, session_token: root_token, authentication_event_at: 1.minute.ago,
-      params: {
-        client_id: client.client_id,
-        redirect_uri: client.redirect_uris.first,
-        response_type: "code",
-        scope: "openid",
-        state: SecureRandom.hex(16),
-        nonce: SecureRandom.hex(16),
-        code_challenge_method: "S256",
-        code_challenge: Base64.urlsafe_encode64(Digest::SHA256.digest(verifier), padding: false),
-      },
-    )
-    exchange =
-      OidcClientRegistry.stub(
-        :verify_client_assertion,
-        ->(client_id, *, **) {
-          OidcClientRegistry::AssertionAuthenticationResult.new(
-            authenticated: true, client: OidcClientRegistry.find!(client_id), step_up_claims_state: :none,
-            step_up_expectation: nil,
-          )
-        },
-      ) do
-        OidcTokenExchangeCoordinator.call(
-          grant_type: "authorization_code", code: code.code, redirect_uri: code.redirect_uri,
-          client_id: client.client_id, code_verifier: verifier,
-          client_assertion_type: OidcClientAssertionJwt::ASSERTION_TYPE, client_assertion: "org-web-push-test",
-          token_endpoint_uri: OidcIssuer.token_endpoint("operator"), expected_resource_type: "operator",
-        )
-      end
-
-    assert_predicate exchange, :success?
-    token_response = exchange.token_response
-    claims, = JWT.decode(token_response.fetch(:id_token), nil, false)
-    cell = RpCellBinding.for_client("base-org-ww")
-    enrollment = RpCallbackCommitter.call(
-      cell:, issuer: claims.fetch("iss"), subject: claims.fetch("sub"), sid: claims.fetch("sid"),
-      absolute_expires_at: 1.hour.from_now,
-    )
-
-    assert_predicate enrollment, :success?
-    assert_instance_of RpBaseOrgSession, enrollment.session
-    cookies[OidcRpBrowserCredentialContract::ACCESS_COOKIE] = token_response.fetch(:access_token)
-    cookies[OidcRpBrowserCredentialContract::REFRESH_COOKIE] = token_response.fetch(:refresh_token)
-    cookies[OidcRpBrowserCredentialContract::SESSION_COOKIE] = enrollment.session.public_id
-    prior_runtime_role = ENV["UMAXICA_RUNTIME_ROLE"]
-    prior_browser_admission = ENV["UMAXICA_RP_BROWSER_ADMISSION"]
     prior_forgery_protection = ActionController::Base.allow_forgery_protection
-    ENV["UMAXICA_RUNTIME_ROLE"] = "#{cell.connection.tr("_", "-")}-#{cell.region}"
-    ENV["UMAXICA_RP_BROWSER_ADMISSION"] = "open"
     ActionController::Base.allow_forgery_protection = true
-    OidcOpJwksClient::CLIENTS.clear
+    as_rp_cell("base-org-ww") do
+      headers = as_staff_headers(actor, host: @host)
+      headers.fetch("Cookie").split("; ").each do |pair|
+        name, value = pair.split("=", 2)
+        cookies[name] = Rack::Utils.unescape(value)
+      end
+      create_operator_passkeys =
+        lambda do |count|
+          OperatorPasskey.where(staff: actor).destroy_all
+          count.times do
+            OperatorPasskey.create!(
+              staff: actor, webauthn_id: SecureRandom.urlsafe_base64(32), external_id: SecureRandom.uuid,
+              public_key: "org-web-push-public-key", sign_count: 0, description: "ORG Web Push test passkey",
+              status_id: OperatorPasskeyStatus::ACTIVE,
+            )
+          end
+        end
+      get(base_org_preference_path(ri: "jp"))
 
-    begin
-      get(edit_base_org_sign_out_path(ri: "jp"))
+      assert_redirected_to base_org_verification_setup_path(ri: "jp")
+
+      create_operator_passkeys.call(2)
+
+      get(base_org_preference_path(ri: "jp"))
 
       assert_response :ok
       csrf_token = response.parsed_body.at_css('meta[name="csrf-token"]').attr("content")
@@ -225,11 +188,7 @@ class Base::Org::Api::V0::Preferences::WebPushesControllerTest < ActionDispatch:
       assert_predicate csrf_token, :present?
 
       [1, 2, 3].each do |passkey_count|
-        OperatorPasskey.create!(
-          staff: actor, webauthn_id: SecureRandom.urlsafe_base64(32), external_id: SecureRandom.uuid,
-          public_key: "org-web-push-public-key", sign_count: 0, description: "ORG Web Push test passkey",
-          status_id: OperatorPasskeyStatus::ACTIVE,
-        )
+        create_operator_passkeys.call(passkey_count)
         patch(
           base_org_api_v0_preferences_web_push_path,
           params: { web_push: "enabled" }.to_json,
@@ -250,12 +209,8 @@ class Base::Org::Api::V0::Preferences::WebPushesControllerTest < ActionDispatch:
                        OrgPreferenceWebPush.find_by!(preference_id: preference.id).option_id
         end
       end
-    ensure
-      OidcOpJwksClient::CLIENTS.clear
-      prior_runtime_role.nil? ? ENV.delete("UMAXICA_RUNTIME_ROLE") : ENV["UMAXICA_RUNTIME_ROLE"] = prior_runtime_role
-      prior_browser_admission.nil? ? ENV.delete("UMAXICA_RP_BROWSER_ADMISSION") :
-        ENV["UMAXICA_RP_BROWSER_ADMISSION"] = prior_browser_admission
-      ActionController::Base.allow_forgery_protection = prior_forgery_protection
     end
+  ensure
+    ActionController::Base.allow_forgery_protection = prior_forgery_protection
   end
 end

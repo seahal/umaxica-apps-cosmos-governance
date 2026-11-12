@@ -61,7 +61,7 @@ class EnforcementAppealTest < ActiveSupport::TestCase
     assert_not_nil appeal.redacted_at
   end
 
-  test "appeal resolution requires a reviewer distinct from the Case operators" do
+  test "appeal resolution refuses unavailable reviewer authority without changing the stored appeal" do
     enforcement_case = AppEnforcementCase.create!(
       kind: "security_lock", state: "draft", duration_mode: "indefinite", visibility: "visible",
       release_mode: "verification_required", effective_at: Time.current, reason_code: "security_incident",
@@ -76,16 +76,18 @@ class EnforcementAppealTest < ActiveSupport::TestCase
       state: "submitted",
     )
 
-    error =
-      assert_raises(EnforcementAppeal::ReviewerSeparationError) do
-        appeal.resolve!(reviewer_operator_public_id: "operator-applying", resolution_code: "rejected")
-      end
-
-    assert_match(/must differ/, error.message)
-    assert_equal "submitted", appeal.reload.state
+    before_appeal = appeal.reload.attributes
+    before_case = enforcement_case.reload.attributes
+    before_events = EnforcementEvent.where(case_public_id: enforcement_case.public_id).count
+    assert_raises(AccessOpDataUnavailableError) do
+      appeal.resolve!(reviewer_operator_public_id: "operator-applying", resolution_code: "rejected")
+    end
+    assert_equal before_appeal, appeal.reload.attributes
+    assert_equal before_case, enforcement_case.reload.attributes
+    assert_equal before_events, EnforcementEvent.where(case_public_id: enforcement_case.public_id).count
   end
 
-  test "a rejected appeal records its reviewer and immutable resolution" do
+  test "rejection cannot invent a reviewer or resolution without Access evidence" do
     enforcement_case = AppEnforcementCase.create!(
       kind: "security_lock", state: "draft", duration_mode: "indefinite", visibility: "visible",
       release_mode: "verification_required", effective_at: Time.current, reason_code: "security_incident",
@@ -99,15 +101,18 @@ class EnforcementAppealTest < ActiveSupport::TestCase
       state: "submitted",
     )
 
-    appeal.resolve!(reviewer_operator_public_id: "operator-reviewing", resolution_code: "rejected")
-
-    assert_equal "rejected", appeal.state
-    assert_equal "operator-reviewing", appeal.reviewer_operator_public_id
-    assert_equal "rejected", appeal.resolution_code
-    assert_not_nil appeal.reviewed_at
+    before_appeal = appeal.reload.attributes
+    before_case = enforcement_case.reload.attributes
+    before_events = EnforcementEvent.where(case_public_id: enforcement_case.public_id).count
+    assert_raises(AccessOpDataUnavailableError) do
+      appeal.resolve!(reviewer_operator_public_id: "operator-reviewing", resolution_code: "rejected")
+    end
+    assert_equal before_appeal, appeal.reload.attributes
+    assert_equal before_case, enforcement_case.reload.attributes
+    assert_equal before_events, EnforcementEvent.where(case_public_id: enforcement_case.public_id).count
   end
 
-  test "an approved appeal remains committed when Case convergence fails" do
+  test "approval without Access evidence cannot change the Case or commit a resolution" do
     enforcement_case = AppEnforcementCase.create!(
       kind: "security_lock", state: "active", duration_mode: "indefinite", visibility: "visible",
       release_mode: "verification_required", effective_at: Time.current, reason_code: "security_incident",
@@ -121,22 +126,18 @@ class EnforcementAppealTest < ActiveSupport::TestCase
       state: "submitted",
     )
 
-    error =
-      assert_raises(RuntimeError) do
-        EnforcementCaseEndOperation.stub(
-          :call, ->(*) { raise RuntimeError, "release service unavailable" },
-        ) do
-          appeal.resolve!(reviewer_operator_public_id: "operator-reviewing", resolution_code: "approved")
-        end
-      end
-
-    assert_equal "release service unavailable", error.message
-    assert_equal "approved", appeal.reload.state
-    assert_equal "approved", appeal.resolution_code
-    assert_nil enforcement_case.reload.ended_at
+    before_appeal = appeal.reload.attributes
+    before_case = enforcement_case.reload.attributes
+    before_events = EnforcementEvent.where(case_public_id: enforcement_case.public_id).count
+    assert_raises(AccessOpDataUnavailableError) do
+      appeal.resolve!(reviewer_operator_public_id: "operator-reviewing", resolution_code: "approved")
+    end
+    assert_equal before_appeal, appeal.reload.attributes
+    assert_equal before_case, enforcement_case.reload.attributes
+    assert_equal before_events, EnforcementEvent.where(case_public_id: enforcement_case.public_id).count
   end
 
-  test "a rejected appeal remains committed when its audit side effect fails" do
+  test "missing Access evidence cannot publish a false rejected-appeal audit" do
     enforcement_case = AppEnforcementCase.create!(
       kind: "security_lock", state: "active", duration_mode: "indefinite", visibility: "visible",
       release_mode: "verification_required", effective_at: Time.current, reason_code: "security_incident",
@@ -150,18 +151,15 @@ class EnforcementAppealTest < ActiveSupport::TestCase
       state: "submitted",
     )
 
-    error =
-      assert_raises(RuntimeError) do
-        EnforcementEvent.stub(
-          :create!, ->(*) { raise RuntimeError, "chronicle unavailable" },
-        ) do
-          appeal.resolve!(reviewer_operator_public_id: "operator-reviewing", resolution_code: "rejected")
-        end
-      end
-
-    assert_equal "chronicle unavailable", error.message
-    assert_equal "rejected", appeal.reload.state
-    assert_equal "rejected", appeal.resolution_code
+    before_appeal = appeal.reload.attributes
+    before_case = enforcement_case.reload.attributes
+    before_events = EnforcementEvent.where(case_public_id: enforcement_case.public_id).count
+    assert_raises(AccessOpDataUnavailableError) do
+      appeal.resolve!(reviewer_operator_public_id: "operator-reviewing", resolution_code: "rejected")
+    end
+    assert_equal before_appeal, appeal.reload.attributes
+    assert_equal before_case, enforcement_case.reload.attributes
+    assert_equal before_events, EnforcementEvent.where(case_public_id: enforcement_case.public_id).count
   end
 
   test "submit! persists the appeal and writes one audit event on the Case" do

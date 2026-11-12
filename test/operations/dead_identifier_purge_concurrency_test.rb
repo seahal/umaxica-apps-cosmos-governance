@@ -39,7 +39,8 @@ class DeadIdentifierPurgeConcurrencyTest < ActiveSupport::TestCase
             [number, "0#{number.delete_prefix("+81")}"]
           end
         record = model.create!(attributes.merge(owner_key => owner.id, :created_at => 3.days.ago))
-        record.finalize_binding!(at: record.created_at) unless realm == "org"
+        # Seed the stored binding fact; concurrent SQL tests DB uniqueness, not unavailable Access proof.
+        record.update_columns(binding_finalized_at: record.created_at) unless realm == "org"
         if realm == "org"
           owner.update!(discard_at: owner.created_at + 1.day, purge_eligible_at: owner.created_at + 2.days)
         else
@@ -72,7 +73,7 @@ class DeadIdentifierPurgeConcurrencyTest < ActiveSupport::TestCase
               release.pop
               begin
                 candidate = model.create!(replacement_attributes)
-                candidate.finalize_binding! unless realm == "org"
+                candidate.update_columns(binding_finalized_at: candidate.class.database_now) unless realm == "org"
                 outcomes << [:created, candidate.id]
               rescue ActiveRecord::RecordNotUnique
                 outcomes << [:conflict, nil]
@@ -98,7 +99,7 @@ class DeadIdentifierPurgeConcurrencyTest < ActiveSupport::TestCase
         if results.any? { |status, _| status == :conflict }
           replacement = model.find_by(owner_key => replacement_owner.id)
           replacement ||= model.create!(replacement_attributes)
-          replacement.finalize_binding! unless realm == "org"
+          replacement.update_columns(binding_finalized_at: replacement.class.database_now) unless realm == "org"
         end
         current = model.find_by!(owner_key => replacement_owner.id)
 

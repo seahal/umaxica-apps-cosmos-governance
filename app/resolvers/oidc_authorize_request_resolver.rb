@@ -32,7 +32,7 @@ class OidcAuthorizeRequestResolver < ApplicationService
   }.freeze
   # RFC 7636 4.2: an S256 challenge is BASE64URL(SHA-256) without padding.
   CODE_CHALLENGE_PATTERN = /\A[A-Za-z0-9_-]{43}\z/
-  STEP_UP_ACR = "https://visa.umaxica.app/acr/reauthentication".freeze
+  STEP_UP_ACR = "urn:umaxica:base:step-up".freeze
   STEP_UP_SCOPE = "oidc_authorization".freeze
   STEP_UP_RETURN_TO = "/oauth/authorize".freeze
   STEP_UP_CLAIMS = JSON.generate(

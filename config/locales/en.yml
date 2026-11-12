@@ -1,11 +1,5 @@
 ---
 en:
-  base_social_identities:
-    title: Connected accounts
-    description: View the accounts connected to your identity.
-    org_description: View the account provisioned for your organization sign-in.
-    linked: Connected
-    unlinked: Not connected
   acme:
     app:
       preference:
@@ -211,19 +205,6 @@ en:
         up_link: Back
         update_settings: Update Settings
         update_success: Preferences updated successfully
-      settings:
-        description: Review and adjust your service settings.
-        email_settings: Email settings
-        email_settings_description: Manage notification senders and descriptions.
-        i18n_settings: Locale settings
-        i18n_settings_description: Update the default language and region for this browser.
-        title: Settings
-      sign:
-        in:
-          limitations:
-            capacity_still_full: Session capacity is still full. Revoke another session to continue.
-            invalid_or_expired: This sign-in limitation link is invalid or expired.
-            revoke_failed: The selected session could not be revoked.
     com:
       preference:
         cookie:
@@ -616,13 +597,6 @@ en:
         up_link: Back
         update_settings: Update Settings
         update_success: Preferences updated successfully
-      settings:
-        description: Review and adjust your organization settings.
-        email_settings: Email settings
-        email_settings_description: Manage notification senders and descriptions.
-        i18n_settings: Locale settings
-        i18n_settings_description: Update the default language and region for this organization.
-        title: Settings
   actions:
     actions: Actions
     add: Add
@@ -793,6 +767,7 @@ en:
         provider_name: Provider
         sign_count: Usage count
       user_telephone:
+        number: Telephone number
         status: "Status"
       user_token:
         discard_at: Lapses at
@@ -877,6 +852,43 @@ en:
   architecture_guard:
     avatar_binding_create: Avatar binding create!
   attributes:
+    attempts: Delivery attempts
+    claim_operation_id: Claim operation ID
+    claim_sign_in_flow_ref: Claim sign-in flow reference
+    client: Client
+    client_privacy_requests: Privacy requests
+    client_processor_erasure_notifications: Processor erasure notifications
+    client_profiles: Client profiles
+    client_retention_holds: Retention holds
+    department: Department
+    event_uuid: Event UUID
+    events_from_status: Events from this status
+    events_to_status: Events to this status
+    external_id: Credential reference
+    incoming_agent_ownership_transfer_requests: Incoming agent ownership transfer requests
+    incoming_bureau_ownership_transfer_requests: Incoming bureau ownership transfer requests
+    incoming_client_persona_ownership_transfer_requests: Incoming persona ownership transfer requests
+    incoming_enterprise_ownership_transfer_requests: Incoming enterprise ownership transfer requests
+    lifecycle_requests_as_approver: Approved lifecycle changes
+    lifecycle_requests_as_executor: Executed lifecycle changes
+    lifecycle_requests_as_rejector: Rejected lifecycle changes
+    lifecycle_requests_as_requester: Requested lifecycle changes
+    lifecycle_requests_as_target: Lifecycle requests targeting this operator
+    operation_id: Operation ID
+    operation_ref: Operation reference
+    operator_id: Operator ID
+    operator_workspace_accounts: Workspace accounts
+    operators: Operators
+    outbox_id: Audit outbox
+    outgoing_agent_ownership_transfer_requests: Outgoing agent ownership transfer requests
+    outgoing_bureau_ownership_transfer_requests: Outgoing bureau ownership transfer requests
+    outgoing_client_persona_ownership_transfer_requests: Outgoing persona ownership transfer requests
+    outgoing_enterprise_ownership_transfer_requests: Outgoing enterprise ownership transfer requests
+    owned_members: Owned members
+    public_key: Public key
+    reason_code: Reason code
+    backup_eligibility: Backup eligibility
+    backup_observation: Backup observation
     ack_deactivate_today: Deactivation confirmation
     ack_schedule_purge: Purge schedule confirmation
     active_avatars: Active avatars
@@ -900,6 +912,7 @@ en:
     birthdate: Birthdate
     body: Body
     bureau_id: Bureau ID
+    bureau_transfer_details: Bureau transfer details
     can_create_content: Can create content
     canceled_at: Canceled at
     capability_id: Capability
@@ -946,6 +959,7 @@ en:
     enabled: Enabled
     ends_at: Ends at
     enterprise_id: Enterprise ID
+    enterprise_transfer_details: Enterprise transfer details
     entry_method: Entry method
     error_message: Error message
     event_id: Event
@@ -1025,12 +1039,13 @@ en:
     restorable_by_owner: Restorable by owner
     result_jti: Result JTI
     role: Role
+    rp_session_id: RP session
     secret_credential_value: Secret
     sequence: Sequence number
     sid: Session reference
     sign_count: Sign count
     sign_in_flow_id: Sign-in flow
-    social_provider: Social provider
+    sign_up_flow_ref: Signup flow reference
     source_record_id: Source record ID
     staff: Staff
     staff_chronicles: Staff chronicles
@@ -1044,6 +1059,7 @@ en:
     staff_telephones: Telephone numbers
     staff_token_id: Staff token ID
     staff_tokens: Tokens
+    state_digest: State digest
     status: Status
     status_id: Status
     step_up_ceremony_transaction_ref: Step-up transaction reference
@@ -1056,11 +1072,20 @@ en:
     telephone_occurrence_id: Telephone occurrence
     term_public_id_snapshot: Term public ID snapshot
     terminal: Terminal state
+    idempotency_key: Idempotency key
+    credentials: Credentials
+    email_histories: Email history
+    telephone_histories: Telephone history
+    context: Context
+    client_social_link_source_receipts: Social link receipts
+    ticket_id: Ticket ID
+    to_state_id: Destination state
     token: Token
     token_expires_at: Token expiration
     token_id: Root session reference
     transaction_id: Transaction ID
     transfer_reservation_id: Transfer reservation
+    transitions: State transitions
     uid: UID
     user: User
     user_id: User
@@ -1072,60 +1097,6 @@ en:
     webauthn_id: WebAuthn ID
   auth:
     rp_feature_unavailable: "This feature is temporarily unavailable. Please try again later."
-    app:
-      dashboards:
-        show:
-          description: Sign app signed-in landing.
-      settings:
-        activity:
-          events:
-            email_registered: Email address registered
-            email_removed: Email address removed
-            logged_in: Logged in
-            logged_out: Logged out
-            login_success: Login success
-            logout: Logged out
-            passkey_registered: Passkey registered
-            recovery_codes_generated: Recovery codes generated
-            session_revoked: Session revoked
-            signed_up_with_apple: Signed up with Apple
-            signed_up_with_email: Signed up with email
-            signed_up_with_google: Signed up with Google
-            signed_up_with_telephone: Signed up with telephone
-            social_linked: Social account linked
-            social_unlinked: Social account unlinked
-            telephone_registered: Telephone number registered
-            telephone_removed: Telephone number removed
-            totp_enabled: Authenticator app registered
-            unknown: Unknown event (%{event_id})
-            user_secret_credential_created: Secret created
-      verification:
-        emails:
-          update:
-            page_title: Email verification
-    org:
-      dashboards:
-        show:
-          description: Sign org signed-in landing.
-      settings:
-        activity:
-          events:
-            logged_in: Logged in
-            login_success: Login success
-            social_unlinked: Social account unlinked
-            unknown: Unknown event (%{event_id})
-      sign:
-        in:
-          passkeys:
-            create:
-              page_title: Sign in with a passkey
-          sessions:
-            update:
-              page_title: Sign in
-        up:
-          invitations:
-            create:
-              turnstile_failed: "Security verification failed. Please try again."
     session_expired: Your session has expired. Please sign in again.
     step_up:
       canceled: Cancel verification
@@ -1169,13 +1140,6 @@ en:
           max_bytes: Name must use at most %{count} UTF-8 bytes.
           max_graphemes: Name must contain at most %{count} visible characters.
       identity:
-        credential_warning:
-          body:
-            Adding another sign-in method helps you access your account if Apple sign-in is
-            unavailable.
-          google: Link Google
-          heading: Add another sign-in method
-          passkey: Add a passkey
         emails:
           registrations:
             edit:
@@ -1534,7 +1498,8 @@ en:
           account_label: Agent
           description: Choose the organization and unit to use for this session.
           empty_message: No available organizations were found for this account.
-          invalid_selection: This organization is no longer available. Choose an available organization.
+          invalid_selection:
+            This organization is no longer available. Choose an available organization.
           organization_label: Organization
           submit_label: Continue
           title: Choose an organization
@@ -1909,7 +1874,6 @@ en:
           menu_links: Menu links
           primary_links: Primary links
           protocol_links: Protocol links
-          publishing: Publishing
         title: Dashboard
       identity:
         activities:
@@ -2066,10 +2030,8 @@ en:
         setting:
           index:
             activity: Activity
-            apple: Apple
             birthdate: Birthdate
             email: Email
-            google: Google
             passkey: Passkey
             secret_credential: Recovery Code
             session: Session
@@ -2077,16 +2039,11 @@ en:
             totp: TOTP
         settings:
           index:
-            apple: Apple
-            google: Google
             passkey: Passkey
             secret_credential: Recovery Code
             totp: TOTP
           show:
             page_title: Settings
-        v1:
-          passkey:
-            new: New passkey
       preferences:
         back_to_settings: Back to Preferences
         cookie_settings: Cookie Settings
@@ -2148,91 +2105,6 @@ en:
       verification_totp_checks:
         invalid_code: The verification code is incorrect.
         invalid_code_format: The verification code is invalid.
-  core:
-    app:
-      layout:
-        nav:
-          contact: Contact
-          settings: Settings
-      preference:
-        emails:
-          edit:
-            always_on: Essential notices
-            always_on_description: Essential messages are always enabled and cannot be turned off.
-            description: Adjust optional notifications using the link sent to your email.
-            heading: Edit email preferences
-            page_title: Edit email preferences
-            product_updates_description: Receive news about new features and improvements.
-            product_updates_label: Product updates
-            promotional_messages_description: Receive campaign and event announcements.
-            promotional_messages_label: Promotional messages
-            submit: Save preferences
-          new:
-            description: Enter your email address to receive a one-time token.
-            email_label: Email address
-            failure: Check your input and try again.
-            heading: Request a secure link
-            page_title: Request a preferences link
-            submit: Send the link
-            success: If the address is registered, we have emailed a secure link.
-      preferences:
-        back_to_settings: Back to settings
-        description:
-          Request a link that lets you change notification settings immediately without signing in.
-        email_settings: Request an email preferences link
-        email_settings_description: Enter your email address and we will send you a secure link.
-        footer:
-          home: Home
-          preference: Preferences
-        title: Email preferences
-        token_guidance: Use the link in the email to change your settings within two hours.
-    com:
-      layout:
-        nav:
-          contact: Contact
-      preferences:
-        footer:
-          preference: Preferences
-    dev:
-      roots:
-        message: Support and status entry point.
-    org:
-      preference:
-        emails:
-          edit:
-            always_on: Essential notices
-            always_on_description: Critical alerts stay enabled automatically.
-            description: Choose which notifications you receive.
-            heading: Choose staff notifications
-            page_title: Adjust staff email preferences
-            product_updates_description: Receive news about staff products and features.
-            product_updates_label: Product updates
-            promotional_messages_description: Receive promotional and event information.
-            promotional_messages_label: Promotional messages
-            submit: Save staff preferences
-          new:
-            description: Enter the target email address to receive a one-time token.
-            email_label: Staff email
-            failure: Correct the errors and try again.
-            heading: Request a secure staff link
-            page_title: Request a staff link
-            submit: Send the link
-            success: If the address is registered, we have sent an email containing the link.
-      preferences:
-        back_to_settings: Back to settings
-        description: Email staff a link to their notification settings.
-        email_settings: Request an email preferences link
-        email_settings_description: Send a one-time token link for staff.
-        footer:
-          cookie: Cookie
-          preference: Preferences
-        title: Email preferences
-        token_guidance: Use the link you received to change your settings before it expires.
-    shared:
-      preference_emails:
-        token_invalid: This link has expired. Please request a new one.
-        turnstile_error: Turnstile verification failed. Refresh the page and try again.
-        update_failure: We could not save your preferences. Please try again.
   custom:
     error:
       key: Custom Error
@@ -2343,46 +2215,6 @@ en:
   defaults:
     never: Never
   description: Withdrawal
-  docs:
-    app:
-      preferences:
-        footer:
-          home: Home
-          preference: Preferences
-      roots:
-        message: Docs API is available. Browser article pages are served outside Rails.
-    com:
-      preferences:
-        footer:
-          home: Home
-          preference: Preferences
-      roots:
-        message: Docs API is available. Browser article pages are served outside Rails.
-    org:
-      preferences:
-        footer:
-          home: Home
-          preference: Preferences
-      roots:
-        message: Docs API is available. Browser article pages are served outside Rails.
-    posts:
-      index:
-        count: "%{count} documents"
-        empty: No documents found
-        search_all: All
-        search_button: Search
-        search_found: "%{count} found"
-        search_placeholder: Search...
-        select_description: Click on a document from the list to view its details
-        select_title: Select a document
-        title: Documents
-    versions:
-      index:
-        description: Document versions list
-        title: Versions
-      show:
-        description: Document version details
-        title: Version
   email:
     app:
       preference_mailer:
@@ -2428,7 +2260,6 @@ en:
       invalid_request: Invalid request.
       less_than: must be less than %{count}
       less_than_or_equal_to: must be less than or equal to %{count}
-      login_cooldown_retry: Sign-in is temporarily unavailable. Please wait a moment, then sign in again.
       login_required: "You must sign in."
       model_invalid: "Validation failed: %{errors}"
       not_a_number: is not a number
@@ -2486,35 +2317,8 @@ en:
       exceeded: Too many requests. Please try again later.
       retry_later: Please retry in a little while.
       too_many_requests: Too many requests right now. Please try again shortly.
-    social_auth:
-      conflict: This account is already linked to another user
-      fatal: A fatal error occurred
-      identity_conflict: This account is already linked
-      identity_not_found: No %{provider} account linked
-      insufficient_login_methods:
-        Please add another login method (email, passkey with verified phone, or another social
-        account) before unlinking
+    auth_ceremony:
       invalid_intent: Invalid authentication intent
-      last_identity: Cannot remove your last login method
-      linked_to_another_user: This %{provider} account is already linked to another user
-      missing_auth_hash: Authentication data not received
-      missing_provider: Provider information missing
-      missing_uid: User identifier not received from provider
-      not_logged_in: Please log in first
-      pending_social_signup_failed:
-        Could not complete the social sign-up confirmation. Please start over.
-      pending_social_signup_invalid_state:
-        The social sign-up confirmation state is invalid. Please refresh and start over.
-      provider_error: Error communicating with provider
-      state_expired: Session expired. Please try again.
-      state_mismatch: Security verification failed. Please try again.
-      state_missing: Security state parameter missing. Please try again.
-      step_up_identity_mismatch:
-        Please use the same %{provider} account that is linked to your profile
-      step_up_required:
-        This action requires recent step-up authentication. Please authenticate again.
-      unauthorized: Authentication failed
-      user_changed: User session changed during authentication
     template:
       body: "There were problems with the following fields:"
       header:
@@ -2543,179 +2347,6 @@ en:
       verification_failed: Passkey verification failed
       verification_required: Passkey registration must be completed through WebAuthn verification.
   hello: Hello world 2
-  help:
-    app:
-      contacts:
-        create:
-          success: Your inquiry has been received.
-        new:
-          badge: Contact
-          body: Body
-          cancel: Cancel
-          category_id: Inquiry Category
-          confirm_policy: I agree to the privacy policy
-          confirm_policy_note: You must agree to the privacy policy before submitting.
-          description: Please fill out the form below to contact us.
-          email_address: Email Address
-          error_heading:
-            one: 1 error prohibited this contact from being saved.
-            other: "%{count} errors prohibited this contact from being saved."
-          page_title: Contact Us
-          submit: Create
-          telephone_number: Telephone Number
-          title: Title
-      preference:
-        cookie:
-          edit:
-            accept_consent_cookies: About allowing consent cookies
-            accept_functional_cookies: About allowing functional cookies
-            accept_necessary_cookies: About allowing necessary cookies (required)
-            accept_performance_cookies: About allowing performance cookies
-            accept_targeting_cookies: About allowing targeting cookies
-            h1: Cookie settings
-        theme:
-          edit:
-            description: Choose a display mode that suits your working environment.
-            hints:
-              dark: Best for night-time work or when you want to reduce eye strain.
-              light: Recommended for shared spaces and brightly lit offices.
-              system: Switches together with the theme of your operating system.
-            legend: Select a theme
-            options:
-              dark: Dark — easy on the eyes in low-light environments
-              light: Light — bright background suited to daytime work
-              system: System — switches automatically with your device setting
-            title: Theme settings (switch between light and dark)
-      preferences:
-        footer:
-          document: Document
-          help_center: Help Center
-          home: Home
-          newsroom: NewsRoom
-          preference: Preferences
-      roots:
-        message: Help API is available. Browser article pages are served outside Rails.
-    com:
-      contact:
-        emails:
-          create:
-            failure: Unable to send verification code. Please try again.
-            hotp_code_invalid: Invalid verification code. Please try again.
-            hotp_code_required: Please enter the verification code.
-            success: Email address verified successfully.
-            turnstile_error: Security verification failed. Please refresh the page and try again.
-          edit:
-            code_label: Verification Code
-            description: Enter the 6-digit code we sent to your email address.
-            heading: Verify your email
-            page_title: Enter Verification Code
-            resend_code: Resend code
-            retry: Start over
-            session_expired: Your session has expired. Please start over.
-            submit: Verify email
-            telephone_link: Verify phone number
-          new:
-            description: We will send a verification code to your email address.
-            email_label: Email Address
-            heading: Enter your email address
-            page_title: Verify Email Address
-            submit: Send verification code
-          update:
-            expired: Verification code has expired. Please request a new code.
-            invalid_code: Invalid verification code. %{attempts_left} attempts remaining.
-            max_attempts: Maximum verification attempts exceeded. Please request a new code.
-            session_expired: Your session has expired. Please start over.
-            success: Email verified successfully. Please verify your phone number.
-      contacts:
-        create:
-          confirm_policy_error: You must agree to the privacy policy to continue.
-          failure: Unable to process your request. Please check the form and try again.
-          success: Thank you for contacting us. Please verify your email address.
-          turnstile_error: Security verification failed. Please refresh the page and try again.
-        new:
-          badge: Contact
-          body: Body
-          cancel: Cancel
-          category_id: Inquiry Category
-          confirm_policy: I agree to the privacy policy
-          confirm_policy_note: You must agree to the privacy policy before submitting.
-          contact_category_title: Inquiry Category
-          description: Please fill out the form below to contact us.
-          email_address: Email Address
-          error_heading:
-            one: 1 error prohibited this contact from being saved.
-            other: "%{count} errors prohibited this contact from being saved."
-          heading: Send us a message
-          page_title: Contact Us
-          submit: Continue
-          telephone_number: Telephone Number
-          title: Title
-        update:
-          success: Your inquiry has been received.
-      preference:
-        theme:
-          edit:
-            options:
-              dark: Dark — easy on the eyes in low-light environments
-              light: Light — bright background suited to daytime work
-              system: System — switches automatically with your device setting
-      preferences:
-        footer:
-          document: Document
-          help_center: Help Center
-          home: Home
-          newsroom: NewsRoom
-          preference: Preferences
-      roots:
-        message: Help API is available. Browser article pages are served outside Rails.
-    contact:
-      errors:
-        id_required: Contact ID is required
-        invalid_status: "Invalid contact status: expected SET_UP, got %{current_status}"
-        not_found: Contact not found
-    org:
-      contacts:
-        create:
-          confirm_policy_error: You must agree to the privacy policy to continue.
-          failure: Unable to process your request. Please check the form and try again.
-          success: Your inquiry has been received.
-          turnstile_error: Security verification failed. Please refresh the page and try again.
-        new:
-          badge: Contact
-          body: Body
-          cancel: Cancel
-          category_id: Inquiry Category
-          confirm_policy: I agree to the privacy policy
-          confirm_policy_note: You must agree to the privacy policy before submitting.
-          contact_category_title: Inquiry Category
-          description: Please fill out the form below to contact us.
-          email_address: Email Address
-          error_heading:
-            one: 1 error prohibited this contact from being saved.
-            other: "%{count} errors prohibited this contact from being saved."
-          heading: Send us a message
-          page_title: Contact Us
-          submit: Continue
-          telephone_number: Telephone Number
-          title: Title
-        update:
-          success: Your inquiry has been received.
-      preference:
-        theme:
-          edit:
-            options:
-              dark: Dark — easy on the eyes in low-light environments
-              light: Light — bright background suited to daytime work
-              system: System — switches automatically with your device setting
-      preferences:
-        footer:
-          document: Document
-          help_center: Help Center
-          home: Home
-          newsroom: NewsRoom
-          preference: Preferences
-      roots:
-        message: Help API is available. Browser article pages are served outside Rails.
   helpers:
     select:
       prompt: Please select
@@ -2723,32 +2354,16 @@ en:
       create: Create %{model}
       submit: Save %{model}
       update: Update %{model}
-  info:
-    app:
-      roots:
-        message: Info API is available. Browser article pages are served outside Rails.
-    com:
-      roots:
-        message: Info API is available. Browser article pages are served outside Rails.
-    org:
-      roots:
-        message: Info API is available. Browser article pages are served outside Rails.
   jump:
     redirector:
       unavailable: This jump link is unavailable.
   landing:
-    sign_in: Sign in
     thin_endpoint: Use the options below to continue.
   languages:
     english: English
     japanese: 日本語
   layouts:
     shared:
-      account_navigation:
-        base: Go to BASE
-        label: Account
-        sign_out: Sign out
-        sign_up_or_in: Sign up / Sign in
       footer_cookie_controls:
         accept_all: Accept all
         close_button: Close
@@ -2766,10 +2381,6 @@ en:
           light: Light
           system: Follow system setting
         title: Theme settings
-      restricted_mode:
-        description: Step-up verification and the operations that require it are unavailable.
-        label: Restricted Mode - Emergency Access
-        sign_out: Sign out and sign in normally
   mail:
     common:
       cta: Learn more
@@ -2821,42 +2432,6 @@ en:
       recovery_identity_required:
         To register a passkey or secret_credential, please register and verify at least one email
         address or phone number first.
-  news:
-    app:
-      preferences:
-        footer:
-          home: Home
-          preference: Preferences
-      roots:
-        message: News API is available. Browser article pages are served outside Rails.
-    com:
-      preferences:
-        footer:
-          home: Home
-          preference: Preferences
-      roots:
-        message: News API is available. Browser article pages are served outside Rails.
-    org:
-      preferences:
-        footer:
-          home: Home
-          preference: Preferences
-      roots:
-        message: News API is available. Browser article pages are served outside Rails.
-    posts:
-      index:
-        count: "%{count} posts"
-        empty: No posts found
-        select_description: Click on a post from the list to view its details
-        select_title: Select a post
-        title: News
-    versions:
-      index:
-        description: News versions list
-        title: Versions
-      show:
-        description: News version details
-        title: Version
   number:
     currency:
       format:
@@ -2908,17 +2483,6 @@ en:
     precision:
       format:
         delimiter: ""
-  oidc:
-    rp_logout:
-      local_only:
-        This domain has been signed out. You are still signed in to sign. To sign out everywhere,
-        use session management at %{idp_sessions_url}.
-  oidc_rp:
-    interruption:
-      body: Sign-in could not be completed. Please sign in again.
-      sign_in: Sign in
-      title: Sign-in could not be completed
-      top: Top page
   org_document_categories:
     "%{id}": org_document_category_%{id}
     announcement: Announcement
@@ -2969,21 +2533,6 @@ en:
       failed: Unable to resend code. Please try again.
       sent: Verification code sent.
       too_soon: Please wait before requesting another code.
-  palm:
-    app:
-      dashboard:
-        description: This is a protected Palm browser page.
-        sign_out: Sign out
-        status: Your browser session is active.
-        status_heading: Session
-        title: Palm App
-      roots:
-        message: Sign in to your Palm account to open the protected app.
-        sign_in: Sign in
-      sign_out:
-        completed: Your Palm session was revoked and the browser logout flow completed.
-        heading: Signed out
-        missing: There is no active Palm logout transaction to display.
   preference:
     cookie:
       banner:
@@ -3305,239 +2854,14 @@ en:
       up_label_fallback: Back
   sign:
     app:
-      authentication:
-        email:
-          create:
-            cooldown: Please wait and try again.
-            email_not_found: We couldn't find an account matching that email address.
-            invalid_format: "Invalid email address format."
-            turnstile_error: Security verification failed. Please refresh and try again.
-            verification_code_sent: Verification code has been sent to your email address.
-            you_have_already_logged_in: You are already signed in.
-          edit:
-            code_label: "Verification code"
-            code_placeholder: "Enter the 6-digit code"
-            delivery_unavailable:
-              "We could not confirm delivery. You can resend the code or go back to stop
-              verification."
-            delivery_help:
-              "If it doesn't arrive within a minute, check your email address and mail settings,
-              then try again."
-            description:
-              "Almost done. Enter the 6-digit verification code sent to your email address."
-            page_title: "Enter verification code"
-            return_page: "Back"
-            submit: Register with Email
-          locked: Sign-in with this email address is locked.
-          new:
-            page_title: Sign in with email
-            registration: Need an account?
-            you_have_already_logged_in: You are already signed in.
-          update:
-            invalid_code: "Invalid verification code."
-        new:
-          back: Prefer a different method?
-          back_link: Back
-          description: Select the method that fits your current session.
-          links:
-            apple: Continue with Apple
-            email: Email
-            google: Continue with Google
-            passkey: Passkey
-            recovery: Recovery code
-            registration: Need an account?
-            secret: Secret
-            secret_credential: Secret
-            telephone: Telephone
-          page_title: Choose how to sign in
-        passkey:
-          new:
-            description: Use your device's security features for a faster and safer login.
-            page_title: Sign in with a passkey
-            pii_label: Email or telephone
-            pii_placeholder: user@example.com or +81 90 1234 5678
-            submit: Sign in using passkey
-        recovery:
-          new:
-            description: Enter one of your saved recovery codes to regain access to your account.
-            page_title: Use a recovery code
-        secret:
-          identifier_label: Email address or phone number
-          invalid: Unable to sign in.
-          label: Secret
-          submit: Sign in
-          title: Secret Sign in
-        secret_credential:
-          create:
-            invalid: Authentication failed. Please check your credentials.
-            success: Signed in successfully.
-          new:
-            hints: Available secret_credential hints
-            page_title: Sign in with a secret_credential
-            pii_label: Email or telephone
-            pii_placeholder: user@example.com or +81 90 1234 5678
-            secret_credential_label: Secret
-        telephone:
-          new:
-            description: This feature is coming soon.
-            page_title: Sign in with telephone
-            you_have_already_logged_in: You are already signed in.
       common:
         cancel: "Cancel"
-      in:
-        bulletins:
-          forbidden: You are not authorized to access this page.
-          show:
-            actions:
-              continue: Continue
-              update: Update
-            body: Please enable MFA. Important terms have changed. Do you accept?
-            title: Bulletin
-          timeout: The checkpoint timed out.
-          welcome:
-            body: Your account has been created. Thank you for using the service.
-            title: Welcome
-        checkpoints:
-          show:
-            title: Sign-in check
-        mfa:
-          description: "Choose an authentication method."
-          methods:
-            passkey: Authenticate with passkey
-            totp: "Authenticate with an authenticator app (TOTP)."
-          no_methods_available: "No authentication methods are available. Contact support."
-          passkey:
-            authenticate: "Authenticate with a passkey."
-            back: "Back to authentication methods."
-            description: "Authenticate with a registered passkey."
-            success: Passkey authentication succeeded.
-            title: "Passkey verification"
-          title: "Additional authentication is required."
-          totp:
-            success: Authenticator verification succeeded.
-          turnstile_failed: Verification failed. Please try again.
-          verification_failed: Verification failed.
-        session:
-          cancelled: Session cancelled. Please sign in again.
-          cannot_revoke_current: The current session cannot be revoked.
-          session_revoked: Session revoked.
-          sessions_revoked: Sessions revoked.
-      outs:
-        destroy:
-          success: You have been signed out.
       preferences:
         footer:
           dashboard: DASHBOARD
           home: home
           preference: Preferences
           settings: Settings
-      registration:
-        cancelled_retry_later: Registration cancelled. Please wait a while before registering again.
-        checkpoint:
-          show:
-            birthdate:
-              description: Enter your birthdate to continue registration.
-              label: Birthdate
-              submit: Continue
-              title: Confirm your birthdate
-            complete: Registration requirements are complete.
-            page_title: Complete registration
-            passkey:
-              action: Register passkey
-              description: Add a passkey before completing registration.
-              title: Register a passkey
-            social:
-              cancel_if_wrong: Cancel if this is not what you intended.
-              confirm_label: I understand that this creates a new Umaxica Identity.
-              confirm_title: Confirm registration
-              create_identity: A new Umaxica Identity will be created.
-              no_merge: It cannot be merged into an existing account later.
-              unregistered: This %{provider} account is not registered.
-        confirmation_required: Please confirm that you want to create a new Umaxica Identity.
-        email:
-          create:
-            contact_held:
-              You can't start a registration with this email address right now. Please try again
-              later.
-            address_required: Please enter an email address.
-            otp_resend_too_soon: Please wait before requesting another code.
-            turnstile_validation_failed: Security verification failed. Please try again.
-            verification_code_sent: Verification code has been sent to your email address.
-          edit:
-            return_page: Back
-            session_expired: Your session has expired. Please start over.
-          flow:
-            invalid: "Your session has expired."
-          new:
-            error_summary: Please check your input.
-            page_title: Sign up with email
-          update:
-            attempts_exceeded: Maximum verification attempts exceeded. Please start over.
-            code_required: Verification code is required.
-            failed: Registration failed. Please try again.
-            invalid_code: The verification code does not match. Please enter it again.
-            sign_in_required: We could not complete registration. Please sign in to continue.
-            success: Email address has been verified.
-        new:
-          links:
-            sign_in: Sign in here
-          methods:
-            email:
-              cta: Sign up with email
-              description:
-                Receive a verification link by email and finish registration in a few minutes.
-              title: Email address
-            telephone:
-              cta: Sign up with telephone
-              description: Verify your phone with a one-time SMS code before creating your account.
-              title: Mobile phone number
-            title: Choose how to get started
-          page_description: Choose the sign-up method that works best for your %{product} account.
-          page_title: Create your account
-          social:
-            buttons:
-              apple: Continue with Apple
-              google: Continue with Google
-            description: Link a new %{product} account with the provider you already trust.
-            disclaimer: We will never post or share anything without your permission.
-            title: Use an existing account
-        session_missing: Your registration session has expired. Please start again.
-        telephone:
-          complete:
-            description:
-              Your account registration has been successfully completed. You can now continue to use
-              our services.
-            link_to_home: Back to Home
-            link_to_sign_in: Go to Sign In
-            page_title: Registration Complete
-          create:
-            contact_held:
-              You can't start a registration with this phone number right now. Please try again
-              later.
-            turnstile_validation_failed: Security verification failed. Please try again.
-            verification_code_sent: Verification code has been sent via SMS.
-          edit:
-            code_label: "Verification code"
-            code_placeholder: "Enter the 6-digit code"
-            delivery_help:
-              "If it doesn't arrive within a minute, check the phone number and SMS settings, then
-              try again."
-            page_title: "Enter verification code"
-            session_expired: Your session has expired. Please start over.
-            submit: "Submit"
-          new:
-            page_title: "Sign up with a phone number"
-          resend:
-            rate_limited: Please wait before requesting another code.
-            sent: We resent the verification code via SMS.
-          update:
-            attempts_exceeded: Maximum verification attempts exceeded. Please start over.
-            code_required: Verification code is required.
-            failed: Registration could not be completed. Please start over.
-            invalid_code: The verification code does not match. Please enter it again.
-            passkey_required: Phone verified. Please register a passkey to continue.
-            sign_in_required: We could not complete registration. Please sign in to continue.
-            success: Phone number has been verified.
       settings:
         activity:
           events:
@@ -3695,12 +3019,10 @@ en:
             others_confirm: Delete all other sessions?
         show:
           account_settings: Account Settings
-          apple_desc: Connect Apple ID
           back: Back
           description: Manage advanced security controls for your account.
           email_desc: Manage contact emails
           external_services: External Services
-          google_desc: Connect Google account
           logout: Logout
           logout_desc: Sign out of your account
           mfa: MFA settings
@@ -3770,70 +3092,6 @@ en:
             available_at: Permanent termination is available from %{date}.
             confirm: This cannot be undone. Permanently terminate this account?
             submit: Permanently terminate account
-      social:
-        sessions:
-          continue: Continue
-          create:
-            failure: Authentication failed. Please try again.
-            success: Registered with %{provider}.
-          failure:
-            access_denied: "Access was denied."
-            invalid_client: "Apple sign-in is misconfigured. Please contact support."
-            invalid_credentials: "The credentials are invalid."
-            invalid_grant: "Apple sign-in has expired. Please try again."
-            invalid_redirect_uri: "The Apple sign-in redirect URL is misconfigured."
-            invalid_request: "The request to Apple is invalid. Please try again."
-            timeout: "The request timed out."
-            unknown_error: "An unknown error occurred."
-        verified_subject_guidance:
-          registered:
-            body: This social account is already registered. Start a new request and choose sign-in.
-            title: This social account is already registered
-          start: Start a new request
-          unregistered:
-            body: This social account is not registered yet. Start a new request and choose sign-up.
-            title: This social account is not registered yet
-      step_up:
-        edit:
-          authenticate_with_passkey: Authenticate with Passkey
-          cancel: Cancel
-          code_label: Verification Code
-          code_placeholder: 6 digits
-          confirm_cancel: Are you sure?
-          description:
-            Please enter the code or use passkey authentication for identity verification.
-          submit: Confirm
-          title: Step-up authentication
-        index:
-          empty: No sessions found
-          new: New
-          table:
-            expires: Expires
-            method: Method
-            scope: Scope
-            status: Status
-          title: Step-up authentication Sessions
-        new:
-          back: Back
-          description: Step-up authentication is required to continue. Please select a method.
-          method_legend: Authentication Method
-          methods:
-            email_otp: Email (One-time code)
-            passkey: Passkey
-            totp: Authenticator App (TOTP)
-          submit: Continue
-          title: Step-up authentication
-        show:
-          cancel: Cancel
-          confirm_cancel: Are you sure?
-          list: List
-          title: Step-up authentication Session
-          to_edit: To input screen
-        success:
-          complete: Step-up authentication completed.
-      up:
-        birthdate:
-          title: Confirm your birthdate
       verification:
         edit:
           authenticate_with_passkey: Authenticate with Passkey
@@ -3897,153 +3155,6 @@ en:
     default_passkey_description: My Passkey
     default_user_name: User
     org:
-      authentication:
-        email:
-          create:
-            email_not_found: We couldn't find an account matching that email address.
-            turnstile_error: Security verification failed. Please refresh and try again.
-            verification_code_sent: Verification code has been sent to your email address.
-            you_have_already_logged_in: You are already signed in.
-          edit:
-            code_label: "Verification code"
-            code_placeholder: "Enter the 6-digit code"
-            delivery_help:
-              "If it doesn't arrive within a minute, check your email address and mail settings,
-              then try again."
-            description:
-              "Almost done. Enter the 6-digit verification code sent to your email address."
-            page_title: "Enter verification code"
-            submit: Register with Email
-          new:
-            registration: Need an account?
-            you_have_already_logged_in: You are already signed in.
-        emergency:
-          passkey:
-            new:
-              description:
-                Sign in with the staff ID and your existing passkey. Microsoft sign-in is not used.
-              identifier_label: ID
-              identifier_placeholder: Enter the staff ID
-              page_title: Emergency Access
-              restricted_mode_notice:
-                This sign-in produces a restricted session. Step-up verification and the operations
-                that require it are unavailable until you sign out and sign in normally.
-              submit: Sign in with passkey
-        entra:
-          errors:
-            authentication_method_locked:
-              Microsoft sign-in is locked for this account. Please contact your administrator.
-            client_assertion_unavailable:
-              Microsoft sign-in is not configured correctly. Please contact your administrator.
-            connection_not_found: The specified Microsoft connection was not found.
-            entra_error: An error occurred during Microsoft authentication. Please try again.
-            generic: An error occurred. Please try again.
-            identity_not_found:
-              This account is not registered as a staff member. Please contact your administrator.
-            internal_error: An internal error occurred. Please try again.
-            invalid_callback: The authentication response was invalid. Please start over.
-            missing_id_token: The authentication response was incomplete. Please start over.
-            operator_not_found: Sign-in is not permitted for this account.
-            pkce_verifier_missing: Your sign-in session expired. Please start over.
-            provider_unavailable:
-              Microsoft sign-in is currently unavailable. Please try again later.
-            sign_in_failed: Sign-in failed. Please try again.
-            state_mismatch: Security verification failed. Please start over.
-            tenant_mismatch: This account belongs to a different organization.
-            tenant_not_allowed:
-              This account type cannot be used to sign in. Please use your organization account.
-            token_exchange_failed: Failed to retrieve authentication token. Please try again.
-            token_verification_failed: Authentication token verification failed. Please try again.
-          new:
-            connection_label: Connection ID
-            connection_not_found:
-              That connection ID could not be verified. Check the value and contact your
-              administrator.
-            connection_prompt: Enter the organization connection ID your administrator gave you.
-            connection_submit: Continue
-            connection_unavailable:
-              Microsoft sign-in is not configured for this organization. Please contact your
-              administrator.
-            page_title: Sign in with Microsoft
-            submit: Sign in with Microsoft
-        mode_switch:
-          sign_out_required:
-            You are already signed in. Changing the sign-in mode requires signing out first
-            (%{sign_out_url}).
-        new:
-          back: Back
-          back_link: Back
-          description: Select the method you prefer to access the staff console.
-          links:
-            apple: Apple
-            email: Email
-            emergency: Emergency Access (Restricted Mode)
-            entra: Sign in with Microsoft
-            google: Google
-            passkey: Passkey
-            recovery: Recovery code
-            registration: Need an account?
-            secret_credential: Secret
-            telephone: Telephone
-          page_title: Choose how to sign in
-        passkey:
-          new:
-            description: Use the staff ID and your passkey to sign in securely.
-            identifier_label: ID
-            identifier_placeholder: Enter the staff ID
-            page_title: Sign in with passkey
-            secret_credential: Lost your passkey? Use your secret instead
-            submit: Sign in with passkey
-        recovery:
-          new:
-            description: Enter one of your saved recovery codes to regain access to your account.
-            page_title: Use a recovery code
-        secret_credential:
-          create:
-            invalid: Authentication failed. Please check your credentials.
-            success: Signed in successfully.
-          new:
-            confirm_label: I have saved the secret_credential
-            page_title: Sign in with a secret_credential
-            pii_label: ID
-            pii_placeholder: Enter the staff ID
-            secret_credential_label: Secret
-        telephone:
-          new:
-            description: This feature is coming soon.
-            page_title: Sign in with telephone
-            you_have_already_logged_in: You are already signed in.
-      exits:
-        destroy:
-          success: "Sign out"
-        edit:
-          title: "Do you want to sign out?"
-      in:
-        back: Back to sign in
-        bulletins:
-          forbidden: You are not authorized to access this page.
-          show:
-            actions:
-              continue: Continue
-              update: Update
-            body: Please enable MFA. Important terms have changed. Do you accept?
-            title: Bulletin
-          timeout: The checkpoint timed out.
-          welcome:
-            title: Welcome
-        checkpoints:
-          show:
-            title: Sign-in check
-        session:
-          cancelled: Session cancelled. Please sign in again.
-          cannot_revoke_current: The current session cannot be revoked.
-          invalid_session: Invalid session.
-          login_required: You need to sign in to manage sessions.
-          no_sessions_selected: Please select sessions to revoke.
-          promoted: Session promoted.
-          restricted_notice: The session limit has been reached. Manage your existing sessions.
-          session_revoked: Session revoked.
-          sessions_revoked: Sessions revoked.
       preferences:
         footer:
           dashboard: DASHBOARD
@@ -4051,69 +3162,6 @@ en:
           preference: Preference
           settings: Settings
         title: Preferences
-      registration:
-        email:
-          create:
-            turnstile_validation_failed: Verification failed. Please try again later.
-            verification_code_sent: Verification code sent by email.
-          edit:
-            session_expired: Session expired.
-          new:
-            error_summary: Please check your input.
-            page_title: Sign up with email
-          update:
-            attempts_exceeded: Too many attempts. Please start over.
-            code_required: Enter the code.
-            failed: Registration could not be completed. Please start over.
-            invalid_code: The verification code is invalid.
-            success: Email address verified.
-        new:
-          links:
-            sign_in_link: Sign in here
-            sign_in_text: Already have an account?
-          methods:
-            email:
-              cta: Sign up with email
-              description:
-                Receive a verification link by email and finish registration in a few minutes.
-              title: Email address
-            telephone:
-              cta: Sign up with telephone
-              description: Verify your phone with a one-time SMS code before creating your account.
-              title: Mobile phone number
-            title: Choose how to get started
-          page_description: Staff registration is currently under development.
-          page_title: Staff Registration
-          social:
-            buttons:
-              apple: Continue with Apple
-              google: Continue with Google
-            description: Link a new %{product} account with the provider you already trust.
-            disclaimer: We will never post or share anything without your permission.
-            title: Use an existing account
-        telephone:
-          create:
-            verification_code_sent: Verification code sent by SMS.
-          edit:
-            code_label: "Verification code"
-            code_placeholder: "Enter the 6-digit code"
-            delivery_help:
-              "If it doesn't arrive within a minute, check the phone number and SMS settings, then
-              try again."
-            page_title: "Enter verification code"
-            session_expired: Session expired.
-            submit: "Submit"
-          update:
-            attempts_exceeded: Too many attempts. Please start over.
-            code_required: Enter the code.
-            invalid_code: The verification code is invalid.
-            passkey_required: Phone verified. Please register a passkey to continue.
-            success: Telephone number verified.
-      root:
-        authentication: Sign In
-        description: Choose an action below
-        registration: Sign Up
-        title: Welcome
       settings:
         activity:
           events:
@@ -4178,18 +3226,6 @@ en:
           update:
             failure: Email settings could not be updated.
             success: Email settings updated.
-        google:
-          destroy:
-            via_email: Change Google sign-in from the email settings page.
-          show:
-            delete_confirm: Review how Google sign-in is configured?
-            description: Google sign-in is available through your verified email addresses.
-            disable: Disable
-            disabled: Google sign-in is unavailable until you verify an email address.
-            email_hint:
-              To disable Google sign-in, update or remove the matching email address from email
-              settings.
-            enabled: Google sign-in is available.
         mfa:
           show:
             disabled: Disabled
@@ -4316,80 +3352,6 @@ en:
               request.
             request_link: Create withdrawal request
             title: Withdrawal
-      sign:
-        up:
-          invitations:
-            create:
-              success:
-                Invitation accepted. Your operator ID is %{public_id}. Use Google sign-in with the
-                invited email address, or ask an operator to help configure another sign-in method.
-              turnstile_failed: Verification failed. Please try again later.
-      social:
-        sessions:
-          continue: Continue
-          create:
-            success: Successfully signed in with %{provider}
-      step_up:
-        edit:
-          authenticate_with_passkey: Authenticate with Passkey
-          cancel: Cancel
-          code_label: Verification Code
-          code_placeholder: 6 digits
-          confirm_cancel: Are you sure?
-          description:
-            Please enter the code or use passkey authentication for identity verification.
-          submit: Confirm
-          title: Step-up authentication
-        index:
-          empty: No sessions found
-          new: New
-          table:
-            expires: Expires
-            method: Method
-            scope: Scope
-            status: Status
-          title: Step-up authentication Sessions
-        new:
-          back: Back
-          description: Step-up authentication is required to continue. Please select a method.
-          method_legend: Authentication Method
-          methods:
-            email_otp: Email (One-time code)
-            passkey: Passkey
-            totp: Authenticator App (TOTP)
-          submit: Continue
-          title: Step-up authentication
-        show:
-          cancel: Cancel
-          confirm_cancel: Are you sure?
-          list: List
-          title: Step-up authentication Session
-          to_edit: To input screen
-        success:
-          complete: Step-up authentication completed.
-      up:
-        invitations:
-          create:
-            success:
-              Invitation accepted. Your operator ID is %{public_id}. Use Google sign-in with the
-              invited email address, or ask an operator to help configure another sign-in method.
-            turnstile_failed: Verification failed. Please try again later.
-          form:
-            invitation_code: Invitation code
-            submit: Accept invitation
-          new:
-            description: Enter the invitation code provided by an existing operator.
-            title: Accept operator invitation
-      ups:
-        new:
-          back_to_root: Back
-          description: Create an account to start the administrative operations reserved for you.
-          heading: Create an account
-          links:
-            sign_in: Already have an account? Sign in
-          recruit_link_text: Contact recruiting
-          recruit_prompt: Careers
-          recruit_prompt_html: Interested in joining the team? %{link}
       verification:
         edit:
           authenticate_with_passkey: Authenticate with Passkey
@@ -4509,14 +3471,11 @@ en:
       access_denial:
         description: You do not have permission to use the Tech workspace.
         heading: No access
-        return_to_sign_in: Return to sign in
-        sign_out: Sign out
         title: No access to Tech
       dashboard:
         description: This is the protected Tech operator workspace.
         empty_state: No tools are available yet.
         heading: Tech
-        sign_out: Sign out
         title: Tech Org
         tools_heading: Tools
       navigation:
@@ -4524,7 +3483,6 @@ en:
       roots:
         description: Sign in with an authorized operator account to open the Tech workspace.
         heading: Tech
-        sign_in: Sign in
         title: Tech Org
   test:
     email:
@@ -4586,31 +3544,12 @@ en:
             redirect_prompt: Go to %{preference} immediately.
     sign:
       app:
-        emails:
-          registrations:
-            new_fields:
-              confirm_policy_label: I agree to the terms of service
-            verification_fields:
-              submit: Verify
         settings:
-          apples:
-            show:
-              description: You can sign in to this account using your Apple ID.
-              linked: Linked
-              unlinked: Not linked
           emails:
             index:
               empty: No email addresses registered.
               unverified: Unverified
               verified: Verified
-          googles:
-            show:
-              description: You can sign in to this account using your Google account.
-              linked: Linked
-              unlinked: Not linked
-          outs:
-            edit:
-              confirm_label: Do you want to log out?
           passkeys:
             index:
               actions: Actions
@@ -4648,28 +3587,6 @@ en:
                 If you cannot scan the QR code, enter the secret_credential manually into your
                 authenticator app.
               submit: "Submit"
-        shared:
-          sign_out:
-            confirm_description: Once you log out, you will need to log in again.
-        sign:
-          in:
-            limitations:
-              capacity_still_full:
-                Session capacity is still full. Revoke another session to continue.
-              invalid_or_expired: This sign-in limitation link is invalid or expired.
-              revoke_failed: The selected session could not be revoked.
-        up:
-          emails:
-            edit:
-              submit: Verify
-            new:
-              confirm_policy_label: I agree to the terms of service
-          telephones:
-            edit:
-              submit: Verify
-            new:
-              confirm_policy_label: I agree to the terms of service
-              confirm_using_mfa_label: I confirm MFA usage
         verifications:
           show:
             no_methods: Please register an email, passkey, or TOTP.

@@ -12,28 +12,10 @@ class CurrentBannerPartialTest < ActionView::TestCase
 
   test "renders the current banner for a surface" do
     travel_to Time.zone.parse("2026-03-18 00:00:00 UTC") do
-      render partial: "layouts/shared/current_banner", locals: { tld: :app, region: :jp, domain: :news }
+      render partial: "layouts/shared/current_banner", locals: { tld: :app, region: :global, domain: :acme }
 
       assert_includes rendered, "Client newer banner"
       assert_includes rendered, "Client newer banner body"
-    end
-  end
-
-  test "renders the current banner for sign domain with ww region" do
-    travel_to Time.zone.parse("2026-03-18 00:00:00 UTC") do
-      render partial: "layouts/shared/current_banner", locals: { tld: :org, region: :ww, domain: :sign }
-
-      assert_includes rendered, "Staff current banner"
-      assert_includes rendered, "Staff current banner body"
-    end
-  end
-
-  test "renders the current banner for sign domain with global region (normalized to ww)" do
-    travel_to Time.zone.parse("2026-03-18 00:00:00 UTC") do
-      render partial: "layouts/shared/current_banner", locals: { tld: :org, region: :global, domain: :sign }
-
-      assert_includes rendered, "Staff current banner"
-      assert_includes rendered, "Staff current banner body"
     end
   end
 
@@ -45,47 +27,41 @@ class CurrentBannerPartialTest < ActionView::TestCase
 
   test "raises error when invalid tld is provided" do
     assert_raises ActionView::Template::Error do
-      render partial: "layouts/shared/current_banner", locals: { tld: :net, region: :jp, domain: :news }
+      render partial: "layouts/shared/current_banner", locals: { tld: :net, region: :jp, domain: :acme }
     end
     assert_raises ActionView::Template::Error do
-      render partial: "layouts/shared/current_banner", locals: { tld: nil, region: :jp, domain: :news }
+      render partial: "layouts/shared/current_banner", locals: { tld: nil, region: :jp, domain: :acme }
     end
   end
 
   test "raises error when invalid domain is provided" do
     assert_raises ActionView::Template::Error do
-      render partial: "layouts/shared/current_banner", locals: { tld: :app, region: :jp, domain: :fake }
+      render partial: "layouts/shared/current_banner", locals: { tld: :app, region: :jp, domain: :unsupported }
     end
   end
 
   test "raises error when invalid region is provided" do
     # 'nk' or nil are always invalid
     assert_raises ActionView::Template::Error do
-      render partial: "layouts/shared/current_banner", locals: { tld: :app, region: :nk, domain: :news }
+      render partial: "layouts/shared/current_banner", locals: { tld: :app, region: :nk, domain: :acme }
     end
     assert_raises ActionView::Template::Error do
-      render partial: "layouts/shared/current_banner", locals: { tld: :app, region: nil, domain: :news }
+      render partial: "layouts/shared/current_banner", locals: { tld: :app, region: nil, domain: :acme }
     end
   end
 
-  test "raises error when invalid region for domain is provided" do
-    # For news domain, ww region is invalid (only jp, us are allowed)
+  test "raises error when invalid region for the Base domain is provided" do
     assert_raises ActionView::Template::Error do
-      render partial: "layouts/shared/current_banner", locals: { tld: :app, region: :ww, domain: :news }
+      render partial: "layouts/shared/current_banner", locals: { tld: :org, region: :jp, domain: :acme }
     end
-    # For sign domain, jp region is invalid (only global, ww are allowed)
     assert_raises ActionView::Template::Error do
-      render partial: "layouts/shared/current_banner", locals: { tld: :org, region: :jp, domain: :sign }
-    end
-    # ww is no longer allowed (changed to ww)
-    assert_raises ActionView::Template::Error do
-      render partial: "layouts/shared/current_banner", locals: { tld: :org, region: :www, domain: :sign }
+      render partial: "layouts/shared/current_banner", locals: { tld: :org, region: :www, domain: :acme }
     end
   end
 
   test "renders nothing when the current banner is missing" do
     ClientBanner.stub(:current, ClientBanner.none) do
-      render partial: "layouts/shared/current_banner", locals: { tld: :app, region: :jp, domain: :news }
+      render partial: "layouts/shared/current_banner", locals: { tld: :app, region: :global, domain: :acme }
 
       assert_empty rendered.strip
     end

@@ -152,20 +152,6 @@ class Base::App::Preference::EmailsControllerTest
     ClientPasskeyStatus.find_or_create_by!(id: ClientPasskeyStatus::ACTIVE)
   end
 
-  def ensure_user_token_reference_records!
-    ClientTokenKind.find_or_create_by!(id: ClientTokenKind::BROWSER_WEB)
-    ClientTokenStatus.find_or_create_by!(id: ClientTokenStatus::ACTIVE)
-    ClientTokenBindingMethod.find_or_create_by!(id: ClientTokenBindingMethod::LEGACY)
-    ClientTokenDbscStatus.find_or_create_by!(id: ClientTokenDbscStatus::NOTHING)
-  end
-
-  def ensure_staff_token_reference_records!
-    OperatorTokenKind.find_or_create_by!(id: OperatorTokenKind::BROWSER_WEB)
-    OperatorTokenStatus.find_or_create_by!(id: OperatorTokenStatus::ACTIVE)
-    OperatorTokenBindingMethod.find_or_create_by!(id: OperatorTokenBindingMethod::LEGACY)
-    OperatorTokenDbscStatus.find_or_create_by!(id: OperatorTokenDbscStatus::NOTHING)
-  end
-
   def create_verified_user_with_email(email_address: "user-#{SecureRandom.hex(4)}@example.com")
     ensure_user_reference_records!
     user = Client.create!(
@@ -187,27 +173,6 @@ class Base::App::Preference::EmailsControllerTest
     )
   end
 
-  def satisfy_user_verification(token, scope: nil)
-    _verification, raw_token = ClientVerification.issue_for_token!(token: token)
-    cookies[ClientVerification.cookie_name] = raw_token
-    mark_token_step_up_satisfied_for_test(token, scope: scope)
-    true
-  end
-
-  def satisfy_staff_verification(token, scope: nil)
-    _verification, raw_token = OperatorVerification.issue_for_token!(token: token)
-    cookies[OperatorVerification.cookie_name] = raw_token
-    mark_token_step_up_satisfied_for_test(token, scope: scope)
-    true
-  end
-
-  def step_up_test_audience_for_token(token)
-    case token.class.name
-    when "OperatorToken" then "step_up:org"
-    else "step_up:app"
-    end
-  end
-
   def signed_step_up_pt_for(path, surface:, session_nonce:)
     safe_path = path.to_s
     return nil if safe_path.blank? || !safe_path.start_with?("/") || safe_path.match?(/[\x00-\x1F\x7F]/)
@@ -226,20 +191,6 @@ class Base::App::Preference::EmailsControllerTest
       purpose: :path_target,
       expires_in: 15.minutes,
     )
-  end
-
-  def signed_step_up_grant_for(actor:, token:, scope:, return_to:, surface:, methods: %i(email_otp totp passkey),
-                               aal: "aal2")
-    IdentityStepUpCeremonyGrantIssuer.issue!(
-      surface: surface.to_s,
-      actor_ref: actor.public_id,
-      session_ref: token.public_id,
-      required_scope: scope.to_s,
-      required_aal: aal,
-      allowed_methods: methods,
-      return_to: return_to,
-      expires_at: 15.minutes.from_now,
-    ).grant
   end
 
   def with_forgery_protection
@@ -266,57 +217,6 @@ class Base::App::Preference::EmailsControllerTest
     response.body[/name="authenticity_token" value="([^"]+)"/, 1] || response.body
   end
 
-  def social_callback_headers(host)
-    scheme = host.to_s.include?("localhost") ? "http" : "https"
-    origin = "#{scheme}://#{host}"
-    cookies["csrf_token"] = csrf_token_value if respond_to?(:cookies)
-    {
-      "Host" => host,
-      "Origin" => origin,
-      "Referer" => "#{origin}/",
-      "Sec-Fetch-Site" => "same-origin",
-      "X-STRICT-SOCIAL-STATE" => "1",
-      "X-CSRF-Token" => csrf_token_value,
-    }
-  end
-
-  def social_auth_state_from_response
-    session[:social_auth_state].presence || begin
-      uri = URI.parse(response.location.to_s)
-      Rack::Utils.parse_nested_query(uri.query.to_s)["state"].presence
-    rescue URI::InvalidURIError
-      nil
-    end
-  end
-
-  def seed_social_auth_session(provider:, intent: "login", user: nil, entry: nil, ri: "jp", rt: nil, referer: nil)
-    host = configured_host(:sign_service)
-    host!(host) if respond_to?(:host!)
-    normalized_provider = SocialIdentifiable.normalize_provider(provider)
-    continue_path =
-      if intent.to_s == "link"
-        public_send(:"auth_app_settings_#{normalized_provider}_path", ri: ri)
-      elsif entry.to_s == "sign_up"
-        public_send(:"auth_app_social_#{normalized_provider}_registration_path", ri: ri, rt: rt)
-      else
-        public_send(:"auth_app_social_#{normalized_provider}_session_path", ri: ri, rt: rt)
-      end
-    headers = social_callback_headers(host)
-    headers["Referer"] = referer if referer.present?
-    if user
-      user_headers =
-        as_user_headers(user, host: host)
-      token = ClientToken.find_by(public_id: user_headers["X-TEST-SESSION-PUBLIC-ID"])
-      mark_token_step_up_satisfied_for_test(
-        token,
-        scope: SocialAuth::SOCIAL_LINK_SCOPE,
-      ) if intent.to_s == "link" && token
-      headers = headers.merge(user_headers)
-    end
-    post(continue_path, headers: headers)
-    social_auth_state_from_response
-  end
-
   def assert_oidc_authorize_redirect(location, host:, client_id: "base-rails-rp")
     uri = URI.parse(location)
     query = Rack::Utils.parse_nested_query(uri.query.to_s)
@@ -339,11 +239,11 @@ class Base::App::Preference::EmailsControllerTest
   private
 
   def set_access_cookie(token)
-    cookies[AuthenticationBase::ACCESS_COOKIE_KEY] = token
+    cookies[AuthenticationCookieName.access] = token
   end
 
   def set_refresh_cookie(token)
-    cookies[AuthenticationBase::REFRESH_COOKIE_KEY] = token
+    cookies[AuthenticationCookieName.refresh] = token
   end
 
   def jump_rt_url_from_location(location)
@@ -385,7 +285,7 @@ class Base::App::Preference::EmailsControllerTest
   def load_jump_rt_env!
     @jump_rt_env_originals ||= {}
     jump_rt_key = Base64.strict_encode64(OpenSSL::PKey::EC.generate("secp384r1").to_der)
-    %w(AUTH_APP AUTH_ORG ACME_APP ACME_ORG CORE_APP CORE_ORG BASE_APP BASE_ORG).each do |namespace|
+    %w(FOREIGN_APP FOREIGN_ORG BASE_APP BASE_ORG).each do |namespace|
       ENV["JWT_#{namespace}_ACTIVE_KID"] = "#{namespace.downcase.tr("_", "-")}-test"
       ENV["JWT_#{namespace}_PRIVATE_KEY"] = jump_rt_key
     end
@@ -427,13 +327,5 @@ class Base::App::Preference::EmailsControllerTest
     rescue NameError
       nil
     end
-  end
-
-  def setup_google_mock_auth(uid: "google_uid_123", email: "google@example.com")
-    OmniAuth.config.mock_auth[:google_app] =
-      OmniAuth::AuthHash.new(
-        provider: "google_app", uid: uid, info: { email: email, name: "Google Client" },
-        credentials: { token: "google_token", expires_at: 1.hour.from_now.to_i },
-      )
   end
 end

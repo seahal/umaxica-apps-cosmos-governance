@@ -101,7 +101,7 @@ module Base
         ).dashboard_identity
         raise ActiveRecord::RecordNotFound, "selected org Persona is not available to this principal" if
           result.status == :not_found
-        raise RuntimeError, "Avatar owner is unavailable for the dashboard identity" unless result.ok?
+        raise AccessOpDataUnavailableError unless result.ok?
 
         identity = { display_name: result.data.fetch("display_name") }
         # org Avatars are optional; without an Avatar or a stored image there is no image element.
@@ -114,7 +114,6 @@ module Base
         [
           { label: t("base.shared.dashboard.links.preference"), href: base_org_identity_path(ri: params[:ri]) },
           { label: t("base.shared.dashboard.links.switcher"), href: base_org_switcher_path(ri: params[:ri]) },
-          { label: t("base.shared.dashboard.links.logout"), href: new_base_org_sign_out_path(ri: params[:ri]) },
         ]
       end
 
@@ -123,7 +122,6 @@ module Base
           { label: t("base.shared.dashboard.links.root"), href: base_org_dashboard_path(ri: params[:ri]) },
           { label: t("base.shared.dashboard.links.account"), href: base_org_accounts_path(ri: params[:ri]) },
           { label: t("base.shared.dashboard.links.organization"), href: base_org_organizations_path(ri: params[:ri]) },
-          { label: t("base.shared.dashboard.links.avatar"), href: base_org_avatar_path(ri: params[:ri]) },
           { label: t("base.shared.dashboard.links.identity"), href: base_org_identity_path(ri: params[:ri]) },
           { label: t("base.shared.dashboard.links.offline"), href: base_org_pwa_offline_path(ri: params[:ri]) },
         ]
@@ -134,9 +132,6 @@ module Base
           title: nil,
           heading: "Base Org",
           description: t("landing.thin_endpoint"),
-          # One neutral entry; any allowed switch to registration happens inside Auth.
-          sign_in: { label: t("actions.continue"), href: base_org_sign_show_path(ri: params[:ri]) },
-          sign_up: nil,
         }
       end
     end

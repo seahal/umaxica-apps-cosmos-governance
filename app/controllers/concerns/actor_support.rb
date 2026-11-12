@@ -113,6 +113,9 @@ module ActorSupport
   end
 
   def resolved_current_actor_type(resource)
+    # A verified Tech cell principal cannot supply the canonical Governance actor or missing Access authority.
+    raise AccessOpDataUnavailableError if resource.is_a?(RpTechOrgPrincipal)
+
     actor_type = Actor.actor_type
     return actor_type if actor_type.present? && actor_type != :unauthenticated
     return :unauthenticated if resource.blank?
@@ -129,7 +132,7 @@ module ActorSupport
     resolved_current_token&.dig("sid")
   end
 
-  # The verified access-token claims recorded by AuthenticationBase#load_from_token. This must
+  # The verified access-token claims recorded at the request credential boundary. This must
   # not fall back to another token: ApplicationPolicy reads its Emergency context from here.
   def resolved_current_token
     @current_access_token_payload if defined?(@current_access_token_payload)

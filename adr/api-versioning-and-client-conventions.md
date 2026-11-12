@@ -4,6 +4,11 @@
 
 ## Status
 
+> **Route-source disposition (2026-11-10):** Examples below that name Core, Auth, Palm, or other
+> foreign local API controllers describe the pre-reset implementation. The versioning decision
+> remains applicable to retained Base/Tech APIs and external contracts where callers still exist;
+> it does not imply that removed local endpoints remain served.
+
 Accepted (2026-08-16). Section 4 amended on 2026-08-22: the target OpenAPI version changes from
 3.2.x to 3.0.4. Sections 1 through 3 are unchanged. See "Amendment 2026-08-22" below.
 

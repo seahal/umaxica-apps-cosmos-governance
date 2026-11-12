@@ -201,13 +201,13 @@ class CspViolationReportIntakeTest < ActiveSupport::TestCase
     assert_not_includes payload.values, "alert(document.cookie)"
   end
 
-  test "surface is derived for app com org net and dev hosts" do
+  test "retained surfaces are classified and retired net and dev hosts are unknown" do
     {
       "www.app.localhost" => "app",
       "www.com.localhost" => "com",
       "www.org.localhost" => "org",
-      "www.net.localhost" => "net",
-      "www.dev.localhost" => "dev",
+      "www.net.localhost" => "unknown",
+      "www.dev.localhost" => "unknown",
     }.each do |host, surface|
       _result, events =
         capture_events do

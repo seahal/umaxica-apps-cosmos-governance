@@ -7,7 +7,7 @@ class AvatarEnterpriseToEnterpriseTransferDetail < AvatarRecord
              inverse_of: :enterprise_to_enterprise_detail
   belongs_to :source_ownership_period,
              class_name: "AvatarEnterpriseOwnershipPeriod",
-             inverse_of: false
+             inverse_of: :enterprise_transfer_details
 
   validates :transfer_reservation_id, uniqueness: true, on: :create
 

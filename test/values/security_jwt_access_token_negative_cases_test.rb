@@ -21,10 +21,11 @@ class SecurityJwtAccessTokenNegativeCasesTest < ActiveSupport::TestCase
   end
 
   test "auth access rejects a token signed by another keyring" do
-    surface_token = AuthenticationToken.encode(
-      clients(:one), host: AUTH_HOST, session_public_id: "sid", resource_type: "client",
-                     jwt_issuer_id: "surface:AUTH_APP",
+    payload, = auth_parts
+    surface_token = JitSecurityJwtKeyring.encode(
+      payload, typ: "at+jwt", issuer_id: "surface:BASE_APP",
     )
+
     payload, header = auth_parts
     preference_signed = JWT.encode(
       payload, JitSecurityJwtRegistry.private_key_for("preference_app"), "ES384", header,
@@ -32,18 +33,6 @@ class SecurityJwtAccessTokenNegativeCasesTest < ActiveSupport::TestCase
 
     assert_nil decode_auth(surface_token)
     assert_nil decode_auth(preference_signed)
-  end
-
-  test "auth access facade preserves an explicitly supplied authentication time" do
-    auth_time = Time.utc(2026, 1, 2, 3, 4, 5)
-    token = AuthenticationToken.encode(
-      clients(:one), host: AUTH_HOST, session_public_id: "sid", resource_type: "client",
-                     auth_time: auth_time,
-    )
-
-    payload = decode_auth(token)
-
-    assert_equal auth_time.to_i, payload.fetch("auth_time")
   end
 
   test "auth access rejects malformed and missing required claims" do
@@ -147,9 +136,25 @@ class SecurityJwtAccessTokenNegativeCasesTest < ActiveSupport::TestCase
   end
 
   def auth_parts
-    token = AuthenticationToken.encode(
-      clients(:one), host: AUTH_HOST, session_public_id: "sid", resource_type: "client",
+    payload = {
+      "iss" => AuthenticationJwtConfiguration.issuer,
+      "aud" => AuthenticationJwtConfiguration.audiences("client"),
+      "sub" => "external-client-subject",
+      "client_id" => AuthenticationJwtConfiguration.client_id("client"),
+      "iat" => Time.current.to_i,
+      "nbf" => Time.current.to_i,
+      "exp" => 10.minutes.from_now.to_i,
+      "jti" => "external-token-id",
+      "sid" => "external-session-id",
+      "acr" => "aal1",
+      "scope" => "authenticated domain:client read:self write:self",
+    }
+    token = JWT.encode(
+      payload, AuthenticationJwtConfiguration.private_key, "ES384",
+      { "typ" => "at+jwt", "kid" => JitSecurityJwtKeyring.active_kid },
     )
+
+    assert_predicate decode_auth(token), :present?
     JWT.decode(token, nil, false)
   end
 

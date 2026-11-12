@@ -706,29 +706,30 @@ triggers for additional tables.
 
 ## ID-3p — Social candidate capability references
 
-- Basis: I04/I06/I07/I10 and ID-3; scope: the APP Social link candidate store, link-completion
-  request boundary and the candidate's verified callback/result consumers. Provider subject values,
-  OAuth/OIDC state, signed result identities and transaction/grant references remain separate
-  contracts.
+- Basis: I04/I06/I07/I10 and ID-3; scope: persisted APP Social candidate references and their
+  model-level resolution contract. The local Auth callback/link-completion routes and controller
+  consumer were removed by the 2026-11-11 hard reset; this criterion does not assert an active
+  request path. Provider subject values, OAuth/OIDC state, signed result identities and
+  transaction/grant references remain separate contracts.
 - Given a newly stored Social candidate, its self-controlled non-secret `ref` is a NanoID-21 value
   generated through the shared public-ID mechanism. An already issued UUID-v4 candidate remains
   readable during this bounded transition; no existing candidate is rewritten and no shared UUID
   admission pattern is widened for unrelated flows.
-- A link-completion request accepts only a strict Social candidate reference: the new NanoID-21 form
+- A persisted candidate lookup accepts only a strict Social candidate reference: the new NanoID-21 form
   or the retained UUID-v4 form. Missing, malformed, cross-purpose or unknown references are rejected
-  without a lookup fallback to another identity column. Provider callback verification,
-  actor/session binding, expiry and one-shot consumption remain authoritative.
+  without a lookup fallback to another identity column. Actor/session binding, expiry and one-shot
+  consumption remain model-level contracts until the retained records are assessed for retirement.
 - A generated collision may be retried only for the concrete candidate table's named, single-column
   `ref` unique B-tree index. Each retry uses a fresh value inside a savepoint and the finite shared
   collision budget. Caller-supplied legacy values, unrelated validation or uniqueness failures and
   exhausted retries remain explicit failures; provider values and candidate capability references
   are never substituted for transaction or result identities.
-- Check: `test/services/identity/social_ceremony_contract_test.rb`,
-  `test/integration/acme_social_link_completion_test.rb` and
-  `test/integration/social_auth_link_test.rb`, plus direct inspection of
-  `IdentitySocialCeremonyCandidateStore` and `Auth::App::Social::LinkCompletionsController`. Static
-  checks do not prove concurrent committed collision behavior or live provider behavior. Evidence is
-  revision-scoped and is not a permanent PASS for future code.
+- Check: `test/models/model_only_line_coverage_test.rb` and
+  `test/models/concerns/social_ceremony_transactionable_test.rb`, plus direct inspection of
+  `app/models/identity_social_ceremony_candidate.rb` and
+  `app/values/identity_social_ceremony_contract.rb`. No local route or callback consumer remains.
+  Static checks do not prove concurrent committed collision behavior. Evidence is revision-scoped
+  and is not a permanent PASS for future code.
 
 ## ID-3q — Step-Up passkey challenge references
 

@@ -9,6 +9,94 @@ class AvatarTransferReservationTest < ActiveSupport::TestCase
   self.use_transactional_tests = false
   self.fixture_table_names = []
 
+  test "five day maximum remains 120 hours across the spring clock change" do
+    Time.use_zone("America/New_York") do
+      requested_at = Time.zone.local(2026, 3, 6, 12)
+      reservation = AvatarTransferReservation.new(
+        requested_at: requested_at, expires_at: requested_at + 120.hours,
+      )
+
+      reservation.valid?
+
+      assert_empty reservation.errors[:expires_at]
+    end
+  end
+
+  test "five day maximum rejects 120 hours plus one microsecond across the autumn clock change" do
+    Time.use_zone("America/New_York") do
+      requested_at = Time.zone.local(2026, 10, 30, 12)
+      reservation = AvatarTransferReservation.new(
+        requested_at: requested_at, expires_at: requested_at + 120.hours + Rational(1, 1_000_000),
+      )
+
+      reservation.valid?
+
+      assert_not_empty reservation.errors[:expires_at]
+    end
+  end
+
+  test "expiry rejects the nearest timestamp before the requested instant" do
+    requested_at = Time.utc(2026, 11, 12)
+    reservation = AvatarTransferReservation.new(
+      requested_at: requested_at, expires_at: requested_at - Rational(1, 1_000_000),
+    )
+
+    reservation.valid?
+
+    assert_not_empty reservation.errors[:expires_at]
+  end
+
+  test "expiry rejects the requested instant itself" do
+    requested_at = Time.utc(2026, 11, 12)
+    reservation = AvatarTransferReservation.new(requested_at: requested_at, expires_at: requested_at)
+
+    reservation.valid?
+
+    assert_not_empty reservation.errors[:expires_at]
+  end
+
+  test "expiry accepts the nearest timestamp after the requested instant" do
+    requested_at = Time.utc(2026, 11, 12)
+    reservation = AvatarTransferReservation.new(
+      requested_at: requested_at, expires_at: requested_at + Rational(1, 1_000_000),
+    )
+
+    reservation.valid?
+
+    assert_empty reservation.errors[:expires_at]
+  end
+
+  test "expiry accepts the nearest timestamp below the five day maximum" do
+    requested_at = Time.utc(2026, 11, 12)
+    reservation = AvatarTransferReservation.new(
+      requested_at: requested_at, expires_at: requested_at + 5.days - Rational(1, 1_000_000),
+    )
+
+    reservation.valid?
+
+    assert_empty reservation.errors[:expires_at]
+  end
+
+  test "expiry accepts exactly five days" do
+    requested_at = Time.utc(2026, 11, 12)
+    reservation = AvatarTransferReservation.new(requested_at: requested_at, expires_at: requested_at + 5.days)
+
+    reservation.valid?
+
+    assert_empty reservation.errors[:expires_at]
+  end
+
+  test "expiry rejects the nearest timestamp above the five day maximum" do
+    requested_at = Time.utc(2026, 11, 12)
+    reservation = AvatarTransferReservation.new(
+      requested_at: requested_at, expires_at: requested_at + 5.days + Rational(1, 1_000_000),
+    )
+
+    reservation.valid?
+
+    assert_not_empty reservation.errors[:expires_at]
+  end
+
   teardown do
     # The race test commits a bare enterprise and everything the transfer records about it is a
     # public id in another database, so this row is the only thing left to remove; a leftover
@@ -78,14 +166,22 @@ class AvatarTransferReservationTest < ActiveSupport::TestCase
         idempotency_key: SecureRandom.uuid,
         request_fingerprint: Digest::SHA256.hexdigest("pending-1"),
       )
+      duplicate = AvatarTransferReservation.new(
+        avatar: avatar, operation_kind: "bureau_to_bureau", idempotency_key: SecureRandom.uuid,
+        request_fingerprint: Digest::SHA256.hexdigest("pending-2"),
+      )
+
+      assert_not duplicate.valid?
+      assert duplicate.errors.of_kind?(:avatar_id, :taken)
+      assert_raises(ActiveRecord::RecordInvalid) { duplicate.save! }
+      history = duplicate.dup
+      history.state = "expired"
+
+      assert_predicate history, :valid?
+
       error =
-        assert_raises(ActiveRecord::StatementInvalid) do
-          AvatarTransferReservation.create!(
-            avatar: avatar,
-            operation_kind: "bureau_to_bureau",
-            idempotency_key: SecureRandom.uuid,
-            request_fingerprint: Digest::SHA256.hexdigest("pending-2"),
-          )
+        assert_raises(ActiveRecord::RecordNotUnique) do
+          AvatarRecord.transaction(requires_new: true) { duplicate.save!(validate: false) }
         end
       raise ActiveRecord::Rollback
     end
@@ -114,14 +210,18 @@ class AvatarTransferReservationTest < ActiveSupport::TestCase
         idempotency_key: key,
         request_fingerprint: Digest::SHA256.hexdigest("same-key-1"),
       )
+      duplicate = AvatarTransferReservation.new(
+        avatar: second, operation_kind: "bureau_to_enterprise", idempotency_key: key,
+        request_fingerprint: Digest::SHA256.hexdigest("same-key-2"),
+      )
+
+      assert_not duplicate.valid?
+      assert duplicate.errors.of_kind?(:idempotency_key, :taken)
+      assert_raises(ActiveRecord::RecordInvalid) { duplicate.save! }
+
       error =
-        assert_raises(ActiveRecord::StatementInvalid) do
-          AvatarTransferReservation.create!(
-            avatar: second,
-            operation_kind: "bureau_to_enterprise",
-            idempotency_key: key,
-            request_fingerprint: Digest::SHA256.hexdigest("same-key-2"),
-          )
+        assert_raises(ActiveRecord::RecordNotUnique) do
+          AvatarRecord.transaction(requires_new: true) { duplicate.save!(validate: false) }
         end
       raise ActiveRecord::Rollback
     end
@@ -292,14 +392,14 @@ class AvatarTransferReservationTest < ActiveSupport::TestCase
       AvatarRecord.transaction(requires_new: true) do
         error =
           assert_raises(ActiveRecord::StatementInvalid) do
-            AvatarTransferReservation.create!(
+            AvatarTransferReservation.new(
               avatar: avatar,
               operation_kind: "enterprise_to_bureau",
               idempotency_key: "018f2b18-6f5c-7a30-8ec2-4ebc1f0f7a35",
               request_fingerprint: Digest::SHA256.hexdigest("boundary-invalid"),
               requested_at: requested_at,
-              expires_at: requested_at + 5.days + 1.second,
-            )
+              expires_at: requested_at + 5.days + Rational(1, 1_000_000),
+            ).save!(validate: false)
           end
         assert_match(/check|expiry|validity/i, error.message)
         raise ActiveRecord::Rollback

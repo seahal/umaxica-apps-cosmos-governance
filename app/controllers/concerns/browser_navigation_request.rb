@@ -37,8 +37,7 @@ module BrowserNavigationRequest
   end
 
   # A request that declares a destination other than a top-level document (for example `iframe`).
-  # A missing header is not a framed destination: the caller decides (owner, 2026-10-27, D-197: the
-  # Visa confirmation then renders its non-consuming form).
+  # A missing header is not a framed destination; the caller applies its own continuation policy.
   def framed_destination_request?
     destination = request.headers["Sec-Fetch-Dest"]
     !destination.nil? && NAVIGATION_DESTINATIONS.exclude?(destination)

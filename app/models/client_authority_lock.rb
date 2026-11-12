@@ -10,6 +10,8 @@
 class ClientAuthorityLock < AppRpRecord
   belongs_to :client, inverse_of: :authority_lock
 
+  validates :client_id, uniqueness: true, if: :will_save_change_to_client_id?
+
   class << self
     public
 
@@ -18,6 +20,16 @@ class ClientAuthorityLock < AppRpRecord
       # supplied attribute after a unique violation; timestamps would make an
       # existing lock row impossible to find on the second acquisition.
       create_or_find_by!(client_id:)
+      lock.find_by!(client_id:)
+    rescue ActiveRecord::RecordInvalid => e
+      # A competing insert may become visible during uniqueness validation before PostgreSQL
+      # raises RecordNotUnique. Recover only that exact owner collision, never other failures.
+      unless e.record.is_a?(ClientAuthorityLock) &&
+          e.record.errors.attribute_names == [:client_id] &&
+          e.record.errors.count == 1 && e.record.errors.of_kind?(:client_id, :taken)
+        raise
+      end
+
       lock.find_by!(client_id:)
     end
   end

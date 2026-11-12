@@ -21,47 +21,8 @@ class BranchCoverageBatch39EasyMissesTest < ActiveSupport::TestCase
     assert_predicate result.payload, :blank?
   end
 
-  test "SignAppUpSocialCancellation requires cycle and social provider" do
-    result = SignAppUpSocialCancellation.new(cycle: nil).call
-
-    assert_equal :blocked, result.status
-
-    cycle = Object.new
-    cycle.define_singleton_method(:social_provider) { nil }
-    cycle.define_singleton_method(:entry_method) { "password" }
-    cycle.define_singleton_method(:social_entry_method?) { false }
-    cycle.define_singleton_method(:step) { "start" }
-    result = SignAppUpSocialCancellation.new(cycle: cycle).call
-
-    assert_equal :blocked, result.status
-  end
-
   test "RedirectsJumpGatewayUrl origin validation arms" do
     assert_raises(ArgumentError) { RedirectsJumpGatewayUrl.call(gateway_origin: "://bad") }
     assert_raises(ArgumentError) { RedirectsJumpGatewayUrl.call(gateway_origin: "http://example.com") }
-  end
-
-  test "ExternalAuthenticationAppleNotificationProcessor terminal short-circuit" do
-    event = Object.new
-    event.define_singleton_method(:terminal?) { true }
-    processor = ExternalAuthenticationAppleNotificationProcessor.allocate
-    processor.instance_variable_set(:@event, event)
-
-    assert_equal event, processor.call
-  end
-
-  test "OidcLogoutRequest verify blank client_id and jti" do
-    verifier = Object.new
-    verifier.define_singleton_method(:verified) { |*_a, **_k| { "client_id" => "", "jti" => "x" } }
-
-    OidcLogoutRequest.stub(:verifier, verifier) do
-      assert_nil OidcLogoutRequest.verify("tok")
-    end
-    verifier = Object.new
-    verifier.define_singleton_method(:verified) { |*_a, **_k| { "client_id" => "c", "jti" => "" } }
-
-    OidcLogoutRequest.stub(:verifier, verifier) do
-      assert_nil OidcLogoutRequest.verify("tok")
-    end
   end
 end

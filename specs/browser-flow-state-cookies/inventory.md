@@ -6,6 +6,10 @@ Status: Work order 1 inventory. This document records current behavior and propo
 it does not authorize or describe an implementation. The accepted contract is
 specs/browser-flow-state-cookies/spec.md.
 
+> **Route status (2026-11-10):** The source call sites below include local Auth/Visa and foreign
+> controller trees removed by the owner-approved hard reset. Those call-site rows are historical;
+> retained cookie/model state and Base/Tech callers remain distinct and are not removed by this note.
+
 ## Scope and method
 
 The source scan covered Ruby files under app/ and lib/, including direct session[...] access,
