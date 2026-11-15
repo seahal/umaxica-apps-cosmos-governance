@@ -10,7 +10,7 @@ module OrgAdminRelay
 
   def org_admin_authority
     @org_admin_authority ||= OrgAdminAuthorityClient.new(
-      access_token: BrowserCredentialCookie.read(cookies, OidcRpBrowserCredentialContract::ACCESS_COOKIE),
+      rp_session: browser_rp_access_state.rp_session,
       browser_request: request,
     )
   end

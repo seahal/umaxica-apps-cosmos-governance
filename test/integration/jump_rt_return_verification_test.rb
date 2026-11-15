@@ -7,14 +7,18 @@ class JumpRtReturnVerificationTest < ActionDispatch::IntegrationTest
   self.fixture_table_names = []
 
   setup do
-    @jump_private_key = OpenSSL::PKey::EC.generate("secp384r1")
-    @jump_public_jwk = JWT::JWK.new(@jump_private_key, kid: "jump-test").export.stringify_keys.except("d").merge(
-      "alg" => "ES384",
+    @jump_private_key = OpenSSL::PKey::RSA.generate(3072)
+    @jump_public_jwk = JWT::JWK.new(@jump_private_key, kid: "jump-test").export.stringify_keys.except(
+      *JitSecurityJwtJwk::PRIVATE_FIELDS,
+    ).merge(
+      "alg" => "PS256",
       "use" => "sig",
     )
-    @rails_private_key = OpenSSL::PKey::EC.generate("secp384r1")
-    @rails_public_jwk = JWT::JWK.new(@rails_private_key, kid: "acme-app-test").export.stringify_keys.except("d").merge(
-      "alg" => "ES384",
+    @rails_private_key = OpenSSL::PKey::RSA.generate(3072)
+    @rails_public_jwk = JWT::JWK.new(@rails_private_key, kid: "acme-app-test").export.stringify_keys.except(
+      *JitSecurityJwtJwk::PRIVATE_FIELDS,
+    ).merge(
+      "alg" => "PS256",
       "use" => "sig",
     )
     @now = Time.current.change(usec: 0)
@@ -243,7 +247,7 @@ class JumpRtReturnVerificationTest < ActionDispatch::IntegrationTest
       rails_rt,
       JWT::JWK.import(@rails_public_jwk).public_key,
       true,
-      algorithms: ["ES384"],
+      algorithms: ["PS256"],
       iss: rails_issuer,
       verify_iss: true,
       aud: "https://jump.umaxica.net",
@@ -297,7 +301,7 @@ class JumpRtReturnVerificationTest < ActionDispatch::IntegrationTest
       url: "#{base_app_origin}/",
     }.merge(overrides)
 
-    JWT.encode(payload, @jump_private_key, "ES384", { typ: "JWT", kid: "jump-test" })
+    JWT.encode(payload, @jump_private_key, "PS256", { typ: "JWT", kid: "jump-test" })
   end
 
   def base_app_origin

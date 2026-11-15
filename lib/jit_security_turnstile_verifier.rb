@@ -17,6 +17,7 @@ class JitSecurityTurnstileVerifier
   def self.verify(token:, remote_ip:, secret_key: nil, mode: nil)
     new(token: token, remote_ip: remote_ip, secret_key: secret_key, mode: mode).verify
   end
+  public_class_method :verify
 
   def initialize(token:, remote_ip:, secret_key: nil, mode: nil)
     @token = token
@@ -25,6 +26,7 @@ class JitSecurityTurnstileVerifier
     @secret_key = secret_key || resolve_secret_key
   end
 
+  public
   def verify
     return failure("missing cf-turnstile-response") if @token.blank?
 

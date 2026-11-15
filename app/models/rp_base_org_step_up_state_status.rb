@@ -14,6 +14,8 @@ class RpBaseOrgStepUpStateStatus < RpBaseOrgRecord
   INDETERMINATE = 93
   DEFAULTS = [PENDING, DISPATCHING, INSTALLED, CANCELLED, EXPIRED, REFUSED, INDETERMINATE].freeze
 
+  self.record_timestamps = false
+
   has_many :step_up_states,
            class_name: "RpBaseOrgStepUpState",
            foreign_key: :state_id,

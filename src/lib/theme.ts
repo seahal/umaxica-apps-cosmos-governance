@@ -79,15 +79,19 @@ function comThemeFromExperience(value: string | null): Theme {
       return themeFromDocument();
     }
     for (const [key, allowed] of Object.entries(COM_EXPERIENCE_VALUES)) {
+      if (key === "theme") {
+        continue;
+      }
       const option = readString(payload, key);
       if (option === undefined || !allowed.includes(option)) {
         return themeFromDocument();
       }
     }
     const theme = readString(payload, "theme");
-    return theme === "dark" || theme === "light" || theme === "system"
-      ? theme
-      : themeFromDocument();
+    if (theme !== "dark" && theme !== "light" && theme !== "system") {
+      return themeFromDocument();
+    }
+    return theme;
   } catch (error) {
     if (error instanceof SyntaxError) {
       return themeFromDocument();

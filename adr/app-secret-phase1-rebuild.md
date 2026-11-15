@@ -15,6 +15,13 @@ This replaces the app purpose and legacy app-only state described in
 Its historical record is retained. com recovery and org Emergency contracts are outside this
 replacement.
 
+> **Governance runtime boundary (2026-11-13):** Access owns authentication ceremony execution;
+> Governance runs no local sign-in ceremony. The local Secret sign-in, `SignInFlow`, Ticket
+> successful-login receipt and `AuthenticationBase#log_in` descriptions below are pre-Cosmos
+> implementation history, not current Governance call paths. This ADR remains relevant to
+> Governance-owned Secret credential lifecycle, persistence and audit records; Access-side
+> authentication integration requires its own accepted contract.
+
 ## Decision
 
 The user accepted the four operational lifetimes on 2026-10-05 (UTC): 600 seconds for

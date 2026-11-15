@@ -4,16 +4,7 @@
 module HasBirthdate
   extend ActiveSupport::Concern
 
-  # FIXME: Violates Umaxica/NoConcernInclusionHooks; move the declarations in this block into each class that includes this concern.
-  included do
-    encrypts :birthdate
-
-    validates :birthdate, length: { maximum: 10 }, allow_blank: true
-
-    validate :birthdate_format
-    validate :birthdate_not_future
-  end
-
+  public
   def parsed_birthdate
     return nil if birthdate.blank?
 

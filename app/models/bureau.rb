@@ -19,6 +19,13 @@
 #
 class Bureau < OrgRpRecord
   include ::PublicId
+
+  before_validation :generate_public_id, on: :create
+  before_validation :refresh_generated_public_id_after_collision, on: :create
+  before_create :generate_public_id
+  around_create :retry_public_id_collision
+  validate :public_id_immutable_after_create, on: :update
+  validates :public_id, presence: true, length: { is: PublicId::GENERATION_SIZE }, uniqueness: true
   include ::Organization
 
   organization_interface_validations
@@ -51,6 +58,7 @@ class Bureau < OrgRpRecord
            dependent: :restrict_with_error,
            inverse_of: :bureau
 
+  public
   def root_units
     bureau_units.where(parent_id: nil)
   end

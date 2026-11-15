@@ -20,17 +20,25 @@ class DomainAuthorityProtocolTest < ActiveSupport::TestCase
     request = ActionDispatch::TestRequest.create
     %w(app org).each do |surface|
       assert_instance_of AvatarAuthorityClient,
-                         AvatarAuthorityClient.new(surface: surface, access_token: "token", persona: "person")
+                         AvatarAuthorityClient.new(
+                           surface: surface, rp_session: RpBaseAppSession.new,
+                           persona: "person",
+                         )
       assert_instance_of MembershipAuthorityClient,
-                         MembershipAuthorityClient.new(surface: surface, access_token: "token", persona: "person")
+                         MembershipAuthorityClient.new(
+                           surface: surface, rp_session: RpBaseAppSession.new,
+                           persona: "person",
+                         )
     end
     ["com", "", "unknown", nil].each do |surface|
-      assert_raises(KeyError) { AvatarAuthorityClient.new(surface: surface, access_token: "token", persona: "person") }
+      assert_raises(KeyError) {
+        AvatarAuthorityClient.new(surface: surface, rp_session: RpBaseAppSession.new, persona: "person")
+      }
       assert_raises(KeyError) do
-        MembershipAuthorityClient.new(surface: surface, access_token: "token", persona: "person")
+        MembershipAuthorityClient.new(surface: surface, rp_session: RpBaseAppSession.new, persona: "person")
       end
       assert_raises(KeyError) do
-        OrgAdminAuthorityClient.new(surface: surface, access_token: "token", browser_request: request)
+        OrgAdminAuthorityClient.new(surface: surface, rp_session: RpBaseOrgSession.new, browser_request: request)
       end
     end
   end
@@ -48,11 +56,11 @@ class DomainAuthorityProtocolTest < ActiveSupport::TestCase
           assert_equal "persona", params.fetch(:persona)
           response
         end
-      OidcClientAssertionJwt.stub(:issue, "synthetic-assertion") do
+      BaseApiAuthorityTokenIssuer.stub(:issue, "synthetic-governance-token") do
         OutboundHttp::Connection.stub(:build, connection) do
           connection.stub(:get, fetch) do
             result = AvatarAuthorityClient.new(
-              surface: "app", access_token: "synthetic", persona: "persona",
+              surface: "app", rp_session: RpBaseAppSession.new, persona: "persona",
             ).fetch_group(reference)
 
             assert_equal({ 200 => :ok, 403 => :forbidden, 404 => :not_found }.fetch(status), result.status)
@@ -86,11 +94,11 @@ class DomainAuthorityProtocolTest < ActiveSupport::TestCase
         response
       end
 
-    OidcClientAssertionJwt.stub(:issue, "synthetic-assertion") do
+    BaseApiAuthorityTokenIssuer.stub(:issue, "synthetic-governance-token") do
       OutboundHttp::Connection.stub(:build, connection) do
         connection.stub(:get, request) do
           result = AvatarAuthorityClient.new(
-            surface: "app", access_token: "synthetic", persona: "persona-public-id", selection:,
+            surface: "app", rp_session: RpBaseAppSession.new, persona: "persona-public-id", selection:,
           ).groups
 
           assert_predicate result, :ok?
@@ -103,17 +111,22 @@ class DomainAuthorityProtocolTest < ActiveSupport::TestCase
   test "domain clients preserve owner objects and refuse non-object JSON as dependency failures" do
     browser_request = ActionDispatch::TestRequest.create
     clients = [
-      -> { AvatarAuthorityClient.new(surface: "app", access_token: "synthetic", persona: "persona").groups },
-      -> { MembershipAuthorityClient.new(surface: "app", access_token: "synthetic", persona: "persona").accounts },
+      -> { AvatarAuthorityClient.new(surface: "app", rp_session: RpBaseAppSession.new, persona: "persona").groups },
       -> {
-        OrgAdminAuthorityClient.new(access_token: "synthetic", browser_request: browser_request).get("/iam/grants")
+        MembershipAuthorityClient.new(surface: "app", rp_session: RpBaseAppSession.new, persona: "persona").accounts
+      },
+      -> {
+        OrgAdminAuthorityClient.new(
+          rp_session: RpBaseOrgSession.new,
+          browser_request: browser_request,
+        ).get("/iam/grants")
       },
     ]
     connection = Faraday.new
     [{ "items" => [] }, [], nil, true, 1, "invalid-object"].each do |body|
       response = Faraday::Response.new(status: 200, body: body.to_json)
       clients.each do |call|
-        OidcClientAssertionJwt.stub(:issue, "synthetic-assertion") do
+        BaseApiAuthorityTokenIssuer.stub(:issue, "synthetic-governance-token") do
           OutboundHttp::Connection.stub(:build, connection) do
             connection.stub(:get, response) do
               result = call.call
@@ -135,13 +148,15 @@ class DomainAuthorityProtocolTest < ActiveSupport::TestCase
     connection = Faraday.new
     [{ "allowed" => true }, { "allowed" => false }, { "allowed" => "true" }, {}, [], nil, true, 1].each do |body|
       response = Faraday::Response.new(status: 200, body: body.to_json)
-      OidcClientAssertionJwt.stub(:issue, "synthetic-assertion") do
+      BaseApiAuthorityTokenIssuer.stub(:issue, "synthetic-governance-token") do
         OutboundHttp::Connection.stub(:build, connection) do
           connection.stub(:post, response) do
             if body.is_a?(Hash) && [true, false].include?(body["allowed"])
-              assert_equal body["allowed"], TechCapabilityClient.allowed?(access_token: "synthetic")
+              assert_equal body["allowed"], TechCapabilityClient.allowed?(rp_session: RpTechOrgSession.new)
             else
-              assert_raises(AccessOpDataUnavailableError) { TechCapabilityClient.allowed?(access_token: "synthetic") }
+              assert_raises(AccessOpDataUnavailableError) {
+                TechCapabilityClient.allowed?(rp_session: RpTechOrgSession.new)
+              }
             end
           end
         end
@@ -153,40 +168,42 @@ class DomainAuthorityProtocolTest < ActiveSupport::TestCase
     connection = Faraday.new
     built = []
     posted = []
-    audiences = []
-    issuer =
-      lambda do |client_id:, token_url:|
-        audiences << [client_id, token_url]
-        "synthetic-assertion"
-      end
     response = Faraday::Response.new(status: 200, body: { "allowed" => true }.to_json)
-    OidcClientAssertionJwt.stub(:issue, issuer) do
+    BaseApiAuthorityTokenIssuer.stub(:issue, "synthetic-governance-token") do
       OutboundHttp::Connection.stub(:build, ->(**options) { (built << options) && connection }) do
-        connection.stub(:post, ->(uri, _body) { (posted << uri.to_s) && response }) do
-          assert TechCapabilityClient.allowed?(access_token: "synthetic")
+        connection.stub(
+          :post, ->(uri, body, headers) {
+                   posted << [uri.to_s, body, headers]
+                   response
+                 },
+        ) do
+          assert TechCapabilityClient.allowed?(rp_session: RpTechOrgSession.new)
         end
       end
     end
-    sent = URI.parse(posted.sole)
+    sent = URI.parse(posted.sole.fetch(0))
     base_host = Rails.configuration.x.boot_config.fetch(:hosts).base_staff.host
 
     assert_equal ["http", base_host, Integer(ENV.fetch("PORT"), exception: false) || 3000,
                   "/api/v0/tech-capability-checks", false,],
                  [sent.scheme, sent.host, sent.port, sent.path, built.sole.fetch(:require_https)]
-    # Base checks the audience against the URL it receives, so the assertion names the same URL.
-    assert_equal [[TechCapabilityClient::CLIENT_ID, sent.to_s]], audiences
+    assert_equal({}, posted.sole.fetch(1))
+    assert_equal "Bearer synthetic-governance-token", posted.sole.fetch(2).fetch("Authorization")
+    assert_not posted.sole.fetch(2).key?("X-Client-Assertion")
   end
   test "Tech distinguishes permission refusal from unavailable authority status" do
     connection = Faraday.new
     [401, 403, 500, 503].each do |status|
       response = Faraday::Response.new(status:, body: "{}")
-      OidcClientAssertionJwt.stub(:issue, "synthetic-assertion") do
+      BaseApiAuthorityTokenIssuer.stub(:issue, "synthetic-governance-token") do
         OutboundHttp::Connection.stub(:build, connection) do
           connection.stub(:post, response) do
             if [401, 403].include?(status)
-              assert_not TechCapabilityClient.allowed?(access_token: "synthetic")
+              assert_not TechCapabilityClient.allowed?(rp_session: RpTechOrgSession.new)
             else
-              assert_raises(AccessOpDataUnavailableError) { TechCapabilityClient.allowed?(access_token: "synthetic") }
+              assert_raises(AccessOpDataUnavailableError) {
+                TechCapabilityClient.allowed?(rp_session: RpTechOrgSession.new)
+              }
             end
           end
         end

@@ -17,6 +17,8 @@ class OrgPreferenceCurrencyOption < OrgSettingRecord
 
   DEFAULTS = [NOTHING, USD, JPY].freeze
 
+  self.record_timestamps = false
+
   has_many :org_preference_currencies,
            class_name: "OrgPreferenceCurrency",
            foreign_key: :option_id,
@@ -26,7 +28,9 @@ class OrgPreferenceCurrencyOption < OrgSettingRecord
   def self.ensure_defaults!
     insert_missing_fixed_ids!(DEFAULTS)
   end
+  public_class_method :ensure_defaults!
 
+  public
   def name
     case id
     when 1 then "usd"

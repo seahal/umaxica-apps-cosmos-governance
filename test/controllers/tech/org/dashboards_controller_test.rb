@@ -98,8 +98,15 @@ class Tech::Org::DashboardsControllerTest < ActionDispatch::IntegrationTest
         "Cookie" => "#{OidcRpBrowserCredentialContract::ACCESS_COOKIE}=#{Rack::Utils.escape(tech.fetch(:token))}; #{OidcRpBrowserCredentialContract::SESSION_COOKIE}=#{base.fetch(:session).public_id}",
       }
 
-      assert_response :unauthorized
-      assert_nil response.location
+      assert_response :see_other
+      location = URI.parse(response.location)
+
+      assert_equal URI.parse(base_org_sign_show_path).path, location.path
+      assert_equal request.host, location.host
+      query = URI.decode_www_form(location.query).to_h
+
+      assert_equal "jp", query.fetch("ri")
+      assert_equal "/dashboard", query.fetch("target_link_uri")
     end
   end
 

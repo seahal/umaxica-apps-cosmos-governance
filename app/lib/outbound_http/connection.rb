@@ -50,6 +50,7 @@ module OutboundHttp
         builder.options.write_timeout = write_timeout if write_timeout
       end
     end
+    public_class_method :build
 
     # Faraday.default_adapter is deliberately left alone: the OAuth2 and
     # openid_connect gem chain shares that global, and reassigning it would
@@ -57,5 +58,6 @@ module OutboundHttp
     def self.default_adapter
       :net_http
     end
+    public_class_method :default_adapter
   end
 end

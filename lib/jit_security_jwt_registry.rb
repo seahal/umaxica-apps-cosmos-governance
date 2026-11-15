@@ -12,7 +12,6 @@ module JitSecurityJwtRegistry
   module_function
 
   ALGORITHM = JitSecurityJwtJwk::ALGORITHM
-  CURVE = JitSecurityJwtJwk::CURVE
   REQUIRED_JWK_FIELDS = JitSecurityJwtJwk::REQUIRED_PUBLIC_FIELDS
   PRIVATE_JWK_FIELDS = JitSecurityJwtJwk::PRIVATE_FIELDS
   SURFACE_NAMESPACES = %w(BASE_APP BASE_ORG).freeze
@@ -21,7 +20,6 @@ module JitSecurityJwtRegistry
   MAX_JUMP_KID_LENGTH = 128
   ACCESS_TOKEN_SURFACE_NAMESPACES = SURFACE_NAMESPACES.freeze
   OIDC_CLIENT_NAMESPACES = %w(BASE_RP_APP_WW BASE_RP_ORG_WW TECH_ORG_WW).freeze
-  REQUIRED_OIDC_CLIENT_NAMESPACES = %w(TECH_ORG_WW).freeze
   # Issuer metadata for surface records without Jump issuer capability. Jump issuer records take
   # JumpRtSurface's PUBLIC_* origin instead, so the record that holds a Jump signing key names the
   # same `iss` the RT carries, and an invalid origin fails at boot rather than at request time.
@@ -121,28 +119,13 @@ module JitSecurityJwtRegistry
     records = {}
     auth_audiences = AUTH_AUDIENCE_ENV_NAMES.flat_map { |name| source.csv(name) }
     auth_audiences.uniq!
-    records["auth"] = build_keyset_issuer(
-      source: source,
-      id: "auth",
-      private_keyset_name: :AUTH_JWT_PRIVATE_KEYSET,
-      public_keyset_name: :AUTH_JWT_PUBLIC_KEYSET,
-      active_kid: source.fetch("AUTH_JWT_ACTIVE_KID", nil),
-      issuer: source.fetch("AUTH_JWT_ISSUER", nil),
+    records["auth"] = build_repository_issuer(
+      source: source, id: "auth", issuer: source.fetch("AUTH_JWT_ISSUER", nil),
       audiences: auth_audiences.freeze,
-      revoked_kids: source.csv("AUTH_JWT_REVOKED_KIDS"),
     )
-    com_active_kid = source.value("PREFERENCE_COM_JWT_ACTIVE_KID")
-    raise ConfigurationError, "com preference active kid is missing" if com_active_kid.blank?
-
-    records["preference_com"] = build_keyset_issuer(
-      source: source,
-      id: "preference_com",
-      private_keyset_name: :PREFERENCE_COM_JWT_PRIVATE_KEYSET,
-      public_keyset_name: :PREFERENCE_COM_JWT_PUBLIC_KEYSET,
-      active_kid: com_active_kid,
-      issuer: source.value("PREFERENCE_COM_JWT_ISSUER"),
+    records["preference_com"] = build_repository_issuer(
+      source: source, id: "preference_com", issuer: source.value("PREFERENCE_COM_JWT_ISSUER"),
       audiences: [source.value("PREFERENCE_COM_JWT_AUDIENCE")].compact.freeze,
-      revoked_kids: source.csv("PREFERENCE_COM_JWT_REVOKED_KIDS"),
     )
     records.merge!(build_preference_realm_issuers(source))
 
@@ -158,21 +141,32 @@ module JitSecurityJwtRegistry
 
   def build_preference_realm_issuers(source)
     PREFERENCE_REALM_ISSUERS.to_h do |id, configuration|
-      prefix = id.upcase
       [
         id,
-        build_keyset_issuer(
-          source: source,
-          id: id,
-          private_keyset_name: :"#{prefix}_JWT_PRIVATE_KEYSET",
-          public_keyset_name: :"#{prefix}_JWT_PUBLIC_KEYSET",
-          active_kid: source.value("#{prefix}_JWT_ACTIVE_KID"),
-          issuer: configuration.fetch(:issuer),
+        build_repository_issuer(
+          source: source, id: id, issuer: configuration.fetch(:issuer),
           audiences: [configuration.fetch(:audience)].freeze,
-          revoked_kids: source.csv("#{prefix}_JWT_REVOKED_KIDS"),
         ),
       ]
     end
+  end
+
+  def build_repository_issuer(source:, id:, issuer:, audiences:)
+    private_keyset = source.value("AUTH_JWT_PRIVATE_KEYSET")
+    raise ConfigurationError, "AUTH_JWT_PRIVATE_KEYSET is required" if private_keyset.blank?
+
+    build_keyset_issuer(
+      source: source,
+      id: id,
+      private_keyset_name: :AUTH_JWT_PRIVATE_KEYSET,
+      public_keyset_name: :AUTH_JWT_PUBLIC_KEYSET,
+      active_kid: source.value("AUTH_JWT_ACTIVE_KID"),
+      issuer: issuer,
+      audiences: audiences,
+      revoked_kids: source.csv("AUTH_JWT_REVOKED_KIDS"),
+    )
+  rescue JitSecurityJwtIssuerBuilder::Error => e
+    raise ConfigurationError, e.message
   end
 
   def build_keyset_issuer(source:, id:, private_keyset_name:, public_keyset_name:, active_kid:, issuer:,
@@ -193,94 +187,24 @@ module JitSecurityJwtRegistry
   end
 
   def build_surface_issuer(namespace, source:)
-    prefix = "JWT_#{namespace}"
-    public_keyset = source.value("#{prefix}_PUBLIC_KEYSET")
-    validate_jump_public_keyset!(namespace, public_keyset) if JumpRtSurface::ISSUER_NAMESPACES.include?(namespace)
-
-    JitSecurityJwtIssuerBuilder.build_surface_issuer(
-      namespace: namespace,
-      active_kid: source.value("#{prefix}_ACTIVE_KID"),
-      private_key: source.value("#{prefix}_PRIVATE_KEY"),
-      private_key_source: "#{prefix}_PRIVATE_KEY",
-      public_keyset: public_keyset,
-      public_keyset_source: "#{prefix}_PUBLIC_KEYSET",
-      revoked_kids: source.csv("#{prefix}_REVOKED_KIDS"),
+    build_repository_issuer(
+      source: source,
+      id: "surface:#{namespace}",
       issuer: surface_issuer_origin(namespace),
       audiences: [jump_gateway_audience].freeze,
     )
-  rescue JitSecurityJwtIssuerBuilder::Error => e
-    raise ConfigurationError, e.message
   end
 
   def build_oidc_client_issuer(namespace, source:)
-    active_kid_name = "OIDC_CLIENT_#{namespace}_ACTIVE_KID"
-    private_key_name = "OIDC_CLIENT_#{namespace}_PRIVATE_KEY"
-    active_kid = source.value(active_kid_name)
-    private_key = source.value(private_key_name)
-    require_oidc_client_key_material!(
-      namespace,
-      active_kid_name:,
-      private_key_name:,
-      active_kid:,
-      private_key:,
-    )
-
-    JitSecurityJwtIssuerBuilder.build_surface_issuer_record(
-      namespace: namespace,
+    build_repository_issuer(
+      source: source,
       id: "oidc_client:#{namespace}",
-      active_kid:,
-      private_key:,
-      private_key_source: private_key_name,
-      public_keyset: source.fetch("OIDC_CLIENT_#{namespace}_PUBLIC_KEYSET", nil),
-      public_keyset_source: "OIDC_CLIENT_#{namespace}_PUBLIC_KEYSET",
-      revoked_kids: source.csv("OIDC_CLIENT_#{namespace}_REVOKED_KIDS"),
       issuer: "oidc_client:#{namespace.downcase}",
       audiences: ["oidc-token-endpoint"].freeze,
     )
-  rescue JitSecurityJwtIssuerBuilder::Error => e
-    raise ConfigurationError, e.message
   end
 
-  def require_oidc_client_key_material!(namespace, active_kid_name:, private_key_name:, active_kid:, private_key:)
-    return unless required_oidc_client_namespaces.include?(namespace)
-    return if active_kid.present? && private_key.present?
-
-    missing = []
-    missing << active_kid_name if active_kid.blank?
-    missing << private_key_name if private_key.blank?
-    raise ConfigurationError, "missing required OIDC client configuration: #{missing.join(", ")}"
-  end
-
-  # Com preference verification can run with public keys only. Its writer requires the private
-  # key at issuance; this capability does not depend on a runtime role selector.
-  # In an RP cell process only the records it signs with must carry a private key.
-  def private_key_required?(record)
-    return false if PREFERENCE_REALM_ISSUERS.key?(record.id) || record.id == "preference_com"
-    return true unless RuntimeRole::RP_ROLES.include?(RuntimeRole.current)
-
-    RuntimeRole.rp_private_env_names.include?(private_env_name_for(record.id))
-  end
-
-  def private_env_name_for(record_id)
-    kind, namespace = record_id.to_s.split(":", 2)
-    case kind
-    when "auth" then "AUTH_JWT_PRIVATE_KEYSET"
-    when "preference_com" then "PREFERENCE_COM_JWT_PRIVATE_KEYSET"
-    when "preference_app" then "PREFERENCE_APP_JWT_PRIVATE_KEYSET"
-    when "preference_org" then "PREFERENCE_ORG_JWT_PRIVATE_KEYSET"
-    when "surface" then "JWT_#{namespace}_PRIVATE_KEY"
-    when "oidc_client" then "OIDC_CLIENT_#{namespace}_PRIVATE_KEY"
-    else raise ConfigurationError, "unknown JWT issuer record #{record_id.inspect}"
-    end
-  end
-
-  # An RP cell process holds only its own client key (RuntimeRole.rp_private_env_names), so only
-  # that namespace is required there; every other process requires the full list.
-  def required_oidc_client_namespaces
-    return REQUIRED_OIDC_CLIENT_NAMESPACES unless RuntimeRole::RP_ROLES.include?(RuntimeRole.current)
-
-    [RuntimeRole.rp_private_env_names.first.delete_prefix("OIDC_CLIENT_").delete_suffix("_PRIVATE_KEY")]
-  end
+  def private_key_required?(_record) = true
 
   def jump_gateway_audience
     Rails.configuration.x.boot_config.fetch(:jump).audience
@@ -289,43 +213,29 @@ module JitSecurityJwtRegistry
   def validate!(records = issuers)
     records.each_value { |record| validate_record!(record) }
     validate_global_kid_uniqueness!(records)
-    validate_preference_realm_key_separation!(records)
+    validate_shared_keyset!(records)
     validate_jump_issuer_records!(records)
     true
   end
 
-  def validate_preference_realm_key_separation!(records)
-    preference_ids = %w(preference_app preference_com preference_org)
-    preference_ids.each do |id|
-      current = records.fetch(id)
-      current_keys = current.keys.values.map { |key| key.public_key.public_to_der }
-      (preference_ids - [id]).each do |other_id|
-        other_keys = records.fetch(other_id).keys.values.map { |key| key.public_key.public_to_der }
-        if other_keys.any? { |key| current_keys.include?(key) }
-          raise ConfigurationError, "#{id} key material is shared with #{other_id}"
-        end
-      end
+  def validate_shared_keyset!(records)
+    canonical = records.fetch("auth")
+    canonical_keys = keyset_contract(canonical)
+    records.each_value do |record|
+      next if keyset_contract(record) == canonical_keys
+
+      raise ConfigurationError, "#{record.id} does not use the repository JWT signing keyset"
     end
   end
 
-  def validate_jump_public_keyset!(namespace, raw)
-    return if raw.blank?
-
-    parsed = JSON.parse(raw)
-    entries =
-      if parsed.is_a?(Array)
-        parsed
-      elsif parsed.is_a?(Hash) && parsed["keys"].is_a?(Array)
-        parsed.fetch("keys")
-      end
-    return unless entries
-
-    kids = entries.filter_map { |entry| entry["kid"] if entry.is_a?(Hash) }
-    return if kids.uniq.size == kids.size
-
-    raise ConfigurationError, "surface:#{namespace} public JWKS contains duplicate kid values"
-  rescue JSON::ParserError => e
-    raise ConfigurationError, "surface:#{namespace} public JWKS contains invalid JSON: #{e.message}"
+  def keyset_contract(record)
+    [
+      record.current_kid,
+      record.revoked_kids.to_a.sort,
+      record.keys.sort.each_with_object([]) do |(kid, key), entries|
+        entries << [kid, key.public_jwk, key.state, key.private_key&.public_to_der]
+      end,
+    ]
   end
 
   def validate_jump_issuer_records!(records)
@@ -423,16 +333,19 @@ module JitSecurityJwtRegistry
   def validate_global_kid_uniqueness!(records = issuers)
     seen = {}
     records.each_value do |record|
-      record.keys.each_key do |kid|
+      record.keys.each do |kid, key|
         previous = seen[kid]
-        next if previous && previous != record.id && insecure_default_kid_allowed?(kid)
-        if previous && previous != record.id
-          raise ConfigurationError,
-                "duplicate JWT kid #{kid.inspect} in #{previous} and #{record.id}"
-        end
+        next unless previous
+        next if previous.fetch(:jwk) == key.public_jwk
+        next if insecure_default_kid_allowed?(kid)
 
-        seen[kid] = record.id
+        if previous.fetch(:record_id) != record.id
+          raise ConfigurationError,
+                "duplicate JWT kid #{kid.inspect} in #{previous.fetch(:record_id)} and #{record.id}"
+        end
       end
+
+      record.keys.each { |kid, key| seen[kid] ||= { record_id: record.id, jwk: key.public_jwk } }
     end
   end
 
@@ -483,12 +396,12 @@ module JitSecurityJwtRegistry
     RESERVED_ENV_KID_PATTERN.match?(kid.to_s)
   end
 
-  private_class_method :build_issuers, :build_oidc_client_issuer, :require_oidc_client_key_material!,
+  private_class_method :build_issuers, :build_oidc_client_issuer, :build_repository_issuer,
                        :jump_gateway_audience, :validate_record_metadata!, :validate_active_key!,
-                       :private_key_required?, :private_env_name_for, :required_oidc_client_namespaces,
+                       :private_key_required?,
                        :validate_record_keys!, :validate_global_kid_uniqueness!, :validate_public_jwk!,
-                       :validate_preference_realm_key_separation!,
-                       :validate_jump_public_keyset!, :validate_jump_issuer_records!, :validate_jump_kid!,
+                       :validate_shared_keyset!, :keyset_contract,
+                       :validate_jump_issuer_records!, :validate_jump_kid!,
                        :surface_issuer_origin, :normalize_oidc_client_namespace, :insecure_default_kid?,
                        :insecure_default_kid_allowed?, :reserved_env_kid?
 end

@@ -46,6 +46,7 @@ class AvatarPermissionResolver
   def self.call(...)
     new(...).call
   end
+  public_class_method :call
 
   def initialize(actor:, surface:, subject_public_id:, owner_collective_public_id:, permission:, lock: false,
                  avatar: nil)
@@ -58,6 +59,7 @@ class AvatarPermissionResolver
     @avatar = avatar
   end
 
+  public
   def call
     raise ArgumentError, "unsupported Avatar permission" unless PERMISSIONS.include?(permission)
 

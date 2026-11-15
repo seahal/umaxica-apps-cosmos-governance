@@ -46,7 +46,25 @@
 
 class ClientPasskey < AppPrincipalRecord
   include ::PublicId
+
+  before_validation :generate_public_id, on: :create
+  before_validation :refresh_generated_public_id_after_collision, on: :create
+  before_validation :set_defaults, on: :create
+  before_validation :ensure_status_defaults, on: :create
+  before_create :generate_public_id
+  around_create :retry_public_id_collision
+  validate :public_id_immutable_after_create, on: :update
+  validates :public_id, presence: true, length: { is: PublicId::GENERATION_SIZE }, uniqueness: true
   include Retainable
+
+  attribute :discard_at, :datetime, default: -> { Retainable::SENTINEL }
+  attribute :purge_eligible_at, :datetime, default: -> { Retainable::SENTINEL }
+  validates :discard_at, presence: true
+  validates :purge_eligible_at, presence: true
+  validate :retention_order_valid
+  validate :retention_times_not_before_created_at, on: :update
+  Retainable.register_host(self)
+
   include MfaStatusCredential
 
   MAX_PASSKEYS_PER_USER = 10
@@ -69,11 +87,11 @@ class ClientPasskey < AppPrincipalRecord
   validate :within_passkey_limit, on: :create
   validates :status_id, numericality: { only_integer: true }
   validates :sign_count, presence: true, numericality: { greater_than_or_equal_to: 0 }
-  before_validation :set_defaults, on: :create
-  before_validation :ensure_status_defaults, on: :create
+  after_commit :refresh_owner_mfa_status
 
   scope :active, -> { where(status_id: ClientPasskeyStatus::ACTIVE) }
 
+  public
   def to_param
     public_id
   end

@@ -8,6 +8,7 @@ module CollectiveMembership
       @membership = membership
     end
 
+    public
     def call
       raise InactiveMembership, "membership is revoked" if membership.revoked?
 

@@ -152,6 +152,7 @@ class RetentionPurgeJobTest < ActiveJob::TestCase
     assert_nil user.reload.terminated_at
   end
   test "remote dependent actor purge refuses deletion while independent occurrence purge continues" do
+    VisitorOccurrenceStatus.ensure_defaults!
     client = clients(:one)
     client.update_columns(discard_at: 2.hours.ago, purge_eligible_at: 1.hour.ago)
     occurrence = VisitorOccurrence.create!(body: "retention-independent")

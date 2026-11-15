@@ -21,6 +21,7 @@ class AvatarMonikerWriterOperation < ApplicationService
     @expected_current = expected_current
   end
 
+  public
   def call
     avatar_moniker = nil
     errors = {}

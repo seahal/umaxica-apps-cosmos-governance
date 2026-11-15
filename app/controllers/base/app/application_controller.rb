@@ -16,6 +16,7 @@ module Base
 
       include ::BrowserRpAuthentication
       include ::BrowserRpUnsafeRequestGuard
+      include ::BaseRpSignInRedirect
       include ::AuthenticationWithdrawalGate
 
       include ::BaseAdmissionBrowserBinding
@@ -24,7 +25,6 @@ module Base
       include ::AuthorizationClient
       include ::VerificationClient
       include ActionPolicy::Controller
-      include SurfaceRouteAliasHelper
       include ::ActorSupport
       include ::Finisher
 
@@ -36,18 +36,15 @@ module Base
       }.freeze
 
       AUTHENTICATION_MODE = :deny_all
+
+      prepend_before_action :enforce_fqdn_availability!
+
       after_action :verify_private_action_authorized!
       after_action :apply_authenticated_page_cache_policy!
-      helper_method :current_resource, :browser_rp_authenticated?, :browser_rp_session_public_id,
+      helper_method :current_resource, :browser_rp_authenticated?,
                     :current_browser_session_security_context, :current_session_public_id,
                     :current_session, :logged_in?
       prepend_before_action :guard_browser_rp_unsafe_request!
-
-      class << self
-        public
-
-        def base_admission_surface_name = "app"
-      end
 
       layout "base/app/application"
 
@@ -55,10 +52,11 @@ module Base
       authorize :actor, through: :current_actor
       rescue_from ApplicationError, with: :handle_application_error
       rescue_from BaseZenithIdentityResolver::DependencyUnavailable, with: :render_base_zenith_identity_unavailable
+      rescue_from ::Oidc::AcmeServiceOrigin::ConfigurationUnavailable, with: :render_oidc_authority_unavailable
       rescue_from ActionController::InvalidCrossOriginRequest, with: :handle_csrf_failure
       rescue_from ActionPolicy::Unauthorized, with: :handle_authorization_error
-      helper_method :current_actor, :current_account, :current_session_public_id,
-                    :current_client, :logged_in?, :active_client?, :logged_in_client?
+      helper_method :current_actor, :current_session_public_id,
+                    :current_client, :logged_in?
 
       allow_browser versions: :modern
 
@@ -128,11 +126,17 @@ module Base
         BaseZenithIdentityResolver.call(access_state: state, surface: :app) if state.status == :valid
         state
       rescue BaseZenithIdentityResolver::WithdrawalRequired
-        @current_access_token_payload = nil
+        @current_rp_authentication_payload = nil
         withdrawal_required_browser_rp_access
       rescue BaseZenithIdentityResolver::LoginBlocked
-        @current_access_token_payload = nil
+        @current_rp_authentication_payload = nil
         invalid_browser_rp_access
+      end
+
+      def render_oidc_authority_unavailable
+        response.set_header("Cache-Control", "no-store")
+        render plain: I18n.t("errors.messages.temporarily_unavailable"), status: :service_unavailable,
+               content_type: "text/plain"
       end
 
       def refuse_unavailable_rp_root_feature!
@@ -165,7 +169,7 @@ module Base
           "secret_management"
         when "base/app/identity/sessions"
           "session_management"
-        when "base/app/verifications", "base/app/verification/setups"
+        when "base/app/verifications"
           "secret_verification" if secret_verification_request?
         end
       end
@@ -225,13 +229,68 @@ module Base
 
       private
 
-      def actor_verification_path(**args)
-        base_app_verification_path(**args)
+      def rp_cell_issuer
+        rp_op_origin.origin
       end
 
-      # Base collects consent and issues the scoped admission before leaving its root session.
-      def actor_verification_setup_path(**args)
-        base_app_verification_setup_path(**args)
+      def rp_cell_jwks_client
+        OidcOpJwksClient.for_jwks_uri(rp_op_jwks_uri)
+      end
+
+      def rp_client_id = oidc_client_id
+
+      def rp_realm = rp_cell_binding.realm
+
+      def rp_resource_type = browser_rp_resource_type
+
+      def rp_log_surface = "base_app"
+
+      def rp_cell_binding = RpCellBinding.fetch("rp_base_app")
+
+      def rp_record_class = RpBaseAppRecord
+
+      def rp_session_class = RpBaseAppSession
+
+      def rp_notice_face = "app"
+
+      def rp_op_jwks_uri = rp_op_origin.jwks_uri
+
+      def rp_op_origin
+        return @rp_op_origin if defined?(@rp_op_origin)
+
+        hosts = Rails.configuration.x.boot_config.fetch(:hosts)
+        host = hosts.visa_service&.host
+        local_host = ::Oidc::AcmeServiceOrigin.host_from(host)
+        scheme = local_host&.end_with?(".localhost") ? (request.ssl? ? "https" : "http") : "https"
+        @rp_op_origin = ::Oidc::AcmeServiceOrigin.from_configured_host(host, default_scheme: scheme)
+      end
+
+      def rp_default_landing_path = base_app_dashboard_path(ri: params[:ri])
+
+      def rp_callback_path = base_app_oidc_callback_path
+
+      def rp_interruption_path = base_app_sign_interruption_path(ri: params[:ri])
+
+      def rp_sign_path(**) = base_app_sign_show_path(**)
+
+      def rp_sign_out_path(**) = base_app_sign_out_path(**)
+
+      def rp_sign_out_completion_path = base_app_sign_out_completion_path
+
+      def rp_root_path(**) = base_app_root_path(**)
+
+      def rp_sign_out_component = "base/app/sign_outs/edit"
+
+      def rp_sign_out_completed_description = t("base.app.sign_out.completed_description")
+
+      def rp_sign_out_unavailable_after_local_description = t("base.app.sign_out.unavailable_after_local_description")
+
+      def account_navigation_sign_in_path(**) = base_app_sign_show_path(**)
+
+      def account_navigation_sign_out_path(**) = new_base_app_sign_out_path(**)
+
+      def actor_verification_path(**args)
+        base_app_verification_path(**args)
       end
 
       def cross_host_redirect_allowed?

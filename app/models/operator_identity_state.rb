@@ -17,6 +17,8 @@ class OperatorIdentityState < OrgRpRecord
   DELETED = 3
   DEFAULTS = [NOTHING, ACTIVE, SUSPENDED, DELETED].freeze
 
+  self.record_timestamps = false
+
   has_many :operator_identities, class_name: "OperatorIdentity", foreign_key: :status_id,
                                  dependent: :restrict_with_error,
                                  inverse_of: :identity_state

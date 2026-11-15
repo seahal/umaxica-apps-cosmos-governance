@@ -21,6 +21,12 @@ require WU-06. See the open
 [cycle completion spec](../specs/authentication-cycle-completion/spec.md); partial storage does not
 certify E1 or a 30-minute end-to-end workflow.
 
+> **Governance runtime supersession (2026-11-13):** The owner confirmed that Access runs all
+> authentication ceremonies and Governance runs none. The APP/COM flow and admission implementation
+> described below is historical for this repository; this cleanup did not change any database schema
+> or records. See
+> [`evidence/2026-11-13-remove-unreachable-ceremony-code-Q7M2.md`](../evidence/2026-11-13-remove-unreachable-ceremony-code-Q7M2.md).
+
 Legacy Base social-completion readers now also enforce explicit agreement between their signed
 result's Flow and its stored Binding FK (S2E1). Initial commit, committed-receipt reads and
 completion-reference access all retain the existing signature, candidate and browser checks; these
@@ -30,6 +36,13 @@ transport with shared Finalization and canonical Sign In First.
 The acceptance date is the decision date explicitly supplied by the owner. Local source review was
 performed on 2026-10-20 at `febec3225cc9a0cfa53b9cbe817d20d366aba5a2` with unrelated uncommitted
 work present. This record does not claim observations of future runtime behavior.
+
+> **Pending split amendment (proposed 2026-11-14):** Admission, Binding and Flow storage belong to
+> Access. The
+> [split amendment](sign-up-finalization-in-auth.md#cosmos-split-amendment-governance-owned-pending-registration-2026-11-14)
+> answers this ADR's D14 item (distributed cancel, switch, supersession and late results) for
+> registration. It replaces one in-progress Flow per Binding with one in-progress registration per
+> identifier and per browser.
 
 ## Context and authority
 

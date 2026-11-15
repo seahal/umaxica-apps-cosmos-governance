@@ -18,6 +18,9 @@ class OperatorStatus < OrgPrincipalRecord
   RESERVED = 3
 
   DEFAULTS = [ACTIVE, NOTHING, RESERVED].freeze
+
+  self.record_timestamps = false
+
   has_many :staffs,
            class_name: "Operator",
            foreign_key: :status_id,

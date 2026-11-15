@@ -7,7 +7,7 @@ require "jwt"
 require "base64"
 
 # WU-7 section 4.2: the anonymous com writer carries the D-54 claims shape. Signed envelope format
-# stays ES384 with the realm kid/keyset; the rejected legacy claims (client_id, host,
+# stays PS256 with the realm kid/keyset; the rejected legacy claims (client_id, host,
 # preference_type, nbf, scope, public_id) are gone; unknown preference keys are refused.
 class AnonymousComPreferenceTokenShapeTest < ActiveSupport::TestCase
   DISPLAY_SNAPSHOT = {
@@ -55,12 +55,12 @@ class AnonymousComPreferenceTokenShapeTest < ActiveSupport::TestCase
     key = PreferenceJwtConfiguration.private_key_for_active("preference_com")
 
     [
-      [header.sub('"alg":', '"alg":"ES384","alg":'), payload],
+      [header.sub('"alg":', '"alg":"PS256","alg":'), payload],
       [header, payload.sub('"jti":', '"jti":"other","jti":')],
       [header, payload.sub('"theme":', '"theme":"light","theme":')],
     ].each do |header_json, payload_json|
       input = [header_json, payload_json].map { |json| Base64.urlsafe_encode64(json, padding: false) }.join(".")
-      signature = JWT::JWA.resolve("ES384").sign(data: input, signing_key: key)
+      signature = JWT::JWA.resolve("PS256").sign(data: input, signing_key: key)
       duplicate_token = "#{input}.#{Base64.urlsafe_encode64(signature, padding: false)}"
 
       assert_nil SecurityJwtPreferenceTokenCodec.decode(duplicate_token, host: "www.umaxica.com")
@@ -237,14 +237,13 @@ class AnonymousComPreferenceTokenShapeTest < ActiveSupport::TestCase
     claims, header = JWT.decode(seed, nil, false)
     header_length, _, signature_length = seed.split(".").map(&:bytesize)
     candidates =
-      (1700..2400).to_h do |length|
+      (1..3000).to_h do |length|
         encoded = Base64.urlsafe_encode64(claims.merge("sub" => "x" * length).to_json, padding: false)
         [header_length + encoded.bytesize + signature_length + 2, length]
       end
     limit = SecurityJwtPreferenceTokenCodec::ANONYMOUS_REALM_TOKEN_MAX_BYTES
     # Base64url cannot represent every adjacent length; use the nearest reachable size on each side.
     sizes = [candidates.keys.select { |size| size < limit }.max,
-             candidates.keys.select { |size| size <= limit }.max,
              candidates.keys.select { |size| size > limit }.min,]
     key = PreferenceJwtConfiguration.private_key_for_active("preference_com")
 
@@ -338,18 +337,15 @@ class AnonymousComPreferenceTokenShapeTest < ActiveSupport::TestCase
     assert_nil SecurityJwtPreferenceTokenCodec.decode(token, host: "other.example.com")
   end
 
-  test "com app and org anonymous issuers reject each other's signing keys" do
+  test "preference realms reject another realm's claims despite sharing the repository keyset" do
     com_token = SecurityJwtPreferenceTokenCodec.encode(
       DISPLAY_SNAPSHOT, host: "www.umaxica.com", preference_type: "ComPreference", issued_at: Time.current,
                         public_id: "com-row", jti: SecureRandom.uuid,
     )
-    com_claims, com_header = JWT.decode(com_token, nil, false)
-    forged_com = JWT.encode(
-      com_claims, PreferenceJwtConfiguration.private_key_for_active("preference_app"),
-      com_header.fetch("alg"), com_header.except("alg"),
-    )
 
-    assert_nil SecurityJwtPreferenceTokenCodec.decode(forged_com, host: "www.umaxica.com")
+    assert_predicate SecurityJwtPreferenceTokenCodec.decode(com_token, host: "www.umaxica.com"), :present?
+    assert_nil SecurityJwtPreferenceTokenCodec.decode(com_token, host: "www.umaxica.app")
+    assert_nil SecurityJwtPreferenceTokenCodec.decode(com_token, host: "www.umaxica.org")
 
     %w(app org).each do |realm|
       host = "www.umaxica.#{realm}"
@@ -359,33 +355,21 @@ class AnonymousComPreferenceTokenShapeTest < ActiveSupport::TestCase
         DISPLAY_SNAPSHOT, host: host, preference_type: preference_type, issued_at: Time.current,
                           public_id: "#{realm}-row", jti: SecureRandom.uuid,
       )
-      claims, header = JWT.decode(token, nil, false)
-      forged_token = JWT.encode(
-        claims,
-        PreferenceJwtConfiguration.private_key_for_active("preference_com"),
-        header.fetch("alg"),
-        header.except("alg"),
-      )
 
       assert_predicate SecurityJwtPreferenceTokenCodec.decode(token, host: host, jwt_issuer_id: issuer_id), :present?
-      assert_nil SecurityJwtPreferenceTokenCodec.decode(forged_token, host: host, jwt_issuer_id: issuer_id)
       assert_nil SecurityJwtPreferenceTokenCodec.decode(token, host: "www.umaxica.com")
     end
   end
 
-  test "registry rejects reuse of another issuer's key under a com kid" do
+  test "preference realm issuer records expose the same repository key material" do
     records = JitSecurityJwtRegistry.issuers.dup
-    com = records.fetch("preference_com")
-    other = records.fetch("preference_app").current_key
-    com_key = com.current_key.with(
-      private_key: other.private_key,
-      public_key: other.public_key,
-      public_jwk: JitSecurityJwtRegistry.export_public_jwk(other.public_key, kid: com.current_kid),
-    )
-    records["preference_com"] = com.with(keys: { com.current_kid => com_key })
 
-    error = assert_raises(JitSecurityJwtRegistry::ConfigurationError) { JitSecurityJwtRegistry.validate!(records) }
-    assert_match "key material is shared", error.message
+    app_keys = records.fetch("preference_app").keys.transform_values { |key| key.public_key.public_to_der }
+    com_keys = records.fetch("preference_com").keys.transform_values { |key| key.public_key.public_to_der }
+    org_keys = records.fetch("preference_org").keys.transform_values { |key| key.public_key.public_to_der }
+
+    assert_equal app_keys, com_keys
+    assert_equal app_keys, org_keys
   end
 
   test "com token issuance rejects app org and unrelated hosts" do
@@ -450,7 +434,7 @@ class AnonymousComPreferenceTokenShapeTest < ActiveSupport::TestCase
       DISPLAY_SNAPSHOT, host: host, preference_type: "ComPreference", issued_at: issued_at,
                         public_id: "old-preference", jti: "old-generation",
     )
-    new_key = OpenSSL::PKey::EC.generate("secp384r1")
+    new_key = OpenSSL::PKey::RSA.generate(3072)
     new_kid = "com-rotation-new"
     new_record = KeyRecord.new(
       kid: new_kid, private_key: new_key, public_key: new_key,

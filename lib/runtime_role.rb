@@ -16,8 +16,8 @@ module RuntimeRole
   # cell process must boot with its own `rp-*` role and never as `shared`.
   SHARED = "shared"
 
-  # Each retained RP cell requires only its own client assertion private key and
-  # serves only its own local store.
+  # Each retained RP cell serves only its own local store and loads the repository's
+  # one signing keyset through the explicit JWT registry boundary.
   RP_ROLES = %w(rp-base-app-ww rp-base-org-ww rp-tech-org-ww).freeze
   # Canonical domain authorities: their own stores and protocol secrets only.
   DOMAIN_ROLES = %w(domain-avatar domain-org).freeze
@@ -47,18 +47,12 @@ module RuntimeRole
     name.delete_prefix("rp-").split("-").first(2).unshift("rp").join("_")
   end
 
-  # Private signing material an RP cell process may hold (one.md section 1: "RP execution has no OP
-  # signing key"): its own private_key_jwt client key and its surface's Jump RT key. Preference
-  # JWTs are signed only through Base writers; RP readers receive public keysets only.
+  # The repository has one signing keyset for its first-party JWTs. Each RP process needs that
+  # shared keyset to issue its own client assertions and Jump RTs through the JWT registry.
   def rp_private_env_names(name = current)
     raise UnknownRole, "#{name} is not an RP cell role" unless RP_ROLES.include?(name)
 
-    family, realm, region = name.delete_prefix("rp-").split("-")
-    client_namespace = (family == "base") ? "BASE_RP_#{realm}_#{region}" : "#{family}_#{realm}_#{region}"
-    surface_namespace = "#{family}_#{realm}"
-    private_env_names = ["OIDC_CLIENT_#{client_namespace.upcase}_PRIVATE_KEY"]
-    private_env_names << "JWT_#{surface_namespace.upcase}_PRIVATE_KEY" if family == "base"
-    private_env_names.freeze
+    ["AUTH_JWT_PRIVATE_KEYSET"].freeze
   end
 
   BROWSER_ADMISSION_STATES = %w(open closed).freeze
@@ -92,6 +86,7 @@ module RuntimeRole
     identity identities verification verifications secrets secret_issuances secret_presentations
     selectors welcomes actor_support api/v0/identity api/v0/membership
   ).freeze
+  BASE_RP_PROTOCOL_PREFIXES = %w(sign sign_outs oidc).freeze
 
   BASE_ANY_PREFIXES = %w(
     health healths revisions robots sitemaps csp_violation_reports preference preferences
@@ -127,6 +122,7 @@ module RuntimeRole
     BASE_DOMAIN_PREFIXES.each { |prefix, role| return role if matches.call(prefix) }
     return ANY_ROLE if BASE_ANY_PREFIXES.any?(&matches)
     return "rp-base-#{realm}-ww" if BASE_METADATA_PREFIXES.any?(&matches)
+    return "rp-base-#{realm}-ww" if %w(app org).include?(realm) && BASE_RP_PROTOCOL_PREFIXES.any?(&matches)
     return "rp-base-#{realm}-ww" if BASE_RP_PREFIXES.any?(&matches)
 
     raise UnownedRoute, "no runtime role owns base/#{realm}/#{rest}"

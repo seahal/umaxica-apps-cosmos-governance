@@ -34,6 +34,7 @@ class SecurityHeadersTest < ActionDispatch::IntegrationTest
     assert_includes response.headers["Content-Security-Policy"], "https://#{hosts.base_service.host}"
     assert_includes response.headers["Content-Security-Policy"], "https://#{hosts.base_corporate.host}"
     assert_includes response.headers["Content-Security-Policy"], "https://#{hosts.base_staff.host}"
+    assert_includes response.headers["Content-Security-Policy"], "https://#{hosts.visa_staff.host}"
     # Internal hosts must never be form-action targets: browser-posted forms have to
     # aim at the public Base origins asserted above.
     assert_not_includes response.headers["Content-Security-Policy"],

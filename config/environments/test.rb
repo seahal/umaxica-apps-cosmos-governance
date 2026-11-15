@@ -186,10 +186,10 @@ Rails.application.configure do
     self.create_unlogged_tables = true
   end
 
-  # Rails applies this configured value after the application callbacks. Assigning the
-  # ActiveRecord singleton in after_initialize was overwritten by the Rails default and
-  # fixture loading silently validated existing NOT VALID foreign keys in disposable DBs.
-  # Keep the established fixture policy while ordinary FK enforcement remains active.
+  # Rails applies this value after application callbacks. This disables FixtureSet's explicit
+  # post-insert foreign-key validation pass. On PostgreSQL 18.4+, the adapter still switches
+  # constraints through NOT ENFORCED and ENFORCED while fixture sets are inserted; that path
+  # validates existing NOT VALID constraints and is not controlled by this setting.
   config.active_record.verify_foreign_keys_for_fixtures = false
 
   # Log slow queries over 100ms.

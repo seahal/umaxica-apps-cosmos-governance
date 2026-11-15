@@ -23,11 +23,14 @@ class AvatarImageAttachmentTest < ActiveSupport::TestCase
   end
 
   test "a valid png is stored on the avatar boundary and persisted in the avatar database" do
+    cache_key_without_image = @avatar.image_cache_key
     @avatar.image = StringIO.new(PNG)
     @avatar.save!
 
     assert_predicate @avatar.image, :present?
     assert_equal :avatar_store, @avatar.image.storage_key
+    assert_not_equal cache_key_without_image, @avatar.image_cache_key
+    assert_equal @avatar.image_cache_key, @avatar.reload.image_cache_key
     assert_equal "image/png", @avatar.image.mime_type
     assert_not_nil @avatar.image_data
     assert_equal "avatar_store", @avatar.image_data["storage"]

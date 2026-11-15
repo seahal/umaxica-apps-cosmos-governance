@@ -32,6 +32,7 @@ class AppPreferenceAdultContentGate < AppSettingRecord
 
   before_validation :set_option_id
 
+  public
   def approved? = option_id == AppPreferenceAdultContentGateOption::APPROVED
 
   def denied? = option_id == AppPreferenceAdultContentGateOption::DENY

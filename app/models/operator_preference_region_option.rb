@@ -18,6 +18,8 @@ class OperatorPreferenceRegionOption < OrgPrincipalRecord
 
   DEFAULTS = [NOTHING, US, JP].freeze
 
+  self.record_timestamps = false
+
   has_many :operator_preference_regions,
            foreign_key: :option_id,
            inverse_of: :option,
@@ -26,7 +28,9 @@ class OperatorPreferenceRegionOption < OrgPrincipalRecord
   def self.ensure_defaults!
     insert_missing_fixed_ids!(DEFAULTS)
   end
+  public_class_method :ensure_defaults!
 
+  public
   def name
     case id
     when US then "US"

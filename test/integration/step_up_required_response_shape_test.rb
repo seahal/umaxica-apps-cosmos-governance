@@ -51,6 +51,12 @@ class StepUpRequiredResponseShapeTest < ActionDispatch::IntegrationTest
       "Accept" => "text/html", "Sec-Fetch-Mode" => "navigate", "Sec-Fetch-Dest" => "document",
     )
     passkey = @test_client.client_passkeys.active.sole
+
+    get base_app_identity_passkeys_url(ri: "jp", host:), headers: headers
+
+    assert_response :success
+    assert_includes response.body, passkey.public_id
+
     get base_app_identity_passkey_url(SecureRandom.alphanumeric(21), ri: "jp", host:), headers: headers
 
     assert_response :not_found
@@ -91,6 +97,14 @@ class StepUpRequiredResponseShapeTest < ActionDispatch::IntegrationTest
       "Accept" => "text/html", "Sec-Fetch-Mode" => "navigate", "Sec-Fetch-Dest" => "document",
     )
     passkey = @test_operator.operator_passkeys.active.first
+
+    get base_org_identity_passkeys_url(ri: "jp", host:), headers: headers
+
+    assert_response :success
+    @test_operator.operator_passkeys.active.each do |active_passkey|
+      assert_includes response.body, active_passkey.external_id
+    end
+
     get base_org_identity_passkey_url(SecureRandom.alphanumeric(21), ri: "jp", host:), headers: headers
 
     assert_response :not_found

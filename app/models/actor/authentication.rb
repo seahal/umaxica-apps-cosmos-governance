@@ -3,21 +3,20 @@
 
 class Actor
   class Authentication
-    attr_reader :login_public_id, :access_claims, :acr, :amr, :actor_type, :actor_id,
-                :active_sign_sequence_id
+    attr_reader :login_public_id, :access_claims, :acr, :amr, :actor_type, :actor_id
 
     def initialize(login_public_id: nil, access_claims: nil, acr: nil, amr: [],
-                   actor_type: nil, actor_id: nil, active_sign_sequence_id: nil)
+                   actor_type: nil, actor_id: nil)
       @login_public_id = login_public_id
       @access_claims = immutable_claims(access_claims)
       @acr = acr
       @amr = Array(amr).freeze
       @actor_type = actor_type&.to_sym
       @actor_id = actor_id
-      @active_sign_sequence_id = active_sign_sequence_id
       freeze
     end
 
+    public
     def null?
       login_public_id.blank? && access_claims.blank?
     end
@@ -71,8 +70,7 @@ class Actor
         acr == other.acr &&
         amr == other.amr &&
         actor_type == other.actor_type &&
-        actor_id == other.actor_id &&
-        active_sign_sequence_id == other.active_sign_sequence_id
+        actor_id == other.actor_id
     end
 
     alias eql? ==
@@ -86,7 +84,6 @@ class Actor
         amr,
         actor_type,
         actor_id,
-        active_sign_sequence_id,
       ].hash
     end
 

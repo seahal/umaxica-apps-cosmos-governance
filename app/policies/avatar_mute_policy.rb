@@ -2,6 +2,7 @@
 # frozen_string_literal: true
 
 class AvatarMutePolicy < ApplicationPolicy
+  public
   def create?
     actor_avatar = user
     target_avatar = record&.muted_avatar

@@ -2,20 +2,38 @@
 
 # Checks the same JSON text values and row predicate used by a PostgreSQL expression index.
 # The database index remains authoritative for concurrent inserts.
-class JsonbTextUniquenessValidator < ActiveModel::EachValidator
+class JsonbTextUniquenessValidator < ActiveModel::Validator
   IDENTIFIER = /\A[a-zA-Z_][a-zA-Z0-9_]*\z/
   private_constant :IDENTIFIER
 
+  TRANSACTION_PUBLIC_ID_INDEX_COLUMN = "((context ->> transaction_public_id))"
+  HALT_GENERATION_INDEX_COLUMN = "((context ->> halt_generation))"
+
+  attr_reader :attributes
+
+  def self.kind
+    :uniqueness
+  end
+  public_class_method :kind
+
   public
+  def initialize(options)
+    @attributes = Array(options.fetch(:attributes)).freeze
+    super
+    check_validity!
+  end
 
   def check_validity!
     raise ArgumentError, "JSON text uniqueness requires distinct simple keys" unless valid_keys?
     raise ArgumentError, "JSON text uniqueness requires a predicate hash" unless valid_predicate?
     raise ArgumentError, "JSON text uniqueness requires scalar predicate values" unless scalar_predicate_values?
-    raise ArgumentError, "JSON text uniqueness requires simple column names" unless valid_identifiers?
+    raise ArgumentError, "JSON text uniqueness requires simple source identifiers" unless valid_identifiers?
+    raise ArgumentError, "JSON text uniqueness requires exact index expression metadata" unless valid_index_metadata?
   end
 
-  def validate_each(record, attribute, value)
+  def validate(record)
+    attribute = options.fetch(:source_attribute).to_sym
+    value = record.read_attribute_for_validation(attribute)
     return unless value.is_a?(Hash)
 
     predicate = options.fetch(:where)
@@ -65,6 +83,11 @@ class JsonbTextUniquenessValidator < ActiveModel::EachValidator
 
   def valid_identifiers?
     options.fetch(:where).keys.all? { |column| IDENTIFIER.match?(column.to_s) } &&
-      attributes.all? { |attribute| IDENTIFIER.match?(attribute.to_s) }
+      IDENTIFIER.match?(options.fetch(:source_attribute).to_s)
+  end
+
+  def valid_index_metadata?
+    attributes == [TRANSACTION_PUBLIC_ID_INDEX_COLUMN] &&
+      options.fetch(:scope) == HALT_GENERATION_INDEX_COLUMN
   end
 end

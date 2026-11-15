@@ -59,7 +59,7 @@ class AuthenticationTokenServiceExpiredTokenFacadeTest < ActiveSupport::TestCase
       "scope" => "openid domain:client",
     }
     forged = JWT.encode(
-      payload, OpenSSL::PKey::EC.generate("secp384r1"), "ES384",
+      payload, OpenSSL::PKey::RSA.generate(3072), "PS256",
       { typ: "at+jwt", kid: JitSecurityJwtKeyring.active_kid("auth") },
     )
 

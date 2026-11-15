@@ -18,11 +18,24 @@ class BaseRpEntrypointsTest < ActionDispatch::IntegrationTest
     end
   end
 
-  test "Base app and org do not expose Auth-dependent sign-in callbacks" do
-    [BASE_APP_HOST, BASE_ORG_HOST].each do |host|
-      assert_raises(ActionController::RoutingError) do
-        Rails.application.routes.recognize_path("https://#{host}/oidc/callback", method: :get)
-      end
+  test "Base App and Base Org expose their own RP sign-entry and callback routes" do
+    {
+      BASE_APP_HOST => "base/app",
+      BASE_ORG_HOST => "base/org",
+    }.each do |host, controller_prefix|
+      sign_entry = Rails.application.routes.recognize_path("https://#{host}/sign", method: :get)
+      sign_start = Rails.application.routes.recognize_path("https://#{host}/sign", method: :post)
+      interruption = Rails.application.routes.recognize_path("https://#{host}/sign/interruption", method: :get)
+      callback = Rails.application.routes.recognize_path("https://#{host}/oidc/callback", method: :get)
+
+      assert_equal "#{controller_prefix}/sign/entries", sign_entry.fetch(:controller)
+      assert_equal "show", sign_entry.fetch(:action)
+      assert_equal "#{controller_prefix}/sign/entries", sign_start.fetch(:controller)
+      assert_equal "create", sign_start.fetch(:action)
+      assert_equal "#{controller_prefix}/sign/interruptions", interruption.fetch(:controller)
+      assert_equal "show", interruption.fetch(:action)
+      assert_equal "#{controller_prefix}/oidc/callbacks", callback.fetch(:controller)
+      assert_equal "show", callback.fetch(:action)
     end
   end
 

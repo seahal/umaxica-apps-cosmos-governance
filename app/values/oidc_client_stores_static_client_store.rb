@@ -47,21 +47,6 @@ module OidcClientStoresStaticClientStore
     },
   }.freeze
 
-  RP_BACKCHANNEL_LOGOUT_PATH = "/oidc/closures"
-
-  # The frozen back-channel logout endpoint for an active first-party RP (R5-WU10, one.md 7.6).
-  # It is derived from the same registered host as the RP callback; no logout delivery target is
-  # ever taken from a grant, token or request.
-  def backchannel_logout_uri(client_id)
-    family_realm, spec =
-      FIRST_PARTY_RP_SPECS.find { |key, _|
-      RpDeploymentBindingValue.client_id(key) == client_id.to_s
-    }
-    raise KeyError, "no registered back-channel logout endpoint for #{client_id.inspect}" unless family_realm
-
-    build_redirect_uris(spec.fetch(:env_key), spec[:default_host], path: RP_BACKCHANNEL_LOGOUT_PATH).first
-  end
-
   def face_rp_client(env_key:, resource_type:, aud:, name:, jwt_namespace:, default_host: nil,
                      callback_path: OidcRpSurfaceMap::CANONICAL_RP_CALLBACK_PATH,
                      step_up_callback_path: nil,

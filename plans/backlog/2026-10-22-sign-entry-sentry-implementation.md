@@ -1,10 +1,16 @@
 # Sign Entry Sentry: Proposals and Implementation Plan
 
+**Superseded for Governance on 2026-11-13:** Access owns authentication ceremonies and Governance
+runs none; the proposed local Auth sign-in and sign-up entry routes are not to be implemented here.
+Retained as historical context. See
+[`evidence/2026-11-13-remove-unreachable-ceremony-code-Q7M2.md`](../../evidence/2026-11-13-remove-unreachable-ceremony-code-Q7M2.md).
+
 Recorded 2026-10-22. **Plan; not started.** The Owner-approved decisions are those in
 [adr/sign-entry-sentry.md](../../adr/sign-entry-sentry.md), which on 2026-10-22 accepted P1–P4 and
 P7 as proposed, refused draining for callbacks (P4.5), rejected the OP pre-check alternative of P6,
 and replaced the staged transition below with a one-change replacement (ADR items 17–23). Where this
-plan and the ADR differ, the ADR wins. P8, P9 and the user-facing details remain proposals. Facts and the adversarial review are in
+plan and the ADR differ, the ADR wins. P8, P9 and the user-facing details remain proposals. Facts
+and the adversarial review are in
 [the investigation](../../research/2026-10-22-sign-entry-sentry-investigation.md). No application
 code, route, flag, migration or test has been changed for Sentry.
 
@@ -12,12 +18,12 @@ code, route, flag, migration or test has been changed for Sentry.
 
 Each proposal names a recommendation and the alternative it was weighed against.
 
-- **P1. Where the Sentry GET lives — decided by the Owner on 2026-10-22** (ADR item 9): on the
-  Auth host of each surface, `GET /sign/in/sentry` → `/sign/in` and `GET /sign/up/sentry` →
-  `/sign/up`. Remaining proposal for the details: Base's `start_authorization_ceremony!` and Switch
-  redirect to `/sign/in/sentry?entry_ref=…` (or `/sign/up/sentry` for `prompt=create` and a Switch
-  to Sign Up) instead of the entry page; the Sentry answers `ALLOWED` with a 303 that passes only
-  `entry_ref` explicitly (`ri` and `lx` come from `PreferenceGlobal#default_url_options`, `pt` from
+- **P1. Where the Sentry GET lives — decided by the Owner on 2026-10-22** (ADR item 9): on the Auth
+  host of each surface, `GET /sign/in/sentry` → `/sign/in` and `GET /sign/up/sentry` → `/sign/up`.
+  Remaining proposal for the details: Base's `start_authorization_ceremony!` and Switch redirect to
+  `/sign/in/sentry?entry_ref=…` (or `/sign/up/sentry` for `prompt=create` and a Switch to Sign Up)
+  instead of the entry page; the Sentry answers `ALLOWED` with a 303 that passes only `entry_ref`
+  explicitly (`ri` and `lx` come from `PreferenceGlobal#default_url_options`, `pt` from
   `signed_pt_param`, per the ADR), and `BLOCKED` with 503, `Cache-Control: no-store`,
   `Referrer-Policy: no-referrer` and `Retry-After`. The local registration link on the Sign In page
   points to `/sign/up/sentry` only if it survives (see P1a). The Base-hosted alternative was not
@@ -25,9 +31,8 @@ Each proposal names a recommendation and the alternative it was weighed against.
 - **P2. Routes and classes.** Proposal, following the existing resourceful style in
   `config/routes/auth.rb`: `namespace :in { resource :sentry, only: :show }` and the same under
   `namespace :up`, giving `/sign/in/sentry`, `/sign/up/sentry` and helpers such as
-  `auth_app_sign_in_sentry_path`. Controllers:
-  `Auth::{App,Com,Org}::Sign::In::SentriesController` and
-  `Auth::{App,Com,Org}::Sign::Up::SentriesController`, each inheriting its surface's
+  `auth_app_sign_in_sentry_path`. Controllers: `Auth::{App,Com,Org}::Sign::In::SentriesController`
+  and `Auth::{App,Com,Org}::Sign::Up::SentriesController`, each inheriting its surface's
   `ApplicationController` and declaring its surface and flow as constants, as
   `SignUpSuspensionGuard` callers declare `sign_up_surface`. No constant may be named `Sentry`
   (shadowing `::Sentry`).
@@ -37,8 +42,8 @@ Each proposal names a recommendation and the alternative it was weighed against.
   resolver holds the explicit six-entry table keyed by `(surface, flow)` and raises `ArgumentError`
   for any other pair. It rescues only the flag-store error class (as `FqdnAvailabilityGate` does)
   and returns `BLOCKED`. Alternative: `SignEntrySentryPolicy` in `app/policies`, which would sit
-  among ActionPolicy classes without being one. The Owner's name `SignEntrySentry` stays the
-  concept name in prose.
+  among ActionPolicy classes without being one. The Owner's name `SignEntrySentry` stays the concept
+  name in prose.
 - **P4. Enforcement points.** Proposal (one shared, non-raising check through the resolver):
   1. Auth Sentry GET (entry, user-facing 503).
   2. Auth Admission redemption (`AuthCeremonyAdmission#create` and `ceremony_bindings`) for the
@@ -46,16 +51,16 @@ Each proposal names a recommendation and the alternative it was weighed against.
      excluded explicitly. `authentication` is checked against `sign_in_available_*`.
   3. Auth entry `show` for an already admitted ceremony (closes the direct GET without the hop).
   4. Every Sign In and Sign Up evidence or registration POST, including Email OTP, Passkey options
-     and verification, Secret, challenge, `sign/up/check/**`, `sign/up/guard/**`, social start,
-     ORG Entra session start and invitations. Implemented as one concern per flow that only calls
-     the resolver, not by extending `SignUpSuspensionGuard` or `AuthCeremonyAdmission`.
+     and verification, Secret, challenge, `sign/up/check/**`, `sign/up/guard/**`, social start, ORG
+     Entra session start and invitations. Implemented as one concern per flow that only calls the
+     resolver, not by extending `SignUpSuspensionGuard` or `AuthCeremonyAdmission`.
   5. Provider callbacks: the Sign Up flag before `handle_pending_social_sign_up_intent` and the
      social sign-up branch; the Sign In flag before recording login evidence. Whether a callback
      drains like the provider switch is decision D-CB below.
   6. Base root-login commit: a check in `AuthenticationBase#log_in` for `establishment: :root_login`
-     only, evaluated before the session commit and returning a refusal status (never success,
-     never a raise inside a caller's transaction). `:rp_session`, Refresh, Sign Out and Step-Up
-     are untouched. This is the backstop that also covers resume, session limit and selector.
+     only, evaluated before the session commit and returning a refusal status (never success, never
+     a raise inside a caller's transaction). `:rp_session`, Refresh, Sign Out and Step-Up are
+     untouched. This is the backstop that also covers resume, session limit and selector.
 - **P5. Sign Up → Sign In First handoff.** Proposal: do not check inside `with_cycle_lock`. The
   registration completes; the Base commit (P4.6) refuses the session when Sign In is blocked; the
   person sees a "sign in unavailable" result and the Identity stays.
@@ -73,20 +78,21 @@ Each proposal names a recommendation and the alternative it was weighed against.
 - **P1a. Redirect sites that change target (code, not state machines).** Base ceremony start:
   `Base::{App,Com,Org}::Oauth::AuthorizationsController#start_authorization_ceremony!` (3). Base
   Switch: `authorization_switch_url` in `Base::{App,Com}::Oauth::AuthorizationsController` (2; ORG
-  raises). These five move with the OP if the planned OP host separation and Switch relocation
-  land first; Sentry changes the target of the five wherever they live. The Auth local links
+  raises). These five move with the OP if the planned OP host separation and Switch relocation land
+  first; Sentry changes the target of the five wherever they live. The Auth local links
   (`registration_link` in `Auth::{App,Com,Org}::Sign::InsController`, the Sign In footer link in
   `Auth::Com::Sign::UpsController`) become sites only if a sign-up page can still be entered from a
-  sign-in admission; under an explicit effective-intent rule they cannot. Not changed: the return from Base
-  binding confirmation (`BaseCeremonyBindingConfirmation#auth_binding_entry_url`), which continues
-  a ceremony that already passed the Sentry and is covered by the redemption check (P4.2); and
-  `AuthCeremonyAdmission#auth_ceremony_clean_url`, the post-redemption redirect.
+  sign-in admission; under an explicit effective-intent rule they cannot. Not changed: the return
+  from Base binding confirmation (`BaseCeremonyBindingConfirmation#auth_binding_entry_url`), which
+  continues a ceremony that already passed the Sentry and is covered by the redemption check (P4.2);
+  and `AuthCeremonyAdmission#auth_ceremony_clean_url`, the post-redemption redirect.
 - **P9. Lifecycle diagrams.** Sentry state is not persisted and is not a flow lifecycle state, so no
   new axis is added to `docs/mermaid/idp-state-machine-transition-inventory.md`. The Sentry GET
-  forwards `entry_ref` without touching the binding, so the `issued → attached → confirmed →
-  redeemed` transitions in `idp-*-auth-admission-binding.mmd` are unchanged; a refusal leaves the
-  binding in its current state until expiry, which those diagrams already show as `retired`. If an in-flight
-  refusal is later recorded on a flow, that becomes a new decision with a diagram update.
+  forwards `entry_ref` without touching the binding, so the
+  `issued → attached → confirmed → redeemed` transitions in `idp-*-auth-admission-binding.mmd` are
+  unchanged; a refusal leaves the binding in its current state until expiry, which those diagrams
+  already show as `retired`. If an in-flight refusal is later recorded on a flow, that becomes a new
+  decision with a diagram update.
 
 ## Decisions the Owner needs to make
 
@@ -98,8 +104,8 @@ Each proposal names a recommendation and the alternative it was weighed against.
 
 ## Transition from `sign_up_suspended_*`
 
-Current readers: `SignUpSuspension` (`app/services/sign_up_suspension.rb`),
-`SignUpSuspensionGuard` and its eight call sites (see the investigation, section 1.1),
+Current readers: `SignUpSuspension` (`app/services/sign_up_suspension.rb`), `SignUpSuspensionGuard`
+and its eight call sites (see the investigation, section 1.1),
 `test/integration/sign_up_suspension_test.rb`, `test/services/sign_up_suspension_test.rb`, the
 registry invariant test, and the `errors.messages.sign_up_suspended` locale key.
 
@@ -144,12 +150,13 @@ Rollback:
 6. ORG Entra, Emergency (per D-ORG) and invitations.
 7. Transition step 3; later step 4.
 8. Current documentation: `docs/security/sign-in-sequence.md`, `docs/security/sign-up-sequence.md`,
-   `docs/security/authentication-capacity-admission.md` (control table), `docs/security/idp-flow-lifecycle.md`
-   (availability row), and `docs/checklists/authentication.md`.
+   `docs/security/authentication-capacity-admission.md` (control table),
+   `docs/security/idp-flow-lifecycle.md` (availability row), and
+   `docs/checklists/authentication.md`.
 
 Likely files touched: `app/values/feature_flags.rb`, new resolver/value/concern/controller files,
-`config/routes/auth.rb`, `app/controllers/concerns/auth_ceremony_admission.rb` (one call, no
-merge), `app/controllers/concerns/authentication_base.rb` (`log_in`), the three Base
+`config/routes/auth.rb`, `app/controllers/concerns/auth_ceremony_admission.rb` (one call, no merge),
+`app/controllers/concerns/authentication_base.rb` (`log_in`), the three Base
 `oauth/authorizations_controller.rb` redirect targets, the Auth Sign In and Sign Up continuation
 controllers, `app/controllers/auth/app/omniauth/omniauth_callbacks_controller.rb`, ORG social and
 Emergency controllers, `lib/tasks/feature_flags.rake`, locale bundles, and their tests.
@@ -169,9 +176,9 @@ Integration (public HTTP boundary):
 - Sentry GET `ALLOWED` → 303 to the fixed entry path with the forwarded reference; the entry page
   then renders through the existing Admission (Sentry GET → redirect → existing GET).
 - Sentry GET `BLOCKED` → 503, `no-store`, no `Location`, no flow or ceremony row created.
-- Direct `GET /sign/in` with an admitted ceremony, `POST /sign/in`, `POST /ceremony_bindings`,
-  and one representative continuation POST per method (Email OTP, Passkey verification, Secret,
-  APP social start, ORG Entra start) are refused while blocked.
+- Direct `GET /sign/in` with an admitted ceremony, `POST /sign/in`, `POST /ceremony_bindings`, and
+  one representative continuation POST per method (Email OTP, Passkey verification, Secret, APP
+  social start, ORG Entra start) are refused while blocked.
 - Social "login" callback for an unknown identity creates no `ClientSignUpFlow` while Sign Up is
   blocked; the existing-identity login follows D-CB.
 - Base root-login commit refused while Sign In is blocked: no token row, no cookie, no login audit;
@@ -187,8 +194,8 @@ Integration (public HTTP boundary):
 
 Keep `test/controllers/concerns/auth/session_issuance_boundary_surfaces_test.rb`,
 `test/controllers/concerns/auth/login_cooldown_surfaces_test.rb` and
-`test/integration/root_login_establishment_flow_test.rb` green. Do not enumerate every route ×
-flag combination; the resolver unit tests carry the state space and the integration tests carry one
+`test/integration/root_login_establishment_flow_test.rb` green. Do not enumerate every route × flag
+combination; the resolver unit tests carry the state space and the integration tests carry one
 representative per enforcement point. Flag setup and registration are environment construction and
 are recorded in `evidence/`, not tested (`project/no-environment-tests.mdc`).
 

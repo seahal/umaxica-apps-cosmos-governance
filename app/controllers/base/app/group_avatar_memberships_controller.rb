@@ -35,7 +35,7 @@ module Base
       def avatar_authority
         @avatar_authority ||= AvatarAuthorityClient.new(
           surface: "app",
-          access_token: BrowserCredentialCookie.read(cookies, OidcRpBrowserCredentialContract::ACCESS_COOKIE),
+          rp_session: browser_rp_access_state.rp_session,
           persona: Actor.selection.account_public_id,
           selection: Actor.selection,
         )

@@ -25,7 +25,7 @@ class JwtAnomalySubscriberCoverageTest < ActiveSupport::TestCase
         code: "AUTH_USER_MALFORMED_TOKEN",
         request_host: "id.app.localhost",
         kid: "kid-1",
-        alg: "ES384",
+        alg: "PS256",
         typ: "JWT",
         iss: "jit",
         jti: "jti-123",

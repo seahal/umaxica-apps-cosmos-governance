@@ -7,16 +7,17 @@ D-150, D-151, D-152, D-153, D-154, D-155, D-160, D-162 of the 2026-10 authentica
 implementation in its work unit WU-43. The current implementation covers the RP-owned signed state,
 path-only target, one-pending entry rule, callback interruption, and related Rails tests. Production
 key rotation, external Jump/Edge behavior, and deployment evidence remain separate operational work.
+Amended 2026-11-13: state uses Governance's repository-wide PS256 key set.
 
 ## Decision
 
-1. **`state` is an ES384 JWS** signed with the RP's existing `oidc_client:<namespace>` key (no new
-   key; sharing the key with client assertions is an accepted trade-off). Header `typ`
-   `umaxica-oidc-state+jwt`; `alg` exactly ES384 in the header and the verifier allow list; `kid`
-   resolved only in the RP's own key set. Claims at least `iss`, `aud` (state-specific), `jti`,
-   `iat`, `exp`, `v`, and `target_link_uri`; never `sid`, `code_verifier` or session secrets.
-   Verification uses the `jwt` gem's supported options (`verify_expiration`, `verify_not_before`,
-   `verify_iat: { leeway: 30 }`; see [JWT validation](jwt-validation-and-key-risk-decisions.md)).
+1. **`state` is a PS256 JWS** signed with Governance's shared repository key set; it has no
+   state-specific signing key. Header `typ` `umaxica-oidc-state+jwt`; `alg` exactly PS256 in the
+   header and verifier allow list; `kid` resolves in the repository key set. Claims at least `iss`,
+   `aud` (state-specific), `jti`, `iat`, `exp`, `v`, and `target_link_uri`; never `sid`,
+   `code_verifier` or session secrets. Verification uses the `jwt` gem's supported options
+   (`verify_expiration`, `verify_not_before`, `verify_iat: { leeway: 30 }`; see
+   [JWT validation](jwt-validation-and-key-risk-decisions.md)).
 2. **Lifetime:** `exp = iat + 30 minutes` on the Rails clock that mints it; no grace; leeway only
    for a future `iat`. The OP curfew is a separate deadline on the database clock; the RP deadline
    ending a few seconds earlier is intended (D-160).
@@ -42,11 +43,22 @@ key rotation, external Jump/Edge behavior, and deployment evidence remain separa
    generic page (customer-visible copy, ja "ログインできませんでした。再度ログインしてください。",
    en "Sign-in could not be completed. Please sign in again."), shows no reason, never redirects on
    its own, writes nothing and is `no-store`; the reason is a server-side reason code only.
-6. **Key rotation:** after rotating an RP key, the old public key stays verifiable for at least 30
-   minutes plus the clock-skew leeway.
+6. **Key rotation:** Governance rotates the shared repository key set. An old public key remains
+   verifiable for at least the longest first-party token lifetime (currently 400 days for
+   Preference) and the applicable leeway; state tokens alone do not shorten that shared window.
 
 ## Supersession
 
 - [Redirect target lanes](redirect-target-lanes-pt-nt-xt.md) and
   [signed return targets](signed-return-targets-only.md): the RP lane's `pt` is replaced by
   `target_link_uri`; Auth's `pt`, `nt` and `xt` lanes are unchanged.
+
+## Base first-party profile amendment (2026-11-14)
+
+For Base App (`base-app-ww`) and Base Org (`base-org-ww`) only, the owner-approved
+[`front-channel ID Token profile`](oidc-authorization-code-only-implicit-and-hybrid-non-adoption.md)
+does not use Authorization Code or PKCE. `POST /sign` still creates the signed, PS256, browser-bound
+state and stores its nonce and creation time in the Rails session; the pending entry contains no
+`code_verifier`. After the callback verifies state and response issuer, it verifies the
+front-channel ID Token with Visa JWKS and redirects to the same path-only return target. Other
+clients keep the code and PKCE contract above.

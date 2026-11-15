@@ -32,6 +32,8 @@ module Base
 
       AUTHENTICATION_MODE = :deny_all
 
+      prepend_before_action :enforce_fqdn_availability!
+
       layout "base/com/application"
 
       allow_browser versions: :modern

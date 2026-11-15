@@ -17,6 +17,8 @@ class OrgPreferenceDensityOption < OrgSettingRecord
 
   DEFAULTS = [NOTHING, STANDARD, COMPACT].freeze
 
+  self.record_timestamps = false
+
   has_many :org_preference_densities,
            class_name: "OrgPreferenceDensity",
            foreign_key: :option_id,
@@ -26,7 +28,9 @@ class OrgPreferenceDensityOption < OrgSettingRecord
   def self.ensure_defaults!
     insert_missing_fixed_ids!(DEFAULTS)
   end
+  public_class_method :ensure_defaults!
 
+  public
   def name
     case id
     when 1 then "standard"

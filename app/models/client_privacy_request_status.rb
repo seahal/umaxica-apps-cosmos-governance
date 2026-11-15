@@ -20,4 +20,6 @@ class ClientPrivacyRequestStatus < AppPrincipalRecord
     RECEIVED, VERIFICATION_REQUIRED, VERIFIED, PROCESSING, COMPLETED, PARTIALLY_DENIED,
     BLOCKED_BY_LEGAL_HOLD, CANCELLED, FAILED,
   ].freeze
+
+  self.record_timestamps = false
 end

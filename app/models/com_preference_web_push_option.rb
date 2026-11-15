@@ -9,6 +9,8 @@ class ComPreferenceWebPushOption < ComSettingRecord
   ENABLED = 1
   DEFAULTS = [DISABLED, ENABLED].freeze
 
+  self.record_timestamps = false
+
   has_many :com_preference_web_pushes,
            foreign_key: :option_id,
            inverse_of: :option,

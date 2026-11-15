@@ -65,10 +65,6 @@ module OidcClientAssertionJwt
     raise AccessOpDataUnavailableError
   end
 
-  def valid?(client_id:, assertion:, token_url:, now: Time.current)
-    verify(client_id:, assertion:, token_url:, now:).authenticated?
-  end
-
   def refresh_local_key_material!(client_id:)
     return false unless Rails.env.local?
     return false unless defined?(JitSecurityJwtLocalKeysetInstaller)

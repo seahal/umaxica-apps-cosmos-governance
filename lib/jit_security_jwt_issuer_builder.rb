@@ -32,64 +32,6 @@ module JitSecurityJwtIssuerBuilder
     )
   end
 
-  def build_surface_issuer(namespace:, active_kid:, private_key:, private_key_source:, public_keyset:,
-                           public_keyset_source:, revoked_kids:, issuer:, audiences:)
-    build_surface_issuer_record(
-      namespace: namespace,
-      id: "surface:#{namespace}",
-      active_kid: active_kid,
-      private_key: private_key,
-      private_key_source: private_key_source,
-      public_keyset: public_keyset,
-      public_keyset_source: public_keyset_source,
-      revoked_kids: revoked_kids,
-      issuer: issuer,
-      audiences: audiences,
-    )
-  end
-
-  def build_surface_issuer_record(namespace:, id:, active_kid:, private_key:, private_key_source:, public_keyset:,
-                                  public_keyset_source:, revoked_kids:, issuer:, audiences:)
-    active_private_key = decode_private_key(private_key, source: private_key_source)
-    current_public_jwk =
-      (active_kid && active_private_key) ? JitSecurityJwtJwk.export_public(active_private_key, kid: active_kid) : nil
-    public_jwks = parse_public_jwk_collection(public_keyset, source: public_keyset_source)
-    revoked_kids = revoked_kids.to_set
-
-    if active_kid && current_public_jwk && public_jwks[active_kid] &&
-        public_jwks[active_kid].except("state") != current_public_jwk
-      raise Error, "surface:#{namespace} active public JWK does not match active private key"
-    end
-
-    public_jwks[active_kid] = current_public_jwk.merge("state" => "active") if current_public_jwk
-
-    keys = public_jwks.each_with_object({}) do |(kid, jwk), acc|
-      state = key_state_for(
-        kid: kid, current_kid: active_kid, configured_state: jwk["state"],
-        revoked_kids: revoked_kids,
-      )
-      acc[kid] = KeyRecord.new(
-        kid: kid,
-        private_key: (kid == active_kid) ? active_private_key : nil,
-        public_key: JitSecurityJwtJwk.import_public_key(jwk),
-        public_jwk: jwk.except("state"),
-        state: state,
-      )
-    rescue JitSecurityJwtJwk::Error => e
-      raise Error, "#{public_keyset_source} #{e.message}"
-    end.freeze
-
-    JitSecurityJwtIssuerRecord.new(
-      id: id,
-      namespace: namespace,
-      issuer: issuer,
-      audiences: audiences.freeze,
-      current_kid: active_kid,
-      keys: keys,
-      revoked_kids: revoked_kids.freeze,
-    )
-  end
-
   def merge_keys(private_keys:, public_jwks:, current_kid:, revoked_kids:)
     revoked_kids = revoked_kids.to_set
     merged = {}

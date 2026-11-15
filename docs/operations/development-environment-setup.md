@@ -24,9 +24,10 @@ Obtain and place the items listed in
 
 ## 3. Cloudflare tunnel
 
-A development tunnel is used for Base and Tech host access and operator tools. Configure it following
-[cloudflare-private-origin.md](cloudflare-private-origin.md). Confirm the retained Base and Tech
-route hosts reach this deployment. OpenID Provider sign-in is unavailable in this repository.
+A development tunnel is used for Base and Tech host access and operator tools. Configure it
+following [cloudflare-private-origin.md](cloudflare-private-origin.md). Confirm the retained Base
+and Tech route hosts reach this deployment. Base App's RP entry depends on Access authorization and
+Jump trust being available; neither external condition is verified by this local setup guide.
 
 ## 4. Start the development container
 
@@ -45,9 +46,10 @@ To be written: when [local-aws-fakecloud.md](local-aws-fakecloud.md) is required
 
 ## 7. Identity sign-in status
 
-Auth and Visa URL configuration and their local routes have been removed. Base and Tech OIDC
-sign-in, callbacks, sign-out, Back-Channel Logout, and OIDC-driven step-up are unavailable. This
-repository does not call those authorities.
+Governance does not host Auth or Visa credential ceremonies. Base App and Base Org have separate RP
+entries, callbacks, local sign-outs and Back-Channel Logout receivers that use Visa and Jump. The
+Visa Org authorization endpoint currently answers 503, and Jump deployment trust remains an external
+condition. Tech RP routes and the OIDC-driven step-up callback remain absent.
 
 ## 8. Other external services
 

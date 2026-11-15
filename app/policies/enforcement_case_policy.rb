@@ -12,6 +12,7 @@
 # Self-action denial and approval separation are also CHECK constraints (D12); this policy is the
 # operator-facing gate, not the sole boundary.
 class EnforcementCasePolicy < ApplicationPolicy
+  public
   def index?
     realm_capability?(read: true)
   end

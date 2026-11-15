@@ -7,6 +7,13 @@
 
 Accepted; partially superseded (2026-09-13) (2026-06-11)
 
+> **Governance runtime status (2026-11-13):** This ADR describes the pre-Cosmos `sign/id` surface.
+> Access owns OP data and all authentication ceremony execution. Governance's uncalled local step-up
+> result issuer, OIDC ID-token issuer/codec, and UserInfo serializer were removed. Governance
+> retains its RP-local step-up state and assertion request path, plus identity and credential
+> records; it runs no authentication ceremony. The pre-split implementation descriptions below do
+> not define current Governance runtime behavior.
+
 > **Supersession (2026-06-12):** The target component model is now defined by
 > `adr/acme-sign-core-base-port-boundary.md`. Sign is a special RP, not a credential-gateway IdP
 > host, and Acme is the only IdP / Authorization Server. This ADR remains useful for identifying
@@ -75,7 +82,12 @@ as follow-up implementation, not performed by this ADR.
    (`IdentityStepUpCeremonyFreshnessCommitter`, via the acme completion path). `sign/id` must
    require an `acme/www`-issued grant and return only a signed result.
 
-## Decision — Keep on `sign/id` (explicit exception)
+> **Owner supersession (2026-11-13):** The pre-split exception below, which kept credential ceremony
+> execution on `sign/id`, no longer applies after the Cosmos split. Access owns every authentication
+> ceremony. Governance's active RP step-up state and WebAuthn assertion client do not make
+> Governance the ceremony owner.
+
+## Decision — Keep on `sign/id` (historical exception)
 
 Step-up credential ceremony execution (TOTP, passkey/WebAuthn) stays on `sign/id` at
 `id.example.com` and its URL must not change.

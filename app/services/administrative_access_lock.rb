@@ -9,10 +9,12 @@ class AdministrativeAccessLock < ApplicationService
   def self.lock!(account:, operator:, reason_code:, reason_note: nil, ticket_id: nil, metadata: {}, &)
     new(account:, operator:, reason_code:, reason_note:, ticket_id:, metadata:).lock!(&)
   end
+  public_class_method :lock!
 
   def self.unlock!(account:, operator:, reason_code:, reason_note: nil, ticket_id: nil, metadata: {}, &)
     new(account:, operator:, reason_code:, reason_note:, ticket_id:, metadata:).unlock!(&)
   end
+  public_class_method :unlock!
 
   def initialize(account:, operator:, reason_code:, reason_note: nil, ticket_id: nil, metadata: {})
     super()
@@ -24,6 +26,7 @@ class AdministrativeAccessLock < ApplicationService
     @metadata = metadata
   end
 
+  public
   def lock!
     validate_inputs!
     now = nil

@@ -22,17 +22,6 @@ export function noContentResponse(): Response {
   return new Response(null, { status: 204 });
 }
 
-/**
- * A response the code under test must handle without parsing it as JSON. `contentType` is optional
- * because a server behind a proxy can answer with none at all, and that path needs covering too.
- */
-export function textResponse(body: string, status: number, contentType = "text/html"): Response {
-  return new Response(body, {
-    status,
-    ...(contentType === "" ? {} : { headers: { "content-type": contentType } }),
-  });
-}
-
 function urlOf(target: Parameters<typeof fetch>[0]): string {
   if (typeof target === "string") {
     return target;

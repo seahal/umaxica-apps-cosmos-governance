@@ -17,12 +17,12 @@ class DefaultNoStoreBaseTest < ActionDispatch::IntegrationTest
     assert_includes response.headers.fetch("Cache-Control"), "no-store"
   end
 
-  test "Base app ApplicationController authentication refusal is no-store" do
+  test "Base app ApplicationController sign-entry redirect is no-store" do
     host!("base.app.localhost")
 
     get("/groups", params: { ri: "jp" })
 
-    assert_response :unauthorized
+    assert_response :see_other
     assert_equal "no-store", response.headers.fetch("Cache-Control")
   end
 
@@ -69,7 +69,11 @@ class DefaultNoStoreBaseTest < ActionDispatch::IntegrationTest
 
     get("/settings", params: { ri: "jp" })
 
-    assert_response :unauthorized
+    assert_response :see_other
+    target = URI.parse(response.location)
+
+    assert_includes [nil, request.host], target.host
+    assert_equal URI.parse(base_org_sign_show_path(ri: "jp")).path, target.path
     assert_equal "no-store", response.headers.fetch("Cache-Control")
   end
 

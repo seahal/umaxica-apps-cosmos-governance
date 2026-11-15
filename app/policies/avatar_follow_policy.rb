@@ -2,6 +2,7 @@
 # frozen_string_literal: true
 
 class AvatarFollowPolicy < ApplicationPolicy
+  public
   def create?
     actor_avatar = user
     target_avatar = record.try(:followed_avatar)

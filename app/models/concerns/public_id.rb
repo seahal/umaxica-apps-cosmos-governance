@@ -1,9 +1,8 @@
 # typed: false
 # frozen_string_literal: true
 
-# Inclusion-time callbacks are retained because every PublicId record must mint
-# and validate the identifier on create; an explicit per-model hook would
-# duplicate the same persistence contract on every including class.
+# PublicId supplies shared identifier generation and immutability methods. Each
+# concrete model declares its persistence contract where it includes the concern.
 module PublicId
   extend ActiveSupport::Concern
 
@@ -17,17 +16,6 @@ module PublicId
     def generate
       Nanoid.generate(size: GENERATION_SIZE, non_secure: false)
     end
-  end
-
-  # FIXME: Violates Umaxica/NoConcernInclusionHooks; move the declarations in this block into each class that includes this concern.
-  included do
-    before_create :generate_public_id
-    before_validation :generate_public_id, on: :create
-    before_validation :refresh_generated_public_id_after_collision, on: :create
-    around_create :retry_public_id_collision
-    validate :public_id_immutable_after_create, on: :update
-
-    validates :public_id, presence: true, length: { is: GENERATION_SIZE }, uniqueness: true
   end
 
   public

@@ -4,6 +4,7 @@
 class AccountPolicy < ApplicationPolicy
   ACCOUNT_RESOURCE_KINDS = AuthorityOwnerMigrationInventory::RESOURCE_KIND_BY_CATEGORY.fetch(:account).values.freeze
 
+  public
   def show?
     account_owned_by_current_principal?
   end

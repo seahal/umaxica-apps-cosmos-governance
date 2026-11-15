@@ -26,12 +26,11 @@ module Base
           public
 
           def create
-            allowed = TechCapabilityCheckQuery.call(
-              access_token: params[:access_token].to_s, client_assertion: params[:client_assertion].to_s,
-              endpoint_uri: request.original_url, host: request.host,
-            )
             response.headers["Cache-Control"] = "no-store"
-            render json: { allowed: }, status: :ok
+            decision = TechCapabilityCheckQuery.call(token: bearer_token)
+            return render(json: { error: "invalid_token" }, status: :unauthorized) unless decision.authenticated?
+
+            render json: { allowed: decision.allowed }, status: :ok
           end
 
           private
@@ -39,6 +38,13 @@ module Base
           def render_access_unavailable
             response.headers["Cache-Control"] = "no-store"
             render_problem(:service_unavailable)
+          end
+
+          def bearer_token
+            scheme, token = request.authorization.to_s.split(" ", 2)
+            return if scheme != "Bearer" || token.blank? || token.match?(/\s/)
+
+            token
           end
         end
       end

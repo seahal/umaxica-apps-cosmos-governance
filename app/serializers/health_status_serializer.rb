@@ -29,6 +29,7 @@ class HealthStatusSerializer
       timestamp: timestamp,
     ).call
   end
+  public_class_method :call
 
   def initialize(liveness:, namespace:, readiness:, startup:, timestamp:)
     @results = { startup: startup, liveness: liveness, readiness: readiness }
@@ -36,6 +37,7 @@ class HealthStatusSerializer
     @timestamp = timestamp
   end
 
+  public
   def call
     mapped = CHECK_ORDER.index_with { |name| vocab_for(@results.fetch(name)) }
     overall = aggregate(mapped.values)

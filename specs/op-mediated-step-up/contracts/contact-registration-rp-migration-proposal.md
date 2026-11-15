@@ -5,6 +5,12 @@ ORG Email and Telephone registration from a Base RP-local session. The current l
 until the owner APIs, receipts, recovery and verification gates below are complete. Bootstrap
 remains out of scope.
 
+> **Owner supersession (2026-11-13):** Governance no longer runs contact-proof or credential
+> registration ceremonies. The local registration paths discussed below were removed. Any future
+> integration must execute proof through Access and persist owner records through an accepted
+> Governance contract; the APIs are not implemented by this work. This proposal is historical and
+> does not authorize restoring a local OTP route.
+
 ## Observed problem
 
 Base has a verified local RP session and access event, not a `ClientToken` or `OperatorToken`. The

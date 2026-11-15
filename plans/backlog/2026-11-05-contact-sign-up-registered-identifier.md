@@ -2,9 +2,9 @@
 
 Date: 2026-11-05
 
-Status: Backlog, to be handled in the current session (owner, 2026-11-05). Owner decisions recorded
-below. Outside the OP-mediated step-up contract, except where the post-sign-in registration overlaps
-its contact-registration redesign. No code changed by this note.
+Status: Superseded for Governance implementation by the owner decision dated 2026-11-13. Access owns
+contact-verification ceremony execution. The observations and privacy requirements below are
+preserved as historical transfer context; this backlog no longer authorizes local ceremony code.
 
 ## Observed (development, 2026-11-05)
 

@@ -6,6 +6,11 @@ only. Method: `rg` over `app/` in the working tree at HEAD
 `efdcd80d31c1ea3da77d49dce6edd6dbefa5c5b8` (extensive uncommitted work present). Dispositions are
 proposals.
 
+> **Owner supersession (2026-11-13):** Access owns authentication ceremony execution; Governance
+> runs none. The local Auth/OP ceremony callers inventoried below were removed when found
+> unreachable. This 2026-11-03 inventory is historical source analysis, not a current Governance
+> call graph. RP-local state and server-to-server revocation paths are outside that removal.
+
 ## 1. Summary
 
 1. Evidence store today: the Base root token. `ClientToken` and `OperatorToken` carry the

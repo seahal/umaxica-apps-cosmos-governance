@@ -6,7 +6,8 @@ scripts; this document does not add or replace those checks.
 
 Current acceptance requires host-constrained routing, cross-surface isolation, authorization before
 protected writes, explicit failure when RP login dependencies are unavailable, and correct public
-Base com behavior. Auth/Visa sign-in and OIDC callback behavior is retired and has no local route or
-controller contract.
+Base com behavior. Base App's neutral RP entry, callback, sign-out and Back-Channel Logout contracts
+are covered through their public routes. Governance has no local Visa credential ceremony; Base Org
+and Tech RP protocol routes remain absent.
 
 For test conventions and data setup, follow the loaded repository rules and `test/test_helper.rb`.

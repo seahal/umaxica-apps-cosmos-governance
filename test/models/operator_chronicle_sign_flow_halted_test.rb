@@ -50,14 +50,19 @@ class OperatorChronicleSignFlowHaltedTest < ActiveSupport::TestCase
     end
   end
 
-  test "correlation key presence follows PostgreSQL JSON object and array semantics" do
+  test "halt identities that extract to SQL NULL are rejected by the model and database" do
     [
-      { transaction_public_id: nil, halt_generation: nil },
+      { transaction_public_id: nil, halt_generation: "100" },
+      { transaction_public_id: "txn-a", halt_generation: nil },
       ["transaction_public_id", "halt_generation"],
     ].each do |context|
-      record = OperatorChronicle.create!(base_attributes.merge(context: context))
+      record = OperatorChronicle.new(base_attributes.merge(context: context))
 
-      assert_predicate record, :persisted?
+      assert_not record.valid?
+      assert record.errors.of_kind?(:context, :invalid)
+      assert_raises(ActiveRecord::StatementInvalid) do
+        OperatorChronicle.transaction(requires_new: true) { record.save!(validate: false) }
+      end
     end
   end
 

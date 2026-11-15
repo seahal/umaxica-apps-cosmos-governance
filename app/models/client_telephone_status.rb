@@ -23,9 +23,12 @@ class ClientTelephoneStatus < AppPrincipalRecord
   DEFAULTS = [NOTHING, VERIFIED, UNVERIFIED, SUSPENDED, DELETED, LEGACY_NOTHING,
               UNVERIFIED_WITH_SIGN_UP, VERIFIED_WITH_SIGN_UP,].freeze
 
+  self.record_timestamps = false
+
   has_many :client_telephones, inverse_of: :user_telephone_status, dependent: :restrict_with_error
 
   def self.ensure_defaults!
     insert_missing_fixed_ids!(DEFAULTS)
   end
+  public_class_method :ensure_defaults!
 end

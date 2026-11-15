@@ -34,6 +34,10 @@ class SurfaceRootLandingTest < ActionDispatch::IntegrationTest
 
     assert_response :success
     assert_equal "base/app/roots/index", inertia_component
+    assert_equal "Base App", inertia_props.fetch("heading")
+    # The landing offers no links, so it carries no text that points at them.
+    assert_not inertia_props.key?("description")
+    assert_not inertia_props.key?("links")
   end
 
   test "base com root with a region renders the control-plane home" do

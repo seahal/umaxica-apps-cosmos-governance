@@ -22,11 +22,11 @@ class AvatarAuthorityClientOperationsTest < ActiveSupport::TestCase
         response
       end
 
-    OidcClientAssertionJwt.stub(:issue, "test-client-assertion") do
+    BaseApiAuthorityTokenIssuer.stub(:issue, "test-governance-token") do
       OutboundHttp::Connection.stub(:build, connection) do
         connection.stub(:get, request) do
           client = AvatarAuthorityClient.new(
-            surface: "app", access_token: "test-access-token", persona: "persona-public-id", selection:,
+            surface: "app", rp_session: RpBaseAppSession.new, persona: "persona-public-id", selection:,
           )
 
           assert_predicate client.avatars, :ok?
@@ -53,8 +53,8 @@ class AvatarAuthorityClientOperationsTest < ActiveSupport::TestCase
     assert_equal expected_selection, collection_params
     assert_equal expected_selection, member_params
     [collection_headers, member_headers].each do |headers|
-      assert_equal "Bearer test-access-token", headers.fetch("Authorization")
-      assert_equal "test-client-assertion", headers.fetch("X-Client-Assertion")
+      assert_equal "Bearer test-governance-token", headers.fetch("Authorization")
+      assert_not headers.key?("X-Client-Assertion")
       assert_equal "application/json", headers.fetch("Accept")
     end
   end
@@ -74,11 +74,11 @@ class AvatarAuthorityClientOperationsTest < ActiveSupport::TestCase
         responses.shift
       end
 
-    OidcClientAssertionJwt.stub(:issue, "test-client-assertion") do
+    BaseApiAuthorityTokenIssuer.stub(:issue, "test-governance-token") do
       OutboundHttp::Connection.stub(:build, connection) do
         connection.stub(:run_request, request) do
           client = AvatarAuthorityClient.new(
-            surface: "app", access_token: "test-access-token", persona: "persona-public-id",
+            surface: "app", rp_session: RpBaseAppSession.new, persona: "persona-public-id",
           )
 
           assert_equal :ok, client.create_avatar(attributes).status
@@ -107,8 +107,8 @@ class AvatarAuthorityClientOperationsTest < ActiveSupport::TestCase
     assert_nil update_uri.fragment
     assert_equal expected_avatar_write, update_body
     [create_headers, update_headers].each do |headers|
-      assert_equal "Bearer test-access-token", headers.fetch("Authorization")
-      assert_equal "test-client-assertion", headers.fetch("X-Client-Assertion")
+      assert_equal "Bearer test-governance-token", headers.fetch("Authorization")
+      assert_not headers.key?("X-Client-Assertion")
       assert_equal "application/x-www-form-urlencoded", headers.fetch("Content-Type")
     end
   end
@@ -127,11 +127,11 @@ class AvatarAuthorityClientOperationsTest < ActiveSupport::TestCase
         responses.shift
       end
 
-    OidcClientAssertionJwt.stub(:issue, "test-client-assertion") do
+    BaseApiAuthorityTokenIssuer.stub(:issue, "test-governance-token") do
       OutboundHttp::Connection.stub(:build, connection) do
         connection.stub(:run_request, request) do
           client = AvatarAuthorityClient.new(
-            surface: "org", access_token: "test-access-token", persona: "operator-public-id",
+            surface: "org", rp_session: RpBaseOrgSession.new, persona: "operator-public-id",
           )
 
           assert_equal :ok, client.add_edge("follows", target).status
@@ -155,8 +155,8 @@ class AvatarAuthorityClientOperationsTest < ActiveSupport::TestCase
     assert_equal "/api/v0/avatar/org/avatars/#{ERB::Util.url_encode(target)}/blocks", remove_uri.path
     assert_equal({ "persona" => "operator-public-id" }, remove_body)
     [add_headers, remove_headers].each do |headers|
-      assert_equal "Bearer test-access-token", headers.fetch("Authorization")
-      assert_equal "test-client-assertion", headers.fetch("X-Client-Assertion")
+      assert_equal "Bearer test-governance-token", headers.fetch("Authorization")
+      assert_not headers.key?("X-Client-Assertion")
     end
   end
 
@@ -175,16 +175,16 @@ class AvatarAuthorityClientOperationsTest < ActiveSupport::TestCase
             "persona" => "operator-public-id", }, Rack::Utils.parse_nested_query(body),
         )
         assert_equal idempotency_key, headers.fetch("Idempotency-Key")
-        assert_equal "Bearer test-access-token", headers.fetch("Authorization")
-        assert_equal "test-client-assertion", headers.fetch("X-Client-Assertion")
+        assert_equal "Bearer test-governance-token", headers.fetch("Authorization")
+        assert_not headers.key?("X-Client-Assertion")
         response
       end
 
-    OidcClientAssertionJwt.stub(:issue, "test-client-assertion") do
+    BaseApiAuthorityTokenIssuer.stub(:issue, "test-governance-token") do
       OutboundHttp::Connection.stub(:build, connection) do
         connection.stub(:run_request, request) do
           result = AvatarAuthorityClient.new(
-            surface: "org", access_token: "test-access-token", persona: "operator-public-id",
+            surface: "org", rp_session: RpBaseOrgSession.new, persona: "operator-public-id",
           ).request_transfer(attributes, idempotency_key:)
 
           assert_equal :ok, result.status
@@ -218,12 +218,12 @@ class AvatarAuthorityClientOperationsTest < ActiveSupport::TestCase
         responses.shift
       end
 
-    OidcClientAssertionJwt.stub(:issue, "test-client-assertion") do
+    BaseApiAuthorityTokenIssuer.stub(:issue, "test-governance-token") do
       OutboundHttp::Connection.stub(:build, connection) do
         connection.stub(:get, read_request) do
           connection.stub(:run_request, update_request) do
             client = AvatarAuthorityClient.new(
-              surface: "org", access_token: "test-access-token", persona: "operator-public-id", selection:,
+              surface: "org", rp_session: RpBaseOrgSession.new, persona: "operator-public-id", selection:,
             )
 
             assert_equal :ok, client.switcher_context.status
@@ -251,8 +251,8 @@ class AvatarAuthorityClientOperationsTest < ActiveSupport::TestCase
         "persona" => "operator-public-id", }, update_body,
     )
     [read_headers, update_headers].each do |headers|
-      assert_equal "Bearer test-access-token", headers.fetch("Authorization")
-      assert_equal "test-client-assertion", headers.fetch("X-Client-Assertion")
+      assert_equal "Bearer test-governance-token", headers.fetch("Authorization")
+      assert_not headers.key?("X-Client-Assertion")
     end
   end
 
@@ -275,12 +275,12 @@ class AvatarAuthorityClientOperationsTest < ActiveSupport::TestCase
         responses.shift
       end
 
-    OidcClientAssertionJwt.stub(:issue, "test-client-assertion") do
+    BaseApiAuthorityTokenIssuer.stub(:issue, "test-governance-token") do
       OutboundHttp::Connection.stub(:build, connection) do
         connection.stub(:get, read_request) do
           connection.stub(:run_request, update_request) do
             client = AvatarAuthorityClient.new(
-              surface: "org", access_token: "test-access-token", persona: "operator-public-id",
+              surface: "org", rp_session: RpBaseOrgSession.new, persona: "operator-public-id",
             )
 
             assert_equal :ok, client.selected_avatar.status
@@ -303,8 +303,8 @@ class AvatarAuthorityClientOperationsTest < ActiveSupport::TestCase
         "persona" => "operator-public-id", }, update_body,
     )
     [read_headers, update_headers].each do |headers|
-      assert_equal "Bearer test-access-token", headers.fetch("Authorization")
-      assert_equal "test-client-assertion", headers.fetch("X-Client-Assertion")
+      assert_equal "Bearer test-governance-token", headers.fetch("Authorization")
+      assert_not headers.key?("X-Client-Assertion")
     end
   end
 end

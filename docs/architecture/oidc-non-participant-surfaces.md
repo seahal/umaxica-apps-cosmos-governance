@@ -1,9 +1,11 @@
 # OIDC Route Status
 
-The local router contains no authorization, callback, discovery, or logout endpoints for an OpenID
-Provider flow. Auth and Visa URL configuration and local routes have been removed. Base and Tech
-also have no RP sign-in, OIDC callback, RP-initiated sign-out, Back-Channel Logout receiver, or
-OIDC-driven step-up callback routes because those flows require the removed provider endpoints.
+The local router contains no OpenID Provider authorization, discovery, token, revocation, or logout
+endpoints. Governance does not serve Auth or Visa credential ceremonies. Base App and Base Org are
+independent RPs with neutral entry, callback, local sign-out, and Back-Channel Logout routes;
+authorization and logout handoffs use Jump. Base com and Tech have no RP routes. The Visa Org
+authorization endpoint is currently unavailable upstream. OIDC-driven step-up callback routes remain
+absent.
 
 Base app and org retain `/.well-known/jwks.json` endpoints backed by the local JIT security key set.
 Those endpoints do not publish OIDC discovery metadata or enable sign-in. Base com remains an
@@ -11,6 +13,6 @@ anonymous public surface. Tech org remains an operator surface. Each operator to
 host constraint and Basic Auth boundary.
 
 The retired product route and controller trees are absent and have no redirect, alias, or
-compatibility routes. The removed Base and Tech RP routes have no compatibility paths either.
+compatibility routes. The Base App and Base Org RP route sets have no alternate compatibility paths.
 Their remaining models and databases are listed in the surface hard-reset evidence for a later
 cleanup step.

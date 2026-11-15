@@ -55,7 +55,7 @@ class AnonymousPreferenceRealmTokenShapeTest < ActiveSupport::TestCase
     assert_nil PreferenceToken.decode(org_token, host: "app.localhost", jwt_issuer_id: "preference_app")
   end
 
-  test "anonymous preference signing keys are distinct for app org and com" do
+  test "anonymous preference realms use the repository signing keyset" do
     app_key =
       JitSecurityJwtRegistry.issuer("preference_app").keys.values.map do |key|
         key.public_key.public_to_der
@@ -69,8 +69,7 @@ class AnonymousPreferenceRealmTokenShapeTest < ActiveSupport::TestCase
         key.public_key.public_to_der
       end
 
-    assert_empty app_key & com_key
-    assert_empty app_key & org_key
-    assert_empty com_key & org_key
+    assert_equal app_key, com_key
+    assert_equal app_key, org_key
   end
 end

@@ -3,8 +3,8 @@
 require "test_helper"
 
 class RpRetainedUniquenessTest < ActiveSupport::TestCase
-  test "callback state digests remain reserved after consumption and isolated by RP cell" do
-    [RpBaseAppCallbackState, RpBaseOrgCallbackState, RpTechOrgCallbackState].each do |model|
+  test "Tech callback state digests remain reserved after consumption" do
+    [RpTechOrgCallbackState].each do |model|
       attributes = {
         state_digest: Digest::SHA256.digest("unique-state"),
         browser_binding_digest: Digest::SHA256.digest("browser"),

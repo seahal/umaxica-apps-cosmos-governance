@@ -4,7 +4,7 @@
 class RpStepUpStartIssuer
   Result = Data.define(:authorization_url, :state_ref, :return_target)
 
-  STEP_UP_ACR = OidcAuthorizeRequestResolver::STEP_UP_ACR
+  STEP_UP_ACR = StepUpEvidenceResolver::STEP_UP_ACR
   PENDING_TTL = 15.minutes
 
   class Refused < StandardError
@@ -46,7 +46,7 @@ class RpStepUpStartIssuer
       record_class.transaction do
         session, binding, identity, principal, now = lock_current_binding!
         validate_current_binding!(session, binding, identity, principal, now)
-        state, raw_state, raw_nonce = create_pending_state!(session, now)
+        state, raw_state, raw_nonce = create_pending_state!(session, identity, now)
         write_requested_audit!(state, identity.subject, now)
         result = Result.new(
           authorization_url: authorization_url(
@@ -129,18 +129,17 @@ class RpStepUpStartIssuer
     identity && principal && binding.identity_binding_id == identity.id &&
       identity.principal_id == access_state.resource.id && identity.realm == entry.cell.realm &&
       identity.client_id == entry.cell.client_id &&
-      identity.issuer == OidcIssuer.for_resource_type(entry.resource_type) &&
+      identity.issuer == access_state.payload["iss"] &&
       identity.subject == OidcSubject.for(actor, resource_type: entry.resource_type) && !principal.deactivated?
   end
 
   def current_actor_claims?(binding, identity)
     payload = access_state.payload
-    issuer = OidcIssuer.for_resource_type(entry.resource_type)
-    payload["iss"] == issuer && payload["sid"] == binding.sid && payload["sub"] == identity.subject &&
+    payload["iss"] == identity.issuer && payload["sid"] == binding.sid && payload["sub"] == identity.subject &&
       payload["client_id"] == entry.cell.client_id && payload["aud"] == [entry.cell.client_id]
   end
 
-  def create_pending_state!(session, now)
+  def create_pending_state!(session, identity, now)
     raw_state = SecureRandom.urlsafe_base64(32)
     raw_nonce = SecureRandom.urlsafe_base64(32)
     verifier = SecureRandom.urlsafe_base64(32)
@@ -152,7 +151,7 @@ class RpStepUpStartIssuer
       nonce_digest: Digest::SHA256.hexdigest(raw_nonce),
       pkce_challenge: OidcPkce.challenge_for(verifier),
       pkce_verifier_ciphertext: StepUpPkceVerifierCipherAdapter.encrypt(verifier:),
-      issuer: OidcIssuer.for_resource_type(entry.resource_type),
+      issuer: identity.issuer,
       realm: entry.cell.realm.upcase,
       client_id: entry.cell.client_id,
       return_target:,

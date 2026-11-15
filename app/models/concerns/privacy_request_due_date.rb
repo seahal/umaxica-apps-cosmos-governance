@@ -12,4 +12,5 @@ module PrivacyRequestDueDate
   def self.due_at(jurisdiction:, received_at:)
     received_at + DURATIONS.fetch(jurisdiction.to_s) { DURATIONS.fetch("unknown") }
   end
+  public_class_method :due_at
 end

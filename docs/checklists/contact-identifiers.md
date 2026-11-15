@@ -41,7 +41,8 @@ deletion, secret rotation or production authority.
   including when a same-named ENV entry is present. Missing or blank credentials fail explicitly;
   ENV is neither a fallback nor an override for these four keys. History-key reuse checks compare
   against the same authoritative credential source. Basis: owner decision dated 2026-11-10 in
-  `docs/backlog/2026-11-10-secrets-from-credentials-only.md`; this does not change other key families.
+  `docs/backlog/2026-11-10-secrets-from-credentials-only.md`; this does not change other key
+  families.
 - Exercise an authorized isolated com-Telephone maintenance case: app/org and Email are unaffected;
   ordinary roles cannot use maintenance to alter finalized owner/PII/binding facts. No real secret
   changes are authorized by this criterion.
@@ -68,91 +69,20 @@ deletion, secret rotation or production authority.
 
 ## CONTACT-4 — Ceremony ownership, binding and single use
 
-- Basis: E05/E06, C08; approved proof/receipt extension in the realm ADR. Given a live
-  Email/Telephone ceremony for a particular transaction/generation, purpose/operation, actor,
-  original session/browser, candidate/destination and finite expiry, verify its random six-digit
-  code: exactly one concurrent fresh verification consumes it. DB reads alone cannot reconstruct it;
-  DB stores independently keyed verifier, not raw code or identifier HOTP secret+counter.
-- Wrong flow/purpose (including sign-in versus withdrawal/recovery/sign-up), actor, session,
-  operation, candidate/generation, expired/cancelled/consumed challenge is refused. Check
-  before/at/after deadlines, parallel attempts and terminal direct-SQL tampering. Ordinary parent
-  completion remains permitted.
-- Existing bounded receipt can reconcile only the original authorized pending operation; it is not
-  fresh success, a new failure reset, renewed freshness or a sliding deadline. Stale phase admission
-  cannot be bypassed with a receipt. Independent Step-Up Email stays session-bound and separate.
-- Check six concrete ceremony models, independent issuer/verifier/finalizer series and their actual
-  public tests; inspect realm ADR paths and `test/operations/` for current consumers. The current
-  public route collection covers Email/Telephone sign-up, Email sign-in, App/Com/Org sign-in and
-  passkey entry, Org Entra guards, App/Org social sessions, sign-in isolation, sign-up completion,
-  verification, delayed transport and withdrawal reentry; its current result is recorded in
-  [`H2N6`](../../evidence/2026-10-12-p3d-public-route-matrix-H2N6.md). The full purpose/realm
-  matrix, provider applicability map and real concurrency remain separate checks where absent;
-  source alone cannot certify single use. The current ceremony model/operation/integration
-  collection passed `418 runs, 6843 assertions, 0 failures, 0 errors, 0 skips`; see
-  [`B7Q5`](../../evidence/2026-10-12-p3d-ceremony-matrix-B7Q5.md). This narrows the executable gap
-  but does not close every provider/credential, realm/purpose concurrency or cross-database
-  transport cell. The selected provider, MFA, checkpoint, session-limit, OIDC and Entra public
-  boundary collection passed `210 runs, 1831 assertions, 0 failures, 0 errors, 0 skips`; see
-  [`Y5R8`](../../evidence/2026-10-12-p3d-provider-mfa-matrix-Y5R8.md). Applicability and remaining
-  source/transport cells must still be mapped explicitly; live external providers are outside this
-  local verification. The selected independent-connection ceremony,
-  authentication-session/revocation, TOTP-window and Telephone issuer/verification concurrency
-  collection passed `118 runs, 1653 assertions, 0 failures, 0 errors, 0 skips`; see
-  [`P6R2`](../../evidence/2026-10-12-p3d-otp-concurrency-matrix-P6R2.md). This narrows the
-  concurrency gap for the exercised cells but does not close every purpose/realm/provider
-  applicability partition or the remaining source/fixture/constraint and cross-database inventory.
+> **Superseded for Governance runtime (2026-11-13, owner):** The Governance-local Email/Telephone
+> OTP ceremony execution, result consumption and queued proof delivery described by this criterion
+> are retired. Access owns authentication ceremony execution. This is not evidence that an Access
+> replacement API is implemented or verified. Contact identity, encryption, failure-accounting,
+> audit and retention records remain; this code change did not alter schema or persisted data.
 
 ## CONTACT-5 — Bound transport and legacy retirement
 
-- Basis: E05/E06/E17/E18. Given a queued synthetic code, expire/cancel/supersede its original
-  ceremony before transport or during rendering. The actual worker/mailer refuses delivery after
-  fresh binding/ deadline checks; a valid original message still delivers through existing
-  Noticed/interceptor semantics.
-- Raw code is absent from durable plaintext job args/logs; existing encrypted envelopes retain exact
-  purpose/generation bindings. Email and Telephone migrate separately with no old HOTP/envelope
-  fallback. The runtime `store_otp`/`get_otp`/`clear_otp`/expiry helpers and withdrawal writes to
-  identifier-owned proof fields are removed; the remaining physical source columns are transitional
-  schema data only and may be dropped only after a complete reader/fixture/constraint inventory. At
-  the completed retirement boundary, all six identifier tables lack `otp_private_key`, `otp_counter`
-  and `otp_expires_at`; APP/COM source tables also lack `sign_up_otp_context` and
-  `credential_registration_otp_context`. Ceremony proof fields remain with their concrete owners.
-  Source-proof-only CHECKs, triggers and functions no longer reference the retired columns; current
-  ceremony integrity protections remain. Retirement refuses non-NULL legacy contexts rather than
-  silently destroying proof facts. Inspect PostgreSQL catalogs as well as public model attributes:
-  `ignored_columns` alone does not establish physical removal. Exercise the six-model public
-  contract in `test/models/otp_failure_retention_test.rb`, then supported issuer/consumer
-  regressions. The Email and Telephone public delivery adapters reject retired counter payloads
-  before invoking Noticed or SMS transport; see `test/adapters/otp_email_notifier_adapter_test.rb`
-  and `test/adapters/otp_telephone_adapter_test.rb`. Removing source proof fields/methods leaves
-  every supported issuer/resend/verifier/finalizer usable. A Source commit then Ticket failure does
-  not masquerade as distributed rollback; original receipt/ audit provenance governs retry and
-  cannot authorize another operation.
-- Check current concrete notifier/mailer/worker and caller inventory, synthetic local adapter and
-  in-memory export checks (MAIL-2/3), and public stale-delivery/fault tests. The current Email
-  Source/Ticket and Step-Up retry fault result is recorded in
-  [`H5W2`](../../evidence/2026-10-12-p3d-source-ticket-fault-H5W2.md). The current Telephone signup
-  Source/Ticket fault and same-browser retry collection passed
-  `8 runs, 432 assertions, 0 failures, 0 errors, 0 skips`; see
-  [`W6Q2`](../../evidence/2026-10-12-p3d-telephone-source-ticket-retry-W6Q2.md). Complete retirement
-  still requires the remaining source/fixture/constraint inventory and any uncovered applicable
-  cross-database transport path; documented route evidence is not itself a distributed rollback
-  guarantee. The broader current ceremony/delivery collection passed
-  `418 runs, 6843 assertions, 0 failures, 0 errors, 0 skips`; see
-  [`B7Q5`](../../evidence/2026-10-12-p3d-ceremony-matrix-B7Q5.md). It narrows, but does not close,
-  the remaining consumer inventory. The selected provider/MFA/checkpoint/session-limit boundary
-  collection also passed `210 runs, 1831 assertions, 0 failures, 0 errors, 0 skips`; see
-  [`Y5R8`](../../evidence/2026-10-12-p3d-provider-mfa-matrix-Y5R8.md). This does not replace the
-  source/fixture/constraint retirement inventory or external transport verification. The selected
-  independent-connection ceremony and transport-consequence collection also passed
-  `118 runs, 1653 assertions, 0 failures, 0 errors, 0 skips`; see
-  [`P6R2`](../../evidence/2026-10-12-p3d-otp-concurrency-matrix-P6R2.md). It does not replace the
-  cross-database fault campaign. The current repository-wide source/config/test/migration reference
-  inventory classified 122 matching paths as ceremony-owned fields, deliberate
-  rejection/forbidden-key coverage, historical migrations or contract traceability; the current
-  disposable catalog has no retired columns or matching live constraint/trigger/function. See
-  [`R7M4`](../../evidence/2026-10-12-p3d-proof-reference-inventory-R7M4.md). This classification
-  narrows the retirement inventory but does not replace applicable transport verification or prove
-  that historical migration definitions may be removed.
+> **Superseded for Governance runtime (2026-11-13, owner):** Governance-local OTP transports and
+> ceremony-bound payload readers are retired where they had no application caller; no local legacy
+> fallback remains. Access owns ceremony execution, but its replacement delivery contract is not
+> established by this checklist. Physical database columns and historical records are unchanged by
+> this work and require a separate ownership/schema review before cleanup. No delivery or
+> external-provider behavior is claimed here.
 
 ## CONTACT-6 — Live uniqueness without dead reservations
 

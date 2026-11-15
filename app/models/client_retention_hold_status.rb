@@ -11,4 +11,6 @@ class ClientRetentionHoldStatus < AppPrincipalRecord
   RELEASED = 20
   EXPIRED = 30
   DEFAULTS = [ACTIVE, RELEASED, EXPIRED].freeze
+
+  self.record_timestamps = false
 end

@@ -13,9 +13,17 @@ the owner-approved `implementation-instruction.md` (Codex implements).
 
 > **Route-ownership clarification (2026-11-10):** This accepted spec remains scoped to Base app/org
 > ordinary step-up. Auth and Visa are external authority dependencies; this repository's local
-> Auth/Visa routes/controllers have been removed. Base app/org callers remain subject to the accepted
-> contract; any Tech caller follows its own accepted contract. This spec does not restore local
-> Auth/Visa routes or alter external OIDC contracts.
+> Auth/Visa routes/controllers have been removed. Base app/org callers remain subject to the
+> accepted contract; any Tech caller follows its own accepted contract. This spec does not restore
+> local Auth/Visa routes or alter external OIDC contracts.
+
+> **Owner supersession (2026-11-13):** Access owns all authentication ceremonies, including the
+> step-up credential ceremony. Governance retains the RP-local state, policy checks and OIDC
+> handoff. Requirements and acceptance rows that depend on a local Auth ceremony, local verifier, or
+> local result consumer are historical for this repository; this spec does not authorize their
+> restoration. Inbound OP authorization-request validation is Access-owned; Governance retains only
+> the RP-side authorization URL construction. The Access query and revocation APIs remain an
+> external dependency and are not implemented by this change.
 
 ## Authority and scope
 

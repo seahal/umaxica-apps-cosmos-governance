@@ -5,6 +5,19 @@ require "test_helper"
 class WithdrawalCeremonyReentryTest < ActionDispatch::IntegrationTest
   self.fixture_table_names = []
 
+  test "GET reentry page uses the generic description without creating a ceremony" do
+    host = ENV.fetch("PUBLIC_BASE_SERVICE_URL")
+    host! host
+
+    assert_no_difference ["ClientWithdrawalCeremony.count", "ActionMailer::Base.deliveries.count"] do
+      get new_base_app_identity_withdrawal_session_url(ri: "jp", host:)
+    end
+
+    assert_response :success
+    assert_includes response.body, I18n.t("withdrawal_ceremony_reentry.generic_message")
+    assert_equal "no-store", response.headers["Cache-Control"]
+  end
+
   test "withdrawal reentry exposes missing Access authority without issuing mail or changing Governance state" do
     host = ENV.fetch("PUBLIC_BASE_SERVICE_URL")
     host! host

@@ -14,6 +14,7 @@ class SignRiskEmitter
     event = SignRiskEvent.new(name, payload: payload)
     persist(event)
   end
+  public_class_method :emit
 
   def self.persist(event)
     user_id = event.payload[:user_id]
@@ -87,6 +88,7 @@ class SignRiskEmitter
     enabled_config = Rails.configuration.try(:x).try(:risk_enforcement).try(:enabled)
     enabled_config || ENV["RISK_ENFORCEMENT_ENABLED"] == "true" || Rails.env.production?
   end
+  public_class_method :feature_enabled?
 
   def self.hmac_email(email)
     return if email.blank?

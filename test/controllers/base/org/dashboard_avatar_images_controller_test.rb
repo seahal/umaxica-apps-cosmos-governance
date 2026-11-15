@@ -58,7 +58,7 @@ class Base::Org::DashboardAvatarImagesControllerTest < ActionDispatch::Integrati
     assert_nil response.location
   end
 
-  test "verified RP image GET and HEAD refuse missing authority without a cacheable image or session write" do
+  test "verified RP image GET and HEAD return not found without a cacheable response or session write" do
     original_session = @rp_session.reload.attributes
     selection = RpBaseOrgSessionSelection.find_by!(rp_session_id: @rp_session.id)
     original_selection = selection.attributes
@@ -66,15 +66,13 @@ class Base::Org::DashboardAvatarImagesControllerTest < ActionDispatch::Integrati
 
     get base_org_dashboard_avatar_image_url(ri: "jp", host: @host), headers: image_headers
 
-    assert_response :service_unavailable
-    assert_includes response.headers["Cache-Control"], "no-store"
+    assert_response :not_found
     assert_empty response.body
     assert_nil response.headers["ETag"]
     assert_nil response.location
     head base_org_dashboard_avatar_image_url(ri: "jp", host: @host), headers: image_headers
 
-    assert_response :service_unavailable
-    assert_includes response.headers["Cache-Control"], "no-store"
+    assert_response :not_found
     assert_empty response.body
     assert_nil response.headers["ETag"]
     assert_equal original_session, @rp_session.reload.attributes

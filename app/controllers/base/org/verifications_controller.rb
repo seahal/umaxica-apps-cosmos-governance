@@ -8,6 +8,11 @@ module Base
       include SurfaceInertiaPage
 
       AUTHENTICATION_MODE = :private
+
+      layout "base/org/inertia"
+      inertia_share chrome: -> { surface_chrome }
+      inertia_share clear_history: -> { session[:inertia_clear_history] == true }
+
       declare_authentication_mode! :private
 
       public
@@ -46,7 +51,7 @@ module Base
         return_target = requested_rp_step_up_return_target
         return redirect_to(return_target, status: :see_other, allow_other_host: false) if current_step_up_evidence
 
-        return redirect_to_bootstrap_choice if available_step_up_methods(current_operator).blank?
+        raise AccessOpDataUnavailableError if available_step_up_methods(current_operator).blank?
 
         started = RpStepUpStartIssuer.call(
           cell: RpCellBinding.for_client(oidc_client_id), access_state: browser_rp_access_state,
@@ -127,21 +132,6 @@ module Base
 
         super
       end
-
-      def redirect_to_bootstrap_choice
-        return if reject_step_up_for_authentication_context!
-
-        scope = requested_step_up_scope(StepUpScopeCatalog::ORG)
-        requested_step_up_return_to(scope: scope, allowed_scopes: StepUpScopeCatalog::ORG)
-        redirect_to(
-          base_org_verification_setup_path(scope: scope, pt: params[:pt], ri: params[:ri]),
-          status: :see_other,
-        )
-      end
-
-      def bootstrap_registration_methods = [:passkey]
-
-      def bootstrap_scope_permitted?(_scope) = true
 
       def actor_verification_path(**args)
         base_org_verification_path(**args)

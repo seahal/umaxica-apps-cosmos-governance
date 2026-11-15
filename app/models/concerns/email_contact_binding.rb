@@ -18,22 +18,6 @@ module EmailContactBinding
     binding_released_at.present?
   end
 
-  def finalize_registration_binding!(transaction:, code:, session_ref:)
-    raise AccessOpDataUnavailableError
-  end
-
-  def finalize_binding!(at: nil)
-    raise AccessOpDataUnavailableError
-  end
-
-  def finalize_sign_up_binding!(flow:, session_nonce:)
-    raise AccessOpDataUnavailableError
-  end
-
-  def mark_sign_up_verified!(flow:, session_nonce:, code:)
-    raise AccessOpDataUnavailableError
-  end
-
   def release_binding!(at: self.class.database_now)
     raise ArgumentError, "candidate contact binding cannot be released" if binding_finalized_at.blank?
     return self if binding_released_at.present?

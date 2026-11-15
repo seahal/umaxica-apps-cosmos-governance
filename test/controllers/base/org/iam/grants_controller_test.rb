@@ -51,7 +51,14 @@ class Base::Org::Iam::GrantsControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
-  test "unavailable owner refuses grant creation and revocation without modifying grants or writing success audits" do
+  test "owner refuses grant creation and revocation while Access step-up proof is unavailable" do
+    [OperatorCapabilityGrant::IAM_CAPABILITY_READ, OperatorCapabilityGrant::IAM_CAPABILITY_GRANT,
+     OperatorCapabilityGrant::IAM_CAPABILITY_REVOKE, OperatorCapabilityGrant::TECH_ACCESS,].each do |capability|
+      OperatorCapabilityGrant.create!(
+        operator: @operator, origin: "bootstrap", capability:, reason_code: "bootstrap",
+        starts_at: 1.minute.ago, expires_at: 1.day.from_now,
+      )
+    end
     grant = OperatorCapabilityGrant.create!(
       operator: @other, origin: "bootstrap", capability: OperatorCapabilityGrant::TECH_ACCESS,
       reason_code: "bootstrap", starts_at: 1.minute.ago, expires_at: 1.day.from_now,
@@ -59,7 +66,7 @@ class Base::Org::Iam::GrantsControllerTest < ActionDispatch::IntegrationTest
     before = grant.reload.attributes
     before_count = OperatorCapabilityGrant.count
     before_audits = Chronicle.where(action: %w(iam.capability.granted iam.capability.revoked)).count
-    headers = as_staff_headers(@operator, host: @host)
+    headers = as_staff_headers(@operator, host: @host, select_available_org_persona: true)
     get new_base_org_iam_grant_url(ri: "jp", host: @host), headers: headers
 
     assert_response :service_unavailable

@@ -269,17 +269,18 @@ class InertiaPageContractTest < ActionDispatch::IntegrationTest
     )
   end
 
-  test "an unauthenticated Inertia visit is unauthorized without a sign-in route" do
+  test "an unauthenticated Inertia visit redirects to neutral sign with its target" do
     get(base_app_identity_url(ri: "jp", host: @host), headers: inertia_headers(version: ViteRuby.digest))
 
-    assert_response :unauthorized
-    assert_nil response.headers["X-Inertia-Location"]
+    assert_response :see_other
+    assert_redirected_to base_app_sign_show_path(ri: "jp", target_link_uri: "/identity")
   end
 
-  test "a plain unauthenticated browser request is unauthorized" do
+  test "a plain unauthenticated browser request redirects to neutral sign with its target" do
     get(base_app_identity_url(ri: "jp", host: @host), headers: host_headers(@host))
 
-    assert_response :unauthorized
+    assert_response :see_other
+    assert_redirected_to base_app_sign_show_path(ri: "jp", target_link_uri: "/identity")
   end
 
   private

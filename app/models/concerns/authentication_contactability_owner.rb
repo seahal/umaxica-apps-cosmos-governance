@@ -4,6 +4,7 @@
 module AuthenticationContactabilityOwner
   extend ActiveSupport::Concern
 
+  public
   def contact_identifiers(excluding: nil, reload: false)
     authentication_credential_inventory(excluding: excluding, reload: reload).contact_identifiers
   end

@@ -16,6 +16,7 @@ module GroupAvatarMemberships
       @position = position
     end
 
+    public
     def call
       observed_group_owner = AvatarGroupOwnershipPeriodSource.current.find_by!(avatar_group_id: group.id)
       unless observed_group_owner.owner_surface == surface

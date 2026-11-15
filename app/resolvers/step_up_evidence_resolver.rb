@@ -71,7 +71,9 @@ class StepUpEvidenceResolver
     identity = binding&.identity_binding
     return unless active_session_binding?(session:, binding:, identity:, now:)
 
-    issuer = OidcIssuer.for_resource_type(resource_type)
+    issuer = identity.issuer
+    return unless issuer.is_a?(String) && issuer.present?
+
     payload = access_state.payload
     return unless token_binding_matches?(payload:, binding:, identity:, issuer:, resource_type:)
     return unless authentication_evidence_valid?(payload:, now:)

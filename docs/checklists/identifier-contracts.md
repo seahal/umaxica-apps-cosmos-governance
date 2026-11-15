@@ -45,9 +45,11 @@ criterion.
   valid. Storage capacity is neither permission to issue arbitrary 1–25 lengths nor an unconditional
   length=21 CHECK. No truncation, case conversion, business meaning, binary/char conversion or
   test-only bypass.
-- Check: [PublicId tests](../../test/models/concerns/public_id_test.rb), current generator source,
-  model/reference validations, API schemas, forms, fixtures/seeds and direct PostgreSQL writes.
-  Extend missing public/bulk boundaries; test presence is not a current pass.
+- Check: [PublicId generation tests](../../test/lib/public_id_generation_test.rb), the
+  [fixed-length contract guard](../../test/models/public_id_fixed_length_contract_test.rb), the
+  [capacity contract tests](../../test/models/public_id_capacity_contract_test.rb), current
+  generator source, model/reference validations, API schemas, forms, fixtures/seeds and direct
+  PostgreSQL writes. Extend missing public/bulk boundaries; test presence is not a current pass.
 
 ## ID-3 — Semantic roles, scope and remote resolution
 
@@ -120,9 +122,16 @@ triggers for additional tables.
   tests in
   [the ORG Telephone identity suite](../../test/models/operator_telephone_public_id_immutability_test.rb),
   and
-  [operational backfill tests](../../test/operations/operator_telephone_public_id_backfill_operation_test.rb).
-  Use only verified run-owned PostgreSQL catalogs. Approval and this criterion do not establish
-  implementation, production application, or protection against intentional administrator bypass.
+  [the maintenance operation](../../app/operations/operator_telephone_public_id_backfill_operation.rb),
+  and its [explicit Rake tasks](../../lib/tasks/operator_telephone_public_ids.rake). The previously
+  cited operation test is absent from this checkout. The current schema enforces
+  `public_id NOT NULL`, so a legacy NULL row cannot be constructed without bypassing the current
+  database contract. No pre-cutover behavior test is claimed; its test and retirement status remain
+  unresolved pending confirmation that an existing deployment still requires this maintenance path.
+  Current reachability evidence records the finding in
+  [`L6N2`](../../evidence/2026-11-13-coverage-reachability-L6N2.md). Use only verified run-owned
+  PostgreSQL catalogs. Approval and this criterion do not establish implementation, production
+  application, or protection against intentional administrator bypass.
 
 ## ID-4b — Owned preference and Client Passkey identities become required
 
@@ -335,28 +344,10 @@ triggers for additional tables.
 
 ## ID-3a — ORG Telephone ceremony references
 
-- Basis: I04/I10 and ID-3; scope: OperatorTelephone registration, resend, form admission,
-  verification/finalization and queued SMS delivery across org_zenith and org_ticket.
-- Given a newly created candidate owned by an authorized Operator and a usable Root session, issuing
-  registration proof stores the candidate's NanoID public identity in the ticket ceremony and
-  encrypted delivery binding. Its database-local bigint is not the candidate reference.
-- Resend, delivery and verification resolve and compare that same public identity together with
-  actor, session, purpose, generation and expiry. A former numeric PK binding is refused rather than
-  falling back to lookup by id; wrong-owner and stale proof cannot send or finalize.
-- Check: public issuer test in
-  `test/operations/telephone_credential_registration_otp_issuer_test.rb`, ORG HTTP registration
-  tests in `test/controllers/base/org/identity/telephones/registrations_controller_test.rb`, binding
-  boundary tests in `test/values/contact_registration_otp_delivery_binding_value_test.rb`, and
-  actual queued transport guards. Code inspection alone does not prove asynchronous delivery.
-- Before consumer cutover, control old numeric-reference writers and drain their still-valid proof,
-  queued delivery and bounded original-operation receipts through their existing authorized paths.
-  The candidate reference participates in the keyed OTP verifier; rewriting it alone is not a safe
-  proof migration. Do not reissue a public identity on request, rewrite old verifiers without proof,
-  or introduce a weaker legacy-proof fallback. Demonstrate the drain/cutover precondition with
-  synthetic issued proof; merely backfilling source public IDs does not satisfy it.
-- Existing-row operational backfill, NOT NULL cutover and DB immutability remain separately required
-  by ID-4/MIG-1; an additive nullable column is not completion of those criteria. Local controller
-  PK-based URL/session consumers remain an inventory item under ID-3, not an approved exception.
+> **Superseded (2026-11-13, owner):** The Governance-local ORG Telephone proof issuer, binding and
+> delivery consumer described by this criterion are retired. Access owns authentication ceremony
+> execution. Keep the OperatorTelephone identity and management contracts in ID-3b, ID-3c and ID-4a.
+> No table, column or persisted proof row was changed here.
 
 ## ID-3b — ORG Telephone management URLs
 
@@ -390,9 +381,17 @@ triggers for additional tables.
   the documented finite bound. Exhaustion leaves that source unchanged and fails explicitly;
   unrelated uniqueness errors are not treated as ID collisions. Invalid realm/scope/mode/batch
   inputs fail before writing. Batch size is explicitly 1–1000, not an unbounded all-row load.
-- Check: `test/operations/operator_telephone_public_id_backfill_operation_test.rb` and explicit Rake
-  inventory/backfill tasks. Test-only construction of legacy NULL rows bypasses validations;
-  ordinary creation and read/update must not become missing-ID repair paths.
+- Check the
+  [maintenance operation](../../app/operations/operator_telephone_public_id_backfill_operation.rb)
+  and its
+  [explicit inventory/backfill Rake tasks](../../lib/tasks/operator_telephone_public_ids.rake). The
+  previously cited operation test is absent from this checkout. The current schema enforces
+  `public_id NOT NULL`, so a legacy NULL row cannot be constructed without bypassing the current
+  database contract. No pre-cutover behavior test is claimed; its test and retirement status remain
+  unresolved pending confirmation that an existing deployment still requires this maintenance path.
+  Current reachability evidence records the finding in
+  [`L6N2`](../../evidence/2026-11-13-coverage-reachability-L6N2.md). Ordinary creation and
+  read/update must not become missing-ID repair paths.
 - This procedure assigns missing identity only. It does not certify writer quiescence, migrate
   numeric proof bindings, enforce DB immutability or authorize production data mutation. The final
   NOT NULL transition is represented by the reviewed two-step migrations and must follow the
@@ -400,336 +399,83 @@ triggers for additional tables.
 
 ## ID-3d — Legacy ORG Telephone proof-drain observations
 
-- Basis: I07/I11, ID-3a and MIG-1. Scope: ORG registration ceremonies bound to the old canonical
-  positive-decimal PK reference, distinct from current 21-character public candidates.
-- Given that explicit ceremony scope, inventory reports aggregate pending-parent, deliverable-proof
-  and unexpired-receipt counts without changing rows, returning raw identifiers, code or verifier
-  values, or initiating delivery. Other realm/channel scopes are refused.
-- A consumed proof with a still-valid original receipt remains counted after its challenge expires.
-  Parent and receipt deadlines are exclusive: immediately before the relevant deadline the item
-  counts; at the deadline and immediately after it does not. Current public candidates, including
-  all-digit 21-character values, are not classified as old PK references.
-- Check: `test/queries/operator_telephone_legacy_reference_inventory_test.rb` and the read-only
-  `org_telephone_public_ids:legacy_references` Rake task. The observations are not a cutover permit,
-  a distributed snapshot, proof of source reconciliation, writer quiescence or queue drain. Those
-  independent prerequisites remain mandatory even when every count is zero.
+> **Superseded (2026-11-13, owner):** The Governance-local legacy proof-drain query and task are
+> retired with local Telephone ceremony execution. This is not a drain or purge result and grants no
+> database cleanup authority; historical proof-bearing rows and schema remain untouched.
 
 ## ID-3e — Email and Telephone sign-up transaction references
 
-- Basis: I04/I06/I07/I10 and ID-3; scope: APP and COM Email/Telephone sign-up transaction issuance,
-  resend, delayed delivery, session binding and verification. This criterion is separate from the
-  credential-registration and TOTP-enrollment transaction criteria above.
-- Given a newly issued sign-up transaction, its self-controlled, non-secret `transaction_id` is a
-  NanoID-21 generated through the shared public-ID mechanism. Existing UUID-v4 transaction rows
-  remain readable during the bounded transition. The OTP `generation` remains a UUID-v4 one-time
-  proof identity and is not replaced by the transaction reference.
-- A delivery or session binding must match the correct realm, surface, channel, flow, purpose,
-  actor/root binding, transaction reference, generation and expiry. It accepts the explicitly
-  supported NanoID-21 or legacy UUID-v4 transaction form and rejects malformed, missing, stale,
-  wrong-flow, wrong-purpose, wrong-surface or cross-purpose references without a silent lookup
-  fallback. A transaction reference cannot be used as a generation, grant or result identity.
-- APP Email and Telephone sign-up issuers refuse an existing transaction whose expiry differs
-  from its parent Flow expiry, without rotating the OTP or changing the contact cooldown.
-  Delivery and verification also refuse that mismatch, including an existing verified receipt.
-  Issuance refuses a changed destination for the same candidate and Flow rather than creating a
-  second transaction for that binding, and locks the existing transaction before checking it.
-- When a newly generated transaction collides, only the concrete table's named single-column
-  `transaction_id` unique B-tree collision may be retried. Each retry uses a fresh reference inside
-  a savepoint and the finite shared collision budget. Caller-supplied IDs, unrelated validation or
-  uniqueness failures, and exhausted retries remain explicit failures.
-- Check: `test/operations/email_sign_up_otp_issuer_test.rb`,
-  `test/operations/telephone_sign_up_otp_issuer_test.rb`,
-  `test/values/sign_up_otp_delivery_binding_value_test.rb`,
-  `test/values/email_sign_up_otp_delivery_binding_value_test.rb`,
-  `test/operations/sign_up_otp_delivery_guard_test.rb`,
-  `test/integration/signup_otp_delayed_transport_test.rb` and
-  `test/integration/telephone_sign_up_otp_delivery_test.rb`. Direct inspection must confirm the
-  issuer, binding value and consumer preserve the same purpose/surface boundary; static checks do
-  not prove delayed delivery, concurrent collision recovery or external runtime behavior.
-- This criterion does not classify unexamined sign-up transaction, grant, result or OTP-generation
-  issuers, and it does not authorize a global UUID-to-NanoID rewrite or a cross-realm identifier
-  fallback. Current run evidence is revision-scoped; it is not a permanent PASS for future code.
+> **Superseded (2026-11-13, owner):** Governance no longer issues or consumes local sign-up OTP
+> transactions. Access owns authentication ceremonies. Existing identity records and persisted
+> history remain; this change did not rewrite or delete their schema or data.
 
 ## ID-3f — Email and Telephone sign-up grant references
 
-- Basis: I04/I06/I07/I10 and ID-3; scope: APP and COM Email/Telephone sign-up grant issuance, signed
-  grant/result claims, replay validation and delivery/verification handoff. The grant identity is
-  separate from the sign-up transaction, OTP generation and eventual result identity.
-- Given a newly created sign-up transaction, its generated `grant_jti` is a NanoID-21 from the
-  shared public-ID mechanism. Existing UUID-v4 grant values remain accepted as opaque claims; no
-  caller or provider value is reformatted. A grant reference is checked against the same concrete
-  transaction and realm before a grant or result is accepted.
-- A generated `grant_jti` collision may be retried only when the concrete table identifies its
-  named, single-column `grant_jti` unique B-tree index. The retry uses a fresh transaction and grant
-  reference inside a savepoint and the finite shared collision budget. A collision on the separate
-  `transaction_id` index follows its own rule; unrelated validation or uniqueness errors and
-  exhausted retries remain explicit failures.
-- Check: `test/operations/email_sign_up_otp_issuer_test.rb` and
-  `test/operations/telephone_sign_up_otp_issuer_test.rb`, including generated-format and grant/
-  transaction collision cases, plus the sign-up delivery/transport and binding tests listed in
-  ID-3e. Direct inspection must confirm that grant, transaction, generation and result values are
-  not substituted across purposes or surfaces. The locale fallback labels only prevent validation
-  error reporting from failing; they are not an acceptance substitute.
-- This criterion does not classify other sign-up, credential-registration, step-up, passkey, social,
-  TOTP or secret-credential grant issuers, and it does not authorize changing external protocol
-  identifiers. Current evidence is revision-scoped and does not establish complete ID-3 or ID-4
-  acceptance.
+> **Superseded (2026-11-13, owner):** Governance no longer issues or consumes local sign-up ceremony
+> grants. Access owns authentication ceremonies. Existing records and signed historical values were
+> not rewritten or deleted by this code retirement.
 
 ## ID-3g — Credential-registration Email and Telephone grant references
 
-- Basis: I04/I06/I07/I10 and ID-3; scope: APP, COM and ORG Email/Telephone credential-registration
-  transaction issuance and its grant-bound proof handoff. The `grant_jti` is a self-controlled,
-  non-secret grant identity separate from `transaction_id`, OTP `generation`, result identities,
-  actor/session references and provider or protocol values.
-- Given a newly issued credential-registration transaction, its generated `grant_jti` is a NanoID-21
-  from the shared public-ID mechanism. Existing UUID-v4 grant values remain opaque and readable
-  where the current contract permits them; they are not reformatted. The grant remains bound to the
-  concrete realm, channel, transaction, actor, candidate and purpose, and cannot be substituted for
-  a transaction, generation or result reference.
-- A generated collision may be retried only for the concrete table's named, single-column
-  `grant_jti` or `transaction_id` unique B-tree index. Each retry uses fresh generated references
-  inside a database savepoint and the finite shared collision budget. Caller-supplied values,
-  unrelated validation or uniqueness errors and exhausted retries remain explicit failures; no
-  cross-purpose or cross-surface fallback is permitted.
-- Check: `test/operations/email_credential_registration_otp_issuer_test.rb`,
-  `test/operations/telephone_credential_registration_otp_issuer_test.rb`,
-  `test/operations/contact_registration_otp_issuer_test.rb`,
-  `test/values/credential_registration_otp_session_value_test.rb`,
-  `test/values/contact_registration_otp_delivery_binding_value_test.rb` and
-  `test/values/email_credential_registration_otp_delivery_binding_value_test.rb`. Direct inspection
-  must confirm that transaction, grant, generation and proof/session bindings retain their existing
-  purpose and realm boundaries. The current evidence is revision-scoped and does not classify every
-  other credential-registration grant or result issuer.
+> **Superseded (2026-11-13, owner):** Governance no longer issues or consumes local
+> credential-registration Email/Telephone ceremony grants. Access owns authentication ceremonies.
+> Durable credential/contact records remain; no schema or data migration was performed.
 
 ## ID-3h — Email recovery and withdrawal reentry references
 
-- Basis: I04/I06/I07/I10 and ID-3; scope: Email reentry OTP issuance and delivery for APP, COM and
-  ORG recovery, plus APP and COM withdrawal. ORG withdrawal remains explicitly unsupported. The
-  transaction and grant references are self-controlled, non-secret ceremony identities; the
-  browser/session reference and OTP generation remain separate UUID-bound contracts.
-- Given an allowed reentry request, a newly created concrete Email ceremony transaction carries a
-  NanoID-21 `transaction_id` and a separate NanoID-21 `grant_jti`. Existing UUID transaction values
-  remain readable during the bounded transition. The binding accepts either transaction form but
-  still requires a UUID OTP generation, preserves the operation (`recovery` or `withdrawal`) and
-  rejects other-purpose or malformed references without fallback.
-- A generated transaction or grant collision may be retried only for the concrete table's named,
-  single-column unique B-tree index, using fresh values inside a savepoint and the finite collision
-  budget. Unrelated validation or uniqueness failures and exhausted retries remain explicit
-  failures. A rejected ORG withdrawal creates no transaction or delivery.
-- Check: `test/operations/email_reentry_otp_issuer_test.rb`,
-  `test/operations/email_reentry_otp_verification_committer_test.rb`,
-  `test/values/email_reentry_otp_delivery_binding_value_test.rb` and
-  `test/notifiers/notify/email_reentry_otp_delivery_test.rb`. The current execution record is
-  [`Q4M8`](../../evidence/2026-10-12-email-reentry-references-Q4M8.md); it is revision-scoped and
-  does not classify other Email/Telephone ceremony issuers.
+> **Superseded (2026-11-13, owner):** The local Email recovery/reentry OTP transaction and grant
+> path is retired. The separate Governance withdrawal lifecycle and FlowWithdrawal remain; this
+> status does not alter their state, retention, or authorization contracts. No database schema or
+> data was changed.
 
 ## ID-3i — Secret Credential ceremony transaction and grant references
 
-- Basis: I04/I06/I07/I10 and ID-3; scope: APP, COM and ORG Secret Credential ceremony transaction
-  creation, signed grant binding, replay lookup and result handoff. `transaction_id` and `grant_jti`
-  are self-controlled, non-secret ceremony identities; `result_jti`, credential candidate refs,
-  secret material and actor/session references remain separate contracts.
-- Given a newly created Secret Credential ceremony transaction, a generated `transaction_id` and
-  `grant_jti` are separate NanoID-21 values from the shared public-ID mechanism. Explicitly supplied
-  values remain explicit inputs; this criterion does not reformat existing rows or classify the
-  result identity.
-- A generated collision may be retried only for the concrete table's named, single-column
-  `transaction_id` or `grant_jti` unique B-tree index. Each retry uses fresh generated values inside
-  a savepoint and the finite shared collision budget. Caller-supplied values, unrelated validation
-  or uniqueness failures and exhausted retries remain explicit failures; no cross-surface or
-  cross-purpose lookup fallback is permitted.
-- Check: `test/services/identity_secret_credential_ceremony_replay_store_test.rb` and the related
-  Secret Credential contract, result-issuer, final-committer, consumer and purger tests listed in
-  the execution evidence. Direct inspection must confirm that the three concrete transaction models
-  retain their surface binding and that transaction, grant, result and candidate references are not
-  substituted. Static checks do not prove concurrent committed collision behavior.
-- This criterion does not classify Secret Credential `result_jti`, the underlying permanent secret
-  credential identity, provider/protocol values or other ceremony transaction/grant issuers. Current
-  evidence is revision-scoped and is not a permanent PASS for future code.
+> **Superseded (2026-11-13, owner):** Governance no longer issues or consumes local Secret
+> Credential ceremony transactions or grants. Durable Secret Credential records and their
+> audit/retention behavior remain. No schema or persisted credential was changed.
 
 ## ID-3j — Social ceremony transaction and grant references
 
-- Basis: I04/I06/I07/I10 and ID-3; scope: the APP Social ceremony grant issuer, signed grant/result
-  binding, provider callback handoff and replay transaction. Provider subject values, OAuth/OIDC
-  state, candidate capability references and result identities remain separate contracts.
-- Given a newly issued Social ceremony grant, the internally generated `transaction_id` and
-  `grant_jti` are separate NanoID-21 values from the shared public-ID mechanism. Provider-managed
-  subject identifiers and the explicit candidate capability reference are not reformatted or used as
-  the transaction or grant identity.
-- A generated collision may be retried only for the concrete table's named, single-column
-  `transaction_id` or `grant_jti` unique B-tree index. Each retry uses fresh generated values inside
-  a savepoint and the finite shared collision budget. Caller-supplied values, unrelated validation
-  or uniqueness failures and exhausted retries remain explicit failures; no provider, surface or
-  purpose fallback is permitted.
-- Check: `test/models/concerns/social_ceremony_transactionable_test.rb`, the Social ceremony
-  contract, result-issuer, consumer and transaction integration tests. Direct inspection must
-  confirm that provider subject binding, verified callback validation and result consumption retain
-  their existing trust boundaries. Static checks do not prove concurrent committed collision
-  behavior or live provider behavior.
-- This criterion does not classify Social `result_jti`, provider subject values, candidate `ref`,
-  OAuth/OIDC state, permanent external-identity identifiers or other ceremony issuers. Current
-  evidence is revision-scoped and is not a permanent PASS for future code.
+> **Superseded (2026-11-13, owner):** Governance no longer runs local social sign-in/link ceremonies
+> or their transaction/grant handoff. Access owns authentication ceremony execution. External
+> identity and social audit records remain; this change did not rewrite or delete them.
 
 ## ID-3k — Step-up ceremony transaction and grant references
 
-- Basis: I04/I06/I07/I10 and ID-3; scope: APP, COM and ORG Step-up ceremony transaction creation,
-  signed grant admission, verification result handoff and replay lookup. `transaction_id` and
-  `grant_jti` are self-controlled, non-secret ceremony identities; `result_jti`, session and
-  credential references, OTP/protocol values and authorization evidence remain separate contracts.
-- Given a newly created Step-up ceremony transaction, generated `transaction_id` and `grant_jti` are
-  separate NanoID-21 values from the shared public-ID mechanism. Explicitly supplied values remain
-  explicit inputs. The existing purpose, surface, actor, session, audience, allowed-method, expiry
-  and assurance guards remain authoritative; this criterion does not reformat result or
-  authentication-protocol identities.
-- A generated collision may be retried only for the concrete table's named, single-column
-  `transaction_id` or `grant_jti` unique B-tree index. Each retry uses fresh generated values inside
-  a savepoint and the finite shared collision budget. Caller-supplied values, unrelated validation
-  or uniqueness failures and exhausted retries remain explicit failures; no cross-surface,
-  cross-purpose or session-issuance fallback is permitted.
-- Check: `test/services/identity/step_up_ceremony_acme_transaction_test.rb` and the related Step-up
-  contract, replay-store, transition, admission, verification, purge and integration tests executed
-  for this slice. Direct inspection must confirm that `result_jti`, signed result claims,
-  actor/session binding and purpose-specific authorization remain separate. Static checks do not
-  prove concurrent committed collision behavior, external authenticator behavior or production
-  deployment behavior.
-- This criterion does not classify Step-up `result_jti`, OTP/email/passkey/TOTP proof values,
-  credential identities, provider/protocol values, session identifiers or other unclassified
-  ceremony issuers. Current evidence is revision-scoped and is not a permanent PASS for future code.
+> **Superseded (2026-11-13, owner):** Governance no longer issues or consumes local step-up ceremony
+> transactions or grants. The active RP-side step-up state, policy checks and challenge references
+> remain covered by ID-3q. No credential ceremony or OP result is implemented by Governance.
 
 ## ID-3l — OIDC authorization transaction references
 
-- Basis: I04/I06/I07/I10 and ID-3; scope: the three concrete APP, COM and ORG OIDC authorization
-  transaction writers and their coordinator, admission, token-exchange and purge consumers.
-  `transaction_id` is an internally generated, non-secret durable transaction identity. OIDC
-  `state`, `nonce`, PKCE challenge, login challenge and provider/client values retain their own
-  protocol or request contracts.
-- Given a newly issued OIDC authorization transaction, its generated `transaction_id` is a NanoID-21
-  value from the shared public-ID mechanism. Existing opaque transaction values remain readable; no
-  state, nonce, PKCE, login challenge or external provider value is reformatted or substituted.
-- A generated collision may be retried only for the concrete table's named, single-column
-  `transaction_id` unique B-tree index. Each retry uses a fresh generated value inside a savepoint
-  and the finite shared collision budget. Login-challenge uniqueness, caller/request validation,
-  other uniqueness failures and exhausted retries remain explicit failures; no cross-surface or
-  protocol fallback is permitted.
-- Check: `test/models/concerns/oidc_authorization_transactionable_test.rb` plus the coordinator,
-  admission-binding, token-exchange, purge and OIDC integration tests selected for this slice.
-  Direct inspection must confirm that authorization parameters, surface class, durable admission
-  binding, result generation and token exchange continue to resolve the same transaction. Static
-  checks do not prove concurrent external-provider behavior or production deployment behavior.
-- This criterion does not classify OIDC `state`, `nonce`, PKCE, login challenges, provider/client
-  identifiers, protocol `jti`/`sid` values or other unclassified transaction and result issuers.
-  Current evidence is revision-scoped and is not a permanent PASS for future code.
+> **Superseded (2026-11-13, owner):** Governance has no APP/COM/ORG OIDC authorization transaction
+> writers or consumers. OP transaction state belongs to Access after the Cosmos split. Governance
+> RP-local state remains under its RP-specific criteria; no table or persisted data was changed
+> here.
 
 ## ID-3m — Passkey ceremony transaction references
 
-- Basis: I04/I06/I07/I10 and ID-3; scope: the concrete APP, COM and ORG Passkey ceremony transaction
-  models, their replay/result/purge consumers and the public transaction factory. `transaction_id`
-  and `grant_jti` are self-controlled, non-secret ceremony identities. Relying-party identifiers and
-  origins, credential-candidate references, WebAuthn challenges/results, credential identities and
-  protocol values retain separate contracts.
-- Given a newly created Passkey ceremony transaction through the public factory, generated
-  `transaction_id` and `grant_jti` are separate NanoID-21 values from the shared public-ID
-  mechanism. Existing opaque values remain readable. The factory preserves the concrete surface,
-  actor/session binding, operation, relying-party configuration, candidate data and expiry; it does
-  not substitute a challenge, credential identifier or protocol value for either reference.
-- A generated collision may be retried only for the concrete table's named, single-column
-  `transaction_id` or `grant_jti` unique B-tree index. Each retry uses fresh generated values inside
-  a savepoint and the finite shared collision budget. Caller-supplied values, unrelated validation
-  or uniqueness failures and exhausted retries remain explicit failures; no cross-surface,
-  cross-purpose or WebAuthn fallback is permitted.
-- Check: `test/models/concerns/ceremony_transactionable_test.rb` and the related Passkey
-  replay-store, contract, result-issuer, final-committer, purger, registration-committer,
-  authorization and numeric-date tests selected for this slice. Direct inspection must confirm that
-  the existing WebAuthn challenge/protocol boundary and concrete surface bindings remain
-  authoritative. Static checks do not prove concurrent committed collision behavior or live
-  authenticator behavior.
-- This criterion does not classify WebAuthn credential IDs, challenge/client-data values, RP
-  identifiers, result identities, protocol/session values or other unclassified ceremony issuers.
-  Current evidence is revision-scoped and is not a permanent PASS for future code.
+> **Superseded (2026-11-13, owner):** The Governance-local WebAuthn registration ceremony
+> transaction path is retired. Passkey credential records, owner-side persistence/audit contracts
+> and live RP step-up assertions remain; no credential or schema was changed.
 
 ## ID-3n — Email ceremony transaction references
 
-- Basis: I04/I06/I07/I10 and ID-3; scope: the concrete APP, COM and ORG Email ceremony transaction
-  models, the Email Verification Protocol challenge factory, replay/finalization/result/purge
-  consumers and the related delivery paths. `transaction_id` and `grant_jti` are self-controlled,
-  non-secret ceremony identities; EVP nonce/token material, OTP generations, result identities,
-  candidate values and actor/session references retain separate contracts.
-- Given a newly created Email ceremony transaction through `EmailCeremonyTransactionable` or the
-  public EVP challenge factory, generated `transaction_id` and `grant_jti` are separate NanoID-21
-  values from the shared public-ID mechanism. Existing opaque transaction and grant values remain
-  readable. Surface, operation, actor/session binding, candidate/digest fields, EVP state and expiry
-  remain authoritative; no challenge, token, generation or result value is substituted for either
-  reference.
-- A generated collision may be retried only for the concrete table's named, single-column
-  `transaction_id` or `grant_jti` unique B-tree index. Each retry uses fresh generated values inside
-  a savepoint and the finite shared collision budget. Caller-supplied values, unrelated validation
-  or uniqueness failures and exhausted retries remain explicit failures; no cross-surface,
-  cross-purpose or proof fallback is permitted.
-- Check: `test/models/concerns/ceremony_transactionable_test.rb`,
-  `test/models/email_verification_challengeable_test.rb` and the Email ceremony contract,
-  replay-store, final-committer, result-issuer, purger, delivery and integration tests selected for
-  this slice. Direct inspection must confirm that EVP nonce/token verification and the existing
-  delivery/session boundaries remain separate. Static checks do not prove concurrent committed
-  collision behavior or external delivery behavior.
-- This criterion does not classify OTP `generation`, EVP nonce/token digests, result identities,
-  candidate or provider values, protocol/session identifiers or other unclassified ceremony issuers.
-  Current evidence is revision-scoped and is not a permanent PASS for future code.
+> **Superseded (2026-11-13, owner):** Governance no longer issues or consumes local Email ceremony
+> transactions. Access owns authentication ceremony execution. Durable Email identity/history
+> records remain, and no schema or persisted data was changed.
 
 ## ID-3o — Telephone ceremony transaction references
 
-- Basis: I04/I06/I07/I10 and ID-3; scope: the concrete APP, COM and ORG Telephone ceremony
-  transaction models, the typed replay store and their result/finalization/purge consumers.
-  `transaction_id` and `grant_jti` are self-controlled, non-secret ceremony identities; telephone
-  OTP generations, delivery/proof values, result identities, candidate values and actor/session
-  references retain separate contracts.
-- Given a newly created Telephone ceremony transaction through `TelephoneCeremonyTransactionable`,
-  generated `transaction_id` and `grant_jti` are separate NanoID-21 values from the shared public-ID
-  mechanism. Existing opaque values remain readable. Surface, operation, actor/session binding,
-  candidate/digest fields and expiry remain authoritative; no OTP generation, result, delivery or
-  protocol value is substituted for either reference.
-- A generated collision may be retried only for the concrete table's named, single-column
-  `transaction_id` or `grant_jti` unique B-tree index. Each retry uses fresh generated values inside
-  a savepoint and the finite shared collision budget. Caller-supplied values, unrelated validation
-  or uniqueness failures and exhausted retries remain explicit failures; no cross-surface,
-  cross-purpose or proof fallback is permitted.
-- Check: `test/models/concerns/ceremony_transactionable_test.rb`,
-  `test/services/identity_telephone_ceremony_transaction_coverage_test.rb` and the Telephone
-  contract, replay-store, finalization, result, purge, OTP issuer, delivery and integration tests
-  selected for this slice. Direct inspection must confirm that the existing Telephone delivery and
-  proof/session boundaries remain separate. Static checks do not prove concurrent committed
-  collision behavior or live SMS delivery behavior.
-- This criterion does not classify Telephone OTP generation, delivery/proof values, result
-  identities, protocol/session identifiers or other unclassified ceremony issuers. The legacy
-  value-object defaults now use the shared NanoID-21 issuer as well; explicitly supplied UUID-v4
-  transaction and grant values remain readable during the bounded transition. Current evidence is
-  revision-scoped and is not a permanent PASS for future code.
+> **Superseded (2026-11-13, owner):** Governance no longer issues or consumes local Telephone
+> ceremony transactions. Access owns authentication ceremony execution. Durable Telephone
+> identity/history records remain, and no schema or persisted data was changed.
 
 ## ID-3p — Social candidate capability references
 
-- Basis: I04/I06/I07/I10 and ID-3; scope: persisted APP Social candidate references and their
-  model-level resolution contract. The local Auth callback/link-completion routes and controller
-  consumer were removed by the 2026-11-11 hard reset; this criterion does not assert an active
-  request path. Provider subject values, OAuth/OIDC state, signed result identities and
-  transaction/grant references remain separate contracts.
-- Given a newly stored Social candidate, its self-controlled non-secret `ref` is a NanoID-21 value
-  generated through the shared public-ID mechanism. An already issued UUID-v4 candidate remains
-  readable during this bounded transition; no existing candidate is rewritten and no shared UUID
-  admission pattern is widened for unrelated flows.
-- A persisted candidate lookup accepts only a strict Social candidate reference: the new NanoID-21 form
-  or the retained UUID-v4 form. Missing, malformed, cross-purpose or unknown references are rejected
-  without a lookup fallback to another identity column. Actor/session binding, expiry and one-shot
-  consumption remain model-level contracts until the retained records are assessed for retirement.
-- A generated collision may be retried only for the concrete candidate table's named, single-column
-  `ref` unique B-tree index. Each retry uses a fresh value inside a savepoint and the finite shared
-  collision budget. Caller-supplied legacy values, unrelated validation or uniqueness failures and
-  exhausted retries remain explicit failures; provider values and candidate capability references
-  are never substituted for transaction or result identities.
-- Check: `test/models/model_only_line_coverage_test.rb` and
-  `test/models/concerns/social_ceremony_transactionable_test.rb`, plus direct inspection of
-  `app/models/identity_social_ceremony_candidate.rb` and
-  `app/values/identity_social_ceremony_contract.rb`. No local route or callback consumer remains.
-  Static checks do not prove concurrent committed collision behavior. Evidence is revision-scoped
-  and is not a permanent PASS for future code.
+> **Superseded (2026-11-13, owner):** Governance no longer resolves local Social candidate
+> capabilities for an authentication ceremony. Access owns authentication ceremony execution.
+> Durable external-identity, audit and receipt records remain; no schema or data was changed.
 
 ## ID-3q — Step-Up passkey challenge references
 
@@ -755,6 +501,10 @@ triggers for additional tables.
 
 ## ID-3r — Publishing immutable taxonomy snapshot references
 
+> **Superseded (2026-11-13, owner):** Publishing taxonomy snapshot records and their tests moved to
+> Press with Publishing ownership. Governance has no current Publishing models, tables or snapshot
+> tests. This historical criterion does not authorize Governance schema changes or work in Press.
+
 - Basis: ID-3/ID-4 and the accepted
   [Publishing taxonomy architecture](../../adr/publishing-taxonomy-architecture.md). Scope: both
   `vocabulary_public_id_snapshot` and `term_public_id_snapshot` on the 24 single/multiple version
@@ -769,7 +519,7 @@ triggers for additional tables.
   completeness checks remain authoritative; no new trigger or source-identity rewrite is implied.
 - Given an existing snapshot, attempted overlong replacement still raises the established
   ReadOnlyRecord error; direct bounded SQL mutation remains refused and leaves history unchanged.
-- Check:
-  [all-family snapshot capacity tests](../../test/models/publishing/snapshot_public_id_capacity_contract_test.rb),
-  snapshot integrity/immutability tests and actual DB column/check definitions. This criterion does
-  not resolve the separate owned-Publishing-ID capacity/ADR conflict or authorize schema expansion.
+- Check in Governance: not applicable after the ownership transfer. The split evidence records the
+  removed Governance-owned Publishing database and code paths in
+  [`R4D8`](../../evidence/2026-11-12-remove-non-governance-databases-R4D8.md). The current Press
+  owner maintains snapshot tests and database constraints.

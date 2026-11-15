@@ -9,6 +9,7 @@ module CollectiveMembership
       @unit = unit
     end
 
+    public
     def call
       raise InactiveMembership, "membership is not active" unless membership.active?
       raise InvalidUnitTransfer, "unit does not belong to same collective" unless same_collective?

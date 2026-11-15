@@ -261,16 +261,6 @@ class ModelOnlyLineCoverageTest < ActiveSupport::TestCase
     assert_not ClientSecretCredential.new.available_at?(at: Client.database_now)
   end
 
-  test "external identity unlink guard remains queryable" do
-    assert_kind_of ActiveRecord::Relation, ClientWithdrawalFlow.active
-
-    client = Client.new(security_mode_id: SecurityModeConfigurable::NORMAL)
-
-    client.stub(:remaining_social_unlink_methods, [:email]) do
-      assert client.social_unlink_methods_remaining?(excluding_provider: "google")
-    end
-  end
-
   test "withdrawal ceremony issue and expiration use the model boundary" do
     subject = Client.new(security_mode_id: SecurityModeConfigurable::NORMAL)
     created = Object.new

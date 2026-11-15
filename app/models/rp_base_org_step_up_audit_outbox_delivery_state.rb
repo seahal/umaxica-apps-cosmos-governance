@@ -9,6 +9,8 @@ class RpBaseOrgStepUpAuditOutboxDeliveryState < RpBaseOrgRecord
   DELIVERED = 20
   DEFAULTS = [PENDING, DELIVERED].freeze
 
+  self.record_timestamps = false
+
   has_many :outboxes,
            class_name: "RpBaseOrgStepUpAuditOutbox",
            foreign_key: :delivery_state_id,

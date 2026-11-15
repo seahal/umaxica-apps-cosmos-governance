@@ -7,6 +7,7 @@ class PromotionEmailAdapter < PromotionAdapter
     @mailer = mailer
   end
 
+  public
   def deliver(email_address:, title:, body:, cta_url: nil, email_record: nil, **)
     @mailer.with(
       email_address: email_address,

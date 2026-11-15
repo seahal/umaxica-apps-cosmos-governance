@@ -37,7 +37,7 @@ class Base::Org::Iam::GrantPagesTest < ActionDispatch::IntegrationTest
     assert_not OperatorCapabilityGrantPolicy.new(OperatorCapabilityGrant, user: @operator.reload).apply(:index?)
   end
 
-  test "grant list detail and unknown detail disclose nothing without Access caller resolution" do
+  test "grant pages read Governance-owned records after the local role check" do
     grant = OperatorCapabilityGrant.create!(
       operator: @other, origin: "bootstrap", capability: OperatorCapabilityGrant::TECH_ACCESS,
       reason_code: "bootstrap", starts_at: 1.minute.ago, expires_at: 1.day.from_now,
@@ -46,18 +46,30 @@ class Base::Org::Iam::GrantPagesTest < ActionDispatch::IntegrationTest
       operator: @operator, origin: "bootstrap", capability: OperatorCapabilityGrant::IAM_CAPABILITY_READ,
       reason_code: "bootstrap", starts_at: 1.minute.ago, expires_at: 1.day.from_now,
     )
+    OperatorCapabilityGrant.create!(
+      operator: @operator, origin: "bootstrap", capability: OperatorCapabilityGrant::IAM_CAPABILITY_REVOKE,
+      reason_code: "bootstrap", starts_at: 1.minute.ago, expires_at: 1.day.from_now,
+    )
     before = grant.reload.attributes
-    headers = as_staff_headers(@operator, host: @host)
-    [base_org_iam_grants_url(q: @other.public_id, ri: "jp", host: @host),
-     base_org_iam_grant_url(grant.public_id, ri: "jp", host: @host),
-     base_org_iam_grant_url("unknown-grant", ri: "jp", host: @host),].each do |url|
-      get url, headers: headers
+    headers = as_staff_headers(@operator, host: @host, select_available_org_persona: true)
+    get base_org_iam_grants_url(q: @other.public_id, ri: "jp", host: @host), headers: headers
 
-      assert_response :service_unavailable
-      assert_includes response.headers.fetch("Cache-Control"), "no-store"
-      assert_not_includes response.body, grant.public_id
-      assert_equal before, grant.reload.attributes
-    end
+    assert_response :success
+    assert_equal "private, no-store", response.headers["Cache-Control"]
+    assert_includes inertia_props.fetch("rows").map { |row| row.fetch("key") }, grant.public_id
+    get base_org_iam_grant_url(grant.public_id, ri: "jp", host: @host), headers: headers
+
+    assert_response :success
+    assert_equal "private, no-store", response.headers["Cache-Control"]
+    assert_includes inertia_props.fetch("fields").map { |field| field.fetch("description").to_s }, grant.public_id
+    get new_base_org_iam_grant_revocation_url(grant.public_id, ri: "jp", host: @host), headers: headers
+
+    assert_response :success
+    assert_equal "private, no-store", response.headers["Cache-Control"]
+    get base_org_iam_grant_url("unknown-grant", ri: "jp", host: @host), headers: headers
+
+    assert_response :not_found
+    assert_equal before, grant.reload.attributes
   end
 
   test "revocation policy requires its separate capability and refuses an already revoked grant" do

@@ -12,6 +12,10 @@ module Base
         declare_authentication_mode! :private
         OWNER_PAGE_SURFACE = "app"
 
+        layout "base/app/inertia"
+        inertia_share chrome: -> { surface_chrome }
+        inertia_share clear_history: -> { session[:inertia_clear_history] == true }
+
         public
 
         # R5-WU12: the standing is resolved by the Enforcement owner over HTTPS.

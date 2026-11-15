@@ -4,16 +4,11 @@
 module Occurrence
   extend ActiveSupport::Concern
 
-  include Retainable
+  private
 
-  # FIXME: Violates Umaxica/NoConcernInclusionHooks; move the declarations in this block into each class that includes this concern.
-  included do
-    validates :public_id,
-              length: { is: 21 },
-              format: { with: /\A[A-Za-z0-9_-]{21}\z/ },
-              uniqueness: true
-    validates :body, presence: true, uniqueness: true
-    validates :status_id, presence: true
-    validates :memo, length: { maximum: 1024 }, allow_nil: true
+  # Keep the foreign-key field in validation errors while the required
+  # belongs_to association enforces that the referenced status exists.
+  def status_id_must_be_present
+    errors.add(:status_id, :blank) if status_id.blank?
   end
 end

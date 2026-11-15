@@ -155,9 +155,11 @@ boundary, authorization failure and session/actor substitution. Exercise both wi
 versus principal commit on independent connections, expiration while waiting, rollback, unknown
 commit, delivery failure/retry, root rotation during preservation, no stale session use before
 delivery and no revocation of a newer login. Check audit failure and replay without duplicate
-transition. Reconcile `docs/mermaid/idp-state-machine-transition-inventory.md` and the owning
-diagrams with the final implementation. The global O-10 reverse-lock inventory remains an activation
-prerequisite.
+transition. The former cross-service IdP inventory was removed from Governance during the Cosmos
+split: Access owns ceremony transitions, while Governance retains RP-local step-up state. Before
+this acceptance is complete, add a Governance-owned RP diagram and transition inventory linked from
+`docs/mermaid/README.md`; do not restore or duplicate Access's ceremony inventory. The global O-10
+reverse-lock inventory remains an activation prerequisite.
 
 ## Alternative using a mode-transition barrier (not yet implemented)
 

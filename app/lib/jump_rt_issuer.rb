@@ -22,6 +22,7 @@ class JumpRtIssuer
   def self.call(...)
     new(...).call
   end
+  public_class_method :call
 
   def initialize(namespace:, url:, dst:, preserve_query_keys: [], ttl: nil, now: Time.current,
                  jti: SecureRandom.uuid)
@@ -34,6 +35,7 @@ class JumpRtIssuer
     @jti = jti
   end
 
+  public
   def call
     return nil unless valid_destination?
     return nil unless valid_ttl?

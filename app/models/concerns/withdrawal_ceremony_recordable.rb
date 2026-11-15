@@ -13,22 +13,6 @@ module WithdrawalCeremonyRecordable
   STATUS_EXPIRED = 4
   STATUS_IDS = [STATUS_ACTIVE, STATUS_CONSUMED, STATUS_REVOKED, STATUS_EXPIRED].freeze
 
-  # FIXME: Violates Umaxica/NoConcernInclusionHooks; move the declarations in this block into each class that includes this concern.
-  included do
-    include ::PublicId
-
-    attr_reader :plaintext_token
-
-    before_validation :ensure_purpose, on: :create
-    before_validation :ensure_expires_at, on: :create
-    before_validation :ensure_token_digest, on: :create
-
-    validates :purpose, inclusion: { in: PURPOSES }
-    validates :status_id, inclusion: { in: STATUS_IDS }
-    validates :token_digest, presence: true, uniqueness: true
-    validates :expires_at, presence: true
-  end
-
   class_methods do
     def issue!(subject:, purpose: "status", request: nil)
       create!(
@@ -61,6 +45,7 @@ module WithdrawalCeremonyRecordable
     end
   end
 
+  public
   def active?
     !expired? && !consumed? && !revoked? && status_id == STATUS_ACTIVE
   end

@@ -10,6 +10,12 @@
 class OperatorCapabilityGrant < OrgPrincipalRecord
   include PublicId
 
+  before_validation :generate_public_id, on: :create
+  before_validation :refresh_generated_public_id_after_collision, on: :create
+  before_create :generate_public_id
+  around_create :retry_public_id_collision
+  validate :public_id_immutable_after_create, on: :update
+  validates :public_id, presence: true, length: { is: PublicId::GENERATION_SIZE }, uniqueness: true
   SUPPORT_CONSOLE_READ = "support.console.read"
   SUPPORT_ACCOUNT_READ_APP = "support.account.read.app"
   SUPPORT_SESSION_REVOKE_APP = "support.session.revoke.app"

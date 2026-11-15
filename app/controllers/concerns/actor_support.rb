@@ -8,6 +8,8 @@ module ActorSupport
 
   class ResolutionError < StandardError; end
 
+  public
+
   def current_actor
     Actor.context
   end
@@ -135,7 +137,7 @@ module ActorSupport
   # The verified access-token claims recorded at the request credential boundary. This must
   # not fall back to another token: ApplicationPolicy reads its Emergency context from here.
   def resolved_current_token
-    @current_access_token_payload if defined?(@current_access_token_payload)
+    @current_rp_authentication_payload if defined?(@current_rp_authentication_payload)
   end
 
   def resolved_current_authentication(resource: safe_current_resource,
@@ -151,21 +153,7 @@ module ActorSupport
       amr: token&.dig("amr"),
       actor_type: actor_type,
       actor_id: resource&.id,
-      active_sign_sequence_id: resolved_active_sign_sequence_id,
     )
-  end
-
-  def resolved_active_sign_sequence_id
-    return unless respond_to?(:session, true)
-    return unless defined?(SignInSequenceCarrier)
-
-    sequence = SignInSequenceCarrier.new(session, surface: Actor.tld).current
-    return if sequence.blank?
-    return if sequence.expired? || sequence.terminal?
-
-    sequence.id
-  rescue StandardError => e
-    raise_actor_resolution_error!(:sign_sequence, e)
   end
 
   def resolved_current_configuration(_resource)

@@ -50,6 +50,21 @@ class AvatarOwnershipTransitionInventoryQueryTest < ActiveSupport::TestCase
     assert_nil detail.fetch(:legacy_owner_surface)
     assert_equal "app", detail.fetch(:concrete_owner_surface)
     assert_predicate result, :ready?
+    assert_not_predicate result, :blocking?
+  end
+
+  test "an ownerless accessible avatar blocks the ownership cutover" do
+    avatar = AvatarTestFactory.create!(
+      moniker: "No owner",
+      create_concrete_owner: false,
+      capability: @capability,
+      active_handle: active_handle("inventory-ownerless"),
+    )
+
+    result = AvatarOwnershipTransitionInventoryQuery.call(avatar_ids: [avatar.id])
+
+    assert_equal "ownerless", result.details.fetch(0).fetch(:classification)
+    assert_predicate result, :blocking?
   end
 
   test "is read-only and rejects an unbounded or invalid avatar selection" do

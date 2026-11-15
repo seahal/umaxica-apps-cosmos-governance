@@ -32,7 +32,31 @@ class OperatorTelephone < OrgPrincipalRecord
   # Issued public IDs are also protected by operator_telephones_public_id_immutability;
   # the scoped DB exception is owned by adr/database-trigger-usage-boundary.md.
   include PublicId
+
+  after_initialize :initialize_telephone_otp_state
+  before_validation :generate_public_id, on: :create
+  before_validation :refresh_generated_public_id_after_collision, on: :create
+  before_validation :normalize_number_from_raw
+  before_validation :set_number_digests
+  before_create :generate_public_id
+  around_create :retry_public_id_collision
+  validate :public_id_immutable_after_create, on: :update
+  validates :public_id, presence: true, length: { is: PublicId::GENERATION_SIZE }, uniqueness: true
   include Telephone
+
+  scope :with_number, ->(value) do
+    digest = IdentifierBlindIndex.bidx_for_telephone(value, realm: identifier_hmac_realm)
+    digest.present? ? where(number_digest: digest) : none
+  end
+  validate :validate_telephone_number
+  validates :confirm_policy, acceptance: true,
+                             unless: proc { |record| record.raw_number.blank? && record.pass_code.present? }
+  validates :confirm_using_mfa, acceptance: true,
+                                unless: proc { |record| record.raw_number.blank? && record.pass_code.present? }
+  validates :pass_code, numericality: { only_integer: true },
+                        length: { is: 6 },
+                        presence: true,
+                        unless: proc { |record| record.pass_code.blank? && record.raw_number.present? }
   include TelephoneDeadIdentifierHistory
 
   IDENTIFIER_REALM = "org"
@@ -53,9 +77,7 @@ class OperatorTelephone < OrgPrincipalRecord
   validates :number, presence: true
   validates :otp_attempts_count, presence: true, numericality: { only_integer: true }
   validates :staff_identity_telephone_status_id, numericality: { only_integer: true }
-  validates :number_digest, blind_index_uniqueness: { error_attribute: :number }, allow_blank: true
-
-  after_initialize :initialize_telephone_otp_state
+  validates :number_digest, blind_index_uniqueness: { error_attribute: :number }, allow_nil: true
 
   before_destroy :archive_dead_telephone_identifier, prepend: true
 
@@ -77,10 +99,6 @@ class OperatorTelephone < OrgPrincipalRecord
   # Note: :number encryption is handled by Telephone concern
 
   public
-
-  def finalize_telephone_registration!(transaction:, code:, session_ref:)
-    raise AccessOpDataUnavailableError
-  end
 
   private
 end

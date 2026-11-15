@@ -20,14 +20,11 @@
 module HealthCheckRendering
   extend ActiveSupport::Concern
 
-  # FIXME: Violates Umaxica/NoConcernInclusionHooks; move the declarations in this block into each class that includes this concern.
-  included do
-    before_action :disable_health_response_cache
-  end
-
   # Probe endpoints (liveness/readiness/startup): text/plain, no redirect, no layout, no
   # negotiation. `result.ok?` already folds the probe-specific rule that liveness tolerates a
   # "starting" process while startup and readiness do not.
+  public
+
   def render_probe(result)
     if result.ok?
       render plain: "ok\n"

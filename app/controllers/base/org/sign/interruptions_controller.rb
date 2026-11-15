@@ -1,0 +1,17 @@
+# typed: false
+# frozen_string_literal: true
+
+module Base
+  module Org
+    module Sign
+      class InterruptionsController < Base::Org::ApplicationController
+        include ::OidcRpSignInterruption
+
+        AUTHENTICATION_MODE = :open
+        declare_authentication_mode! :open
+        skip_before_action :set_region, raise: false
+        helper_method :interruption_sign_path
+      end
+    end
+  end
+end

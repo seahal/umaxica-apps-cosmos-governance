@@ -4,6 +4,12 @@ Status: owner-reviewed direction; revised on 2026-11-05 per the review recorded 
 Implementation is in progress. The endpoints remain disconnected until their source-write and
 recovery paths pass the listed verification.
 
+> **Cosmos ownership supersession (2026-11-13, owner):** Access now owns OP data and executes every
+> authentication ceremony. The Governance-local Auth/Visa implementation paths described here are
+> not current runtime; Governance retains its RP-side step-up state and fails closed for unavailable
+> OP data. Preserve this design as historical context. This notice authorizes no schema or data
+> cleanup.
+
 ## Ownership and flow
 
 Auth is the source writer for APP and ORG passkey registration and APP Google/Apple social linking.

@@ -12,8 +12,7 @@ module PromotionalEmailUnsubscribeActions
   extend ActiveSupport::Concern
   include ::CloudflareTurnstile
 
-  def edit
-  end
+  public
 
   def destroy
     return unless verified_turnstile_for_destroy?

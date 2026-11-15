@@ -18,6 +18,8 @@ class AppPreferenceDateFormatOption < AppSettingRecord
 
   DEFAULTS = [NOTHING, ISO, UK, US].freeze
 
+  self.record_timestamps = false
+
   has_many :app_preference_date_formats,
            class_name: "AppPreferenceDateFormat",
            foreign_key: :option_id,
@@ -27,7 +29,9 @@ class AppPreferenceDateFormatOption < AppSettingRecord
   def self.ensure_defaults!
     insert_missing_fixed_ids!(DEFAULTS)
   end
+  public_class_method :ensure_defaults!
 
+  public
   def name
     case id
     when 1 then "iso"

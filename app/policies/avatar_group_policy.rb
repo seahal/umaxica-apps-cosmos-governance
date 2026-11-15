@@ -2,6 +2,7 @@
 # frozen_string_literal: true
 
 class AvatarGroupPolicy < ApplicationPolicy
+  public
   def index?
     selected_owner_permission?("avatar.group.manage")
   end

@@ -32,6 +32,7 @@ module AvatarLifecycle
       @metadata = metadata
     end
 
+    public
     def call
       Avatar.transaction do
         locked_avatar = Avatar.lock.find(avatar.id)

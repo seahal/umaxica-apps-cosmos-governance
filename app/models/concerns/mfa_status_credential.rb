@@ -6,8 +6,6 @@ module MfaStatusCredential
 
   OWNER_ASSOCIATIONS = Concurrent::Map.new
 
-  included { after_commit :refresh_owner_mfa_status }
-
   class_methods do
     def mfa_status_owner(association_name)
       OWNER_ASSOCIATIONS[self] = association_name

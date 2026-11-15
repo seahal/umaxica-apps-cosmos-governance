@@ -56,54 +56,40 @@ authorize :actor, through: :current_actor
 
 `app/policies/application_policy.rb` provides these policy helpers:
 
-| Method                                                                               | Meaning                                                                                                                                                                                                                                                                   |
-| ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `actor` / `user`                                                                     | Authorization context and derived concrete resource                                                                                                                                                                                                                       |
-| `record`                                                                             | Resource being authorized                                                                                                                                                                                                                                                 |
-| `owner?`                                                                             | Whether `user` owns `record`, using Client `user_id`, Operator `staff_id`, Visitor `visitor_id`, or resource identity                                                                                                                                                     |
-| `operator_capability?(capability)`                                                   | Whether `user` is an Operator holding the given `OperatorCapabilityGrant` capability in force                                                                                                                                                                             |
-| `operator?` / `operator_or_manager?` / `can_edit?` / `can_view?` / `can_contribute?` | Organization-role helpers. They delegate to `has_role?`, `operator_or_manager?`, `can_edit?`, `can_view?`, and `can_contribute?` on `user`, which no actor model currently defines, so calling them with an actor raises `NoMethodError`. Do not use them in new policies |
-| `authentication_context`                                                             | Authentication context (normal, emergency) read from the signed access token; drives the capability pre-check                                                                                                                                                             |
-| `current_token`                                                                      | `Actor.authz.token_claims`                                                                                                                                                                                                                                                |
+| Method                                                                               | Meaning                                                                                                                                                                                                     |
+| ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `actor` / `user`                                                                     | Authorization context and derived concrete resource                                                                                                                                                         |
+| `record`                                                                             | Resource being authorized                                                                                                                                                                                   |
+| `owner?`                                                                             | Whether `user` owns `record`, using Client `user_id`, Operator `staff_id`, or matching Client/Operator resource identity                                                                                    |
+| `operator_capability?(capability)`                                                   | Whether `user` is an Operator holding the given `OperatorCapabilityGrant` capability in force                                                                                                               |
+| `operator?` / `operator_or_manager?` / `can_edit?` / `can_view?` / `can_contribute?` | Legacy role helpers retained for historical callers. Current actor models do not define their delegated role API; current policies must use explicit owner checks or the accepted capability grants instead |
+| `authentication_context`                                                             | Authentication context (normal, emergency) read from the signed access token; drives the capability pre-check                                                                                               |
+| `current_token`                                                                      | `Actor.authz.token_claims`                                                                                                                                                                                  |
 
 The default `index?`, `show?`, `create?`, `update?`, and `destroy?` predicates all return false.
 `alias_rule` maps `edit?` to `update?` and `new?` to `create?`.
 
 ## Implementing a Policy
 
-Example from `app/policies/client_policy.rb`:
+`ClientPolicy` is the app-surface self-service policy. It permits a Client to read or update only
+their own Client record. It denies listing, registration, deletion, and every Operator actor.
+Registration has a separate flow, withdrawal uses `ClientWithdrawalPolicy`, and org support uses
+`SupportClientPolicy` with its explicit capability grants.
 
 ```ruby
 class ClientPolicy < ApplicationPolicy
-  def index?
-    user.is_a?(Operator) && operator_or_manager?
-  end
+  def index? = false
 
-  def show?
-    owner? || (user.is_a?(Operator) && operator_or_manager?)
-  end
+  def show? = user.is_a?(Client) && owner?
 
-  def create?
-    user.is_a?(Operator) && operator?
-  end
+  def create? = false
 
-  def update?
-    owner? || (user.is_a?(Operator) && operator_or_manager?)
-  end
+  def update? = user.is_a?(Client) && owner?
 
-  def destroy?
-    (owner? && user.is_a?(Client)) || (user.is_a?(Operator) && operator?)
-  end
+  def destroy? = false
 
-  # Define list filtering with relation_scope.
   relation_scope do |relation|
-    if user.is_a?(Operator) && operator_or_manager?
-      relation.all
-    elsif user.is_a?(Client)
-      relation.where(id: user.id)
-    else
-      relation.none
-    end
+    user.is_a?(Client) ? relation.where(id: user.id) : relation.none
   end
 end
 ```
@@ -173,12 +159,12 @@ denied cases, anonymous actors, another user, another staff member, and each rel
 require "test_helper"
 
 class ClientPolicyTest < ActiveSupport::TestCase
-  test "operator manager can view the client list" do
-    assert_predicate ClientPolicy.new(record, actor: operator_manager_context), :index?
+  test "a Client can update its own record" do
+    assert ClientPolicy.new(client, user: client).apply(:update?)
   end
 
-  test "anonymous actor cannot view the client list" do
-    assert_not_predicate ClientPolicy.new(record, actor: anonymous_context), :index?
+  test "an Operator cannot use the app self-service policy" do
+    assert_not ClientPolicy.new(client, user: operator).apply(:update?)
   end
 end
 ```

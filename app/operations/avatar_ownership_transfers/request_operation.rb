@@ -18,6 +18,7 @@ module AvatarOwnershipTransfers
       @step_up_evidence = step_up_evidence
     end
 
+    public
     def call
       validate_step_up_context!(actor: actor, token: step_up_token, evidence: step_up_evidence)
       reject_legacy_transfer_after_cutover!

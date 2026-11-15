@@ -10,7 +10,7 @@ Base app/org pages (Self-RP cells `base-app-ww`, `base-org-ww`) call Avatar Oper
 `avatar` store in-process with the Global actor (`current_client` / `current_operator`), the OP
 grant as `current_session` (selected collective) and `Actor.selection` (selected persona).
 
-## After (proposed)
+## After (accepted 2026-10-17)
 
 Server-to-server, same pattern as Publishing (R5-WU13): the Base RP sends its private_key_jwt bound
 to the exact URL and the actor's Access JWT. Base reads the selected context from its RP session and
@@ -19,8 +19,8 @@ selection row; ORG reads the optional Avatar ID from a child row keyed to the RP
 selection. No child row means no Avatar is selected. The Avatar owner re-resolves the real actor
 from the Access Token and matches the complete tuple against candidates the actor may select; it
 never reads selection from the OP root or trusts the supplied IDs by themselves. The RP session
-remains the sole Base APP/ORG selection writer. Both surfaces then apply the existing `AvatarPolicy` /
-`AvatarPermissionResolver` / ownership-period checks and Operations. Answers are allowlisted JSON.
+remains the sole Base APP/ORG selection writer. Both surfaces then apply the existing `AvatarPolicy`
+/ `AvatarPermissionResolver` / ownership-period checks and Operations. Answers are allowlisted JSON.
 The former APP `GET /api/v0/identity/selection` root-token reader returns `409` and exposes no
 competing selection.
 
@@ -44,6 +44,17 @@ Invariants kept at the owner: ownership-period lock and "owner changed while upd
 active Avatar per persona (409/422 under `avatar`); owner-surface checks; collective membership via
 `AvatarOwnerMembershipLockService`; no new permission (D-10 deferred work stays unimplemented).
 Writes are not blindly retried; an indeterminate write is re-read.
+
+## Base caller credential update (2026-11-14)
+
+The actor and selection ownership described above remain in force. The Base caller credential is now
+the Governance-signed PS256 bearer defined in
+[`adr/base-api-authority-governance-issued-token.md`](../../adr/base-api-authority-governance-issued-token.md),
+derived from the caller's active `sid`-bound RP session. Avatar receivers reload and validate that
+RP session before resolving the canonical actor and applying the selected-context policy. Base
+clients no longer send an Access JWT or `private_key_jwt` assertion to these Governance-owned APIs.
+The session reference, client, realm, subject and audience are bound into the token; no personal
+data is carried.
 
 ## Questions resolved on 2026-11-05
 

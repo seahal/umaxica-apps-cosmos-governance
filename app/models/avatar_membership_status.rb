@@ -18,5 +18,7 @@ class AvatarMembershipStatus < AvatarRecord
   DELETED = 4
   DEFAULTS = [NOTHING, ACTIVE, INACTIVE, DELETED].freeze
 
+  self.record_timestamps = false
+
   has_many :avatar_memberships, dependent: :restrict_with_error
 end

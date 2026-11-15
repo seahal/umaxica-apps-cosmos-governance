@@ -17,9 +17,6 @@ class BaseSharedWithdrawalLocalSessionTest < ActionDispatch::IntegrationTest
     https!
     headers = as_user_headers(actor, host: ENV.fetch("PUBLIC_BASE_SERVICE_URL"))
     browser_cookies = Rack::Utils.parse_cookies_header(headers.fetch("Cookie"))
-    cookies[OidcRpBrowserCredentialContract::ACCESS_COOKIE] = browser_cookies.fetch(
-      OidcRpBrowserCredentialContract::ACCESS_COOKIE,
-    )
     cookies[OidcRpBrowserCredentialContract::SESSION_COOKIE] = browser_cookies.fetch(
       OidcRpBrowserCredentialContract::SESSION_COOKIE,
     )

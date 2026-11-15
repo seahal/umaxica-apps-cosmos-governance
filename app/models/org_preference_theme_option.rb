@@ -26,7 +26,9 @@ class OrgPreferenceThemeOption < OrgSettingRecord
   def self.ensure_defaults!
     insert_missing_fixed_ids!(DEFAULTS)
   end
+  public_class_method :ensure_defaults!
 
+  public
   def name
     case id
     when LIGHT then "light"

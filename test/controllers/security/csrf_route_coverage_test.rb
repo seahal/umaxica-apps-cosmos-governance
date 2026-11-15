@@ -16,12 +16,19 @@ module Security
       # Retained Base owner APIs use server-to-server authentication without browser cookies.
       %r{\A/api/v0/(?:avatar|membership|iam|support|tech-capability-checks)/},
       %r{\A/api/v0/tech-capability-checks(?:\(\.:format\))?\z},
+      # Visa Back-Channel Logout is a signed server-to-server request, never a browser session.
+      %r{\A/oidc/closures(?:\(\.:format\))?\z},
     ].freeze
 
     test "retired OP and publishing paths are not exempt from the CSRF route invariant" do
-      %w(/oauth/token /oauth/revoke /apple/notifications /oidc/closures /api/v0/publishing/entries).each do |path|
+      %w(/oauth/token /oauth/revoke /apple/notifications /api/v0/publishing/entries).each do |path|
         assert_not PROTOCOL_ENDPOINTS.any? { |pattern| pattern.match?(path) }, path
       end
+    end
+
+    test "Base App Back-Channel Logout is an exact server-to-server exception" do
+      assert PROTOCOL_ENDPOINTS.any? { |pattern| pattern.match?("/oidc/closures") }
+      assert_not PROTOCOL_ENDPOINTS.any? { |pattern| pattern.match?("/oidc/closures/other") }
     end
 
     test "only API controllers use the server-to-server CSRF invariant exception" do
@@ -167,7 +174,7 @@ class Security::CsrfRouteCoverageTest
 
   def load_jump_rt_env!
     @jump_rt_env_originals ||= {}
-    jump_rt_key = Base64.strict_encode64(OpenSSL::PKey::EC.generate("secp384r1").to_der)
+    jump_rt_key = Base64.strict_encode64(OpenSSL::PKey::RSA.generate(3072).to_der)
     %w(FOREIGN_APP FOREIGN_ORG BASE_APP BASE_ORG).each do |namespace|
       ENV["JWT_#{namespace}_ACTIVE_KID"] = "#{namespace.downcase.tr("_", "-")}-test"
       ENV["JWT_#{namespace}_PRIVATE_KEY"] = jump_rt_key

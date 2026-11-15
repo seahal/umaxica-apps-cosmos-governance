@@ -8,7 +8,7 @@ module Umaxica
     # Parses Redis/Valkey URLs. Expected nonprod DB indexes come from config/valkey.yml
     # via Settings.logical_db - they are not duplicated here.
     module ResponsibilityUrls
-      KNOWN = %i(cache rate_limit auth_state performance coverband).freeze
+      KNOWN = %i(cache rate_limit auth_state coverband).freeze
 
       Parsed =
         Data.define(:responsibility, :url, :db, :host, :port) do
@@ -41,18 +41,6 @@ module Umaxica
         )
       rescue URI::InvalidURIError => e
         raise ConfigurationError, "invalid Valkey URL", cause: e
-      end
-
-      def require_url(responsibility, variable, environment: ENV, env: Rails.env)
-        url = environment.fetch(variable)
-        raise ConfigurationError, "#{variable} is required" if url.to_s.strip.empty?
-
-        parsed = parse(url, responsibility:)
-        assert_production_tls!(parsed, env:, variable:)
-        assert_nonprod_db!(parsed, env:)
-        parsed
-      rescue KeyError => e
-        raise ConfigurationError, "#{variable} is required", cause: e
       end
 
       def expected_db(responsibility, env: Rails.env)

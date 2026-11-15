@@ -254,6 +254,44 @@ describe("AdminConfirmation", () => {
     submit_label: "Open case",
   };
 
+  it("keeps newly added server fields controlled after a confirmation form refresh", () => {
+    const { rerender } = render(
+      <AdminConfirmation
+        {...confirmationProps}
+        fields={[]}
+      />,
+    );
+
+    rerender(
+      <AdminConfirmation
+        {...confirmationProps}
+        fields={[
+          {
+            kind: "select",
+            name: "enforcement_case[kind]",
+            label: "Kind",
+            value: "cooldown",
+            options: [
+              { value: "cooldown", label: "Cooldown" },
+              { value: "", label: "Choose a kind" },
+            ],
+          },
+          {
+            kind: "text",
+            name: "ticket_id",
+            label: "Ticket ID",
+            value: "T-100",
+            maxlength: 64,
+            required: false,
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByRole<HTMLSelectElement>("combobox", { name: "Kind" }).value).toBe("");
+    expect(screen.getByRole<HTMLInputElement>("textbox", { name: "Ticket ID" }).value).toBe("");
+  });
+
   it("shows the server's in-progress reason while a mutation is processing", () => {
     const meta = document.createElement("meta");
     meta.name = "ui-processing";
@@ -329,7 +367,9 @@ describe("AdminConfirmation", () => {
       />,
     );
 
-    fireEvent.change(screen.getByRole("textbox", { name: /Ticket ID/u }), {
+    const ticketInput = screen.getByRole<HTMLInputElement>("textbox", { name: /Ticket ID/u });
+    expect(ticketInput.value).toBe("");
+    fireEvent.change(ticketInput, {
       target: { value: "T-100" },
     });
     fireEvent.click(screen.getByRole("checkbox"));

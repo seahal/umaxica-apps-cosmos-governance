@@ -1,8 +1,11 @@
 # O-10 credential registration source receipts
 
-Status: implementation design accepted by the owner on 2026-11-05. Additive implementation is
-authorized; the verification, migration preflight, audit and retention gates below remain required
-before activation.
+Status: **Superseded for Governance runtime (2026-11-13).** Access owns authentication ceremonies;
+Governance has no local passkey or TOTP enrollment finalization path. The proposed cross-database
+commit and recovery implementation is not an active Governance work item. Governance retains its
+credential records and owner-side persistence/audit operations without a current ceremony caller.
+This document is preserved as historical design evidence; none of its proposed receipt migrations or
+schema changes were made by the ceremony retirement.
 
 ## Scope and observed behavior
 

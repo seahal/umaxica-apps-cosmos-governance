@@ -17,6 +17,7 @@ module AvatarSocialGraph
       @target_avatar = target_avatar
     end
 
+    public
     def call
       raise SelfEdgeError, "avatar cannot follow itself" if actor_avatar == target_avatar
       raise BlockedError, "actor avatar is not active" unless active_avatar?(actor_avatar)
@@ -59,6 +60,7 @@ module AvatarSocialGraph
       @target_avatar = target_avatar
     end
 
+    public
     def call
       raise SelfEdgeError, "avatar cannot block itself" if actor_avatar == target_avatar
       raise BlockedError, "actor avatar is not active" unless active_avatar?(actor_avatar)
@@ -98,6 +100,7 @@ module AvatarSocialGraph
       @target_avatar = target_avatar
     end
 
+    public
     def call
       raise SelfEdgeError, "avatar cannot mute itself" if actor_avatar == target_avatar
       raise BlockedError, "actor avatar is not active" unless active_avatar?(actor_avatar)
@@ -130,6 +133,7 @@ module AvatarSocialGraph
       @target_avatar = target_avatar
     end
 
+    public
     def call
       existing_follow&.destroy
     end
@@ -150,6 +154,7 @@ module AvatarSocialGraph
       @target_avatar = target_avatar
     end
 
+    public
     def call
       existing_block&.destroy
     end
@@ -170,6 +175,7 @@ module AvatarSocialGraph
       @target_avatar = target_avatar
     end
 
+    public
     def call
       existing_mute&.destroy
     end

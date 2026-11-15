@@ -45,6 +45,7 @@ class AvatarOwnershipPeriod < AvatarRecord
 
   scope :current, -> { where("valid_to = 'infinity'::timestamp with time zone") }
 
+  public
   def current?
     valid_to == Float::INFINITY && avatar_ownership_status_id == AvatarOwnershipStatus::ACTIVE
   end

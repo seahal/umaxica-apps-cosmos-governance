@@ -15,12 +15,10 @@
 #
 #   FQDN availability gate -> no-store -> 406 -> 415 -> rate limit, CSRF, mutation authority ...
 #
-# The negotiation filters are registered by ApiContentNegotiation when it is included. Declaring
-# them again with `prepend_before_action` moves them, it does not add a second copy: ActiveSupport
-# drops an existing callback with the same filter before inserting the new one. Prepending is what
-# puts 406/415 ahead of the CSRF and credential callbacks the family ApplicationController
-# registered before this controller was defined.
-#
+# `preference_browser_api!` explicitly prepends both negotiation filters on each endpoint host.
+# Prepending puts 406/415 ahead of the CSRF and credential callbacks the family
+# ApplicationController registered before this controller was defined.
+
 # Contract with the including class:
 # - includes FqdnAvailabilityGate (`ensure_fqdn_gate_first!`), and a controller under a
 #   DefaultNoStore policy root re-prepends `:apply_default_no_store` after `preference_browser_api!`;

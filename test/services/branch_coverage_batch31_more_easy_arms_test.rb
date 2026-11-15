@@ -15,31 +15,6 @@ class BranchCoverageBatch31MoreEasyArmsTest < ActiveSupport::TestCase
     assert_equal "missing cf-turnstile-response", nil_token["error"]
   end
 
-  test "OidcIdTokenIssuer blank nonce and inverted times" do
-    resource = Client.new(security_mode_id: SecurityModeConfigurable::NORMAL)
-    client = Struct.new(:client_id).new("base-rails-rp")
-    assert_raises(ArgumentError) do
-      OidcIdTokenIssuer.new(
-        resource: resource,
-        client: client,
-        nonce: "",
-        sid: PublicId.generate,
-        issued_at: Time.current,
-        expires_at: 1.minute.from_now,
-      ).call
-    end
-    assert_raises(ArgumentError) do
-      OidcIdTokenIssuer.new(
-        resource: resource,
-        client: client,
-        nonce: "n",
-        sid: PublicId.generate,
-        issued_at: 1.minute.from_now,
-        expires_at: Time.current,
-      ).call
-    end
-  end
-
   test "CredentialSecurityTransition blank actor" do
     assert_raises(ArgumentError) { CredentialSecurityTransition.new(actor: nil, event: :rotate) }
   end

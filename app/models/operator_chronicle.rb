@@ -43,6 +43,14 @@
 class OperatorChronicle < ChronicleRecord
   include Retainable
 
+  attribute :discard_at, :datetime, default: -> { Retainable::SENTINEL }
+  attribute :purge_eligible_at, :datetime, default: -> { Retainable::SENTINEL }
+  validates :discard_at, presence: true
+  validates :purge_eligible_at, presence: true
+  validate :retention_order_valid
+  validate :retention_times_not_before_created_at, on: :update
+  Retainable.register_host(self)
+
   attribute :level_id, default: OperatorChronicleLevel::NOTHING
 
   # Alias for backward compatibility
@@ -63,9 +71,14 @@ class OperatorChronicle < ChronicleRecord
   validates :level_id, numericality: { only_integer: true }, allow_nil: true
   # Validate that event_id exists in staff_chronicle_events table
   validate :halted_flow_correlation_keys
-  validates :context, jsonb_text_uniqueness: {
-    keys: %w(transaction_public_id halt_generation), where: { event_id: OperatorChronicleEvent::SIGN_FLOW_HALTED },
-  }
+  # These normalized expression terms and conditions match the partial unique index exactly.
+  validates_with JsonbTextUniquenessValidator,
+                 attributes: [JsonbTextUniquenessValidator::TRANSACTION_PUBLIC_ID_INDEX_COLUMN],
+                 scope: JsonbTextUniquenessValidator::HALT_GENERATION_INDEX_COLUMN,
+                 source_attribute: :context,
+                 keys: %w(transaction_public_id halt_generation),
+                 where: { event_id: OperatorChronicleEvent::SIGN_FLOW_HALTED },
+                 conditions: -> { where(event_id: OperatorChronicleEvent::SIGN_FLOW_HALTED) }
   validate :event_id_must_exist
   before_validation :default_actor_to_subject
   # Helper methods for compatibility with existing code
@@ -76,16 +89,17 @@ class OperatorChronicle < ChronicleRecord
   def halted_flow_correlation_keys
     return unless event_id == OperatorChronicleEvent::SIGN_FLOW_HALTED
 
-    keys =
-      case context
-      when Hash then context.keys.map(&:to_s)
-      when Array then context.grep(String)
-      else []
+    identity = context.is_a?(Hash) ? context.stringify_keys : {}
+    valid_identity =
+      %w(transaction_public_id halt_generation).all? do |key|
+        identity.key?(key) && !identity[key].nil?
       end
-    errors.add(:context, :invalid) unless %w(transaction_public_id halt_generation).all? { |key| keys.include?(key) }
+
+    errors.add(:context, :invalid) unless valid_identity
   end
   private :halted_flow_correlation_keys
 
+  public
   def set_timestamp
     self.timestamp ||= Time.current
   end

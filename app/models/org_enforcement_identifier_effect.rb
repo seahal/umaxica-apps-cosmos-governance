@@ -35,6 +35,7 @@ class OrgEnforcementIdentifierEffect < OrgPrincipalRecord
   }
 
   class << self
+    public
     def build_for_email(value:, **attrs)
       digest = EnforcementIdentifierDigest.for_email(realm: "org", value: value)
       return nil unless digest

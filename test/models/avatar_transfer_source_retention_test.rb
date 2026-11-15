@@ -26,7 +26,7 @@ class AvatarTransferSourceRetentionTest < ActiveSupport::TestCase
         period = period_class.create!(avatar: avatar, valid_from: avatar.created_at, **owner_attributes)
         reservation = AvatarTransferReservation.create!(
           avatar: avatar, operation_kind: operation_kind,
-          idempotency_key: "018f2b18-6f5c-7a30-8ec2-4ebc1f0f7a31",
+          idempotency_key: SecureRandom.uuid,
           request_fingerprint: "source-retention-probe",
         )
         detail = detail_class.create!(

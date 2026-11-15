@@ -20,7 +20,7 @@ class Base::App::FullAccessGateTest < ActionDispatch::IntegrationTest
     assert_redirected_to base_app_selector_path(ri: "jp")
   end
 
-  test "selected dashboard reports unavailable Avatar authority after its local selector guard" do
+  test "selected dashboard resolves Governance Avatar authority after its local selector guard" do
     BaseSelectorBootstrapAuthority.call(surface: :app, principal: @user)
 
     http_headers_1 =
@@ -32,7 +32,7 @@ class Base::App::FullAccessGateTest < ActionDispatch::IntegrationTest
       end
     get base_app_dashboard_url(host: @host, ri: "jp"), headers: http_headers_1
 
-    assert_response :service_unavailable
+    assert_response :success
     assert_includes response.headers["Cache-Control"], "no-store"
   end
 

@@ -17,9 +17,12 @@ class AppPreferenceChronicleLevel < ChronicleRecord
 
   DEFAULTS = [NOTHING, INFO].freeze
 
+  self.record_timestamps = false
+
   has_many :app_preference_chronicles, dependent: :restrict_with_error, inverse_of: :app_preference_chronicle_level
 
   def self.ensure_defaults!
     insert_missing_fixed_ids!(DEFAULTS)
   end
+  public_class_method :ensure_defaults!
 end

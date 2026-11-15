@@ -95,6 +95,7 @@ module TelephoneNormalization
     # Pass the flag to know if we should remove domestic 0 after country code
     convert_domestic_format(cleaned, from_intl_prefix)
   end
+  public_class_method :normalize_to_e164
 
   # Remove formatting characters from input
   # @param input [String] the raw input

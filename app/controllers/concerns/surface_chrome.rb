@@ -8,6 +8,8 @@
 # becomes a serialized prop shared by every Inertia response of the surface. Everything that is a
 # server responsibility stays here: translation, route generation, the banner query, and the
 # decision about which navigation a visitor is allowed to see.
+# Base RP controllers provide account_navigation_sign_in_path(**options) and
+# account_navigation_sign_out_path(**options); this concern does not select realm routes.
 #
 # The shared payload is per surface by construction: each including controller declares its own
 # family, surface and banner domain, and `inertia_share` runs in that controller's instance, so one
@@ -23,12 +25,12 @@ module SurfaceChrome
   FAMILY_CHROME = {
     "base" => { family_label: "BASE", banner_domain: :acme },
   }.freeze
-
-  # FIXME: Violates Umaxica/NoConcernInclusionHooks; move the declarations in this block into each class that includes this concern.
-  included do
-    inertia_share chrome: -> { surface_chrome }
-    inertia_share clear_history: -> { session[:inertia_clear_history] == true }
-  end
+  ACCOUNT_NAVIGATION_SURFACES = [%w(base app), %w(base org)].freeze
+  ACCOUNT_PROCEDURE_NAMESPACES = %w(sign sign_outs oidc).freeze
+  ACCOUNT_NAVIGATION_EXCLUDED_CONTROLLER_PATHS = %w(
+    base/app/preference/emails
+    base/org/preference/emails
+  ).freeze
 
   private
 
@@ -56,6 +58,7 @@ module SurfaceChrome
       brand: chrome_brand,
       banner: chrome_banner(configuration.fetch(:banner_domain)),
       footer_navigation: nil,
+      account_navigation: chrome_account_navigation,
       cookie_controls: chrome_cookie_controls,
       theme_controls: chrome_theme_controls,
       copyright: chrome_copyright,
@@ -176,6 +179,35 @@ module SurfaceChrome
 
   def chrome_copyright
     "© #{Time.zone.today.year} #{ENV.fetch("BRAND_NAME")}"
+  end
+
+  def chrome_account_navigation
+    family = chrome_configuration.fetch(:family)
+    surface = chrome_configuration.fetch(:surface)
+    return nil unless ACCOUNT_NAVIGATION_SURFACES.include?([family, surface])
+    return nil if ACCOUNT_NAVIGATION_EXCLUDED_CONTROLLER_PATHS.include?(controller_path.to_s)
+    return nil if ACCOUNT_PROCEDURE_NAMESPACES.include?(controller_path.split("/").third)
+
+    signed_in = logged_in?
+
+    options = request.query_parameters.slice(*PREFERENCE_QUERY_KEYS).symbolize_keys
+    links =
+      if signed_in
+        [{
+          label: chrome_t("layouts.shared.account_navigation.sign_out"),
+          href: account_navigation_sign_out_path(**options),
+        }]
+      else
+        [{
+          label: chrome_t("layouts.shared.account_navigation.sign_up_or_in"),
+          href: account_navigation_sign_in_path(**options),
+        }]
+      end
+    {
+      label: chrome_t("layouts.shared.account_navigation.label"),
+      signed_in: signed_in,
+      links:,
+    }
   end
 
   # Keys are composed from the surface, so they cannot be literals at the call site; passing the

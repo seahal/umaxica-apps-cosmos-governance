@@ -26,12 +26,12 @@ class CycleCloseAuthenticatedRootsTest < ActionDispatch::IntegrationTest
     end
   end
 
-  test "anonymous Base Dashboard is unauthorized and the retired lobby remains absent" do
+  test "anonymous Base Dashboard redirects to neutral sign and the retired lobby remains absent" do
     host = ENV.fetch("PUBLIC_BASE_SERVICE_URL", "base.app.localhost")
     get "/dashboard", params: { ri: "jp" }, headers: { "Host" => host }
 
-    assert_response :unauthorized, "/dashboard"
-    assert_nil response.location
+    assert_response :see_other, "/dashboard"
+    assert_redirected_to base_app_sign_show_path(ri: "jp", target_link_uri: "/dashboard")
 
     get "/lobby", params: { ri: "jp" }, headers: { "Host" => host }
 

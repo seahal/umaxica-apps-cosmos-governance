@@ -55,14 +55,28 @@ class ClientBulletinTest < ActiveSupport::TestCase
   end
 
   test "public_id is auto-generated" do
-    bulletin = ClientBulletin.create!(
+    bulletin = ClientBulletin.new(
       user: @user,
       title: "Test Bulletin",
       body: "Test body",
     )
 
+    assert_nil bulletin.public_id
+    bulletin.save!
+
     assert_predicate bulletin.public_id, :present?
     assert_equal 21, bulletin.public_id.length
+  end
+
+  test "persisted public_id cannot be changed through the record update boundary" do
+    bulletin = ClientBulletin.create!(user: @user, title: "Immutable")
+    original_public_id = bulletin.public_id
+    bulletin.public_id = "replacementid12345678"
+
+    error = assert_raises(ActiveRecord::RecordInvalid) { bulletin.save! }
+
+    assert_equal "cannot be changed after creation", error.record.errors[:public_id].first
+    assert_equal original_public_id, bulletin.reload.public_id
   end
 
   test "retries only a collision on the public_id unique index" do

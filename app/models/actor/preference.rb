@@ -77,6 +77,7 @@ class Actor
       freeze
     end
 
+    public
     def cookie
       @cookie
     end
@@ -204,6 +205,7 @@ class Actor
         cookie: cookie,
       )
     end
+    public_class_method :from_jwt
 
     def self.theme_from_snapshot(value)
       { "light" => "li", "dark" => "dr", "system" => "sy" }.fetch(value.to_s, value)
@@ -227,6 +229,7 @@ class Actor
         build_cookie_from_object(value)
       end
     end
+    public_class_method :cookie_from
 
     def self.build_cookie_from_hash(value)
       Cookie.new(

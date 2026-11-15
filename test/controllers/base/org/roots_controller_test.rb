@@ -7,6 +7,20 @@ require "test_helper"
 class Base::Org::RootsControllerTest < ActionDispatch::IntegrationTest
   fixtures :operators, :operator_statuses
 
+  test "renders the signed-out Base Org account navigation with its local RP sign entry" do
+    host! ENV.fetch("PUBLIC_BASE_STAFF_URL")
+    get base_org_root_url(ri: "jp")
+
+    assert_response :success
+    navigation = inertia_props.dig("chrome", "account_navigation")
+
+    assert_equal I18n.t("layouts.shared.account_navigation.label"), navigation.fetch("label")
+    assert_not navigation.fetch("signed_in")
+    assert_equal I18n.t("layouts.shared.account_navigation.sign_up_or_in"),
+                 navigation.fetch("links").sole.fetch("label")
+    assert_equal "/sign?ri=jp", navigation.fetch("links").sole.fetch("href")
+  end
+
   test "renders the control-plane root for a regional request" do
     host! ENV.fetch("PUBLIC_BASE_STAFF_URL")
     get base_org_root_url(ri: "jp")
@@ -96,12 +110,16 @@ class Base::Org::RootsControllerTest < ActionDispatch::IntegrationTest
     assert_equal "private, no-store", response.headers["Cache-Control"]
   end
 
-  test "anonymous Dashboard is unauthorized without a sign-in route" do
+  test "anonymous Dashboard redirects to the Base Org sign entry with a local return target" do
     host! ENV.fetch("PUBLIC_BASE_STAFF_URL")
     get base_org_dashboard_url(ri: "jp")
 
-    assert_response :unauthorized
-    assert_nil response.location
+    assert_response :see_other
+    assert_equal "/sign", URI.parse(response.location).path
+    query = Rack::Utils.parse_nested_query(URI.parse(response.location).query.to_s)
+
+    assert_equal "jp", query.fetch("ri")
+    assert_equal "/dashboard", query.fetch("target_link_uri")
     assert_equal "no-store", response.headers["Cache-Control"]
   end
   private

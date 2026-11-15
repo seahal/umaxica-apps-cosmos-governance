@@ -13,7 +13,6 @@ class Actor::AuthenticationTest < ActiveSupport::TestCase
       amr: ["passcode"],
       actor_type: :client,
       actor_id: 42,
-      active_sign_sequence_id: "sequence-123",
     )
 
     assert_predicate auth, :signed_in?
@@ -21,7 +20,6 @@ class Actor::AuthenticationTest < ActiveSupport::TestCase
     assert_predicate auth, :aal1?
     assert_equal :client, auth.actor_type
     assert_equal 42, auth.actor_id
-    assert_equal "sequence-123", auth.active_sign_sequence_id
   end
 
   test "null authentication is not signed in" do
@@ -50,7 +48,6 @@ class Actor::AuthenticationTest < ActiveSupport::TestCase
       amr: ["passcode"],
       actor_type: :client,
       actor_id: 42,
-      active_sign_sequence_id: "sequence-123",
     )
     auth2 = Actor::Authentication.new(
       login_public_id: "login-123",
@@ -58,7 +55,6 @@ class Actor::AuthenticationTest < ActiveSupport::TestCase
       amr: ["passcode"],
       actor_type: :client,
       actor_id: 42,
-      active_sign_sequence_id: "sequence-123",
     )
 
     assert_equal auth1.hash, auth2.hash

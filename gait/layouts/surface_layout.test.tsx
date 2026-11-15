@@ -57,6 +57,7 @@ const minimalChrome: SurfaceChrome = {
   brand: { name: "Umaxica", href: "https://umaxica.app/" },
   banner: null,
   footer_navigation: null,
+  account_navigation: null,
   cookie_controls: cookieControls,
   theme_controls: themeControls,
   copyright: "(c) Umaxica",
@@ -134,6 +135,29 @@ describe("SurfaceLayout", () => {
     expect(
       within(screen.getByRole("banner")).queryByRole("navigation", { name: "Account" }),
     ).toBeNull();
+  });
+
+  test("renders Base App account navigation supplied by the server", () => {
+    page.props.chrome = {
+      ...minimalChrome,
+      account_navigation: {
+        label: "Account",
+        signed_in: false,
+        links: [{ label: "Sign up or sign in", href: "/sign?ri=ww" }],
+      },
+    };
+    renderTree(
+      <SurfaceLayout>
+        <p>page body</p>
+      </SurfaceLayout>,
+    );
+
+    const navigation = within(screen.getByRole("banner")).getByRole("navigation", {
+      name: "Account",
+    });
+    const link = within(navigation).getByRole("link", { name: "Sign up or sign in" });
+    expect(link.getAttribute("href")).toBe("/sign?ri=ww");
+    expect(within(navigation).getAllByRole("listitem")).toHaveLength(1);
   });
 
   test("omits theme and cookie chrome when the server sent none", () => {

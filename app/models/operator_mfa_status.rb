@@ -16,6 +16,8 @@ class OperatorMfaStatus < OrgPrincipalRecord
   UNCONFIGURED = 5
   DEFAULTS = [NOTHING, ACTIVE, UNCONFIGURED].freeze
 
+  self.record_timestamps = false
+
   has_many :staffs,
            class_name: "Operator",
            foreign_key: :mfa_status_id,

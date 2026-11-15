@@ -27,6 +27,9 @@ Rails.application.config.filter_parameters += %i(
   cvc
   oauth_code
   authorization_code
+  id_token
+  access_token
+  refresh_token
   code_verifier
   cf-turnstile-response
   turnstile_response
@@ -40,8 +43,6 @@ Rails.application.config.filter_parameters += %i(
   sid
   digest
   result
-  step_up_ceremony_result
-  step_up_ceremony_grant
   session_id
   auth_ceremony_session_ref
   auth_email_otp_generation

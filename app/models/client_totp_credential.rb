@@ -31,6 +31,14 @@
 
 class ClientTotpCredential < AppPrincipalRecord
   include ::PublicId
+
+  after_initialize :generate_private_key_if_blank
+  before_validation :generate_public_id, on: :create
+  before_validation :refresh_generated_public_id_after_collision, on: :create
+  before_create :generate_public_id
+  around_create :retry_public_id_collision
+  validate :public_id_immutable_after_create, on: :update
+  validates :public_id, presence: true, length: { is: PublicId::GENERATION_SIZE }, uniqueness: true
   include MfaStatusCredential
 
   MAX_TOTP_SLOTS = 2
@@ -66,7 +74,7 @@ class ClientTotpCredential < AppPrincipalRecord
   validates :title, length: { maximum: 32 }, allow_blank: true
   validate :revoked_status_is_terminal, on: :update
 
-  after_initialize :generate_private_key_if_blank
+  after_commit :refresh_owner_mfa_status
 
   public
 

@@ -20,6 +20,8 @@ class ClientWithdrawalFlowStatus < AppPrincipalRecord
   FAILED = 900
   DEFAULTS = [NOTHING, REQUESTED, CLOSING, DISCARDED, RECOVERED, TERMINATED, FAILED].freeze
 
+  self.record_timestamps = false
+
   has_many :events_from_status, class_name: "ClientWithdrawalFlowEvent", foreign_key: :from_status_id,
                                 inverse_of: :from_status, dependent: :restrict_with_error
   has_many :events_to_status, class_name: "ClientWithdrawalFlowEvent", foreign_key: :to_status_id,

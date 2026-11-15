@@ -31,6 +31,19 @@ class AdministrativeAccessLockableTest < ActiveSupport::TestCase
     assert_includes client.errors.details[:admin_locked_reason_code].pluck(:error), :inclusion
   end
 
+  test "rejects invalid operator lock reason codes" do
+    operator = Operator.new(
+      security_mode_id: SecurityModeConfigurable::ADVANCED,
+      access_state: AdministrativeAccessLockable::ACCESS_STATE_ADMIN_LOCKED,
+      admin_locked_at: Time.current,
+      admin_locked_by_operator_id: 1,
+      admin_locked_reason_code: "invalid",
+    )
+
+    assert_not operator.valid?
+    assert_includes operator.errors.details[:admin_locked_reason_code].pluck(:error), :inclusion
+  end
+
   test "treats access tokens issued before token_valid_after_at as stale" do
     client = Client.new(security_mode_id: SecurityModeConfigurable::NORMAL, token_valid_after_at: Time.current)
 

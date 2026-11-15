@@ -3,6 +3,7 @@
 
 # The activity-log controller scopes rows to the current client; this policy gates the actor type.
 class ClientChroniclePolicy < ApplicationPolicy
+  public
   def index?
     user.is_a?(Client)
   end

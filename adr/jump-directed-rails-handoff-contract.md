@@ -22,13 +22,14 @@ persistence and API ownership boundaries remain.
 > Jump edges naming those local routes are historical in this repository. Surviving Base/Tech edges
 > and external route/registration contracts remain governed by their current callers and decisions.
 
-The [required Jump/Away selection amendment](secure-jump-link-redirector.md#amendment-required-jump-and-away-selection-2026-10-22)
+The
+[required Jump/Away selection amendment](secure-jump-link-redirector.md#amendment-required-jump-and-away-selection-2026-10-22)
 supersedes broad references below to all cross-origin navigation using Jump. Jump is required for
 approved subdomain changes within the same registered application domain; cross-TLD navigation,
 including first-party navigation, requires `https://away.umaxica.net`. Same-origin path navigation
 remains direct. This revision adds no Jump edges and changes no runtime behavior. Existing direct
-admission exceptions, including Edit, are implementation gaps against the revised navigation
-policy, not exemptions for new work. Method-preserving POST handoffs retain their separate contract.
+admission exceptions, including Edit, are implementation gaps against the revised navigation policy,
+not exemptions for new work. Method-preserving POST handoffs retain their separate contract.
 
 ## Decision
 
@@ -67,13 +68,12 @@ are absent. Adding an RP requires an explicit decision. Core is `jp.*`; Warp is 
 
 Because self-loops are absent, a navigation whose target shares the request's origin (scheme, host
 and port) does not use Jump; the gateway refuses such an rt with `invalid_dst`. The Base self-RPs
-(`base-app-ww`, `base-org-ww`) share their origin with their authority, so the
-`POST /sign` start to `/oauth/authorize`, the authorization code return to `/oidc/callback` and the
-`prompt=none` `login_required` return move by path through
-`CommonRedirect#redirect_to_same_origin_or_jump_url`, which callers opt into explicitly. A
-cross-origin target, including another RP's callback on a Base authority, still goes through Jump.
-`www.jp.*` is rejected, never rewritten to Warp. Node region reflects the deployment; query `ri`
-does not change these origins' identities.
+(`base-app-ww`, `base-org-ww`) share their origin with their authority, so the `POST /sign` start to
+`/oauth/authorize`, the authorization code return to `/oidc/callback` and the `prompt=none`
+`login_required` return move by path through `CommonRedirect#redirect_to_same_origin_or_jump_url`,
+which callers opt into explicitly. A cross-origin target, including another RP's callback on a Base
+authority, still goes through Jump. `www.jp.*` is rejected, never rewritten to Warp. Node region
+reflects the deployment; query `ri` does not change these origins' identities.
 
 Auth surface JWT identities are `AUTH_APP/ORG` with `auth.umaxica.*` issuer origins. Retired
 `SIGN_*` identities and `Sign::*` controller mappings have no fallback. `/sign/...` ceremony paths
@@ -179,28 +179,28 @@ setting. That redesign is intentionally deferred.
 
 ### Issuer identity and keys
 
-Jump issuer capability is exactly eleven namespaces, held in `JumpRtSurface::ISSUER_NAMESPACES`
-and kept separate from the general JWT registry namespaces: app/org for Auth, Base, Visa, Core and
-Warp, plus `PALM_APP`. The corporate authentication realm has no Jump issuer. `ACME_APP` and
-`ACME_ORG` remain general registry namespaces but have no Jump issuer capability; no `Acme::*`
-controller exists, and Base-hosted Acme behavior issues through the Base or Auth controller handling
-the request. Edit is a receiver only.
+Jump issuer capability is exactly eleven namespaces, held in `JumpRtSurface::ISSUER_NAMESPACES` and
+kept separate from the general JWT registry namespaces: app/org for Auth, Base, Visa, Core and Warp,
+plus `PALM_APP`. The corporate authentication realm has no Jump issuer. `ACME_APP` and `ACME_ORG`
+remain general registry namespaces but have no Jump issuer capability; no `Acme::*` controller
+exists, and Base-hosted Acme behavior issues through the Base or Auth controller handling the
+request. Edit is a receiver only.
 
 Each issuer origin is derived from the existing public surface setting (`PUBLIC_AUTH_*_URL`,
 `PUBLIC_BASE_*_URL`, `PUBLIC_VISA_*_URL`, `PUBLIC_CORE_*_URL`, `PUBLIC_WARP_*_URL`,
-`PUBLIC_PALM_SERVICE_URL`). The same
-origin is the return origin, and the issuer JWKS URI is that origin plus `/.well-known/jwks.json`.
-There are no Jump-specific issuer, return or JWKS settings, and the `JUMP_DEVELOPMENT_<NS>_*` and
-`JWT_DEVELOPMENT_<NS>_*` families were removed without replacement. The receiver maps origins to
-namespaces through the same settings, so another environment's identities use the same fourteen
-non-Visa edges;
-a duplicated origin is a configuration error.
+`PUBLIC_PALM_SERVICE_URL`). The same origin is the return origin, and the issuer JWKS URI is that
+origin plus `/.well-known/jwks.json`. There are no Jump-specific issuer, return or JWKS settings,
+and the `JUMP_DEVELOPMENT_<NS>_*` and `JWT_DEVELOPMENT_<NS>_*` families were removed without
+replacement. The receiver maps origins to namespaces through the same settings, so another
+environment's identities use the same fourteen non-Visa edges; a duplicated origin is a
+configuration error.
 
-Each issuer keeps its own ES384 key. In development and test the surface keys are owned by
-`JitSecurityJwtLocalKeysetInstaller` and persisted in `tmp/local_jwt_keysets.json`; a `JWT_<NS>_*`
-value in the environment that does not match that store is a configuration error, so copied
-production signing material cannot become a local Jump key. Outside local environments the registry
-already rejects kids carrying environment markers.
+Each issuer uses the same Governance repository PS256 key set (RSA 3072 bits or larger); issuer
+origins remain distinct in the token's `iss` claim and in the directed return policy. In development
+and test the shared key is owned by `JitSecurityJwtLocalKeysetInstaller` and persisted in
+`tmp/local_jwt_keysets.json`. Outside local environments the registry rejects kids carrying
+environment markers. The repository key set is described in
+[`cosmos-jwt-ps256-and-op-signing-in-aws-kms.md`](cosmos-jwt-ps256-and-op-signing-in-aws-kms.md).
 
 The Jump trust contract is the binding of three things: the issuer public origin, that issuer's
 active signing key, and the public key published at that origin's `/.well-known/jwks.json`. The
@@ -222,9 +222,9 @@ Inside Rails the binding is checked without network access. At boot, `JitSecurit
 each Jump issuer record with `JumpRtSurface.issuer_origin`, so an invalid or missing `PUBLIC_*`
 issuer origin fails boot, and the record holding the signing key names the same `iss` that Jump RTs
 carry. `test/integration/jump_rt_issuer_jwks_authority_test.rb` signs an RT for each of the eleven
-issuers, checks `iss`, `alg=ES384` and the kid, fetches that surface's `/.well-known/jwks.json` from
-the Rails renderer, confirms the kid is present and no private fields are exposed, and verifies the
-RT signature against that JWKS.
+issuers, checks `iss`, `alg=PS256` and the shared kid, fetches that surface's
+`/.well-known/jwks.json` from the Rails renderer, confirms the kid is present and no private fields
+are exposed, and verifies the RT signature against that JWKS.
 
 Configuration failures (gateway, issuer identity, signing key) raise. The existing
 `fallback_internal` same-host downgrade covers only an unusable target URL and never a Jump
@@ -232,7 +232,7 @@ configuration error; there is no direct cross-origin fallback.
 
 ### Wire contract
 
-`schema=1`, ES384, TTL and leeway remain. `rpl` is a required claim whose only valid value is the
+`schema=1`, PS256, TTL and leeway remain. `rpl` is a required claim whose only valid value is the
 exact string `"reuse"`. Issuers always emit it and callers cannot choose a policy. Receivers compare
 it by exact equality without coercion; a missing, null, empty, `"once"`, differently cased, padded,
 NUL-containing, numeric, boolean, array or object value is rejected. A schema 1 Jump RT is a

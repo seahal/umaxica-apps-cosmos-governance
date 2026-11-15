@@ -1,13 +1,15 @@
 # Authentication Assurance Levels
 
-> **Current route status (2026-11-11):** Base and Tech OIDC sign-in is unavailable. This repository
-> no longer contains provider URL configuration, RP callback routes or local sign-in entrypoints.
-> The sign-in method and ceremony policy tables below describe the previous integration; retained
-> session, token and authorization state remains governed by its current owners.
+> **Governance runtime status (2026-11-13):** Access owns authentication ceremony execution.
+> Governance has no local sign-in, sign-up, recovery, contact-proof, WebAuthn, TOTP, social
+> callback, or signed-result flow. The method and ceremony policy tables below describe the previous
+> integration; retained credential inventory, RP step-up policy/state, session, token and
+> authorization data remain with their current owners.
 
 Fresh Umaxica step-up, achieved AAL, phishing resistance, allowed methods, and freshness are
-independent conditions. Email OTP may complete APP normal step-up but has no achieved NIST AAL;
-TOTP alone and current UV passkey ceremonies record AAL1, while passkey is phishing-resistant.
+independent conditions. The historical implementation recorded APP Email OTP as normal step-up
+without a NIST AAL, TOTP alone as AAL1, and UV passkey ceremonies as AAL1 while classifying passkey
+as phishing-resistant. These method outcomes are not current Governance authentication behavior.
 
 ## Historical surface policy
 
@@ -16,10 +18,10 @@ TOTP alone and current UV passkey ceremonies record AAL1, while passkey is phish
 | APP     | Email OTP and passkey (plus existing documented primary methods) | Passkey preferred; TOTP and Email OTP are alternatives | required for registration and sign-in                  |
 | ORG     | Passkey, Secret Credential, and Microsoft Entra ID               | Passkey only                                           | required for registration where applicable and sign-in |
 
-Email OTP on APP is an explicit Umaxica product exception. It completes normal step-up
-freshness, but neither Email OTP nor TOTP alone satisfies NIST AAL2. ORG does not use Email OTP for
-sign-up, sign-in, or step-up. A future operation may independently require an AAL, phishing
-resistance, a restricted method set, and a freshness window.
+Email OTP on APP is an explicit Umaxica product exception. It completes normal step-up freshness,
+but neither Email OTP nor TOTP alone satisfies NIST AAL2. ORG does not use Email OTP for sign-up,
+sign-in, or step-up. A future operation may independently require an AAL, phishing resistance, a
+restricted method set, and a freshness window.
 
 This product uses `AAL1`, `AAL2`, and `AAL3` as authentication-boundary terms.
 
@@ -128,10 +130,10 @@ The current ceremony evidence is recorded as follows:
 | TOTP      | APP                      | `aal1`       | no                 |
 | Passkey   | APP and ORG              | `aal1`       | yes                |
 
-Email OTP is an explicit Umaxica exception. It can establish APP authentication and complete
-normal step-up, but it is never silently promoted to NIST AAL2. TOTP alone also does not achieve
-AAL2. Passkey assurance is derived from the verified WebAuthn ceremony; the current UV-required
-ceremony records AAL1 and phishing resistance rather than assuming AAL2.
+Email OTP is an explicit Umaxica exception. It can establish APP authentication and complete normal
+step-up, but it is never silently promoted to NIST AAL2. TOTP alone also does not achieve AAL2.
+Passkey assurance is derived from the verified WebAuthn ceremony; the current UV-required ceremony
+records AAL1 and phishing resistance rather than assuming AAL2.
 
 Step-up scope, freshness, purpose, audience, session binding, token binding, method policy, achieved
 AAL, and phishing resistance are checked separately. A signed ceremony result cannot satisfy a
@@ -154,19 +156,19 @@ contact identifiers are AAL levels.
 
 Current personal identifiers:
 
-| credential       | personal identifier | contact identifier | AAL relationship                                                                                                  |
-| ---------------- | ------------------- | ------------------ | ----------------------------------------------------------------------------------------------------------------- |
+| credential       | personal identifier | contact identifier | AAL relationship                                                                                              |
+| ---------------- | ------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------- |
 | email address    | yes                 | yes                | Not AAL by itself. Email OTP may authenticate or complete APP normal step-up, but does not achieve NIST AAL2. |
-| telephone number | yes                 | yes                | Not AAL1, AAL2, or AAL3. It is an entry point, contact point, or recovery input only.                             |
-| Google identity  | yes                 | no                 | Google provider authentication may satisfy AAL1 on supported surfaces.                                            |
-| Apple identity   | yes                 | no                 | Apple provider authentication may satisfy AAL1 on app.                                                            |
+| telephone number | yes                 | yes                | Not AAL1, AAL2, or AAL3. It is an entry point, contact point, or recovery input only.                         |
+| Google identity  | yes                 | no                 | Google provider authentication may satisfy AAL1 on supported surfaces.                                        |
+| Apple identity   | yes                 | no                 | Apple provider authentication may satisfy AAL1 on app.                                                        |
 
 Current contact identifiers:
 
-| credential       | contact identifier | AAL relationship                                                                                                  |
-| ---------------- | ------------------ | ----------------------------------------------------------------------------------------------------------------- |
+| credential       | contact identifier | AAL relationship                                                                                              |
+| ---------------- | ------------------ | ------------------------------------------------------------------------------------------------------------- |
 | email address    | yes                | Not AAL by itself. Email OTP may authenticate or complete APP normal step-up, but does not achieve NIST AAL2. |
-| telephone number | yes                | Not AAL1, AAL2, or AAL3. It is an entry point, contact point, or recovery input only.                             |
+| telephone number | yes                | Not AAL1, AAL2, or AAL3. It is an entry point, contact point, or recovery input only.                         |
 
 Ordinary credential-management flows must preserve at least one usable contact identifier after a
 removal. Moving from one contact identifier to zero is forbidden from ordinary UI flows. It is
@@ -192,8 +194,8 @@ state, and they should not be read from `Actor.authn`.
 | ORG     | Passkey, Secret Credential, Microsoft Entra ID                                                                 | Passkey only                                |
 
 ORG Email OTP is not an authentication or step-up method. The public COM surface has no
-authentication or step-up methods. Surface policy and the signed transaction method set are intersected server-side, so
-a direct request cannot expand the permitted methods.
+authentication or step-up methods. Surface policy and the signed transaction method set are
+intersected server-side, so a direct request cannot expand the permitted methods.
 
 ## AAL3
 
@@ -227,23 +229,22 @@ The former local ceremony integration used the following User Verification polic
 routes and registry code were removed with the surface reset; this table records that prior design
 and does not describe a currently routed ceremony.
 
-| Purpose             | Flow                                          | Policy   |
-| ------------------- | --------------------------------------------- | -------- |
-| `registration`      | sign-up and settings passkey registration     | required |
+| Purpose             | Flow                                              | Policy   |
+| ------------------- | ------------------------------------------------- | -------- |
+| `registration`      | sign-up and settings passkey registration         | required |
 | `direct_sign_in`    | discoverable app sign-in; actor-known org sign-in | required |
-| `mfa_challenge`     | passkey as second factor after another factor | required |
-| `ordinary_step_up`  | step-up verification for sensitive settings   | required |
-| `high_risk_step_up` | reserved for future high-risk operations      | required |
+| `mfa_challenge`     | passkey as second factor after another factor     | required |
+| `ordinary_step_up`  | step-up verification for sensitive settings       | required |
+| `high_risk_step_up` | reserved for future high-risk operations          | required |
 
-The purposes were deliberately distinct so a future verifier could relax exactly one of them
-without changing the sign-in and registration policy. The current local RP configuration and
-signed-result boundary are documented in
-[`webauthn-architecture.md`](webauthn-architecture.md).
+The purposes were deliberately distinct so a future verifier could relax exactly one of them without
+changing the sign-in and registration policy. The former local RP configuration and signed-result
+boundary are summarized in [`webauthn-architecture.md`](webauthn-architecture.md).
 
 ## Delivered reconciliation (2026-10-06)
 
 The AAL strings described here remain historical labels for protocol, storage and signed evidence.
 They do not authorize a session, operation or credential mutation. Current policy travels as an
-explicit step-up requirement and is rechecked at the protected mutation. Email OTP, TOTP and
-passkey method behavior is described by `docs/security/step-up-operation-inventory.md`; a caller
-cannot substitute an AAL label for that requirement.
+explicit step-up requirement and is rechecked at the protected mutation. Email OTP, TOTP and passkey
+method behavior is described by `docs/security/step-up-operation-inventory.md`; a caller cannot
+substitute an AAL label for that requirement.

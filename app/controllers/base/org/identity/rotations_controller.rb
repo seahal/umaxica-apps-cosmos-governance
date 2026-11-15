@@ -7,6 +7,8 @@ module Base
       class RotationsController < ::Base::Org::ApplicationController
         AUTHENTICATION_MODE = :private
 
+        public
+
         def create
           secret = current_operator.staff_secret_credentials.find_by!(public_id: params.expect(:secret_id))
           # Rotation hands off to the edit page, so it takes that page's owner rule.

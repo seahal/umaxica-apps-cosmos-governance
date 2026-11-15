@@ -11,6 +11,7 @@ module OperatorSecretCredentialKinds
   ALL = [LOGIN].freeze
 
   # Predicates using string equality on staff_secret_kind_id column (no JOINs)
+  public
   def login_secret_credential?
     staff_secret_kind_id == LOGIN
   end

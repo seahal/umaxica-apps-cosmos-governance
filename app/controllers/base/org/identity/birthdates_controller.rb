@@ -9,10 +9,16 @@ module Base
 
         AUTHENTICATION_MODE = :private
 
+        layout "base/org/inertia"
+        inertia_share chrome: -> { surface_chrome }
+        inertia_share clear_history: -> { session[:inertia_clear_history] == true }
+
         # Object-level authorization (ActionPolicy): only the owner may view their own birthdate.
         # Step-up freshness is still enforced separately below.
         before_action :authorize_birthdate!, only: :show
         step_up only: :show
+
+        public
 
         def show
           render inertia: true, props: {

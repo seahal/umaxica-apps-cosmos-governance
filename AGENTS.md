@@ -163,17 +163,15 @@ concern also applies when no listed path is touched.
   `docs/operations/development-host-port-exposure.md`.
 - Paths: `docs/mermaid/**`. Concern: state machines, flow/status columns or state/status writers.
   Load: `generic/lifecycle-transition-writers.mdc`, `docs/mermaid/README.md`. Establish the affected
-  axis's owner from the inventory. Compare the owning diagram and transition inventory with code;
-  update affected descriptions in the same change when behavior changes. For axes owned by the IdP
-  inventory, use `docs/mermaid/idp-*.mmd` and
-  `docs/mermaid/idp-state-machine-transition-inventory.md`. Add an owned inventory entry and diagram
-  for each new axis. Resolve unclear ownership before assigning an axis to an inventory.
+  axis's owner from current accepted decisions and implementation. Compare the owning diagram and
+  transition inventory with code; update affected descriptions in the same change when behavior
+  changes. Add an owned diagram and transition inventory for each newly accepted Governance-owned
+  axis and link them from the directory index. Do not treat archived service-owned diagrams as
+  current Governance behavior. Resolve unclear ownership before assigning an axis to an inventory.
 - Concern: user-facing notices, alerts or feedback (including any `flash` use). Load:
   `generic/no-flash-messages.mdc`.
 - Paths: `config/locales/**`, and any file whose diff adds or changes a `t`/`I18n.t` call. Load:
   `docs/architecture/i18n.md`, `adr/i18n-explicit-translation-keys.md`.
-- Concern: Google, Apple or Microsoft Entra ID sign-in buttons and branding. Load:
-  `docs/reference/third-party-sign-in-button-requirements.md`.
 - Concern: consulting external technical sources. Load: `generic/source-policy.mdc`.
 - Paths: `adr/**`, `docs/**`, `plans/**`, `research/**`, `specs/**`, `evidence/**`, `.agents/**`,
   `*.md`. Concern: code comments or test names. Load: `generic/repository-language.mdc`.

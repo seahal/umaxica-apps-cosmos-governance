@@ -39,6 +39,7 @@ module Base
 
           props = inertia_props
 
+          assert_nil props.fetch("chrome")["account_navigation"]
           assert props.fetch("promotional")
           assert_equal "Unsubscribe", props.fetch("form").fetch("submit_label")
           assert_equal base_app_preference_email_path(@email), props.fetch("form").fetch("action")
@@ -284,7 +285,7 @@ class Base::App::Preference::EmailsControllerTest
 
   def load_jump_rt_env!
     @jump_rt_env_originals ||= {}
-    jump_rt_key = Base64.strict_encode64(OpenSSL::PKey::EC.generate("secp384r1").to_der)
+    jump_rt_key = Base64.strict_encode64(OpenSSL::PKey::RSA.generate(3072).to_der)
     %w(FOREIGN_APP FOREIGN_ORG BASE_APP BASE_ORG).each do |namespace|
       ENV["JWT_#{namespace}_ACTIVE_KID"] = "#{namespace.downcase.tr("_", "-")}-test"
       ENV["JWT_#{namespace}_PRIVATE_KEY"] = jump_rt_key

@@ -98,8 +98,8 @@ module AuthenticationHarness
   end
 
   def as_user_headers(user, host: nil, headers: {}, session_public_id: nil, select_available_app_persona: true)
-    access_token = jwt_access_token_for(user, host:, session_public_id:, resource_type: "client")
-    session = @authentication_harness_rp_sessions.fetch(["base-app-ww", user.public_id, session_public_id])
+    session = browser_rp_session_for(user, client_id: "base-app-ww", host:, session_public_id:)
+    api_token = base_api_token_for_session(session)
     if select_available_app_persona && !session.selected_actor_context?
       selection = BaseSelectorAuthority.prepare(surface: :app, principal: user, session:)
       if Array(selection[:accounts]).empty? && user.status_id == ClientStatus::ACTIVE &&
@@ -128,17 +128,36 @@ module AuthenticationHarness
            2,
          ).first)
       end
-    cookies << "#{OidcRpBrowserCredentialContract::ACCESS_COOKIE}=#{Rack::Utils.escape(access_token)}"
     cookies << "#{OidcRpBrowserCredentialContract::SESSION_COOKIE}=#{Rack::Utils.escape(session.public_id)}"
     cookie_header = cookies.join("; ")
-    host_headers(host).merge(headers).merge(
-      "Authorization" => "Bearer #{access_token}", "Cookie" => cookie_header, "HTTP_COOKIE" => cookie_header,
-    )
+    result = host_headers(host).merge(headers).merge("Cookie" => cookie_header, "HTTP_COOKIE" => cookie_header)
+    result["Authorization"] = "Bearer #{api_token}" if api_token
+    result
   end
 
-  def as_staff_headers(staff, host: nil, headers: {}, session_public_id: nil)
-    access_token = jwt_access_token_for(staff, host:, session_public_id:, resource_type: "operator")
-    session = @authentication_harness_rp_sessions.fetch(["base-org-ww", staff.public_id, session_public_id])
+  def as_staff_headers(staff, host: nil, headers: {}, session_public_id: nil, select_available_org_persona: false)
+    session = browser_rp_session_for(staff, client_id: "base-org-ww", host:, session_public_id:)
+    api_token = base_api_token_for_session(session)
+    if select_available_org_persona && !session.selected_actor_context?
+      selection = BaseSelectorAuthority.prepare(surface: :org, principal: staff, session:)
+      if Array(selection[:accounts]).empty? && staff.status_id == OperatorStatus::ACTIVE &&
+          staff.login_allowed? && staff.access_enabled?
+        BaseSelectorBootstrapAuthority.call(surface: :org, principal: staff)
+        selection = BaseSelectorAuthority.prepare(surface: :org, principal: staff, session:)
+      end
+      candidate = Array(selection[:accounts]).first
+      if candidate
+        BaseSelectorAuthority.select(
+          surface: :org, principal: staff, session:,
+          params: {
+            account_public_id: candidate.fetch(:public_id),
+            organization_public_id: candidate.dig(:organization, :public_id),
+            organization_unit_public_id: candidate.dig(:organization, :unit_public_id),
+            avatar_public_id: candidate.dig(:avatar, :public_id),
+          },
+        )
+      end
+    end
     cookies =
       headers.fetch("Cookie", "").split("; ").reject do |pair|
         [OidcRpBrowserCredentialContract::ACCESS_COOKIE, OidcRpBrowserCredentialContract::SESSION_COOKIE,
@@ -147,12 +166,11 @@ module AuthenticationHarness
            2,
          ).first)
       end
-    cookies << "#{OidcRpBrowserCredentialContract::ACCESS_COOKIE}=#{Rack::Utils.escape(access_token)}"
     cookies << "#{OidcRpBrowserCredentialContract::SESSION_COOKIE}=#{Rack::Utils.escape(session.public_id)}"
     cookie_header = cookies.join("; ")
-    host_headers(host).merge(headers).merge(
-      "Authorization" => "Bearer #{access_token}", "Cookie" => cookie_header, "HTTP_COOKIE" => cookie_header,
-    )
+    result = host_headers(host).merge(headers).merge("Cookie" => cookie_header, "HTTP_COOKIE" => cookie_header)
+    result["Authorization"] = "Bearer #{api_token}" if api_token
+    result
   end
 
   def bearer_headers(token, host: nil, headers: {})
@@ -194,6 +212,33 @@ module AuthenticationHarness
 
   private
 
+  def base_api_token_for_session(session)
+    BaseApiAuthorityTokenIssuer.issue(rp_session: session)
+  rescue BaseApiAuthorityTokenIssuer::InactiveRpSession
+    nil
+  end
+
+  def browser_rp_session_for(resource, client_id:, host:, session_public_id:)
+    client = OidcClientRegistry.find!(client_id)
+    valid_resource =
+      (client.resource_type == "client" && resource.is_a?(Client)) ||
+      (client.resource_type == "operator" && resource.is_a?(Operator))
+    raise ArgumentError, "test resource does not match its RP cell" unless valid_resource
+
+    host_value = host || (respond_to?(:request, true) ? request&.host : nil)
+    normalized_host = URI.parse(host_value.to_s.include?("://") ? host_value.to_s : "https://#{host_value}").host
+    raise AccessOpDataUnavailableError unless normalized_host == OidcIssuer.host_for_client(client)
+
+    @authentication_harness_rp_sessions ||= {}
+    cache_key = [client_id, resource.public_id, session_public_id]
+    session = @authentication_harness_rp_sessions[cache_key] ||= seed_rp_browser_session(
+      client:, actor: resource, sid: session_public_id || SecureRandom.uuid, absolute_expires_at: 1.hour.from_now,
+    )
+    @base_browser_rp_session_public_ids ||= {}
+    @base_browser_rp_session_public_ids[cache_key] = session.public_id
+    session
+  end
+
   def contact_owner_for_test(contact)
     case contact
     when ClientEmail, ClientTelephone then Client.find(contact.user_id)
@@ -218,20 +263,10 @@ module AuthenticationHarness
       else raise ArgumentError, "test resource does not match its realm"
       end
     client = OidcClientRegistry.find!(client_id)
-    host_value = host || (respond_to?(:request, true) ? request&.host : nil)
-    normalized_host = URI.parse(host_value.to_s.include?("://") ? host_value.to_s : "https://#{host_value}").host
-    raise AccessOpDataUnavailableError unless normalized_host == OidcIssuer.host_for_client(client)
-
-    @authentication_harness_rp_sessions ||= {}
-    cache_key = [client_id, resource.public_id, session_public_id]
-    session = @authentication_harness_rp_sessions[cache_key] ||= seed_rp_browser_session(
-      client:, actor: resource, sid: session_public_id || SecureRandom.uuid, absolute_expires_at: 1.hour.from_now,
-    )
-    @base_browser_rp_session_public_ids ||= {}
-    @base_browser_rp_session_public_ids[cache_key] = session.public_id
+    session = browser_rp_session_for(resource, client_id:, host:, session_public_id:)
     now = Time.current.to_i
     claims = {
-      "iss" => OidcIssuer.for_client(client),
+      "iss" => rp_test_issuer_for(client),
       "sub" => OidcSubject.for(resource, resource_type: client.resource_type),
       "aud" => [client_id],
       "client_id" => client_id,

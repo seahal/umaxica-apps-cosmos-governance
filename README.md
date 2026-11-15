@@ -10,16 +10,39 @@
 - `tech.org`: the separate global operator browser RP.
 - `mission`, `flipper`, `blazer`, `pghero`, `swagger`, and `coverband`: Governance's
   host-constrained operator tools.
-- Auth and Visa URL configuration and local routes have been removed. Base and Tech sign-in is
-  unavailable.
+- Governance does not serve the Visa OpenID Provider or credential ceremonies. Base App exposes a
+  neutral RP entry, OIDC callback, RP-local sign-out, and Back-Channel Logout receiver. The
+  authorization request leaves through Jump. Base App and Base Org receive a short-lived PS256 ID
+  Token through the front channel, validate the signed browser state before reading Visa's JWKS,
+  consume each token JTI once, and install only their own `sid`-bound RP session. The callback
+  removes the token with a 303 redirect and sets no Access or Refresh Token cookie. Renewal passes
+  through Visa with `prompt=none`; Governance issues a separate short-lived token from the active RP
+  session for its own Base APIs. Base Org has its own client, Visa issuer, and RP cell. Access must
+  complete the owner-approved ID Token response for both clients, and Jump's deployed trust path
+  remains an external readiness condition; missing Visa host configuration fails closed. Tech OIDC
+  browser sign-in remains disconnected.
 - Other former product surfaces are not served here. Their route files and controllers have been
   removed; the retained database/model inventory is documented in the hard-reset evidence.
 
 This multi-domain Rails application serves its owned surfaces. Routing is host-constrained, so the
 domain and subdomain matter in both development and production.
 
-Base and Tech remain separate route and authorization boundaries. Their OIDC sign-in, callback, and
-logout routes are removed, and no external Auth or Visa URL is configured here.
+Base and Tech remain separate route and authorization boundaries. Base App has `GET /sign`,
+CSRF-protected `POST /sign`, `GET /sign/interruption`, and `GET /oidc/callback` for its
+relying-party entry. Base Org exposes the same route shape on its own host and uses the
+`base-org-ww` client, Visa staff issuer and `rp_base_org` cell. The callback accepts only the
+owner-approved exact ID Token claim set, enforces the two-minute lifetime and Jump's 2,048
+UTF-16-unit callback URL bound, and returns `Cache-Control: no-store` and
+`Referrer-Policy: no-referrer`. Base API bearer tokens are Governance-signed, realm and audience
+bound, and limited to five minutes; each receiver reloads the referenced RP session from its writer.
+For both realms, signed-in users can confirm sign-out at `/sign/out/edit`; `POST /sign/out` commits
+only the local RP session revocation before clearing local credentials and handing a no-hint Visa
+request to Jump. `/sign/out/completion` accepts the matching one-time return, and
+`POST /oidc/closures` commits verified Visa logout events in the local RP cell before acknowledging
+them. Governance has no local Visa provider or credential ceremonies. Access authorization
+availability and Jump's deployed trust path remain external readiness conditions; OIDC-driven
+step-up callback routes remain absent. Tech RP entry, sign-out, and Back-Channel Logout remain
+absent.
 
 ## Stack
 
@@ -73,7 +96,7 @@ bin/rails assets:clobber        # Remove compiled assets
 - Docker Compose, or rootless Podman with `podman-compose`
 - Ruby `4.0.x`
 - Bundler
-- Node.js `24.20.0` (pinned in `.node-version`; `package.json` accepts `>=24.19.0 <25`)
+- Node.js `26.13.1` (pinned in `.node-version`; `package.json` accepts `>=26.13.1 <27`)
 - Bun `1.4.0`
 
 ### Credentials and secrets
@@ -169,12 +192,12 @@ services to loopback as well (`5432`, `5433`, and `6379` to `6381` by default) s
 can use them; containers continue to use Compose DNS names. See
 `docs/operations/development-host-port-exposure.md`.
 
-| Surface                    | URL                                                                                      |
-| :------------------------- | :--------------------------------------------------------------------------------------- |
-| Base                       | `http://base.{app,com,org}.localhost:3000`                                               |
-| Tech                       | `http://tech.org.localhost:3000`                                                        |
-| Operator tools             | `http://{mission,flipper,blazer,pghero,swagger,coverband}-governance.umaxica.dev:3000` |
-| Operator tools (public)    | `https://<tool>-governance.umaxica.dev`                                                 |
+| Surface                 | URL                                                                                    |
+| :---------------------- | :------------------------------------------------------------------------------------- |
+| Base                    | `http://base.{app,com,org}.localhost:3000`                                             |
+| Tech                    | `http://tech.org.localhost:3000`                                                       |
+| Operator tools          | `http://{mission,flipper,blazer,pghero,swagger,coverband}-governance.umaxica.dev:3000` |
+| Operator tools (public) | `https://<tool>-governance.umaxica.dev`                                                |
 
 The application contract supplies PUBLIC and PRIVATE URL values in both supported modes; Compose
 supplies only service topology. Each route host constraint lists the configured host alongside its
@@ -184,9 +207,14 @@ Access, not Host Authorization, keeps the development listener non-public. See
 `research/implementation/2026-08-10-development-tunnel-access-verification.md` for the measured
 end-to-end evidence.
 
-Base and Tech verification, identity and authenticated-session routes remain. Their OIDC sign-in,
-callback and logout entrypoints were removed with the Auth and Visa dependencies, so this process
-cannot start a new OIDC sign-in flow.
+Base and Tech verification, identity and authenticated-session routes remain. Base App has the RP
+entry, callback, sign-out and Back-Channel Logout endpoints described above; they depend on the
+explicit Visa host contract and Access completing its owner-approved ID Token response. Base Org has
+the same local RP entry, callback, sign-out and Back-Channel Logout shape in its separate RP cell.
+Jump's deployed trust path and real-provider callback size remain external verification items. Tech
+browser sign-in remains disconnected and has no local RP sign-out or Back-Channel Logout endpoint;
+its server-to-server capability check uses a short-lived Governance token from its existing local RP
+session.
 
 ## Code Quality
 
@@ -330,7 +358,7 @@ run in CI, not in the hooks.
 | :--------------------------------------- | :--------------------------------------------------------------------------- |
 | Tailwind changes are not reflected       | Run `bin/rails assets:clobber` and restart `bin/dev`                         |
 | Tests fail because databases are missing | Run `bin/rails db:prepare`                                                   |
-| `bin/dev` stops during boot              | Check Base and Tech surface URL configuration and database availability       |
+| `bin/dev` stops during boot              | Check Base and Tech surface URL configuration and database availability      |
 | Credentials cannot be decrypted          | Obtain the key; see `docs/operations/development-credential-provisioning.md` |
 
 ## Repository Knowledge Base
@@ -350,5 +378,6 @@ ownership, authority and lifecycle.
 ## Acknowledgement
 
 - Secrets must stay in Rails credentials; do not commit plaintext secrets.
-- WebAuthn RP IDs and exact origins are configured per retained surface; `TRUSTED_ORIGINS` is additive only.
+- WebAuthn RP IDs and exact origins are configured per retained surface; `TRUSTED_ORIGINS` is
+  additive only.
 - Public availability of this repository is not guaranteed permanently.

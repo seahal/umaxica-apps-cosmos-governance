@@ -88,6 +88,8 @@ class ClientChronicleEvent < ChronicleRecord
     SIGN_FLOW_HALTED,
   ].freeze
 
+  self.record_timestamps = false
+
   # Association with client_chronicles
   has_many :client_chronicles,
            foreign_key: :event_id,
@@ -135,4 +137,5 @@ class ClientChronicleEvent < ChronicleRecord
   def self.ensure_defaults!
     insert_missing_fixed_ids!(DEFAULTS)
   end
+  public_class_method :ensure_defaults!
 end

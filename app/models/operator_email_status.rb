@@ -22,6 +22,8 @@ class OperatorEmailStatus < OrgPrincipalRecord
   VERIFIED = 7
   DEFAULTS = [ACTIVE, DELETED, INACTIVE, NOTHING, PENDING, UNVERIFIED, VERIFIED].freeze
 
+  self.record_timestamps = false
+
   has_many :staff_emails, class_name: "OperatorEmail",
                           foreign_key: :staff_identity_email_status_id,
                           inverse_of: :staff_email_status,

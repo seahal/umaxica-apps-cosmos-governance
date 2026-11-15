@@ -67,8 +67,9 @@ support, and staff tooling across `umaxica.[app|com|org]` and auxiliary subdomai
 - **Cache and rate-limit counters**: Valkey (Redis-compatible) backs two separate, non-authoritative
   stores -- `Rails.cache` (`CACHE_REDIS_URL`) and the rate-limit counters (`RATE_LIMIT_REDIS_URL`).
   Sessions are cookie-backed and Active Job is Solid Queue (PostgreSQL). Solid Cache is not used.
-- **Security & identity**: JWT auth cookies (ES256) via the `Authn` concern, WebAuthn passkeys,
-  HOTP/TOTP (ROTP), `Outbound::Sms`, and Cloudflare Turnstile for bot defense.
+- **Security & identity**: first-party JWTs use PS256 with RSA keys of at least 3072 bits through
+  the shared Governance key set; WebAuthn passkeys, HOTP/TOTP (ROTP), `Outbound::Sms`, and
+  Cloudflare Turnstile for bot defense.
 - **Observability**: OpenTelemetry instrumentation exports to Tempo via OTLP; logs/metrics land in
   Loki/Grafana (docker/observability stack).
 - **Storage & CDN**: Shrine uses memory storage in test, configured S3-compatible storage in
@@ -130,7 +131,7 @@ support, and staff tooling across `umaxica.[app|com|org]` and auxiliary subdomai
 - **FR-09**: Telephone registration controllers mirror email flow but dispatch OTP codes through
   `Outbound::Sms`.
 - **FR-10**: Authentication controllers (`Sign::App::Authentication::*`) must issue short-lived
-  access tokens (JWT ES384) and refresh tokens using `Auth::Base#log_in`. Refresh now requires
+  access tokens (JWT PS256) and refresh tokens using `Auth::Base#log_in`. Refresh now requires
   `device_id` (`jit_auth_device_id` cookie or `X-Device-Id` header). If both are present they must
   match; missing/mismatch must return `401`, force logout for browser clients (clear
   access/refresh/device cookies + reset session), and require re-login.

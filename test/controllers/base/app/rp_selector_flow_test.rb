@@ -11,7 +11,10 @@ class Base::App::RpSelectorFlowTest < ActionDispatch::IntegrationTest
     host! @host
     https!
     @cell = RpCellBinding.for_client("base-app-ww")
-    @issuer = OidcIssuer.for_resource_type("client")
+    @visa_origin = Oidc::AcmeServiceOrigin.from_configured_host(
+      Rails.configuration.x.boot_config.fetch(:hosts).visa_service.host, default_scheme: "https",
+    )
+    @issuer = @visa_origin.origin
     @subject = OidcSubject.for(@actor, resource_type: "client")
     @sid = SecureRandom.uuid
     enrollment = seed_rp_cell_session(
@@ -121,7 +124,7 @@ class Base::App::RpSelectorFlowTest < ActionDispatch::IntegrationTest
   end
 
   def issue_access_token
-    key = OpenSSL::PKey::EC.generate("secp384r1")
+    key = OpenSSL::PKey::RSA.generate(3072)
     now = Time.current.to_i
     token = JWT.encode(
       {
@@ -138,11 +141,11 @@ class Base::App::RpSelectorFlowTest < ActionDispatch::IntegrationTest
         "authn_ctx" => "normal",
       },
       key,
-      "ES384",
+      "PS256",
       { "kid" => "rp-selector-test", "typ" => "at+jwt" },
     )
     jwks = OidcOpJwksClient.new(
-      jwks_uri: OidcIssuer.jwks_uri("client"),
+      jwks_uri: @visa_origin.jwks_uri,
       fetcher: -> { { "keys" => [JitSecurityJwtJwk.export_public(key, kid: "rp-selector-test")] } },
     )
     [token, jwks]
@@ -151,7 +154,7 @@ class Base::App::RpSelectorFlowTest < ActionDispatch::IntegrationTest
   def with_rp_app_request
     RuntimeRole.stub(:current, "rp-base-app-ww") do
       RuntimeRole.stub(:rp_browser_admission_open?, true) do
-        OidcOpJwksClient.stub(:for_resource_type, @jwks) do
+        OidcOpJwksClient.stub(:for_jwks_uri, @jwks) do
           OrgAdminAuthorityClient.stub(:new, ->(**) { flunk("APP selector must not consult the OP root") }) do
             yield
           end

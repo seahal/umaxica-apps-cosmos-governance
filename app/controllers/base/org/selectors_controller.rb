@@ -8,7 +8,13 @@ module Base
 
       AUTHENTICATION_MODE = :private
 
+      layout "base/org/inertia"
+      inertia_share chrome: -> { surface_chrome }
+      inertia_share clear_history: -> { session[:inertia_clear_history] == true }
+
       declare_authentication_mode! :private
+
+      public
 
       def show
         response.set_header("Cache-Control", "private, no-store")

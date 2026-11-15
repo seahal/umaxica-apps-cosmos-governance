@@ -73,12 +73,6 @@ class AccessOwnedFeatureUnavailabilityTest < ActiveSupport::TestCase
     end
   end
 
-  test "ClientSecretPasskeyReservationIssuer.call! refuses unavailable authority" do
-    assert_no_difference -> { ClientSecretCredential.count + OperatorSecretCredential.count } do
-      assert_raises(AccessOpDataUnavailableError) { ClientSecretPasskeyReservationIssuer.call!(record: nil) }
-    end
-  end
-
   test "ClientSecretPresentationIssuer.prepare! refuses unavailable authority" do
     assert_no_difference -> { ClientSecretCredential.count + OperatorSecretCredential.count } do
       assert_raises(AccessOpDataUnavailableError) { ClientSecretPresentationIssuer.prepare!(record: nil) }
@@ -94,12 +88,6 @@ class AccessOwnedFeatureUnavailabilityTest < ActiveSupport::TestCase
   test "ClientSecretRevocationCommitter.call! refuses unavailable authority" do
     assert_no_difference -> { ClientSecretCredential.count + OperatorSecretCredential.count } do
       assert_raises(AccessOpDataUnavailableError) { ClientSecretRevocationCommitter.call!(record: nil) }
-    end
-  end
-
-  test "ClientSecretSignInReceiptPurger.call! refuses unavailable authority" do
-    assert_no_difference -> { ClientSecretCredential.count + OperatorSecretCredential.count } do
-      assert_raises(AccessOpDataUnavailableError) { ClientSecretSignInReceiptPurger.call!(record: nil) }
     end
   end
 

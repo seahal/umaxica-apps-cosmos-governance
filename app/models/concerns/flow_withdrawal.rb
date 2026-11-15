@@ -4,13 +4,7 @@
 module FlowWithdrawal
   extend ActiveSupport::Concern
 
-  include FlowBase
-
-  # FIXME: Violates Umaxica/NoConcernInclusionHooks; move the declarations in this block into each class that includes this concern.
-  included do
-    cycle_status_column :status_id
-  end
-
+  public
   def withdrawal_requested?
     cycle_status?(status_id_for("REQUESTED"))
   end

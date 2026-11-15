@@ -21,10 +21,12 @@ class BaseSwitcherAuthority
   def self.current(surface:, principal:, session:, selection: nil)
     new(surface: surface, principal: principal, session: session, selection:).current
   end
+  public_class_method :current
 
   def self.switch(surface:, principal:, session:, params:)
     new(surface: surface, principal: principal, session: session).switch(params)
   end
+  public_class_method :switch
 
   def initialize(surface:, principal:, session: nil, selection: nil)
     @config = AcmeSelector.config_for(surface)
@@ -34,6 +36,7 @@ class BaseSwitcherAuthority
   end
 
   # Current selection plus the candidates the actor may switch to.
+  public
   def current
     {
       status: "ok",

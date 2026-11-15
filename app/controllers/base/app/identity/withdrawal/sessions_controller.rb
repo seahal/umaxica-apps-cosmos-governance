@@ -14,6 +14,12 @@ module Base
           include WithdrawalCeremonyReentry
 
           AUTHENTICATION_MODE = :open
+
+          layout "base/app/inertia"
+          inertia_share chrome: -> { surface_chrome }
+          inertia_share clear_history: -> { session[:inertia_clear_history] == true }
+          helper_method :withdrawal_reentry_generic_message
+
           declare_authentication_mode! :open
 
           rate_limit(
@@ -31,6 +37,8 @@ module Base
 
           # DELETE /identity/withdrawal/session
           # Ends the current withdrawal ceremony and returns to the sign-in surface.
+          public
+
           def destroy
             revoke_current_withdrawal_ceremony!
             safe_redirect_to(

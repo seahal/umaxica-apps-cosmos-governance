@@ -38,6 +38,30 @@ class OidcRpBrowserCredentialContractTest < ActiveSupport::TestCase
     end
   end
 
+  test "the RP session cookie expires at the local session absolute expiry" do
+    expires_at = Time.utc(2026, 11, 13, 4, 0, 0)
+
+    options = OidcRpBrowserCredentialContract.session_cookie_options(expires_at:)
+
+    assert_equal expires_at, options.fetch(:expires)
+    assert_equal JitSessionCookieConfig.force_secure?, options.fetch(:secure)
+    assert options.fetch(:httponly)
+    assert_equal :lax, options.fetch(:same_site)
+    assert_equal "/", options.fetch(:path)
+    assert_not options.key?(:domain)
+  end
+
+  test "RP token responses require nonblank access and refresh credentials" do
+    assert_equal ["access", "refresh"], OidcRpBrowserCredentialContract.require_token_response!(
+      access_token: "access",
+      refresh_token: "refresh",
+    )
+
+    assert_raises(ArgumentError) do
+      OidcRpBrowserCredentialContract.require_token_response!(access_token: " ", refresh_token: "refresh")
+    end
+  end
+
   test "a reversed response expiry is rejected instead of extending refresh authority" do
     error =
       assert_raises(ArgumentError) do

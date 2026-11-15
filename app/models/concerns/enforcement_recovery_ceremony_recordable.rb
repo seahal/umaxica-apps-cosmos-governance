@@ -13,19 +13,6 @@ module EnforcementRecoveryCeremonyRecordable
   CONSUMED = 2
   REVOKED = 3
 
-  # FIXME: Violates Umaxica/NoConcernInclusionHooks; move the declarations in this block into each class that includes this concern.
-  included do
-    include ::PublicId
-
-    attr_reader :plaintext_token
-
-    before_validation :assign_token, on: :create
-    before_validation :assign_expiry, on: :create
-    validates :status_id, inclusion: { in: [ACTIVE, CONSUMED, REVOKED] }
-    validates :token_digest, presence: true, uniqueness: true
-    validates :expires_at, presence: true
-  end
-
   class_methods do
     def issue!(subject:, request:)
       create!(
@@ -50,6 +37,7 @@ module EnforcementRecoveryCeremonyRecordable
     def digest_optional(value) = value.present? ? digest(value) : nil
   end
 
+  public
   def active?
     status_id == ACTIVE && consumed_at.blank? && revoked_at.blank? && expires_at > Time.current
   end

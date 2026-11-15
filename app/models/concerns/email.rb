@@ -32,24 +32,6 @@ module Email
   attr_accessor :confirm_policy, :pass_code
   attr_writer :raw_address
 
-  # FIXME: Violates Umaxica/NoConcernInclusionHooks; move the declarations in this block into each class that includes this concern.
-  included do
-    before_validation :normalize_address_from_raw
-    before_validation :set_address_digests
-    scope :with_address, ->(value) do
-      digest = IdentifierBlindIndex.bidx_for_email(value, realm: identifier_hmac_realm)
-      digest.present? ? where(address_digest: digest) : none
-    end
-
-    validate :validate_email_address
-    validates :confirm_policy, acceptance: true, on: :create,
-                               unless: proc { |a| a.raw_address.blank? && a.pass_code.present? }
-    validates :pass_code, numericality: { only_integer: true },
-                          length: { is: 6 },
-                          presence: true,
-                          unless: proc { |a| a.pass_code.blank? && a.raw_address.present? }
-  end
-
   class_methods do
     public
 
@@ -66,6 +48,7 @@ module Email
   end
 
   # Telephone issuance does not select this email-specific cooldown policy.
+  public
   def otp_cooldown_active?(now: nil)
     return false if otp_last_sent_at.blank?
     return false if otp_last_sent_at == -Float::INFINITY

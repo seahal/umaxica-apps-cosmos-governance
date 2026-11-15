@@ -5,6 +5,7 @@ class AvatarMonikerValidator < ActiveModel::EachValidator
   MAX_BYTES = 128
   MAX_GRAPHEME_CLUSTERS = 16
 
+  public
   def validate(record)
     attributes.each do |attribute|
       validate_each(record, attribute, record.read_attribute_for_validation(attribute))

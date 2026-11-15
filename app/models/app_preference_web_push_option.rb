@@ -7,6 +7,8 @@ class AppPreferenceWebPushOption < AppSettingRecord
   ENABLED = 1
   DEFAULTS = [DISABLED, ENABLED].freeze
 
+  self.record_timestamps = false
+
   has_many :app_preference_web_pushes,
            class_name: "AppPreferenceWebPush",
            foreign_key: :option_id,

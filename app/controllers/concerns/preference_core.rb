@@ -6,10 +6,7 @@ module PreferenceCore
   include CommonRedirect
   include PreferenceBase
 
-  # FIXME: Violates Umaxica/NoConcernInclusionHooks; move the declarations in this block into each class that includes this concern.
-  included do
-    helper_method :preference_base_i18n_key, :preference_acme_i18n_key
-  end
+  public
 
   def set_region_preferences_edit
     with_preference_connection(:reading) do

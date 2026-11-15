@@ -7,6 +7,7 @@
 # approve, reject, or execute a change to another Operator, so every rule denies until the
 # capability, approval, and last-administrator rules are specified.
 class OperatorLifecycleRequestPolicy < ApplicationPolicy
+  public
   def index? = false
 
   def show? = false

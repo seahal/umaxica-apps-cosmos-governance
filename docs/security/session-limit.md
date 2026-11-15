@@ -1,15 +1,16 @@
-> **Current route status (2026-11-11):** The hard reset removes local Auth/Visa sign-in and
-> session-limit routes, Base/Tech RP sign-in and callback routes, RP-initiated logout, and
-> Back-Channel Logout receivers. Existing local RP request validation remains; the route and
-> controller descriptions below are historical.
+> **Current route status (2026-11-14):** Base App's neutral RP entry, callback, local sign-out and
+> Back-Channel Logout receiver have been restored. Visa authorization is currently unavailable
+> upstream. Governance still has no local session-limit route or credential ceremony; Base Org and
+> Tech RP routes remain disconnected. The route and controller descriptions below are historical.
 
 # Sign-In Session Limit
 
 > **Historical authority boundary (2026-10-24):** At that time, Visa was the OIDC authority and
 > owned Root Session issuance and session-limit resolution, Auth was ceremony-only, and Base was the
-> browser RP. The 2026-11-11 hard reset has since removed local Auth/Visa and Base/Tech RP protocol
-> routes. The route and controller descriptions below are historical; retained session-limit models
-> do not imply active local endpoints.
+> browser RP. The 2026-11-11 hard reset removed local Auth/Visa ceremonies and RP routes. The
+> 2026-11-14 owner order restored the Base App RP lifecycle endpoints only. The route and controller
+> descriptions below are historical; retained session-limit models do not imply active local
+> session-limit endpoints.
 
 This document preserves the former session-limit behavior for `app` and `org` sign-in flows. COM
 authentication was retired before the local-surface hard reset.
@@ -77,8 +78,8 @@ exists.
 ticket-database transaction:
 
 1. Below the limit, it commits one ACTIVE session and returns `status: :success`.
-2. At the limit, it creates a pending resolution and returns `status: :session_limit_pending`.
-   The parent remains in `SESSION_ISSUANCE_PENDING`; no token, cookie, `current_resource`, or
+2. At the limit, it creates a pending resolution and returns `status: :session_limit_pending`. The
+   parent remains in `SESSION_ISSUANCE_PENDING`; no token, cookie, `current_resource`, or
    `LOGGED_IN` audit exists for the attempt.
 
 An open resolution occupies the actor's waiting slot under the actor lock. R2-WU01 expires elapsed
@@ -88,18 +89,18 @@ result with HTTP 403; the existing flow and lease remain unchanged.
 
 ## Session-Limit Resolution
 
-- External credential authority: no local session-limit route is served here. Base and Tech own their
-  browser RP sessions; authority-side sign-in resolution remains with the external authority.
+- External credential authority: no local session-limit route is served here. Base and Tech own
+  their browser RP sessions; authority-side sign-in resolution remains with the external authority.
 - Visa app, OIDC resume: `/sign/in/limitation` with the `ClientSessionLimitResolutionTransaction`
   challenge.
 - Google and Apple sign-up have no separate path: they reach the limit through the canonical Sign In
   and the OIDC resume above (`adr/sign-up-finalization-in-auth.md`).
 
 The show action is read-only. The existing Visa update path accepts PATCH/PUT to select a candidate
-and an explicit POST with `continue=1` to continue the same browser-bound flow. Both Visa
-limitation routes expose that POST mapping without adding a new action surface. Selection records a
-candidate; it does not revoke a session. The final `log_in` call obtains the actor, parent-flow and
-resolution locks in the canonical order and calls
+and an explicit POST with `continue=1` to continue the same browser-bound flow. Both Visa limitation
+routes expose that POST mapping without adding a new action surface. Selection records a candidate;
+it does not revoke a session. The final `log_in` call obtains the actor, parent-flow and resolution
+locks in the canonical order and calls
 `SessionLimitResolutionTransactionable#finalize_for_session_issuance!`.
 
 If natural sign-out or expiry has already brought the count below N, finalization marks the
@@ -172,8 +173,9 @@ model-level failure before excess live token rows are accepted.
 ## R2-WU03 Delivery (2026-10-16)
 
 At delivery, the three realm resolution models permitted a resolved row without selected-session
-facts when capacity was freed naturally. The APP and ORG resolution models remain; COM authentication
-has since been retired. The historical checks are recorded in the R2-WU03 evidence file.
+facts when capacity was freed naturally. The APP and ORG resolution models remain; COM
+authentication has since been retired. The historical checks are recorded in the R2-WU03 evidence
+file.
 
 ## R2-WU04 Delivery (2026-10-16)
 
@@ -183,12 +185,13 @@ UserInfo validation, Refresh and reissue, Step-Up, and credential ceremony consu
 historical `RESTRICTED` (103) rows before principal creation. The old RestrictedSessionGuard, its
 callback registrations and its refresh exception path were removed; the status reference and
 historical token/audit rows remain readable. MFA reset remains a GET-only unavailable page. At that
-delivery, the three then-existing Base reset controllers were unreachable from a historical 103 session.
+delivery, the three then-existing Base reset controllers were unreachable from a historical 103
+session.
 
 ## Delivered reconciliation (2026-10-06)
 
-APP and ORG use the durable session-limit resolution contract. The parent sign-in flow remains
-in `SESSION_ISSUANCE_PENDING` while the child transaction is bound to actor, browser, realm and OIDC
+APP and ORG use the durable session-limit resolution contract. The parent sign-in flow remains in
+`SESSION_ISSUANCE_PENDING` while the child transaction is bound to actor, browser, realm and OIDC
 transaction where present. Resolve, cancel, expire and conflict transitions lock and reload the
 owner and use the database clock; there is no early `SESSION_LIMIT_PENDING` graph edge or
 placeholder session. The former Acme/sign authority wording is historical.

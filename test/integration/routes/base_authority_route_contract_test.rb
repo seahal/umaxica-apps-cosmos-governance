@@ -136,14 +136,18 @@ class BaseAuthorityRouteContractTest < ActionDispatch::IntegrationTest
       Rails.application.routes.recognize_path("http://#{BASE_APP_HOST}/oidc/authorization", method: :get)
     end
 
-    [
-      ["/oidc/callback", :get], ["/sign/out/new", :get], ["/sign/out/edit", :get],
-      ["/sign/out", :post],
-    ].each do |path, method|
-      assert_raises(ActionController::RoutingError, "#{method.upcase} #{path} is retired") do
-        Rails.application.routes.recognize_path("http://#{BASE_APP_HOST}#{path}", method: method)
-      end
-    end
+    assert_recognizes(
+      { controller: "base/app/oidc/callbacks", action: "show" },
+      { path: "https://#{BASE_APP_HOST}/oidc/callback", method: :get },
+    )
+    assert_recognizes(
+      { controller: "base/app/oidc/closures", action: "create" },
+      { path: "https://#{BASE_APP_HOST}/oidc/closures", method: :post },
+    )
+    assert_recognizes(
+      { controller: "base/app/sign_outs", action: "new" },
+      { path: "https://#{BASE_APP_HOST}/sign/out/new", method: :get },
+    )
 
     assert_raises(ActionController::RoutingError) do
       Rails.application.routes.recognize_path("http://#{BASE_APP_HOST}/lobby", method: :get)
@@ -557,8 +561,22 @@ class BaseAuthorityRouteContractTest < ActionDispatch::IntegrationTest
       { path: "http://#{BASE_ORG_HOST}/switcher", method: :patch },
     )
 
-    assert_raises(ActionController::RoutingError) do
-      Rails.application.routes.recognize_path("http://#{BASE_ORG_HOST}/oidc/callback", method: :get)
+    {
+      ["/sign", :get] => ["base/org/sign/entries", "show"],
+      ["/sign", :post] => ["base/org/sign/entries", "create"],
+      ["/sign/interruption", :get] => ["base/org/sign/interruptions", "show"],
+      ["/oidc/callback", :get] => ["base/org/oidc/callbacks", "show"],
+      ["/oidc/closures", :post] => ["base/org/oidc/closures", "create"],
+      ["/sign/out", :get] => ["base/org/sign_outs", "show"],
+      ["/sign/out/new", :get] => ["base/org/sign_outs", "new"],
+      ["/sign/out/edit", :get] => ["base/org/sign_outs", "edit"],
+      ["/sign/out", :post] => ["base/org/sign_outs", "create"],
+      ["/sign/out/completion", :get] => ["base/org/sign_outs", "show"],
+    }.each do |(path, method), (controller, action)|
+      recognized = Rails.application.routes.recognize_path("http://#{BASE_ORG_HOST}#{path}", method:)
+
+      assert_equal controller, recognized.fetch(:controller), "#{method.upcase} #{path}"
+      assert_equal action, recognized.fetch(:action), "#{method.upcase} #{path}"
     end
 
     assert_raises(ActionController::RoutingError) do
@@ -812,8 +830,16 @@ class BaseAuthorityRouteContractTest < ActionDispatch::IntegrationTest
         { controller: "base/#{surface}/well_known/jwks", action: "show" },
         { path: "http://#{host}/.well-known/jwks.json", method: :get },
       )
-      assert_raises(ActionController::RoutingError) do
-        Rails.application.routes.recognize_path("http://#{host}/oidc/callback", method: :get)
+      if surface == "app"
+        assert_recognizes(
+          { controller: "base/app/oidc/callbacks", action: "show" },
+          { path: "https://#{host}/oidc/callback", method: :get },
+        )
+      else
+        assert_recognizes(
+          { controller: "base/org/oidc/callbacks", action: "show" },
+          { path: "https://#{host}/oidc/callback", method: :get },
+        )
       end
       host! host
       https!

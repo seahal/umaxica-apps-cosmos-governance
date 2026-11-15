@@ -14,6 +14,9 @@ class OrganizationStatus < OrgPrincipalRecord
   # Fixed IDs - do not modify these values
   NOTHING = 1
   DEFAULTS = [NOTHING].freeze
+
+  self.record_timestamps = false
+
   has_many :organizations,
            class_name: "OperatorOrganization",
            foreign_key: :workspace_status_id,

@@ -132,13 +132,20 @@ class BaseRouteContractTest < ActionDispatch::IntegrationTest
         )
       end
 
-      [
-        ["/oidc/callback", :get], ["/oidc/closures", :post],
-        ["/sign/out/new", :get], ["/sign/out/edit", :get], ["/sign/out", :post],
-      ].each do |path, method|
-        assert_raises(ActionController::RoutingError, "#{method.upcase} #{path} is retired") do
-          Rails.application.routes.recognize_path("http://#{host}#{path}", method: method)
-        end
+      {
+        ["/sign", :get] => ["base/app/sign/entries", "show"],
+        ["/sign", :post] => ["base/app/sign/entries", "create"],
+        ["/sign/interruption", :get] => ["base/app/sign/interruptions", "show"],
+        ["/oidc/callback", :get] => ["base/app/oidc/callbacks", "show"],
+        ["/oidc/closures", :post] => ["base/app/oidc/closures", "create"],
+        ["/sign/out/new", :get] => ["base/app/sign_outs", "new"],
+        ["/sign/out/edit", :get] => ["base/app/sign_outs", "edit"],
+        ["/sign/out", :post] => ["base/app/sign_outs", "create"],
+      }.each do |(path, method), (controller, action)|
+        recognized = Rails.application.routes.recognize_path("https://#{host}#{path}", method:)
+
+        assert_equal controller, recognized.fetch(:controller), "#{method.upcase} #{path}"
+        assert_equal action, recognized.fetch(:action), "#{method.upcase} #{path}"
       end
 
       [
@@ -287,20 +294,22 @@ class BaseRouteContractTest < ActionDispatch::IntegrationTest
     assert_equal "base/org/roots", recognized[:controller]
     assert_equal "show", recognized[:action]
 
-    assert_raises(ActionController::RoutingError) do
-      Rails.application.routes.recognize_path(
-        "http://#{BASE_ORG_HOST}/oidc/authorization",
-        method: :get,
-      )
-    end
+    {
+      ["/sign", :get] => ["base/org/sign/entries", "show"],
+      ["/sign", :post] => ["base/org/sign/entries", "create"],
+      ["/sign/interruption", :get] => ["base/org/sign/interruptions", "show"],
+      ["/oidc/callback", :get] => ["base/org/oidc/callbacks", "show"],
+      ["/oidc/closures", :post] => ["base/org/oidc/closures", "create"],
+      ["/sign/out", :get] => ["base/org/sign_outs", "show"],
+      ["/sign/out/new", :get] => ["base/org/sign_outs", "new"],
+      ["/sign/out/edit", :get] => ["base/org/sign_outs", "edit"],
+      ["/sign/out", :post] => ["base/org/sign_outs", "create"],
+      ["/sign/out/completion", :get] => ["base/org/sign_outs", "show"],
+    }.each do |(path, method), (controller, action)|
+      recognized = Rails.application.routes.recognize_path("http://#{BASE_ORG_HOST}#{path}", method:)
 
-    [
-      ["/oidc/callback", :get], ["/oidc/closures", :post],
-      ["/sign/out/new", :get], ["/sign/out/edit", :get], ["/sign/out", :post],
-    ].each do |path, method|
-      assert_raises(ActionController::RoutingError, "#{method.upcase} #{path} is retired") do
-        Rails.application.routes.recognize_path("http://#{BASE_ORG_HOST}#{path}", method: method)
-      end
+      assert_equal controller, recognized.fetch(:controller), "#{method.upcase} #{path}"
+      assert_equal action, recognized.fetch(:action), "#{method.upcase} #{path}"
     end
 
     assert_raises(ActionController::RoutingError) do

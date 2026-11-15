@@ -1,32 +1,22 @@
-# WebAuthn Architecture
+# WebAuthn and passkey ownership
 
-The retained local behavior covers passkey inventory, surface-specific RP configuration, and
-transactional consumption of signed ceremony results. Browser WebAuthn verification and local
-passkey sign-in or registration-start routes are not present. Base and Tech OIDC sign-in is
-unavailable because its provider URLs and RP callback routes were removed.
+Access owns OpenID Provider ceremonies, including browser WebAuthn verification. Governance does not
+start or verify WebAuthn ceremonies, consume signed ceremony results, or own RP ID and origin
+configuration. Base App and Base Org have relying-party entries and callbacks for verified Visa
+responses; these do not provide a Governance-owned credential ceremony. Tech RP routes remain
+disconnected.
 
-## RP configuration
+Governance retains Client and Operator credential records, their metadata, owner-scoped management
+pages, and the atomic credential/audit writer. `Webauthn::Surface` maps the app and org ownership
+domains to their credential classes and actor foreign keys; it does not configure a relying party.
+Passkey metadata is display data and cannot establish identity, authorization, freshness, or
+step-up. RP-local step-up state and the Access handoff remain separate from browser WebAuthn.
 
-`Webauthn::Surface` maps the app and org ownership domains explicitly.
-`Webauthn::RelyingPartyConfigResolver` loads the RP ID and origin for that surface, while
-`Webauthn::RelyingPartyConfig` validates that the RP ID equals the configured origin host and
-compares exact scheme, host and effective port. The request host does not select the surface.
-
-Passkey ceremony transaction records resolve their RP configuration from the declared app or org
-surface. Step-up session consumption uses the same exact-origin check.
-
-## Signed results and stored credentials
-
-Base completion operations validate the signed result contract and bind the result to its surface,
-actor, session, transaction and expiry before writing a credential. Registration uses
-`PasskeyRegistrationOperation` to serialize writes for the owning Client or Operator and to persist
-the audit outbox event atomically.
-
-Base app and org passkey pages are read-only inventory. Stored credential metadata is display data;
-it does not establish identity, authorization, freshness or step-up.
+The historic RP ID/origin and signed-result contracts are retained as migration history in
+[the boundary note](webauthn-rp-id-origin-boundary.md). They do not describe executable Governance
+ceremony code.
 
 ## Related
 
-- [Passkey inventory and signed results](passkeys.md)
+- [Passkey inventory and ownership](passkeys.md)
 - [WebAuthn security invariants](webauthn-security-invariants.md)
-- [RP ID and Origin boundary](webauthn-rp-id-origin-boundary.md)

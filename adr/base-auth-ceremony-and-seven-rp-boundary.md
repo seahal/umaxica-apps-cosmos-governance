@@ -4,6 +4,12 @@
 
 Accepted (2026-09-13)
 
+> **Owner supersession (2026-11-13):** Access owns authentication ceremony execution. Governance no
+> longer runs the local Auth ceremony service described in this decision. Governance retains
+> identity and credential records, RP-local session/step-up state, and their owner-side persistence.
+> The route-scope note below remains in force; this ADR's old ceremony implementation details are
+> historical and must not be used as a current Governance call graph.
+
 Current naming note (2026-09-25): `Side`/`Wide` in this decision name the Rails RP surface now
 implemented internally as `Warp`. The registered RP protocol identifiers and persisted values retain
 their established names.
@@ -22,9 +28,9 @@ not a registered return URI. Base local sign-out still ends at `/lobby`. The cur
 completion contract and its implementation limits are recorded in
 `adr/first-party-sign-out-shared-database-without-backchannel-logout.md`.
 
-Route-scope supersession (2026-11-10): the owner-approved local-surface hard reset removes the
-local Auth, Visa, Core, Warp, Palm, and Edit routes/controllers described below. Surviving Base and
-Tech RP/OP behavior remains governed by current callers and accepted contracts. Existing OIDC
+Route-scope supersession (2026-11-10): the owner-approved local-surface hard reset removes the local
+Auth, Visa, Core, Warp, Palm, and Edit routes/controllers described below. Surviving Base and Tech
+RP/OP behavior remains governed by current callers and accepted contracts. Existing OIDC
 registrations, external authorities, models, and database state are not removed by this amendment.
 
 Supersedes conflicting authority claims in:
@@ -550,3 +556,12 @@ path-only `target_link_uri` in its signed OIDC `state`; Auth's signed `pt` remai
 Cancel is returned by the OP as `access_denied` with the unchanged `state` and `iss`, and the RP
 handles that and other callback failures at `GET /sign/interruption`. The OP never interprets RP
 state claims, and Rails CSRF remains independent of OIDC state.
+
+## Base front-channel ID Token amendment (2026-11-14)
+
+For Base App and Base Org only, the later owner-approved
+[`front-channel profile`](oidc-authorization-code-only-implicit-and-hybrid-non-adoption.md) replaces
+Code/PKCE and UserInfo in the shared RP lifecycle. The callback verifies state and issuer, then
+validates the exact PS256 ID Token through Visa JWKS and commits the RP session bound to `sid`.
+Renewal uses `prompt=none`; the Base API bearer is issued by Governance from the active RP session.
+Other relying parties retain their own accepted flow contracts.

@@ -16,7 +16,7 @@ module RpCellSessionHelper
     client = OidcClientRegistry.find!(client_id)
     resource_type = OidcIssuer.resource_type_for_client(client)
     namespace = (resource_type == "operator") ? "BASE_ORG" : "BASE_APP"
-    jwks_uri = OidcIssuer.jwks_uri(resource_type)
+    jwks_uri = rp_test_jwks_uri_for(client)
     _claims, header = JWT.decode(access_token, nil, false)
     jwks = JitSecurityJwtJwksService.jwk_set(namespace).deep_stringify_keys
     raise ArgumentError, "Base test signing key is absent from the published keyset" unless
@@ -28,8 +28,7 @@ module RpCellSessionHelper
     )
   end
 
-  # Creates the local records needed by request tests without exercising the retired
-  # OIDC callback path. This is test setup; production sessions still have no issuer.
+  # Creates local records needed by request tests without invoking the OIDC callback.
   def seed_rp_cell_session(cell:, issuer:, subject:, sid:, absolute_expires_at:)
     prefix = cell.record_prefix
     record_class = "#{prefix}Record".constantize
@@ -59,10 +58,31 @@ module RpCellSessionHelper
         existing_session = session_class.includes(:op_session_binding)
           .where(op_session_binding: anchor, revoked_at: nil)
           .where("absolute_expires_at > ?", record_class.database_now).order(:id).first
-        existing_session || session_class.create!(
+        session = existing_session || session_class.create!(
           op_session_binding: anchor, absolute_expires_at:, installed_generation: 0,
         )
+        case cell.connection
+        when "rp_base_app"
+          write_test_authentication_evidence!(
+            RpBaseAppSessionAuthenticationEvidence, session,
+          )
+        when "rp_base_org"
+          write_test_authentication_evidence!(
+            RpBaseOrgSessionAuthenticationEvidence, session,
+          )
+        end
+        session
       end
+    end
+  end
+
+  def write_test_authentication_evidence!(evidence_class, session)
+    evidence_class.find_or_create_by!(rp_session_id: session.id) do |evidence|
+      evidence.acr = "urn:umaxica:base:normal"
+      evidence.amr = ["pwd"]
+      evidence.auth_time = Time.current.to_i
+      evidence.id_token_jti_digest = Digest::SHA256.hexdigest("rp-session-test:#{session.public_id}")
+      evidence.authentication_context = AuthenticationContextValue::NORMAL_KEY
     end
   end
 
@@ -70,9 +90,28 @@ module RpCellSessionHelper
     resource_type = OidcIssuer.resource_type_for_client(client)
 
     seed_rp_cell_session(
-      cell: RpCellBinding.for_client(client.client_id), issuer: OidcIssuer.for_client(client),
+      cell: RpCellBinding.for_client(client.client_id), issuer: rp_test_issuer_for(client),
       subject: OidcSubject.for(actor, resource_type:), sid:, absolute_expires_at:,
     )
+  end
+
+  def rp_test_issuer_for(client)
+    hosts = Rails.configuration.x.boot_config.fetch(:hosts)
+    authority =
+      case client.client_id
+      when RpCellBinding.fetch("rp_base_app").client_id then hosts.visa_service
+      when RpCellBinding.fetch("rp_base_org").client_id then hosts.visa_staff
+      else return OidcIssuer.for_client(client)
+      end
+    Oidc::AcmeServiceOrigin.from_configured_host(authority.host, default_scheme: "https").origin
+  end
+
+  def rp_test_jwks_uri_for(client)
+    return OidcIssuer.jwks_uri(OidcIssuer.resource_type_for_client(client)) unless
+      [RpCellBinding.fetch("rp_base_app").client_id,
+       RpCellBinding.fetch("rp_base_org").client_id,].include?(client.client_id)
+
+    Oidc::AcmeServiceOrigin.from(rp_test_issuer_for(client), default_scheme: "https").jwks_uri
   end
 
   # The process role and its deployed contract epoch are process configuration.

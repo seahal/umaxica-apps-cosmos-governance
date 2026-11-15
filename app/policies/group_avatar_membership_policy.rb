@@ -2,6 +2,7 @@
 # frozen_string_literal: true
 
 class GroupAvatarMembershipPolicy < ApplicationPolicy
+  public
   def create?
     (user.is_a?(Client) || user.is_a?(Operator)) ? authorized_group_change?(
       "avatar.group.attach",

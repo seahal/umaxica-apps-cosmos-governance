@@ -15,16 +15,17 @@ Development admits Base and Tech localhost aliases and the six dedicated operato
 hosts. No operator tool is routed on a `.core.dev.localhost` host. Unknown hosts reach the explicit
 unknown-host responder.
 
-The former Auth, Visa, Core, Warp, Palm, Edit, Docs, News, Help, Info, and Guid hosts are not
-local Rails routes. Auth and Visa URL configuration and outbound requests were removed, so this
-process no longer contacts those authorities.
+The former Auth, Core, Warp, Palm, Edit, Docs, News, Help, Info, and Guid hosts are not local Rails
+routes. Governance does not host the Visa provider or credential ceremonies. Base App uses its
+configured Visa host family for RP requests and sends browser authorization and logout navigation
+through Jump. Access and deployed Jump readiness remain external dependencies.
 
 ## Host versus routing target
 
 A Tunnel ingress `service:` address and a Workers VPC Service address are routing targets. They do
 not become the request's Rails `Host` merely because they receive the connection. Rails validates
-the HTTP `Host` header and, when present, the last `X-Forwarded-Host` value. A proxy that sets
-those headers must preserve the host family intended for the route.
+the HTTP `Host` header and, when present, the last `X-Forwarded-Host` value. A proxy that sets those
+headers must preserve the host family intended for the route.
 
 Production browser requests use public surface hosts. Development requests may arrive through the
 Access-protected tunnel or a private local ingress; host authorization admits only the configured
@@ -35,8 +36,10 @@ current surface hosts for those paths.
 - Cloudflare Access authenticates the operator before the request reaches development tools or
   protected development surfaces.
 - Rails still enforces its own route, session, authorization, CSRF, and CSP boundaries.
-- Base and Tech OIDC sign-in, callback and logout entrypoints are absent. Existing local RP session
-  validation, verification and withdrawal routes keep their own browser and authorization checks.
+- Base App and Base Org RP entry, callback, local sign-out and Back-Channel Logout routes are
+  host-constrained and use independent RP cells. External authorization and logout navigation use
+  Jump. Tech RP protocol routes remain absent; local session validation, verification and withdrawal
+  keep their own browser and authorization checks.
 - Operator tools retain their own Basic Auth checks even when an upstream proxy also authenticates.
 
 Do not treat a routing target, development alias, or external authority origin as proof that a

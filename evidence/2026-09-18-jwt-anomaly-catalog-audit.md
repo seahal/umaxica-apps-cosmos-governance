@@ -50,16 +50,16 @@ migration was executed.
 - An isolated initializer wiring check with stubbed occurrence persistence — passed: loading
   `config/initializers/jwt_anomaly_notifications.rb` caused the reporter notification to reach the
   subscriber and emit `jwt.anomaly.catalog_miss` without attempting to create an unknown row.
-- `RAILS_ENV=test POSTGRESQL_TEST_HOST=127.0.0.1 POSTGRESQL_PORT=5432 VALKEY_TEST_HOST=127.0.0.1 VALKEY_TEST_PORT=6379 VALKEY_NAMESPACE_RUN_ID=jwt-anomaly-20260918 CACHE_REDIS_URL=redis://127.0.0.1:6379/3 RATE_LIMIT_REDIS_URL=redis://127.0.0.1:6379/4 AUTH_STATE_REDIS_URL=redis://127.0.0.1:6379/5 bundle exec bin/rails test test/services/anomaly_reporting_and_authorize_failures_test.rb`
+- `RAILS_ENV=<redacted> POSTGRESQL_TEST_HOST=<redacted> POSTGRESQL_PORT=<redacted> VALKEY_TEST_HOST=<redacted> VALKEY_TEST_PORT=<redacted> VALKEY_NAMESPACE_RUN_ID=<redacted> CACHE_REDIS_URL=<redacted> RATE_LIMIT_REDIS_URL=<redacted> AUTH_STATE_REDIS_URL=<redacted> bundle exec bin/rails test test/services/anomaly_reporting_and_authorize_failures_test.rb`
   — blocked during test-schema boot by `ActiveRecord::ConnectionNotEstablished`/`PG::ConnectionBad`
   for `127.0.0.1:5432`; no fallback database was used.
-- `RAILS_ENV=test POSTGRESQL_TEST_HOST=127.0.0.1 POSTGRESQL_PORT=5432 VALKEY_TEST_HOST=127.0.0.1 VALKEY_TEST_PORT=6379 VALKEY_NAMESPACE_RUN_ID=jwt-subscriber-20260918 CACHE_REDIS_URL=redis://127.0.0.1:6379/3 RATE_LIMIT_REDIS_URL=redis://127.0.0.1:6379/4 AUTH_STATE_REDIS_URL=redis://127.0.0.1:6379/5 bundle exec bin/rails test test/subscribers/jwt_anomaly_subscriber_test.rb test/services/jwt_anomaly_subscriber_coverage_test.rb`
+- `RAILS_ENV=<redacted> POSTGRESQL_TEST_HOST=<redacted> POSTGRESQL_PORT=<redacted> VALKEY_TEST_HOST=<redacted> VALKEY_TEST_PORT=<redacted> VALKEY_NAMESPACE_RUN_ID=<redacted> CACHE_REDIS_URL=<redacted> RATE_LIMIT_REDIS_URL=<redacted> AUTH_STATE_REDIS_URL=<redacted> bundle exec bin/rails test test/subscribers/jwt_anomaly_subscriber_test.rb test/services/jwt_anomaly_subscriber_coverage_test.rb`
   — blocked during test-schema boot by the same unavailable isolated PostgreSQL listener; no test
   assertions ran.
 - `RAILS_ENV=test POSTGRESQL_TEST_HOST=127.0.0.1 POSTGRESQL_PORT=5432 VALKEY_TEST_HOST=127.0.0.1 VALKEY_TEST_PORT=6379 VALKEY_NAMESPACE_RUN_ID=jwt-anomaly-wiring-20260918 CACHE_REDIS_URL=redis://127.0.0.1:6379/3 RATE_LIMIT_REDIS_URL=redis://127.0.0.1:6379/4 AUTH_STATE_REDIS_URL=redis://127.0.0.1:6379/5 bundle exec bin/rails test test/services/anomaly_reporting_and_authorize_failures_test.rb test/subscribers/jwt_anomaly_subscriber_test.rb test/services/jwt_anomaly_subscriber_coverage_test.rb`
   — attempted after notification wiring and blocked during test-schema boot because PostgreSQL at
   `127.0.0.1:5432` was unavailable; no assertions ran.
-- `RAILS_ENV=test POSTGRESQL_TEST_HOST=127.0.0.1 POSTGRESQL_PORT=5432 VALKEY_TEST_HOST=127.0.0.1 VALKEY_TEST_PORT=6379 VALKEY_NAMESPACE_RUN_ID=jwt-anomaly-final-20260918 CACHE_REDIS_URL=redis://127.0.0.1:6379/3 RATE_LIMIT_REDIS_URL=redis://127.0.0.1:6379/4 AUTH_STATE_REDIS_URL=redis://127.0.0.1:6379/5 bundle exec bin/jobs check`
+- `RAILS_ENV=<redacted> POSTGRESQL_TEST_HOST=<redacted> POSTGRESQL_PORT=<redacted> VALKEY_TEST_HOST=<redacted> VALKEY_TEST_PORT=<redacted> VALKEY_NAMESPACE_RUN_ID=<redacted> CACHE_REDIS_URL=<redacted> RATE_LIMIT_REDIS_URL=<redacted> AUTH_STATE_REDIS_URL=<redacted> bundle exec bin/jobs check`
   — passed: `Solid Queue configuration is valid.` This validates configuration only; no worker or
   database execution was claimed.
 - A static repository search before this slice found no initializer or runtime call registering or

@@ -17,6 +17,8 @@ class ClientIdentityState < AppRpRecord
   DELETED = 3
   DEFAULTS = [NOTHING, ACTIVE, SUSPENDED, DELETED].freeze
 
+  self.record_timestamps = false
+
   has_many :client_identities,
            class_name: "ClientIdentity",
            foreign_key: :status_id,

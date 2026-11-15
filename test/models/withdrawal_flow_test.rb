@@ -133,6 +133,10 @@ class WithdrawalFlowTest < ActiveSupport::TestCase
   test "status_name_for returns the correct status name" do
     assert_equal "REQUESTED", ClientWithdrawalFlow.status_name_for(ClientWithdrawalFlowStatus::REQUESTED)
     assert_equal "TERMINATED", ClientWithdrawalFlow.status_name_for(ClientWithdrawalFlowStatus::TERMINATED)
+
+    cycle = ClientWithdrawalFlow.new(status_id: ClientWithdrawalFlowStatus::REQUESTED)
+
+    assert_equal "REQUESTED", cycle.status_name_for(cycle.status_id)
   end
 
   test "can_transition_to? accepts valid next status" do

@@ -21,6 +21,11 @@ module Base
           AUTHENTICATION_MODE = :private
           REALM = "app"
           STEP_UP_SCOPE = "support_session_revoke"
+
+          layout "base/org/inertia"
+          inertia_share chrome: -> { surface_chrome }
+          inertia_share clear_history: -> { session[:inertia_clear_history] == true }
+
           declare_authentication_mode! :private
 
           before_action :no_store

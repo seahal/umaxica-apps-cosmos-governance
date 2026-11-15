@@ -22,6 +22,12 @@ Google social temporary gateway. It does not change this ADR's production target
 signup is not a permanent self-service operator creation path, and `com` returns to a social-free
 state before production cleanup.
 
+> **Pending split amendment (proposed 2026-11-14):** The
+> [split amendment](sign-up-finalization-in-auth.md#cosmos-split-amendment-governance-owned-pending-registration-2026-11-14)
+> restates this ADR's pending telephone release, cleanup ownership, and its separation of Sign Up
+> and Sign In failure domains for the Governance-owned registration. It replaces the in-request
+> finalization-to-Sign-In handoff with a browser-carried completion answer.
+
 ## Context
 
 The sign surfaces currently have different registration and post-authentication behavior:

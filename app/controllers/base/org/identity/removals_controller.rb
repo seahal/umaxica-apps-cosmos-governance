@@ -10,6 +10,8 @@ module Base
         before_action :refuse_root_token_feature_in_rp_cell!
         step_up only: :create, scope: "settings_secret_credential"
 
+        public
+
         def create
           secret = current_operator.staff_secret_credentials.find_by!(public_id: params.expect(:secret_id))
           authorize!(secret)

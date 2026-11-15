@@ -1,8 +1,8 @@
 # Org Emergency Access (Restricted Mode)
 
-> **Historical route status (2026-11-11):** The local Auth/Visa routes, controllers and provider
-> URL configuration for the Org Standby ceremony described here have been removed under the
-> owner-approved local-surface hard reset. This document preserves the former route/security
+> **Historical route and owner status (2026-11-13):** The local Auth/Visa routes, controllers and
+> provider URL configuration for the Org Standby ceremony described here have been removed. Access
+> owns all authentication ceremony execution. This document preserves the former route/security
 > design; it is not a current endpoint contract. Retained models or policy data do not imply that
 > the ceremony is routed here.
 
@@ -284,10 +284,11 @@ operations only; the policy-derived Normal Step-Up / Standby comparison and actu
 issuance remain open. See `evidence/2026-11-02-wua6-org-owner-stepup-ops-N3F6.md` and the linked
 operation-specific evidence below.
 
-A separate Normal ORG integration flow now passes real WebAuthn verification in Auth, Base result
-consumption, freshness resolution, and access to the protected Passkey page (5 tests, 35 assertions
-in the affected file). It does not perform a sensitive mutation after Step-Up, so it verifies the
-shared ceremony boundary but does not close AC-41's per-operation comparison. See
+**Historical integration evidence, superseded 2026-11-13:** A former Normal ORG integration flow
+passed WebAuthn verification in Auth, Base result consumption, freshness resolution, and access to
+the protected Passkey page (5 tests, 35 assertions in the affected file). That local ceremony code
+and route were removed after Access became the owner; the run does not establish a current
+Governance route or close AC-41's per-operation comparison. See
 `evidence/2026-11-01-wua6-normal-step-up-fixture-isolation-F7N3.md`.
 
 One write outside the catalogued Step-Up scopes has an explicit current-policy disposition:
@@ -320,11 +321,11 @@ Three independent layers enforce it:
 2. `StepUpResolver` never reports a requirement as satisfied for an Emergency session, so a session
    that somehow held freshness columns still cannot authorize a sensitive action.
 3. `IdentityStepUpCeremonyFreshnessCommitter` refuses to write freshness onto an Emergency session,
-   which is where Base commits it. An operation is
-   unavailable to an Emergency session exactly when it carries a Step-Up gate (`step_up only:` or a
-   `require_*_step_up!` callback). A sensitive operation without one is reachable from Restricted
-   Mode, so adding a sensitive operation means adding its gate. The inventory of write actions that
-   still lack one is tracked in GitHub issue #884.
+   which is where Base commits it. An operation is unavailable to an Emergency session exactly when
+   it carries a Step-Up gate (`step_up only:` or a `require_*_step_up!` callback). A sensitive
+   operation without one is reachable from Restricted Mode, so adding a sensitive operation means
+   adding its gate. The inventory of write actions that still lack one is tracked in GitHub issue
+   #884.
 
 ## No in-session mode transitions
 

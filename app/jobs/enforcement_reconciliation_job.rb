@@ -19,6 +19,7 @@ class EnforcementReconciliationJob < ApplicationJob
   APPEAL_CLASSES = [AppEnforcementAppeal, OrgEnforcementAppeal].freeze
   APPEAL_AUDITABLE_STATES = %w(submitted approved rejected).freeze
 
+  public
   def perform(batch_size: 200)
     CASE_CLASSES.each do |case_class|
       case_class.pending_convergence.includes(:principal_effect).in_batches(of: batch_size) do |batch|

@@ -11,7 +11,7 @@ module Jit
         self.fixture_table_names = []
 
         setup do
-          @key = OpenSSL::PKey::EC.generate("secp384r1")
+          @key = OpenSSL::PKey::RSA.generate(3072)
           @public_jwk = JitSecurityJwtJwk.export_public(@key, kid: "kid-1")
         end
 
@@ -40,23 +40,53 @@ module Jit
         test "rejects unexpected algorithm" do
           error =
             assert_raises(JitSecurityJwtJwk::Error) do
-              JitSecurityJwtJwk.normalize_public(@public_jwk.merge("alg" => "HS256"))
+              JitSecurityJwtJwk.normalize_public(@public_jwk.merge("alg" => "ES384"))
             end
 
-          assert_match(/alg must be ES384/, error.message)
+          assert_match(/alg must be PS256/, error.message)
         end
 
         test "rejects incomplete public jwk" do
           error =
             assert_raises(JitSecurityJwtJwk::Error) do
-              JitSecurityJwtJwk.normalize_public(@public_jwk.except("x"))
+              JitSecurityJwtJwk.normalize_public(@public_jwk.except("n"))
             end
 
-          assert_match(/missing x/, error.message)
+          assert_match(/missing n/, error.message)
         end
 
         test "imports valid public jwk material" do
-          assert_kind_of OpenSSL::PKey::EC, JitSecurityJwtJwk.import_public_key(@public_jwk)
+          assert_kind_of OpenSSL::PKey::RSA, JitSecurityJwtJwk.import_public_key(@public_jwk)
+          assert_equal 3072, JitSecurityJwtJwk.import_public_key(@public_jwk).n.num_bits
+        end
+
+        test "accepts RSA moduli at 3072 and 4096 bits and refuses 2048 bits" do
+          {
+            2_048 => false,
+            3_072 => true,
+            4_096 => true,
+          }.each do |bits, accepted|
+            key = OpenSSL::PKey::RSA.generate(bits)
+            jwk = JWT::JWK.new(key, kid: "rsa-#{bits}").export.stringify_keys.except("d", "p", "q", "dp", "dq", "qi")
+            jwk.merge!("alg" => "PS256", "use" => "sig")
+
+            if accepted
+              normalized = JitSecurityJwtJwk.normalize_public(jwk)
+
+              assert_equal "RSA", normalized.fetch("kty")
+              token = JWT.encode(
+                { "modulus_bits" => bits }, key, "PS256", { "kid" => "rsa-#{bits}", "typ" => "JWT" },
+              )
+
+              payload, = JWT.decode(token, JitSecurityJwtJwk.import_public_key(normalized), true, algorithms: ["PS256"])
+
+              assert_equal bits, payload.fetch("modulus_bits")
+            else
+              error = assert_raises(JitSecurityJwtJwk::Error) { JitSecurityJwtJwk.normalize_public(jwk) }
+
+              assert_match(/at least 3072 bits/, error.message)
+            end
+          end
         end
       end
     end

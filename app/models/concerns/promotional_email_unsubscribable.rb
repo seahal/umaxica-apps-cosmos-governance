@@ -4,6 +4,7 @@
 module PromotionalEmailUnsubscribable
   extend ActiveSupport::Concern
 
+  public
   def promotional_unsubscribe_token
     PromotionalEmailUnsubscribeToken.generate(self, scope: promotional_unsubscribe_scope)
   end

@@ -8,6 +8,7 @@
 # `index?`/`create?` gate the actor *type*; the per-record write rules require ownership
 # (record.user_id == client.id). Other defaults stay deny-all (allowlist).
 class ClientEmailPolicy < ApplicationPolicy
+  public
   def index?
     user.is_a?(Client)
   end

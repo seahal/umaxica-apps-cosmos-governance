@@ -20,6 +20,7 @@ class EnforcementCaseApplyOperation
   def self.call(...)
     new(...).call
   end
+  public_class_method :call
 
   # `actor_operator_public_id` is the operator running this apply (the opener on the direct path,
   # the approver on the approval path); it is recorded on the `applied` event.
@@ -34,6 +35,7 @@ class EnforcementCaseApplyOperation
     validate_step_up_pair!
   end
 
+  public
   def call
     # A failure here rolls the transaction back: nothing was decided or performed, so the Case keeps
     # its committed state (draft or pending_approval) and the error propagates unchanged.

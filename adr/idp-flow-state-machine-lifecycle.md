@@ -10,6 +10,12 @@ decision. Every "current" statement below was observed read-only at commit
 `7430ddea6da1e18da0b42418e5374379a52c8a4b`. Every "target" statement is a contract for future work
 tracked in `plans/backlog/idp-flow-state-machine-unification.md`.
 
+> **Governance runtime supersession (2026-11-13):** The owner confirmed that Access runs all
+> authentication ceremonies and Governance runs none. This monolith-era lifecycle contract is
+> historical for Governance runtime; the retained database schema and records were not changed by
+> the ceremony-code retirement. See
+> [`evidence/2026-11-13-remove-unreachable-ceremony-code-Q7M2.md`](../evidence/2026-11-13-remove-unreachable-ceremony-code-Q7M2.md).
+
 This ADR extends `adr/idp-flow-lifecycle-vocabulary.md`. That ADR fixes the vocabulary and
 invariants and explicitly left the physical representation undecided; this ADR decides the physical
 representation (DB-backed state reference tables, id-only rows, FK ownership, id contract) and

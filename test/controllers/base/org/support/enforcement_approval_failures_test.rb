@@ -60,7 +60,14 @@ class Base::Org::Support::EnforcementApprovalFailuresTest < ActionDispatch::Inte
     )
     before = the_case.reload.attributes
     before_client = @client.reload.attributes
-    headers = as_staff_headers(@operator, host: @host)
+    [OperatorCapabilityGrant::ENFORCEMENT_READ_APP,
+     OperatorCapabilityGrant::ENFORCEMENT_APPROVE_APP,].each do |capability|
+      OperatorCapabilityGrant.create!(
+        operator: @operator, origin: "bootstrap", capability:, reason_code: "bootstrap",
+        starts_at: 1.minute.ago, expires_at: 1.day.from_now,
+      )
+    end
+    headers = as_staff_headers(@operator, host: @host, select_available_org_persona: true)
     post base_org_support_app_enforcement_case_approval_url(the_case.public_id, host: @host),
          params: { principal_effect: { access_blocking: true } }, headers: headers, as: :json
 

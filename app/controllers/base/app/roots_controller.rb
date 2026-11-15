@@ -8,6 +8,11 @@ module Base
       include ::SessionBoundaryNotFound
 
       AUTHENTICATION_MODE = :open
+
+      layout "base/app/inertia"
+      inertia_share chrome: -> { surface_chrome }
+      inertia_share clear_history: -> { session[:inertia_clear_history] == true }
+
       declare_authentication_mode! :private, only: :show
       skip_before_action :set_preferences_cookie, only: %i(index show)
 
@@ -28,14 +33,6 @@ module Base
 
         render inertia: "base/app/dashboards/show", props: dashboard_page_props,
                clear_history: session[:inertia_clear_history] == true
-      end
-
-      protected
-
-      def track_authenticated_session_activity?
-        return false if (request.get? || request.head?) && %w(index show).include?(action_name)
-
-        super
       end
 
       private
@@ -77,7 +74,7 @@ module Base
       def dashboard_current_identity
         result = AvatarAuthorityClient.new(
           surface: "app",
-          access_token: BrowserCredentialCookie.read(cookies, OidcRpBrowserCredentialContract::ACCESS_COOKIE),
+          rp_session: browser_rp_access_state.rp_session,
           persona: Actor.selection.account_public_id,
           selection: Actor.selection,
         ).dashboard_identity
@@ -114,7 +111,6 @@ module Base
         {
           title: nil,
           heading: "Base App",
-          description: t("landing.thin_endpoint"),
         }
       end
     end

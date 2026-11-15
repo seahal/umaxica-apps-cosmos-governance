@@ -18,6 +18,7 @@ class AuthMethodGuard
 
     preserves_required_capabilities?(actor, passkey)
   end
+  public_class_method :can_remove_passkey?
 
   def self.active_passkeys_remaining(actor, passkey)
     surface = Webauthn::Surface.for({ Client => :app, Operator => :org }.fetch(actor.class))
@@ -33,22 +34,27 @@ class AuthMethodGuard
   def self.can_remove_email?(actor, email)
     preserves_required_capabilities?(actor, email)
   end
+  public_class_method :can_remove_email?
 
   def self.can_remove_telephone?(actor, telephone)
     preserves_required_capabilities?(actor, telephone)
   end
+  public_class_method :can_remove_telephone?
 
   def self.can_remove_totp?(actor, totp)
     preserves_required_capabilities?(actor, totp)
   end
+  public_class_method :can_remove_totp?
 
   def self.can_remove_secret_credential?(actor, secret_credential)
     preserves_required_capabilities?(actor, secret_credential)
   end
+  public_class_method :can_remove_secret_credential?
 
   def self.can_remove_external_identity?(actor, external_identity)
     preserves_required_capabilities?(actor, external_identity)
   end
+  public_class_method :can_remove_external_identity?
 
   def self.preserves_required_capabilities?(actor, excluding)
     before = AuthenticationCredentialInventory.call(actor, reload: true)

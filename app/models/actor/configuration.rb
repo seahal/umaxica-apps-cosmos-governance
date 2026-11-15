@@ -11,6 +11,7 @@ class Actor
 
   class Configuration
     class NullValue
+      public
       def nil? = true
 
       def ==(other)
@@ -51,6 +52,7 @@ class Actor
       freeze
     end
 
+    public
     def with(**values)
       self.class.new(@values.merge(values))
     end

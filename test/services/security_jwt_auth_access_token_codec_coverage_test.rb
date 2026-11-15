@@ -96,7 +96,7 @@ class SecurityJwtAuthAccessTokenCodecCoverageTest < ActiveSupport::TestCase
   end
 
   test "rejects a correctly signed token when iat is missing" do
-    private_key = OpenSSL::PKey::EC.generate("secp384r1")
+    private_key = OpenSSL::PKey::RSA.generate(3072)
     payload = {
       "iss" => "issuer",
       "aud" => "audience",
@@ -109,7 +109,7 @@ class SecurityJwtAuthAccessTokenCodecCoverageTest < ActiveSupport::TestCase
       "acr" => "aal1",
       "scope" => "authenticated domain:client",
     }
-    token = JWT.encode(payload, private_key, "ES384", { "typ" => "at+jwt", "kid" => "kid" })
+    token = JWT.encode(payload, private_key, "PS256", { "typ" => "at+jwt", "kid" => "kid" })
 
     JitSecurityJwtKeyring.stub(:public_key_for, private_key.public_key) do
       assert_nil SecurityJwtAuthAccessTokenCodec.decode(

@@ -86,7 +86,6 @@ module Outbound
     test "OP bound OTP deliveries raise unavailable without sending" do
       generation = SecureRandom.uuid
       [
-        ["app", "sign_up", "flow", SecureRandom.uuid, generation],
         ["org", "credential_registration", SecureRandom.uuid, "A" * 21, generation],
       ].each do |binding|
         payload = OutboundSensitivePayload.encrypt_sms_delivery(

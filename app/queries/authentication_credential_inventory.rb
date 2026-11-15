@@ -29,6 +29,7 @@ class AuthenticationCredentialInventory
   def self.call(actor, excluding: nil, reload: false)
     new(actor, excluding: excluding, reload: reload).call
   end
+  public_class_method :call
 
   def initialize(actor, excluding: nil, reload: false)
     @actor = actor
@@ -36,6 +37,7 @@ class AuthenticationCredentialInventory
     @reload = reload
   end
 
+  public
   def call
     return empty_result unless actor
 

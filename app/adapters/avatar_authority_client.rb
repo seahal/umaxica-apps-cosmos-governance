@@ -3,8 +3,8 @@
 
 # Base Self-RP client for the Avatar owner (R5-WU14, approved contract 2026-10-17).
 #
-# Each call carries a fresh private_key_jwt of this realm's Base Self-RP bound to the exact URL,
-# the actor's current Access JWT and the selected persona; the owner re-resolves and decides.
+# Each call carries a fresh Governance token derived from this realm's active RP session and the
+# selected persona; the owner re-resolves the actor and decides.
 # Typed outcomes only; a write is never retried blindly.
 # TODO: AUDIT external access: calls the Avatar authority API on another first-party host.
 class AvatarAuthorityClient
@@ -26,12 +26,12 @@ class AvatarAuthorityClient
   OPEN_TIMEOUT = 2
   READ_TIMEOUT = 5
 
-  def initialize(surface:, access_token:, persona:, selection: nil)
+  def initialize(surface:, rp_session:, persona:, selection: nil)
     @surface = surface.to_s
-    @client_id, resource_type = CLIENTS.fetch(@surface)
-    base_origin = Rails.configuration.x.boot_config.fetch(:hosts).base_for_resource_type(resource_type)
+    @resource_type = CLIENTS.fetch(@surface).fetch(1)
+    base_origin = Rails.configuration.x.boot_config.fetch(:hosts).base_for_resource_type(@resource_type)
     @base = OutboundHttp::LocalBackChannel.url("#{base_origin}/api/v0/avatar/#{surface}")
-    @access_token = access_token.to_s
+    @rp_session = rp_session
     @persona = persona.to_s
     @selection = selection
   end
@@ -66,17 +66,17 @@ class AvatarAuthorityClient
 
   # Raw bytes of the selected Avatar's image (not JSON). Returns [status, body, mime_type, cache_key].
   def selected_image
+    return [:unauthorized, nil, nil, nil] if rp_session.blank?
+
+    token = issue_authority_token
     url = "#{base}/selected-image"
-    assertion = OidcClientAssertionJwt.issue(client_id:, token_url: url)
-    return [:dependency, nil, nil, nil] if access_token.blank? || assertion.blank?
 
     uri = URI.parse(url)
     connection = OutboundHttp::Connection.build(
       url: uri, open_timeout: OPEN_TIMEOUT, read_timeout: READ_TIMEOUT, require_https: OutboundHttp::LocalBackChannel.require_https?(url),
     )
     response = connection.get(
-      uri, request_selection_params, { "Authorization" => "Bearer #{access_token}",
-                                       "X-Client-Assertion" => assertion, },
+      uri, request_selection_params, { "Authorization" => "Bearer #{token}" },
     )
     status = { 200 => :ok, 204 => :no_image, 404 => :not_found, 403 => :forbidden }.fetch(
       response.status.to_i,
@@ -85,6 +85,8 @@ class AvatarAuthorityClient
     [status, response.body, response.headers["Content-Type"], response.headers["X-Avatar-Image-Key"]]
   rescue Faraday::Error, URI::InvalidURIError, OutboundHttp::Connection::InsecureEndpointError
     [:dependency, nil, nil, nil]
+  rescue BaseApiAuthorityTokenIssuer::InactiveRpSession
+    [:unauthorized, nil, nil, nil]
   end
 
   def dashboard_identity = request(:get, "/dashboard-identity")
@@ -121,7 +123,7 @@ class AvatarAuthorityClient
 
   private
 
-  attr_reader :client_id, :base, :access_token, :persona, :selection, :surface
+  attr_reader :base, :persona, :selection, :surface, :rp_session, :resource_type
 
   def request_selection_params
     return app_selection_params if surface == "app"
@@ -145,18 +147,16 @@ class AvatarAuthorityClient
   end
 
   def request(verb, path, params = {}, idempotency_key: nil, selection_params: request_selection_params)
-    return Result.new(status: :unauthorized, data: nil, errors: {}) if access_token.blank?
+    return Result.new(status: :unauthorized, data: nil, errors: {}) if rp_session.blank?
 
     url = "#{base}#{path}"
-    assertion = OidcClientAssertionJwt.issue(client_id:, token_url: url)
-    return Result.new(status: :dependency, data: nil, errors: {}) if assertion.blank?
+    token = issue_authority_token
 
     uri = URI.parse(url)
     connection = OutboundHttp::Connection.build(
       url: uri, open_timeout: OPEN_TIMEOUT, read_timeout: READ_TIMEOUT, require_https: OutboundHttp::LocalBackChannel.require_https?(url),
     )
-    headers = { "Authorization" => "Bearer #{access_token}",
-                "X-Client-Assertion" => assertion,
+    headers = { "Authorization" => "Bearer #{token}",
                 "Accept" => "application/json", }
     headers["Idempotency-Key"] = idempotency_key if idempotency_key
     params = params.merge(selection_params)
@@ -175,6 +175,12 @@ class AvatarAuthorityClient
     Result.new(status: STATUSES.fetch(response.status.to_i, :dependency), data: body, errors: body.fetch("errors", {}))
   rescue Faraday::Error, JSON::ParserError, URI::InvalidURIError, OutboundHttp::Connection::InsecureEndpointError
     Result.new(status: :dependency, data: nil, errors: {})
+  rescue BaseApiAuthorityTokenIssuer::InactiveRpSession
+    Result.new(status: :unauthorized, data: nil, errors: {})
+  end
+
+  def issue_authority_token
+    BaseApiAuthorityTokenIssuer.issue(rp_session:, audience_resource_type: resource_type)
   end
 
   def escape(value) = ERB::Util.url_encode(value.to_s)

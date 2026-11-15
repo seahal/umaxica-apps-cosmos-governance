@@ -28,6 +28,9 @@
 class AvatarAssignment < AvatarRecord
   include AvatarAssignmentAuthorityProtection
 
+  before_destroy :ensure_not_destroying_last_protected_assignment
+  validate :ensure_not_demoting_last_protected_assignment, on: :update
+
   ROLES = %w(owner affiliation administrator editor reviewer viewer).freeze
 
   belongs_to :avatar

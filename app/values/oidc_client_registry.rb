@@ -6,15 +6,13 @@ require "concurrent"
 module OidcClientRegistry
   class ClientNotFound < StandardError; end
 
-  class InvalidRedirectUri < StandardError; end
-
   class ClientAuthenticationConfigurationError < StandardError; end
 
   DEFAULT_ALLOWED_SCOPES = %w(openid profile email).freeze
 
   ClientConfiguration =
     Data.define(
-      :client_id, :client_secret, :redirect_uris, :redirect_uris_by_realm, :post_logout_redirect_uris,
+      :client_id, :redirect_uris, :redirect_uris_by_realm, :post_logout_redirect_uris,
       :aud, :resource_type,
       :name, :domains, :allowed_scopes, :registered_token_endpoint_auth_method,
       :metadata_token_endpoint_auth_method, :jwt_namespace, :required_operator_capability,
@@ -58,7 +56,6 @@ module OidcClientRegistry
 
     ClientConfiguration.new(
       client_id: client_id.to_s,
-      client_secret: resolve_secret_credential(client_id.to_s),
       redirect_uris: all_redirect_uris,
       redirect_uris_by_realm: redirect_uris_by_realm,
       post_logout_redirect_uris: (config[:post_logout_redirect_uris] || []).uniq,
@@ -79,35 +76,6 @@ module OidcClientRegistry
   # @raise [ClientNotFound]
   def find!(client_id)
     find(client_id) || raise(ClientNotFound, "Unknown OIDC client: #{client_id}")
-  end
-
-  # @param client_id [String]
-  # @param uri [String]
-  # @param resource_type [String, nil] when given, the redirect_uri must be registered for this
-  #   realm (client/operator) specifically, not merely registered anywhere for the client.
-  # @return [Boolean]
-  def valid_redirect_uri?(client_id, uri, resource_type: nil)
-    client = find(client_id)
-
-    OidcRedirectUriPolicy.valid_redirect_uri?(client, uri, resource_type: resource_type)
-  end
-
-  def valid_post_logout_redirect_uri?(client_id:, uri:, resource_type:)
-    client = find(client_id)
-    return false unless OidcRedirectUriPolicy.valid_post_logout_redirect_uri?(client, uri)
-
-    normalize_resource_type(client.resource_type) == normalize_resource_type(resource_type)
-  end
-
-  # @param client_id [String]
-  # @param secret_credential [String]
-  # @return [Boolean]
-  def authenticate(client_id, secret_credential)
-    client = find(client_id)
-    return false unless client
-    return false if client.client_secret.blank? || secret_credential.blank?
-
-    ActiveSupport::SecurityUtils.secure_compare(client.client_secret, secret_credential)
   end
 
   def authenticate_assertion(client_id, assertion, token_url:)
@@ -237,10 +205,6 @@ module OidcClientRegistry
     OidcClientStoresStaticClientStore.clients
   end
 
-  def resolve_secret_credential(client_id)
-    OidcClientSecretResolver.resolve(client_id)
-  end
-
   # This method is metadata/diagnostic-only. It must not be used for token endpoint authentication
   # or authorization decisions.
   def metadata_auth_method(_client_id)
@@ -277,7 +241,7 @@ module OidcClientRegistry
   end
 
   private_class_method :clients, :build_clients, :client_config_signature,
-                       :resolve_secret_credential, :domains_from_redirect_uris,
+                       :domains_from_redirect_uris,
                        :redirect_uris_by_realm_for,
                        :normalize_resource_type, :metadata_auth_method, :normalize_allowed_scopes,
                        :normalize_host

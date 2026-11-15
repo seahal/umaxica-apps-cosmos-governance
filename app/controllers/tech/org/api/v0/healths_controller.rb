@@ -11,6 +11,10 @@ module Tech
 
           AUTHENTICATION_MODE = :bare
           HEALTH_PROFILE = ::Health::Profiles::Org
+
+          before_action :disable_health_response_cache
+          before_action :disable_machine_json_response_cache
+
           before_action :refuse_unless_machine_json_acceptable
 
           public

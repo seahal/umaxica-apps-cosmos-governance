@@ -58,6 +58,7 @@ class ProblemType
   }.freeze
 
   class << self
+    public
     def fetch(slug)
       key = slug.to_sym
       definition =
@@ -94,6 +95,7 @@ class ProblemType
 
   # Slugs are underscored as Ruby symbols and hyphenated in the URI. The URI form is the published
   # contract; the symbol form is an implementation detail of the registry.
+  public
   def uri
     "#{NAMESPACE}:#{slug.to_s.tr("_", "-")}"
   end

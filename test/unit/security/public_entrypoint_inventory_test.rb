@@ -26,6 +26,7 @@ module Security
       PUBLIC_PWA_OFFLINE
       PUBLIC_PREFERENCE
       PUBLIC_WITHDRAWAL
+      PUBLIC_RP_PROTOCOL
       PUBLIC_BASE_OWNER_API
     ).freeze
 
@@ -162,6 +163,7 @@ module Security
         public_robots_or_sitemap?(entry) ||
         public_preference?(entry) ||
         public_withdrawal?(entry) ||
+        public_rp_protocol?(entry) ||
         public_base_owner_api?(entry)
     end
 
@@ -200,6 +202,14 @@ module Security
         entry.controller_path.match?(%r{\Abase/app/identity/withdrawal(?:s|/sessions)\z})) ||
         (entry.path.start_with?("/identity/privacy/erasure") &&
           entry.controller_path.match?(%r{\Abase/app/identity/privacy/erasure(?:s|/statuses)\z}))
+    end
+
+    def public_rp_protocol?(entry)
+      entry.controller_path.match?(
+        %r{\Abase/(app|org)/(sign/(entries|interruptions)|sign_outs|oidc/(callbacks|closures))\z},
+      ) && entry.path.match?(
+        %r{\A/(sign(?:/out(?:/(?:new|edit|completion))?)?|oidc/(?:callback|closures)|sign/interruption)\z},
+      )
     end
 
     def get?(entry) = route_allows?(entry, "GET")

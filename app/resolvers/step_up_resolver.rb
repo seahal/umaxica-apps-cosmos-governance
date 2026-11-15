@@ -42,6 +42,7 @@ class StepUpResolver
     requirement = StepUpRequirement.build(requirement)
     new(token: token, requirement: requirement, now: now).call
   end
+  public_class_method :call
 
   def initialize(token:, requirement:, now:)
     @token = token
@@ -49,6 +50,7 @@ class StepUpResolver
     @now = now
   end
 
+  public
   def call
     raise AccessOpDataUnavailableError if token.present?
 

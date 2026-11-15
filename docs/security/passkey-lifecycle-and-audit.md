@@ -1,14 +1,20 @@
 # Passkey Lifecycle and Audit Contract
 
+> **Ceremony ownership (2026-11-13):** Access executes WebAuthn ceremonies. Governance retains
+> credential records, lifecycle policy, and the owner-side persistence/audit boundary; this document
+> does not imply that a local registration or assertion route remains available.
+
 Passkeys are current-state credentials. APP, COM, and ORG each allow ten retained Passkeys per
-owner. Registration goes through `PasskeyRegistrationOperation`, which locks the owner so the
-model's count validation runs serialized; the database does not enforce the limit, and a write
+owner. `PasskeyRegistrationOperation` remains the owner-side writer: when invoked it locks the owner
+so the model's count validation runs serialized. Access owns ceremony execution, and no Governance
+ceremony currently calls this operation. The database does not enforce the limit, and a write
 outside the operation can exceed it (`plans/backlog/2026-10-19-passkey-limit-enforcement-gap.md`).
 
 Settings removal and definitive sign-up cancellation delete the credential row. Withdrawal first
 stops authentication and may revoke credentials during the recoverable period; retention purge
 performs the later physical deletion after holds, dependencies, and FK ordering are checked. A
-deleted credential can be registered again only after a new verified WebAuthn ceremony.
+deleted credential can be registered again only after a new verified WebAuthn ceremony and an
+authorized owner-side write. No current Governance ceremony integration invokes that writer.
 
 Each lifecycle fact is inserted into the surface principal database's Passkey audit outbox in the
 same transaction as the credential mutation. `PasskeyAuditDeliveryJob` delivers the outbox to the

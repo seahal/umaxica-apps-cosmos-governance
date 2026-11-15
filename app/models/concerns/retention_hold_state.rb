@@ -7,25 +7,6 @@ module RetentionHoldState
   HOLD_KINDS = %w(legal_hold).freeze
   REASON_CODES = %w(legal_hold security_investigation billing_dispute abuse_investigation court_order other).freeze
 
-  # FIXME: Violates Umaxica/NoConcernInclusionHooks; move the declarations in this block into each class that includes this concern.
-  included do
-    include PublicId
-    include Retainable
-
-    before_validation :assign_retention_hold_defaults, on: :create
-
-    validates :hold_kind, inclusion: { in: HOLD_KINDS }
-    validates :reason_code, inclusion: { in: REASON_CODES }
-    validates :status_id, inclusion: { in: ->(record) { record.class::STATUS_IDS } }
-    validates :applied_at, presence: true
-
-    scope :active_at,
-          lambda { |now = Time.current|
-            where(status_id: status_id_for("ACTIVE"))
-              .where(arel_table[:expires_at].eq(nil).or(arel_table[:expires_at].gt(now)))
-          }
-  end
-
   class_methods do
     def status_id_for(status_name)
       self::STATUSES.fetch(status_name.to_s)
@@ -36,6 +17,7 @@ module RetentionHoldState
     end
   end
 
+  public
   def active_at?(now = Time.current)
     status_id == self.class.status_id_for("ACTIVE") && (expires_at.blank? || expires_at > now)
   end

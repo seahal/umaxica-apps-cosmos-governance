@@ -46,13 +46,12 @@ class HandleAssignment < AvatarRecord
   validates :handle_id, uniqueness: { conditions: -> { current } }, if: :current_temporal_row?
   validates :avatar_id, uniqueness: { conditions: -> { current } }, if: :current_temporal_row?
 
-  delegate :name, to: :handle
-
   scope :current, -> { where(valid_to: Float::INFINITY) }
 
   def self.current_attributes
     [:handle_id, :avatar_id]
   end
+  public_class_method :current_attributes
 
   private
 

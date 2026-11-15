@@ -6,7 +6,11 @@ module ConfigValues
       :base_service,
       :base_corporate,
       :base_staff,
+      :visa_service,
+      :visa_staff,
       :tech_staff,
+      :auth_service,
+      :auth_staff,
     ) do
       def base_origins
         [base_service, base_corporate, base_staff]
@@ -25,6 +29,7 @@ end
 ConfigValuesHostFamilyValues = ConfigValues::HostFamilyValues
 
 class << ConfigValues::HostFamilyValues
+  public
   def build(env:, production:)
     ConfigValues::HostFamilyValues.new(**host_family_origins(env: env, production: production)).freeze
   end
@@ -45,8 +50,23 @@ class << ConfigValues::HostFamilyValues
 
   def host_family_secondary_origins(env:, production:)
     {
+      visa_service: required_origin(env, visa_key(env, "SERVICE"), production: production),
+      visa_staff: required_origin(env, visa_key(env, "STAFF"), production: production),
       tech_staff: required_origin(env, "PUBLIC_TECH_STAFF_URL", production: production),
+      # Base never links to Auth, but the OP sends the browser there after POST /sign, and
+      # form-action follows that redirect chain (see the content security policy initializer).
+      auth_service: required_origin(env, "PUBLIC_AUTH_SERVICE_URL", production: production),
+      auth_staff: required_origin(env, "PUBLIC_AUTH_STAFF_URL", production: production),
     }
+  end
+
+  def visa_key(env, surface)
+    private_key = "VISA_#{surface}_URL"
+    public_key = "PUBLIC_VISA_#{surface}_URL"
+    return private_key if env.key?(private_key)
+    return public_key if env.key?(public_key)
+
+    raise KeyError, "Missing required ENV key: #{private_key} or #{public_key}"
   end
 
   # Resolves the ENV key for a base surface (service/corporate/staff).
@@ -78,5 +98,5 @@ class << ConfigValues::HostFamilyValues
   end
 
   private :host_family_origins, :host_family_primary_origins, :host_family_secondary_origins,
-          :required_origin
+          :required_origin, :visa_key
 end

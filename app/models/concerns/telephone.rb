@@ -14,7 +14,7 @@ module Telephone
   # Optional:
   # - number_bidx        (set only when the column exists)
   #
-  # Registers:
+  # Host declarations:
   # - before_validation :normalize_number_from_raw
   # - before_validation :set_number_digests
   # - scope :with_number
@@ -31,27 +31,6 @@ module Telephone
   attr_accessor :confirm_policy, :confirm_using_mfa, :pass_code
   attr_writer :raw_number
 
-  # FIXME: Violates Umaxica/NoConcernInclusionHooks; move the declarations in this block into each class that includes this concern.
-  included do
-    before_validation :normalize_number_from_raw
-    before_validation :set_number_digests
-    scope :with_number, ->(value) do
-      digest = IdentifierBlindIndex.bidx_for_telephone(value, realm: identifier_hmac_realm)
-      digest.present? ? where(number_digest: digest) : none
-    end
-
-    validate :validate_telephone_number
-
-    validates :confirm_policy, acceptance: true,
-                               unless: proc { |a| a.raw_number.blank? && a.pass_code.present? }
-    validates :confirm_using_mfa, acceptance: true,
-                                  unless: proc { |a| a.raw_number.blank? && a.pass_code.present? }
-    validates :pass_code, numericality: { only_integer: true },
-                          length: { is: 6 },
-                          presence: true,
-                          unless: proc { |a| a.pass_code.blank? && a.raw_number.present? }
-  end
-
   class_methods do
     public
 
@@ -67,6 +46,7 @@ module Telephone
     end
   end
 
+  public
   def raw_number
     @raw_number.presence || number
   end

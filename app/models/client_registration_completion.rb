@@ -2,8 +2,6 @@
 
 # Historical source fact. Current account/credential status never substitutes for this receipt.
 class ClientRegistrationCompletion < AppZenithRecord
-  class Conflict < StandardError; end
-
   belongs_to :client, inverse_of: :registration_completions
   belongs_to :completion_method, foreign_key: :method_id, class_name: "ClientRegistrationCompletionMethod",
                                  inverse_of: :completions
@@ -16,9 +14,5 @@ class ClientRegistrationCompletion < AppZenithRecord
 
   def readonly?
     persisted?
-  end
-
-  def verify_flow!(_flow)
-    raise AccessOpDataUnavailableError
   end
 end

@@ -42,6 +42,8 @@ module Security
         Base::App::Api::V0::Avatar::SocialEdgesController,
         Base::App::Api::V0::Avatar::DashboardIdentitiesController,
         Base::App::Api::V0::Avatar::AvatarOwnershipTransfersController,
+        Base::App::Oidc::ClosuresController,
+        Base::Org::Oidc::ClosuresController,
         Base::App::Api::V0::Avatar::AvatarsController,
         Base::App::Api::V0::Avatar::SelectedImagesController,
         Base::App::Api::V0::Avatar::GroupsController,

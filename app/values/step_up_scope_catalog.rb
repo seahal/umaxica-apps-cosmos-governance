@@ -3,8 +3,6 @@
 
 module StepUpScopeCatalog
   APP = {
-    "social_link" => %r{\A/settings/(?:google|apple)(?:/edit)?(?:\z|[?#])},
-    "social_unlink" => %r{\A/settings/(?:google|apple)(?:/edit)?(?:\z|[?#])},
     "session_revoke_all" =>
       %r{\A(?:/sign/settings/sessions|/settings/sessions|/sessions|/identity/sessions)(?:\z|[/?#])},
     "withdrawal" => %r{\A(?:/settings/withdrawal|/identity/withdrawal)(?:\z|[/?#])},

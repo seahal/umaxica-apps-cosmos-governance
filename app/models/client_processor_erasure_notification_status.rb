@@ -13,4 +13,6 @@ class ClientProcessorErasureNotificationStatus < AppPrincipalRecord
   SKIPPED = 40
   PERMANENT_FAILURE = 50
   DEFAULTS = [PENDING, NOTIFIED, RETRYABLE_FAILURE, SKIPPED, PERMANENT_FAILURE].freeze
+
+  self.record_timestamps = false
 end

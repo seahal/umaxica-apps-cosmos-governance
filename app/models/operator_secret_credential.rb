@@ -55,8 +55,34 @@
 
 class OperatorSecretCredential < OrgPrincipalRecord
   include Retainable
+
+  attribute :discard_at, :datetime, default: -> { Retainable::SENTINEL }
+  attribute :purge_eligible_at, :datetime, default: -> { Retainable::SENTINEL }
+  validates :discard_at, presence: true
+  validates :purge_eligible_at, presence: true
+  validate :retention_order_valid
+  validate :retention_times_not_before_created_at, on: :update
+  Retainable.register_host(self)
+
   include ::PublicId
+
+  before_validation :generate_public_id, on: :create
+  before_validation :refresh_generated_public_id_after_collision, on: :create
+  before_create :generate_public_id
+  around_create :retry_public_id_collision
+  validate :public_id_immutable_after_create, on: :update
+  validates :public_id, presence: true, length: { is: PublicId::GENERATION_SIZE }, uniqueness: true
   include ::SecretCredential
+
+  has_secure_password algorithm: :argon2, validations: false
+  validates :name, presence: true
+  validates :password,
+            length: {
+              is: SECRET_PASSWORD_LENGTH,
+              message: "must be #{SECRET_PASSWORD_LENGTH} characters",
+            },
+            allow_nil: true
+  validate :new_axis_secret_fields_are_consistent
   include OperatorSecretCredentialKinds
 
   MAX_SECRETS_PER_STAFF = 20
@@ -91,15 +117,19 @@ class OperatorSecretCredential < OrgPrincipalRecord
   def self.identity_secret_credential_status_class
     OperatorSecretCredentialStatus
   end
+  public_class_method :identity_secret_credential_status_class
 
   def self.identity_secret_credential_status_id_column
     :staff_identity_secret_status_id
   end
+  public_class_method :identity_secret_credential_status_id_column
 
   def self.generate_raw_secret_credential(length: SECRET_PASSWORD_LENGTH)
     SecureRandom.base58(length)
   end
+  public_class_method :generate_raw_secret_credential
 
+  public
   def to_param
     public_id
   end

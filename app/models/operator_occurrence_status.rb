@@ -22,6 +22,8 @@ class OperatorOccurrenceStatus < OccurrenceRecord
   DELETED = 4
   DEFAULTS = [NOTHING, ACTIVE, INACTIVE, DELETED].freeze
 
+  self.record_timestamps = false
+
   has_many :staff_occurrences,
            class_name: "OperatorOccurrence",
            foreign_key: :status_id,

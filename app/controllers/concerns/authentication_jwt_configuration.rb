@@ -53,11 +53,7 @@ module AuthenticationJwtConfiguration
     JitSecurityJwtKeyring.private_key_for_active
   end
 
-  def self.public_key
-    JitSecurityJwtKeyring.public_key_for_active
-  end
-
-  public_class_method :leeway_seconds, :issuer, :client_id, :audiences, :validate!, :private_key, :public_key
+  public_class_method :leeway_seconds, :issuer, :client_id, :audiences, :validate!, :private_key
 
   def self.parse_audiences(raw, env_key:)
     values = raw.split(",").map(&:strip)

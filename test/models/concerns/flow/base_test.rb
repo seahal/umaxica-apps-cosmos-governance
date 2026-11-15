@@ -10,6 +10,16 @@ class FlowBaseTest < ActiveSupport::TestCase
     include Retainable
     include FlowBase
 
+    attribute :discard_at, :datetime, default: -> { Retainable::SENTINEL }
+    attribute :purge_eligible_at, :datetime, default: -> { Retainable::SENTINEL }
+    validates :discard_at, presence: true
+    validates :purge_eligible_at, presence: true
+    validate :retention_order_valid
+    validate :retention_times_not_before_created_at, on: :update
+    Retainable.register_host(self)
+
+    def self.cycle_status_column_name = :cycle_status_id
+
     cycle_status_column :cycle_status_id
   end
 
@@ -23,6 +33,8 @@ class FlowBaseTest < ActiveSupport::TestCase
     self.table_name = "cycle_base_test_records"
 
     include FlowBase
+
+    def self.cycle_status_column_name = :nonexistent_status_column
 
     cycle_status_column :nonexistent_status_column
   end
@@ -65,38 +77,10 @@ class FlowBaseTest < ActiveSupport::TestCase
     assert_match(/cycle_status_column/, error.message)
   end
 
-  test "transition_cycle_to is private and cannot bypass named operations" do
+  test "FlowBase does not expose a generic cycle status writer" do
     record = build_record
 
     assert_not_respond_to record, :transition_cycle_to!
-  end
-
-  test "discard_cycle updates retention timestamps when order is valid" do
-    now = Time.zone.local(2026, 5, 19, 10, 0, 0)
-
-    travel_to now do
-      record = build_record(cycle_status_id: 10, discard_at: now + 1.day, purge_eligible_at: now + 2.days)
-      record.discard_cycle!(discard_at: now + 1.second, purge_eligible_at: now + 30.days)
-      record.reload
-
-      assert_equal now + 1.second, record.discard_at
-      assert_equal now + 30.days, record.purge_eligible_at
-    end
-  end
-
-  test "discard_cycle rejects retention timestamps out of order" do
-    now = Time.zone.local(2026, 5, 19, 10, 0, 0)
-
-    travel_to now do
-      record = build_record(cycle_status_id: 10, discard_at: now + 1.day, purge_eligible_at: now + 2.days)
-      error =
-        assert_raises(ArgumentError) do
-          record.discard_cycle!(discard_at: now + 2.days, purge_eligible_at: now + 1.day)
-        end
-
-      assert_match(/discard_at must be <= purge_eligible_at/, error.message)
-      assert_equal now + 1.day, record.reload.discard_at
-    end
   end
 
   test "ensure_cycle_column raises for missing column" do

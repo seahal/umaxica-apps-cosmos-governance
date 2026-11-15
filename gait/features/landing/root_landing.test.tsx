@@ -28,6 +28,17 @@ describe("RootLanding", () => {
     );
   });
 
+  it("omits a description when the server has none", () => {
+    const markup = renderToStaticMarkup(
+      <RootLanding
+        {...props}
+        description={null}
+      />,
+    );
+
+    expect(markup).not.toContain("<p");
+  });
+
   it("renders only the navigation links the server supplied", () => {
     expect(renderToStaticMarkup(<RootLanding {...props} />)).toMatch(
       /<a href="\/accounts"[^>]*>Accounts<\/a>/u,

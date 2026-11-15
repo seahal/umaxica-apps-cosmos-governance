@@ -20,6 +20,8 @@ class AppPreferenceThemeOption < AppSettingRecord
 
   DEFAULTS = [NOTHING, LIGHT, DARK, SYSTEM].freeze
 
+  self.record_timestamps = false
+
   has_many :app_preference_themes,
            class_name: "AppPreferenceTheme",
            foreign_key: :option_id,
@@ -29,7 +31,9 @@ class AppPreferenceThemeOption < AppSettingRecord
   def self.ensure_defaults!
     insert_missing_fixed_ids!(DEFAULTS)
   end
+  public_class_method :ensure_defaults!
 
+  public
   def name
     case id
     when LIGHT then "light"

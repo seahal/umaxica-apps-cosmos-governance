@@ -11,6 +11,7 @@ class RedirectsExternalTargetResolver
   def self.call(key, path: "/", query: {}, source: :explicit_external)
     new(key, path: path, query: query, source: source).call
   end
+  public_class_method :call
 
   def self.url(value, allowed_urls:, source: :explicit_external_url)
     uri = URI.parse(value.to_s)
@@ -46,6 +47,7 @@ class RedirectsExternalTargetResolver
   rescue URI::InvalidURIError
     RedirectsTargetResult.failure(kind: :external, source: source, reason: :invalid_uri, unsafe_value: value)
   end
+  public_class_method :url
 
   def initialize(key, path:, query:, source:)
     @key = key
@@ -54,6 +56,7 @@ class RedirectsExternalTargetResolver
     @source = source
   end
 
+  public
   def call
     registry_key = normalize_key
     return failure(:unknown_key) unless REGISTRY.key?(registry_key)
@@ -107,6 +110,7 @@ class RedirectsExternalTargetResolver
 
     uri.host.to_s.end_with?(".localhost") || %w(localhost 127.0.0.1 ::1).include?(uri.host)
   end
+  public_class_method :local_uri_allowed?
 
   def self.normalized_origin(value)
     uri = URI.parse(value.to_s)
@@ -119,6 +123,7 @@ class RedirectsExternalTargetResolver
   rescue URI::InvalidURIError
     nil
   end
+  public_class_method :normalized_origin
 
   def merged_query(path_value, raw_query)
     path_query = URI.parse(path_value).query

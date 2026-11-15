@@ -38,10 +38,17 @@ Surface-local `ApplicationController` inherits directly from `ActionController::
 authentication-aware request lifecycle.
 
 Base app and org each own a separate Browser RP lifecycle. Tech org owns its operator RP lifecycle.
-Base com serves anonymous public and Preference routes. The local router has no Auth/Visa provider
-endpoints or Base/Tech RP sign-in, callback, RP-initiated sign-out, Back-Channel Logout, or
-OIDC-driven step-up callback routes. Existing local RP credentials remain subject to the local
-session boundary; no OIDC sign-in or sign-out flow can start here.
+Base com serves anonymous public and Preference routes. Base App and Base Org each have a neutral
+`GET /sign` and CSRF-protected `POST /sign` entry, interruption and callback routes, RP-local
+sign-out, and a Back-Channel Logout receiver. Their client, Visa issuer, and local RP cell are
+separate. Neither Base realm hosts the Visa provider or its credential ceremonies. Each RP checks
+its explicit Visa host-family origin before starting state; missing configuration fails with 503.
+Each Base RP session cookie is accepted only by its configured RP cell process. If it reaches a
+process that cannot resolve that cell, the request fails with 503 instead of continuing as a guest
+request or writing anonymous Preference state. Access authorization and Jump's deployed trust graph
+remain external readiness conditions. Tech has no RP entry, callback, sign-out, or Back-Channel
+Logout routes. OIDC-driven step-up callback routes remain absent. Existing local RP credentials
+remain subject to the local session boundary.
 
 Authentication modes that are more specific than this base split, including bare endpoints,
 guest-only flows, optional access, and step-up requirements, must be declared and audited explicitly
@@ -83,9 +90,7 @@ Current surface-local `ApplicationController` callbacks place the relevant lifec
 order:
 
 1. `set_preferences_cookie`
-2. `transparent_refresh_access_token`
-3. `set_current_actor`
-4. `touch_session_activity!` inside current-resource resolution
+2. `set_current_actor`
 
 `set_preferences_cookie` verifies the current Preference JWT on `GET`/`HEAD`. Base app/org may make
 read-only queries to rebuild a missing or mismatched `language` or `__Secure-experience` display
@@ -96,17 +101,14 @@ surfaces verify the JWT without querying the Preference database or changing Pre
 GET/HEAD path creates, updates, or retires Preference rows, reissues the JWT, or extends its expiry.
 Preference row lifecycle changes happen at their explicit non-GET writer boundaries.
 
-`transparent_refresh_access_token` remains in the authenticated controller lifecycle, but browser
-navigation does not use it: `transparent_refresh_allowed?` is false for `GET`/`HEAD`. Authentication
-refresh remains on its explicit POST protocol endpoint and does not update session/token state
-during ordinary navigation.
-
 `set_current_actor` should install the immutable request Actor snapshot. It must not create
 preference rows, rotate tokens, or repair malformed preference JWTs.
 
-`track_authenticated_session_activity?` defaults to false for `GET`/`HEAD`, so
-`touch_session_activity!` does not update the token/session row during ordinary navigation. A
-surface action that intentionally opts into activity tracking must declare and test that boundary.
+The current browser RP request path has no session-activity tracking hook: neither
+`track_authenticated_session_activity?` nor `touch_session_activity!` is called during request
+handling. Ordinary requests therefore do not update token or session activity timestamps. If
+activity tracking is reintroduced, it needs an explicit owner-approved write boundary and request
+tests.
 
 The current read-side database writes are listed in
 [`docs/security/db-write-allowlist.md`](../security/db-write-allowlist.md). Ordinary page navigation

@@ -29,6 +29,18 @@
 #
 class PersonaAssignment < AppRpRecord
   include ::AccountAssignment
+  include ::PublicId
+
+  before_validation :generate_public_id, on: :create
+  before_validation :refresh_generated_public_id_after_collision, on: :create
+  before_validation :set_assigned_at, on: :create
+  before_create :generate_public_id
+  before_create :set_assigned_at
+  around_create :retry_public_id_collision
+  validate :public_id_immutable_after_create, on: :update
+  validates :public_id, presence: true, length: { is: PublicId::GENERATION_SIZE }, uniqueness: true
+  scope :active, -> { where(revoked_at: nil) }
+  validates :assigned_at, presence: true
 
   belongs_to :persona, class_name: "ClientPersona", inverse_of: :persona_assignments
   belongs_to :client_identity, inverse_of: :persona_assignments

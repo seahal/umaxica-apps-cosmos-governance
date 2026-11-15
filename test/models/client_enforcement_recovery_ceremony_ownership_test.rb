@@ -10,6 +10,7 @@ class ClientEnforcementRecoveryCeremonyOwnershipTest < ActiveSupport::TestCase
     ceremony = ClientEnforcementRecoveryCeremony.issue!(subject: client, request: ActionDispatch::TestRequest.create)
 
     assert_includes client.enforcement_recovery_ceremonies, ceremony
+    assert_equal client, ceremony.subject
     assert_raises(ActiveRecord::InvalidForeignKey) do
       Client.transaction(requires_new: true) { Client.where(id: client.id).delete_all }
     end

@@ -26,20 +26,4 @@ class BranchCoverageBatch40LinePushTest < ActiveSupport::TestCase
     assert_not guard.call("alice", "wrong")
     assert_not guard.call("bob", "secret")
   end
-
-  test "SignInSequence readers expose payload fields" do
-    sequence = SignInSequence.new(
-      "method" => "passkey",
-      "pt" => "/home",
-      "safe_pt_path" => "/home",
-      "mfa_challenge_id" => "mfa-1",
-      "session_limit_gate_id" => "gate-1",
-    )
-
-    assert_equal "passkey", sequence.method
-    assert_equal "/home", sequence.pt
-    assert_equal "/home", sequence.safe_pt_path
-    assert_equal "mfa-1", sequence.mfa_challenge_id
-    assert_equal "gate-1", sequence.session_limit_gate_id
-  end
 end

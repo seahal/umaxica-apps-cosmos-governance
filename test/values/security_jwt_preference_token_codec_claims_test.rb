@@ -29,7 +29,7 @@ class SecurityJwtPreferenceTokenCodecClaimsTest < ActiveSupport::TestCase
     claims, header = JWT.decode(token, nil, false)
 
     assert_equal "JWT", header.fetch("typ")
-    assert_equal "ES384", header.fetch("alg")
+    assert_equal "PS256", header.fetch("alg")
     assert_equal %w(aud exp iat iss jti preferences sub), claims.keys.sort
     assert_equal "app", claims.fetch("aud")
     assert_equal public_id, claims.fetch("sub")
@@ -62,7 +62,7 @@ class SecurityJwtPreferenceTokenCodecClaimsTest < ActiveSupport::TestCase
     end
   end
 
-  test "a token signed by another realm key is reported as a signature failure" do
+  test "a token signed by an untrusted key is reported as a signature failure" do
     host = ENV.fetch("PUBLIC_BASE_SERVICE_URL")
     token = PreferenceToken.encode(
       PREFERENCES, host: host, preference_type: "AppPreference", public_id: "app-row-id",
@@ -70,7 +70,7 @@ class SecurityJwtPreferenceTokenCodecClaimsTest < ActiveSupport::TestCase
     )
     claims, header = JWT.decode(token, nil, false)
     forged = JWT.encode(
-      claims, OpenSSL::PKey::EC.generate("secp384r1"), header.fetch("alg"), header.except("alg"),
+      claims, OpenSSL::PKey::RSA.generate(3072), header.fetch("alg"), header.except("alg"),
     )
     reported_reasons = []
 
@@ -162,9 +162,9 @@ class SecurityJwtPreferenceTokenCodecClaimsTest < ActiveSupport::TestCase
     end
 
     maximum = SecurityJwtPreferenceTokenCodec::ANONYMOUS_REALM_TOKEN_MAX_BYTES
-    jti = "x" * 1750
+    jti = "x".dup
     accepted_token = nil
-    oversized_token = nil
+    oversized_token_rejected = false
     while accepted_token.nil? || accepted_token.bytesize <= maximum
       candidate = SecurityJwtPreferenceTokenCodec.encode(
         PREFERENCES, host: host, preference_type: "AppPreference", public_id: "app-row",
@@ -174,14 +174,14 @@ class SecurityJwtPreferenceTokenCodecClaimsTest < ActiveSupport::TestCase
         accepted_token = candidate
         jti << "x"
       else
-        oversized_token = candidate
+        oversized_token_rejected = true
         break
       end
     end
 
     assert_operator accepted_token.bytesize, :<=, maximum
     assert_operator accepted_token.bytesize, :>=, maximum - 2
-    assert_nil oversized_token
+    assert oversized_token_rejected
     assert_nil SecurityJwtPreferenceTokenCodec.decode("x" * (maximum + 1), host: host)
   end
 
@@ -256,6 +256,6 @@ class SecurityJwtPreferenceTokenCodecClaimsTest < ActiveSupport::TestCase
       end
     end
 
-    assert_equal %w(OTHER IAT_INVALID IMMATURE), reasons
+    assert_equal %w(MISSING_JTI IAT_INVALID IMMATURE), reasons
   end
 end

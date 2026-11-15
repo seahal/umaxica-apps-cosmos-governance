@@ -63,32 +63,6 @@ module OidcRpBrowserCredentialContract
     { access_expires_at: access_expires_at, refresh_expires_at: refresh_expires_at }
   end
 
-  def decode_access_token(token:, host:, resource_type:, client_id:, allow_expired: false)
-    client = OidcClientRegistry.find(client_id)
-    return if client.blank?
-    return unless OidcIssuer.resource_type_for_client(client) == resource_type.to_s
-
-    decoder =
-      if allow_expired
-        AuthenticationTokenService.method(:decode_allow_expired)
-      else
-        AuthenticationTokenService.method(:decode)
-      end
-    payload = decoder.call(
-      token,
-      host: host,
-      resource_type: resource_type,
-      issuer: OidcIssuer.for_resource_type(resource_type),
-      audiences: [client.aud],
-      jwt_issuer_id: OidcIssuer.jwt_issuer_id_for_client(client),
-    )
-    return if payload.blank?
-    return unless AuthorizationTokenClaims.client_id(payload) == client.client_id
-    return if AuthorizationTokenClaims.session_id(payload).blank?
-
-    payload
-  end
-
   def require_token_response!(token_response)
     access_token = token_response[:access_token] || token_response["access_token"]
     refresh_token = token_response[:refresh_token] || token_response["refresh_token"]

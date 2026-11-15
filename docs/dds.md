@@ -8,21 +8,23 @@ The [current surface matrix](architecture/content-surface-matrix.md) owns the ho
 - Base app, Base org and Base com route to `Base::App`, `Base::Org` and `Base::Com` controller
   namespaces under their own host constraints.
 - Tech org routes to `Tech::Org` under its own host constraint.
-- Mission Control Jobs, Flipper, Blazer, PgHero, Swagger and Coverband use dedicated operator
-  host constraints. Their engine or Rack access controls remain local to each tool.
-- Unmatched hosts receive the explicit unknown-host response. Rails framework endpoints retain
-  their framework-owned routes.
+- Mission Control Jobs, Flipper, Blazer, PgHero, Swagger and Coverband use dedicated operator host
+  constraints. Their engine or Rack access controls remain local to each tool.
+- Unmatched hosts receive the explicit unknown-host response. Rails framework endpoints retain their
+  framework-owned routes.
 
 Auth, Visa, Core, Warp, Palm, Edit, Docs, News, Help, Info and Guid route/controller trees have been
-removed. Auth/Visa URL configuration is gone, so Base and Tech OIDC sign-in, callbacks, logout,
-and OIDC-driven step-up are unavailable. Base app and Base org retain local RP-cookie validation
-and fail closed when a new login requires the unavailable provider.
+removed. Governance does not host the Visa provider or its credential ceremonies. Base App and Base
+Org have separate RP entries, callbacks, local sign-outs and Back-Channel Logout receivers; external
+authorization and logout navigation use Jump. The Visa Org authorization endpoint currently
+answers 503. Tech has no RP routes, and OIDC-driven step-up is absent. Retained local RP-cookie
+validation fails closed when credentials are invalid or expired.
 
 ## Data and dependencies
 
 No model or migration is removed in this step. The hard-reset evidence lists the models still used
-outside `app/models`, identifies model/test-only references, and classifies each configured
-database for the next cleanup step.
+outside `app/models`, identifies model/test-only references, and classifies each configured database
+for the next cleanup step.
 
 ## Verification
 

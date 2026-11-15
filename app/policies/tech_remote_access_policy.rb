@@ -1,15 +1,14 @@
 # typed: false
 # frozen_string_literal: true
 
-# RP-side Tech gate (R5-WU11): the decision is the org authority's, asked over HTTPS on every check
-# through TechCapabilityClient. The record carries only the Operator's current Access JWT; the RP
-# never reads the Global Operator or its capability grants itself.
+# RP-side Tech gate (R5-WU11): the org authority's decision is asked over HTTPS on every check
+# through TechCapabilityClient. The record carries only the authenticated Tech RP session.
 class TechRemoteAccessPolicy < ApplicationPolicy
-  Request = Data.define(:access_token)
+  Request = Data.define(:rp_session)
 
   public
 
   def show?
-    record.is_a?(Request) && TechCapabilityClient.allowed?(access_token: record.access_token)
+    record.is_a?(Request) && TechCapabilityClient.allowed?(rp_session: record.rp_session)
   end
 end

@@ -7,17 +7,10 @@ require "prism"
 class LifecycleDirectStateWriteInvariantTest < ActiveSupport::TestCase
   self.fixture_table_names = []
 
-  LIFECYCLE_CARRIERS = %w(
-    ClientSignInFlow OperatorSignInFlow
-    ClientSignUpFlow OperatorSignUpFlow
-  ).freeze
+  LIFECYCLE_CARRIERS = %w(ClientWithdrawalFlow).freeze
   TRANSITION_CONCERNS = %r{
-    app/models/concerns/(flow_base|flow_sign_in|flow_sign_up|sign_flow|
-      sign_up_flow_ticket|session_limit_resolution_transactionable)\.rb\z
+    app/models/concerns/(flow_base|flow_withdrawal|withdrawal_flow)\.rb\z
   }x
-  NON_LIFECYCLE_WRITER_ALLOWLIST = %w(
-    app/controllers/concerns/sign_up_sequence_controller_support.rb
-  ).freeze
   STATE_WRITERS = %r{
     \b(?:update!|update_columns|update_all|assign_attributes|write_attribute)\s*
     \([^)]*\b(?:status_id|state_id|state|step)\b
@@ -29,7 +22,6 @@ class LifecycleDirectStateWriteInvariantTest < ActiveSupport::TestCase
     (Rails.root.glob("app/**/*.rb") + Rails.root.glob("lib/**/*.rb")).each do |path|
       relative_path = Pathname(path).relative_path_from(Rails.root).to_s
       next if TRANSITION_CONCERNS.match?(relative_path)
-      next if NON_LIFECYCLE_WRITER_ALLOWLIST.include?(relative_path)
 
       source = File.read(path)
       next unless LIFECYCLE_CARRIERS.any? { |carrier| source.include?(carrier) }

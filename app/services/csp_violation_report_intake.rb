@@ -58,6 +58,7 @@ class CspViolationReportIntake
   ).freeze
 
   def self.call(...) = new(...).call
+  public_class_method :call
 
   def initialize(raw_body:, host:, user_agent: nil)
     @raw_body = safe_string(raw_body)
@@ -65,6 +66,7 @@ class CspViolationReportIntake
     @user_agent = user_agent.to_s.presence
   end
 
+  public
   def call
     return Result.new(status: :too_large, reports_count: 0) if raw_body.bytesize > MAX_BODY_BYTES
 

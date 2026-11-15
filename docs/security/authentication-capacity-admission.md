@@ -2,8 +2,12 @@
 
 > **Historical route inventory (2026-11-10):** The local Auth and Visa route/controller trees
 > described below have been removed. The controller maps and flow descriptions are not current
-> endpoint contracts. Retained Base/Tech callers, external authorities, and model/database
-> contracts are determined by the current surface map and the hard-reset model/database report.
+> endpoint contracts. Retained Base/Tech callers, external authorities, and model/database contracts
+> are determined by the current surface map and the hard-reset model/database report.
+
+> **Owner supersession (2026-11-13):** Access owns authentication ceremonies. Nothing in the former
+> Auth/Visa admission map below implies that Governance still creates or consumes a local sign-in,
+> sign-up, social, OTP or WebAuthn admission.
 
 ## Status
 
@@ -12,8 +16,8 @@ control described by U07 in `three.md`. It does not describe current local Auth/
 does not introduce a waiting room, a queue, a feature flag, or a new admission state machine.
 
 In the pre-reset implementation, `AuthCeremonyAdmission` and `BaseAuthAdmissionCoordinator` were
-security admissions, not capacity permits. That distinction documents the former design and does
-not establish an active local route contract.
+security admissions, not capacity permits. That distinction documents the former design and does not
+establish an active local route contract.
 
 ## Former entry boundary
 
@@ -46,14 +50,14 @@ The following existing controls remain separate:
 The pre-reset routes kept Sign In and Sign Up independent. Any future capacity gate for a retained
 caller must preserve that separation.
 
-| Surface and flow                  | Entry or continuation boundary                                                                         | Expensive execution that needs a future second check                                                                           |
-| --------------------------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
-| App Sign In                       | `auth/app/sign/ins_controller.rb`, then surface-local email, passkey, secret, or challenge controllers | Password/secret verification, email OTP issue/verify, Passkey challenge/verification, TOTP/passcode work                       |
-| Org Sign In and Standby           | `auth/org/sign/ins_controller.rb` and the normal/emergency Passkey controllers                         | Operator Passkey and secret credential verification; Standby continues to forbid Step-Up                                       |
-| App Sign Up                       | `auth/app/sign/ups_controller.rb`, email/telephone and social registration controllers                 | Turnstile/provider verification, OTP issue/verify, Passkey registration, secret credential hashing and finalization            |
-| Provider callback                 | App social callback controllers and registered OIDC callback paths                                     | Provider assertion validation, callback replay checks, and the subsequent Sign In/Sign Up finalizer                            |
-| Resume/direct POST                | Every continuation controller retains the admission, flow/ticket, CSRF, expiry, and owner checks       | A future execution gate must be repeated immediately before the expensive operation; hiding an entry button is insufficient    |
-| Completed App Sign Up handoff     | `finalize_sign_up_from_checkpoint!` enters canonical Sign In admission                                 | Sign In guardrails and Base session issuance remain authoritative; registration completion is not a capacity or session bypass |
+| Surface and flow              | Entry or continuation boundary                                                                         | Expensive execution that needs a future second check                                                                           |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
+| App Sign In                   | `auth/app/sign/ins_controller.rb`, then surface-local email, passkey, secret, or challenge controllers | Password/secret verification, email OTP issue/verify, Passkey challenge/verification, TOTP/passcode work                       |
+| Org Sign In and Standby       | `auth/org/sign/ins_controller.rb` and the normal/emergency Passkey controllers                         | Operator Passkey and secret credential verification; Standby continues to forbid Step-Up                                       |
+| App Sign Up                   | `auth/app/sign/ups_controller.rb`, email/telephone and social registration controllers                 | Turnstile/provider verification, OTP issue/verify, Passkey registration, secret credential hashing and finalization            |
+| Provider callback             | App social callback controllers and registered OIDC callback paths                                     | Provider assertion validation, callback replay checks, and the subsequent Sign In/Sign Up finalizer                            |
+| Resume/direct POST            | Every continuation controller retains the admission, flow/ticket, CSRF, expiry, and owner checks       | A future execution gate must be repeated immediately before the expensive operation; hiding an entry button is insufficient    |
+| Completed App Sign Up handoff | `finalize_sign_up_from_checkpoint!` enters canonical Sign In admission                                 | Sign In guardrails and Base session issuance remain authoritative; registration completion is not a capacity or session bypass |
 
 This map is a boundary inventory, not a claim that every expensive operation already has an
 execution-capacity limiter. The current controls prevent unauthorised or stale flow entry, but do

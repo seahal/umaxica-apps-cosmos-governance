@@ -26,8 +26,19 @@
 
 class ComPreference < ComSettingRecord
   include ::PublicId
+
+  before_validation :generate_public_id, on: :create
+  before_validation :refresh_generated_public_id_after_collision, on: :create
+  before_create :generate_public_id
+  around_create :retry_public_id_collision
+  validate :public_id_immutable_after_create, on: :update
+  validates :public_id, presence: true, length: { is: PublicId::GENERATION_SIZE }, uniqueness: true
   include ::PreferenceResettable
   include ::PreferenceLifecycle
+
+  attr_accessor :confirm_reset
+
+  validate :confirm_reset_accepted, on: :reset
 
   ACTIVE_STATUS_ID = ComPreferenceStatus::ACTIVE
   RETIRED_STATUS_ID = ComPreferenceStatus::RETIRED
@@ -115,6 +126,7 @@ class ComPreference < ComSettingRecord
   validate :retired_status_cannot_be_reactivated, on: :update
   before_destroy :preload_dependent_associations, prepend: true
 
+  public
   def adult_content_gate
     com_preference_adult_content_gate&.option&.name || "nothing"
   end

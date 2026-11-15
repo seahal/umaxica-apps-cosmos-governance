@@ -18,6 +18,8 @@ class ClientPreferenceLanguageOption < AppPrincipalRecord
 
   DEFAULTS = [JA, EN].freeze
 
+  self.record_timestamps = false
+
   has_many :client_preference_languages,
            class_name: "ClientPreferenceLanguage",
            foreign_key: :option_id,
@@ -27,7 +29,9 @@ class ClientPreferenceLanguageOption < AppPrincipalRecord
   def self.ensure_defaults!
     insert_missing_fixed_ids!(DEFAULTS)
   end
+  public_class_method :ensure_defaults!
 
+  public
   def name
     case id
     when JA then "ja"

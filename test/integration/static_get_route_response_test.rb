@@ -7,7 +7,7 @@ require "test_helper"
 # they are published for. Each route is requested on the first host its own host constraint lists,
 # so a 404 means the route no longer answers on its host rather than that it was sent elsewhere.
 class StaticGetRouteResponseTest < ActionDispatch::IntegrationTest
-  UNAVAILABLE_OWNER_PATHS = {
+  BASE_OWNER_API_PATHS = {
     "app" => %w(
       /api/v0/identity/standing /api/v0/identity/selection
       /api/v0/membership/app/accounts /api/v0/membership/app/organizations
@@ -36,11 +36,11 @@ class StaticGetRouteResponseTest < ActionDispatch::IntegrationTest
       paths.each do |path|
         get(path)
         owner_paths = {
-          ENV.fetch("PUBLIC_BASE_SERVICE_URL") => UNAVAILABLE_OWNER_PATHS.fetch("app"),
-          ENV.fetch("PUBLIC_BASE_STAFF_URL") => UNAVAILABLE_OWNER_PATHS.fetch("org"),
+          ENV.fetch("PUBLIC_BASE_SERVICE_URL") => BASE_OWNER_API_PATHS.fetch("app"),
+          ENV.fetch("PUBLIC_BASE_STAFF_URL") => BASE_OWNER_API_PATHS.fetch("org"),
         }
         if owner_paths.fetch(host, []).include?(path)
-          assert_response :service_unavailable
+          assert_response :unauthorized
           assert_includes response.headers["Cache-Control"], "no-store"
           next
         end

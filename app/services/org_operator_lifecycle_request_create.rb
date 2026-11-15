@@ -5,12 +5,14 @@ class OrgOperatorLifecycleRequestCreate
   def self.call(actor:, attributes:)
     new(actor: actor, attributes: attributes).call
   end
+  public_class_method :call
 
   def initialize(actor:, attributes:)
     @actor = actor
     @attributes = attributes
   end
 
+  public
   def call
     if attributes[:action].to_s == OperatorLifecycleRequest::ACTION_JOIN
       raise AccessOpDataUnavailableError

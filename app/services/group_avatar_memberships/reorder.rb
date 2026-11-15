@@ -15,6 +15,7 @@ module GroupAvatarMemberships
       @account_public_id = account_public_id.to_s
     end
 
+    public
     def call
       observed_membership = GroupAvatarMembership.find(membership.id)
       observed_group_owner = AvatarGroupOwnershipPeriodSource.current.find_by!(

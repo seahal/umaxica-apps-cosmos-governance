@@ -6,7 +6,7 @@ require_relative "../support/rp_cell_session_helper"
 class BaseStepUpStartTest < ActionDispatch::IntegrationTest
   include RpCellSessionHelper
 
-  test "Base APP GET is read-only and POST refuses after Auth retirement without creating state" do
+  test "Base APP step-up and OP completion/cancellation endpoints fail closed without creating state" do
     actor = Client.create!(
       security_mode_id: SecurityModeConfigurable::NORMAL,
       status_id: ClientStatus::ACTIVE,
@@ -58,10 +58,29 @@ class BaseStepUpStartTest < ActionDispatch::IntegrationTest
       assert_equal initial_states, RpStepUpState.where(rp_session:).count
       assert_equal initial_outboxes, RpStepUpAuditOutbox.count
       assert_nil rp_session.reload.revoked_at
+
+      get base_app_verification_completion_path(ri: "jp"), headers: headers
+
+      assert_response :service_unavailable
+
+      post base_app_verification_completion_path(ri: "jp"), headers: headers
+
+      assert_response :service_unavailable
+
+      get base_app_verification_cancellation_path(ri: "jp"), headers: headers
+
+      assert_response :service_unavailable
+
+      post base_app_verification_cancellation_path(ri: "jp"), headers: headers
+
+      assert_response :service_unavailable
+      assert_equal initial_states, RpStepUpState.where(rp_session:).count
+      assert_equal initial_outboxes, RpStepUpAuditOutbox.count
+      assert_nil rp_session.reload.revoked_at
     end
   end
 
-  test "Base ORG refuses Auth-mediated step-up without creating state" do
+  test "Base ORG step-up and OP completion/cancellation endpoints fail closed without creating state" do
     actor = Operator.create!(
       security_mode_id: SecurityModeConfigurable::ADVANCED,
       status_id: OperatorStatus::ACTIVE,
@@ -92,10 +111,29 @@ class BaseStepUpStartTest < ActionDispatch::IntegrationTest
       assert_empty RpBaseOrgStepUpState.where(rp_session:)
       assert_empty RpBaseOrgStepUpAuditOutbox.all
       assert_nil rp_session.reload.revoked_at
+
+      get base_org_verification_completion_path(ri: "jp"), headers: headers
+
+      assert_response :service_unavailable
+
+      post base_org_verification_completion_path(ri: "jp"), headers: headers
+
+      assert_response :service_unavailable
+
+      get base_org_verification_cancellation_path(ri: "jp"), headers: headers
+
+      assert_response :service_unavailable
+
+      post base_org_verification_cancellation_path(ri: "jp"), headers: headers
+
+      assert_response :service_unavailable
+      assert_empty RpBaseOrgStepUpState.where(rp_session:)
+      assert_empty RpBaseOrgStepUpAuditOutbox.all
+      assert_nil rp_session.reload.revoked_at
     end
   end
 
-  test "Base ORG standby context refuses step-up before creating RP state" do
+  test "Base ORG step-up is unavailable without Access-owned proof and creates no RP state" do
     actor = Operator.create!(
       security_mode_id: SecurityModeConfigurable::ADVANCED,
       status_id: OperatorStatus::ACTIVE,
@@ -110,20 +148,12 @@ class BaseStepUpStartTest < ActionDispatch::IntegrationTest
         OidcRpBrowserCredentialContract::SESSION_COOKIE,
       )
       rp_session = RpBaseOrgSession.find_by!(public_id: local_id)
-      token = jwt_access_token_for(
-        actor, host: ENV.fetch("PUBLIC_BASE_STAFF_URL"), resource_type: "operator",
-               authentication_context: AuthenticationContextValue::STANDBY_KEY,
-      )
-      browser_cookies = Rack::Utils.parse_cookies_header(headers.fetch("Cookie"))
-      browser_cookies[OidcRpBrowserCredentialContract::ACCESS_COOKIE] = token
-      cookie_header = browser_cookies.map { |name, value| "#{name}=#{Rack::Utils.escape(value)}" }.join("; ")
-      headers = headers.merge("Cookie" => cookie_header, "HTTP_COOKIE" => cookie_header)
       states_before = RpBaseOrgStepUpState.where(rp_session:).count
       outboxes_before = RpBaseOrgStepUpAuditOutbox.count
 
       post base_org_verification_path(ri: "jp"), params: { return_target: "/settings/birthdate" }, headers: headers
 
-      assert_response :forbidden
+      assert_response :service_unavailable
       assert_equal states_before, RpBaseOrgStepUpState.where(rp_session:).count
       assert_equal outboxes_before, RpBaseOrgStepUpAuditOutbox.count
     end

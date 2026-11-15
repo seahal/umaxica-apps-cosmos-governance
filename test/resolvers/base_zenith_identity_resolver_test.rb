@@ -25,6 +25,25 @@ class BaseZenithIdentityResolverTest < ActiveSupport::TestCase
     assert_not_same state.resource, resolved
   end
 
+  test "Base APP resolves a Visa-issued identity binding from the verified RP access token" do
+    actor = Client.create!(security_mode_id: SecurityModeConfigurable::NORMAL, status_id: ClientStatus::ACTIVE)
+    configuration = BaseZenithIdentityResolver::SURFACES.fetch(:app)
+    issuer = "https://visa.umaxica.app"
+    subject = OidcSubject.for(actor, resource_type: "client")
+    enrollment = seed_rp_cell_session(
+      cell: configuration.fetch(:cell), issuer:, subject:, sid: SecureRandom.uuid,
+      absolute_expires_at: 1.hour.from_now,
+    )
+    state = authenticated_state_for_enrollment(
+      cell: configuration.fetch(:cell), enrollment:, subject:, issuer:,
+    )
+
+    resolved = BaseZenithIdentityResolver.call(access_state: state, surface: :app)
+
+    assert_equal actor.public_id, resolved.public_id
+    assert_not_same state.resource, resolved
+  end
+
   test "Base ORG resolves the canonical Operator from the verified base-cell identity" do
     actor = Operator.create!(security_mode_id: SecurityModeConfigurable::ADVANCED, status_id: OperatorStatus::ACTIVE)
     state = authenticated_state(surface: :org, actor:)

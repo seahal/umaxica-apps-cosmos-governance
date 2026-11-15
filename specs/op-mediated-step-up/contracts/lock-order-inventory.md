@@ -7,6 +7,12 @@ concurrency tests cover selected rows, but no exhaustive lock trace or test esta
 graph. A transaction beginning before another transaction does not by itself establish a row-lock
 order.
 
+> **Owner supersession (2026-11-13):** Access owns authentication ceremony execution. Rows about
+> retired local Auth/OP ceremony writers, including the former passkey/TOTP final committers and
+> admission purger, are historical source traces. The remaining RP policy/state and server-to-server
+> revocation traces are not changed by this note; this inventory is not a current call graph for the
+> removed ceremony paths.
+
 ## Required boundary
 
 The accepted design requires the actor's Zenith principal lock before OP device, root and grant

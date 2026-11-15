@@ -14,6 +14,7 @@ module GroupManagement
       @account_public_id = account_public_id.to_s
     end
 
+    public
     def call
       observed_owner = AvatarGroupOwnershipPeriodSource.current.find_by!(avatar_group_id: group.id)
       unless observed_owner.owner_surface == surface

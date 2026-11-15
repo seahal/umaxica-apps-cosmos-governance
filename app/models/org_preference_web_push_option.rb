@@ -7,6 +7,8 @@ class OrgPreferenceWebPushOption < OrgSettingRecord
   ENABLED = 1
   DEFAULTS = [DISABLED, ENABLED].freeze
 
+  self.record_timestamps = false
+
   has_many :org_preference_web_pushes,
            class_name: "OrgPreferenceWebPush",
            foreign_key: :option_id,

@@ -10,29 +10,45 @@ class SecurityJwtAccessTokenNegativeCasesTest < ActiveSupport::TestCase
 
   # --- auth_access -----------------------------------------------------------
 
-  test "auth access rejects every algorithm other than ES384" do
+  test "auth access accepts PS256 and rejects ES384, RS256, PS384, none, HMAC, and header mismatch" do
     payload, header = auth_parts
+    signing_key = AuthenticationJwtConfiguration.private_key
+    token = JWT.encode(payload, signing_key, "PS256", header)
 
-    foreign_keys.each do |alg, key|
-      token = JWT.encode(payload, key, alg, header.merge("alg" => alg))
+    assert_equal "PS256", header.fetch("alg")
+    assert_predicate decode_auth(token), :present?
 
-      assert_nil decode_auth(token), "#{alg} must be rejected"
+    es384 = JWT.encode(
+      payload, OpenSSL::PKey::EC.generate("secp384r1"), "ES384", header.merge("alg" => "ES384"),
+    )
+    rs256 = JWT.encode(payload, signing_key, "RS256", header.merge("alg" => "RS256"))
+    ps384 = JWT.encode(payload, signing_key, "PS384", header.merge("alg" => "PS384"))
+    hmac = JWT.encode(payload, "shared-secret", "HS256", header.merge("alg" => "HS256"))
+    none = JWT.encode(payload, nil, "none", header.merge("alg" => "none"))
+    parts = token.split(".")
+    parts[0] = Base64.urlsafe_encode64(header.merge("alg" => "ES384").to_json, padding: false)
+    header_mismatch = parts.join(".")
+
+    {
+      "ES384" => es384,
+      "RS256" => rs256,
+      "PS384" => ps384,
+      "none" => none,
+      "HMAC" => hmac,
+      "PS256 signature with ES384 header" => header_mismatch,
+    }.each do |label, invalid_token|
+      assert_nil decode_auth(invalid_token), "#{label} must be rejected"
     end
   end
 
-  test "auth access rejects a token signed by another keyring" do
-    payload, = auth_parts
-    surface_token = JitSecurityJwtKeyring.encode(
-      payload, typ: "at+jwt", issuer_id: "surface:BASE_APP",
-    )
-
+  test "auth access rejects wrong issuer and audience when signed by the shared repository key" do
     payload, header = auth_parts
-    preference_signed = JWT.encode(
-      payload, JitSecurityJwtRegistry.private_key_for("preference_app"), "ES384", header,
-    )
+    key = JitSecurityJwtRegistry.private_key_for("surface:BASE_APP")
+    wrong_issuer = JWT.encode(payload.merge("iss" => "https://www.umaxica.app"), key, "PS256", header)
+    wrong_audience = JWT.encode(payload.merge("aud" => ["other-resource"]), key, "PS256", header)
 
-    assert_nil decode_auth(surface_token)
-    assert_nil decode_auth(preference_signed)
+    assert_nil decode_auth(wrong_issuer)
+    assert_nil decode_auth(wrong_audience)
   end
 
   test "auth access rejects malformed and missing required claims" do
@@ -64,7 +80,7 @@ class SecurityJwtAccessTokenNegativeCasesTest < ActiveSupport::TestCase
   test "auth access rejects a token whose domain scope names another resource type" do
     payload = decode_auth(resign_auth { |p| p.merge("scope" => "authenticated domain:operator") })
 
-    assert_not AuthenticationToken.resource_type_scope_matches?(payload, "client")
+    assert_not AuthenticationTokenService.resource_type_scope_matches?(payload, "client")
   end
 
   test "auth access rejects a legacy custom-typ token end to end" do
@@ -72,7 +88,7 @@ class SecurityJwtAccessTokenNegativeCasesTest < ActiveSupport::TestCase
     legacy = JWT.encode(
       payload.merge("scp" => payload["scope"].split, "act" => "client", "sub" => clients(:one).id),
       AuthenticationJwtConfiguration.private_key,
-      "ES384",
+      "PS256",
       header.merge("typ" => "auth-access-token;client"),
     )
 
@@ -124,17 +140,6 @@ class SecurityJwtAccessTokenNegativeCasesTest < ActiveSupport::TestCase
 
   private
 
-  def foreign_keys
-    {
-      "ES256" => OpenSSL::PKey::EC.generate("prime256v1"),
-      "ES512" => OpenSSL::PKey::EC.generate("secp521r1"),
-      "RS256" => OpenSSL::PKey::RSA.generate(2048),
-      "PS256" => OpenSSL::PKey::RSA.generate(2048),
-      "HS256" => "shared-secret",
-      "none" => nil,
-    }
-  end
-
   def auth_parts
     payload = {
       "iss" => AuthenticationJwtConfiguration.issuer,
@@ -150,7 +155,7 @@ class SecurityJwtAccessTokenNegativeCasesTest < ActiveSupport::TestCase
       "scope" => "authenticated domain:client read:self write:self",
     }
     token = JWT.encode(
-      payload, AuthenticationJwtConfiguration.private_key, "ES384",
+      payload, AuthenticationJwtConfiguration.private_key, "PS256",
       { "typ" => "at+jwt", "kid" => JitSecurityJwtKeyring.active_kid },
     )
 
@@ -160,11 +165,11 @@ class SecurityJwtAccessTokenNegativeCasesTest < ActiveSupport::TestCase
 
   def resign_auth
     payload, header = auth_parts
-    JWT.encode(yield(payload), AuthenticationJwtConfiguration.private_key, "ES384", header)
+    JWT.encode(yield(payload), AuthenticationJwtConfiguration.private_key, "PS256", header)
   end
 
   def decode_auth(token)
-    AuthenticationToken.decode(token, host: AUTH_HOST, resource_type: "client")
+    AuthenticationTokenService.decode(token, host: AUTH_HOST, resource_type: "client")
   end
 
   def with_production(&)

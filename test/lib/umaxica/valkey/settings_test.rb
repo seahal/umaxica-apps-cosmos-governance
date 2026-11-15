@@ -20,6 +20,7 @@ class UmaxicaValkeySettingsTest < ActiveSupport::TestCase
     assert_equal "redis://valkey-kvs:6379/3", settings.rate_limit.url
     assert_equal 5, settings.auth_state.db
     assert_equal "redis://valkey-kvs:6379/5", settings.auth_state.url
+    assert_equal 13, settings.coverband.db
     assert_not_predicate settings.cache, :memory?
   end
 

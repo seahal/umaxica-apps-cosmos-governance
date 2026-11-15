@@ -12,7 +12,7 @@ class PreferenceTokenModelTest < ActiveSupport::TestCase
     @issued_at = Time.current.change(usec: 0)
     @public_id = PublicId.generate
     @jti = SecureRandom.uuid
-    @private_key = OpenSSL::PKey::EC.generate("secp384r1")
+    @private_key = OpenSSL::PKey::RSA.generate(3072)
     @preferences = {
       "theme" => "dark",
       "language" => "ja",
@@ -42,7 +42,7 @@ class PreferenceTokenModelTest < ActiveSupport::TestCase
             assert_kind_of String, token
             claims, header = JWT.decode(token, nil, false)
 
-            assert_equal "ES384", header.fetch("alg")
+            assert_equal "PS256", header.fetch("alg")
             assert_equal "test-key", header.fetch("kid")
             assert_equal "JWT", header.fetch("typ")
             assert_equal issuer, claims.fetch("iss")
@@ -128,21 +128,27 @@ class PreferenceTokenModelTest < ActiveSupport::TestCase
               token.reverse,
               JWT.encode(claims, "wrong-secret", "HS256", { "typ" => PreferenceToken::TOKEN_TYPE }),
               JWT.encode(claims, nil, "none", { "kid" => "test-key", "typ" => PreferenceToken::TOKEN_TYPE }),
+              JWT.encode(
+                claims,
+                OpenSSL::PKey::EC.generate("secp384r1"),
+                "ES384",
+                header.merge("alg" => "ES384"),
+              ),
             ]
 
             missing_typ = header.except("typ")
-            invalid_tokens << JWT.encode(claims, @private_key, "ES384", missing_typ)
-            invalid_tokens << JWT.encode(claims, @private_key, "ES384", header.merge("typ" => "wrong"))
+            invalid_tokens << JWT.encode(claims, @private_key, "PS256", missing_typ)
+            invalid_tokens << JWT.encode(claims, @private_key, "PS256", header.merge("typ" => "wrong"))
 
             %w(iss aud sub iat exp jti preferences).each do |claim|
-              invalid_tokens << JWT.encode(claims.except(claim), @private_key, "ES384", header)
+              invalid_tokens << JWT.encode(claims.except(claim), @private_key, "PS256", header)
             end
-            invalid_tokens << JWT.encode(claims.merge("iss" => "https://wrong.example"), @private_key, "ES384", header)
-            invalid_tokens << JWT.encode(claims.merge("exp" => claims.fetch("iat")), @private_key, "ES384", header)
-            invalid_tokens << JWT.encode(claims.merge("client_id" => "retired"), @private_key, "ES384", header)
+            invalid_tokens << JWT.encode(claims.merge("iss" => "https://wrong.example"), @private_key, "PS256", header)
+            invalid_tokens << JWT.encode(claims.merge("exp" => claims.fetch("iat")), @private_key, "PS256", header)
+            invalid_tokens << JWT.encode(claims.merge("client_id" => "retired"), @private_key, "PS256", header)
             invalid_tokens << JWT.encode(
               claims.merge("preferences" => @preferences.merge("theme" => "sepia")),
-              @private_key, "ES384", header,
+              @private_key, "PS256", header,
             )
 
             invalid_tokens.each do |invalid_token|

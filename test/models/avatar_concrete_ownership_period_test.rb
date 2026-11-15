@@ -66,6 +66,8 @@ class AvatarConcreteOwnershipPeriodTest < ActiveSupport::TestCase
 
       assert_equal avatar.id, period.avatar_id
       assert_equal "enterprise_concrete_1", period.enterprise_public_id
+      assert_equal "app", period.owner_surface
+      assert_equal "enterprise_concrete_1", period.owner_collective_public_id
       assert_predicate period, :current?
 
       raise ActiveRecord::Rollback
@@ -129,6 +131,8 @@ class AvatarConcreteOwnershipPeriodTest < ActiveSupport::TestCase
       AvatarRecord.connection.execute("SET CONSTRAINTS ALL IMMEDIATE")
 
       assert_equal transfer_at, enterprise.valid_to
+      assert_equal "org", bureau.owner_surface
+      assert_equal "bureau_adjacent_1", bureau.owner_collective_public_id
       assert_predicate bureau, :current?
 
       raise ActiveRecord::Rollback

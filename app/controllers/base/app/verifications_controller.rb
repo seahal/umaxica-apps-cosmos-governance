@@ -8,6 +8,11 @@ module Base
       include SurfaceInertiaPage
 
       AUTHENTICATION_MODE = :private
+
+      layout "base/app/inertia"
+      inertia_share chrome: -> { surface_chrome }
+      inertia_share clear_history: -> { session[:inertia_clear_history] == true }
+
       declare_authentication_mode! :private
 
       public
@@ -46,8 +51,7 @@ module Base
         return_target = requested_rp_step_up_return_target
         return redirect_to(return_target, status: :see_other, allow_other_host: false) if current_step_up_evidence
 
-        # An actor without an authenticator chooses one on Base first; nothing is issued here.
-        return redirect_to_bootstrap_choice if available_step_up_methods(current_client).blank?
+        raise AccessOpDataUnavailableError if available_step_up_methods(current_client).blank?
 
         started = RpStepUpStartIssuer.call(
           cell: RpCellBinding.for_client(oidc_client_id), access_state: browser_rp_access_state,
@@ -168,24 +172,6 @@ module Base
         end
         nil
       end
-
-      def redirect_to_bootstrap_choice
-        return if reject_step_up_for_authentication_context!
-
-        scope = requested_step_up_scope(StepUpScopeCatalog::APP)
-        requested_step_up_return_to(scope: scope, allowed_scopes: StepUpScopeCatalog::APP)
-        if current_session_token.established_authentication_method == "secret"
-          return render plain: t("errors.messages.invalid_request"), status: :bad_request
-        end
-
-        redirect_to(
-          base_app_verification_setup_path(scope: scope, pt: params[:pt], ri: params[:ri]), status: :see_other,
-        )
-      end
-
-      def bootstrap_registration_methods = %i(passkey totp)
-
-      def bootstrap_scope_permitted?(scope) = scope != "settings_secret_credential"
 
       def actor_verification_path(**args)
         base_app_verification_path(**args)

@@ -15,5 +15,7 @@ description: Keep authentication lifecycle state under one named, database-clock
   guessed terminal outcome.
 - Do not write lifecycle `status_id`, `state_id`, `state` or `step` directly from controllers,
   jobs, operations or callbacks. Initial row construction is distinct from a later transition.
-- When a state or status axis changes, update its canonical Mermaid diagram and the matching section
-  of `docs/mermaid/idp-state-machine-transition-inventory.md` in the same change.
+- When a state or status axis changes, update its current owning Mermaid diagram and transition
+  inventory in the same change. If an accepted Governance-owned axis has no current diagram or
+  inventory, establish ownership and add both; archived diagrams are historical evidence, not
+  current authority.

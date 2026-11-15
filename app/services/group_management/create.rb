@@ -18,6 +18,7 @@ module GroupManagement
       @description = description
     end
 
+    public
     def call
       unless AvatarGroupConcreteOwnershipPeriod::OWNER_SURFACES.include?(owner_surface) &&
           account_surface == owner_surface && account_public_id.present? &&

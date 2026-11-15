@@ -9,6 +9,7 @@ class WebauthnPublicRegistryEntrypointsTest < ActiveSupport::TestCase
 
     assert_equal ClientPasskey, app_surface.passkey_class
     assert_equal OperatorPasskey, org_surface.passkey_class
+    assert_equal [ClientPasskey, OperatorPasskey], Webauthn::Surface.all.map(&:passkey_class)
   end
 
   test "OIDC verification result distinguishes absent and present step-up claims" do
@@ -28,5 +29,14 @@ class WebauthnPublicRegistryEntrypointsTest < ActiveSupport::TestCase
 
     assert_not without_claims.step_up_claims_present?
     assert_predicate with_claims, :step_up_claims_present?
+    assert_predicate without_claims, :authenticated?
+
+    rejected = OidcClientAssertionJwt::VerificationResult.new(
+      authenticated: false,
+      step_up_claims_state: :none,
+      step_up_expectation: nil,
+    )
+
+    assert_not_predicate rejected, :authenticated?
   end
 end

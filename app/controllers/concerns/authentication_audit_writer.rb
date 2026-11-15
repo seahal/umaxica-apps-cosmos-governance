@@ -58,6 +58,7 @@ class AuthenticationAuditWriter
       audit
     end
   end
+  public_class_method :write!
 
   # Writes audit record with best-effort semantics.
   # Returns true on success, false on failure.
@@ -89,6 +90,7 @@ class AuthenticationAuditWriter
 
     false
   end
+  public_class_method :write
 
   # Builds audit record without saving
   def self.build_audit(audit_class, event_id, resource:, actor:, ip_address:, context: {})
@@ -120,6 +122,7 @@ class AuthenticationAuditWriter
 
     audit
   end
+  public_class_method :build_audit
 
   # Tier 2: persist a recovery record so the missed audit can be
   # replayed by a background job or by ops. Sanitises context before

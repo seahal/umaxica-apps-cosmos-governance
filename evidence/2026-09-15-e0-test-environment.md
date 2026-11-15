@@ -31,7 +31,7 @@ no writes. The final scoped cleanup (`e0-cleanup-final2-20260915`) exited 0 and 
 ## Rails assertion smoke
 
 ```text
-PARALLEL_WORKERS=1 VALKEY_NAMESPACE_RUN_ID=e0-smoke-20260915c
+PARALLEL_WORKERS=<redacted> VALKEY_NAMESPACE_RUN_ID=<redacted>
 scripts/test-isolated bin/rails test
   test/lib/umaxica/valkey/connection_and_cleanup_test.rb
 ```

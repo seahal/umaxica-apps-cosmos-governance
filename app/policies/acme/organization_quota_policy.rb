@@ -10,6 +10,7 @@ module Acme
       @limit = limit
     end
 
+    public
     def allowed?
       principal_eligible? && lifecycle_complete? && current_count < limit
     end

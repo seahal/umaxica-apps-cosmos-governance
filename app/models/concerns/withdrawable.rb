@@ -12,11 +12,7 @@ module Withdrawable
   WITHDRAWAL_RECOVERY_DELAY = 1.hour
   WITHDRAWAL_EARLY_TERMINATION_DELAY = 7.days
 
-  # FIXME: Violates Umaxica/NoConcernInclusionHooks; move the declarations in this block into each class that includes this concern.
-  included do
-    scope :withdrawn, -> { where.not(withdrawn_at: nil) }
-  end
-
+  public
   def withdrawn?
     withdrawn_at.present? && withdrawn_at < Float::INFINITY
   end

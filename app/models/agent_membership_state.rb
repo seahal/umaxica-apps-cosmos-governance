@@ -19,6 +19,8 @@ class AgentMembershipState < OrgRpRecord
   ENDED = 5
   DEFAULTS = [NOTHING, ACTIVE, PENDING, SUSPENDED, REVOKED, ENDED].freeze
 
+  self.record_timestamps = false
+
   has_many :agent_memberships,
            foreign_key: :membership_state_id,
            dependent: :restrict_with_error,

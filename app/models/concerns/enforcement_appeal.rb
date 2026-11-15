@@ -13,20 +13,6 @@ module EnforcementAppeal
 
   class InvalidResolutionError < StandardError; end
 
-  # FIXME: Violates Umaxica/NoConcernInclusionHooks; move the declarations in this block into each class that includes this concern.
-  included do
-    include ::PublicId
-
-    encrypts :statement
-
-    validates :state, presence: true, inclusion: { in: STATES }
-    validates :reason_code, presence: true, inclusion: { in: REASON_CODES }
-    validates :statement, presence: true, length: { maximum: MAXIMUM_STATEMENT_LENGTH }, unless: :redacted?
-    validates :submitted_at, presence: true
-    validates :resolution_code, inclusion: { in: RESOLUTION_CODES }, allow_nil: true
-    validate :reviewer_is_separate_from_case_operators, if: :reviewer_operator_public_id?
-  end
-
   public
 
   def redact!

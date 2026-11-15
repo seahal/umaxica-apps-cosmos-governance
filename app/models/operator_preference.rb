@@ -26,6 +26,13 @@
 #
 class OperatorPreference < OrgPrincipalRecord
   include ::PublicId
+
+  before_validation :generate_public_id, on: :create
+  before_validation :refresh_generated_public_id_after_collision, on: :create
+  before_create :generate_public_id
+  around_create :retry_public_id_collision
+  validate :public_id_immutable_after_create, on: :update
+  validates :public_id, presence: true, length: { is: PublicId::GENERATION_SIZE }, uniqueness: true
   include ::PreferenceExplicitFields
   include ::ActorPreferenceExplicitDisplay
 
@@ -91,6 +98,7 @@ class OperatorPreference < OrgPrincipalRecord
   validate :retired_status_cannot_be_reactivated, on: :update
   before_destroy :preload_dependent_associations, prepend: true
 
+  public
   def retire!
     with_lock do
       raise PreferenceLifecycle::InvalidTransition, "only an active Preference can be retired" unless

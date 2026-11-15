@@ -10,6 +10,7 @@ class Email::SurfaceMailersTest < ActionMailer::TestCase
   test "alert mailers send a generic alert payload per surface" do
     [
       [Email::App::AlertMailer, "alert@umaxica.app"],
+      [Email::Com::AlertMailer, "alert@umaxica.com"],
       [Email::Org::AlertMailer, "alert@umaxica.org"],
     ].each do |mailer, sender|
       mail = mailer.with(email_address: "target@example.com", title: "Alert title", body: "Alert body").notice
@@ -93,11 +94,5 @@ class Email::SurfaceMailersTest < ActionMailer::TestCase
       assert_equal [sender], mail.from
       assert_match "List-Unsubscribe", mail.header.to_s
     end
-  end
-
-  private
-
-  def encrypted_otp(code)
-    OutboundSensitivePayload.encrypt_email_otp(code)
   end
 end

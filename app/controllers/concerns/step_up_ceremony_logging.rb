@@ -37,7 +37,6 @@ module StepUpCeremonyLogging
 
   def step_up_refusal_code(error)
     case error
-    when IdentityStepUpCeremonyContract::Error then error.code
     when ActiveRecord::RecordNotFound then "invalid_admission"
     when ActionController::BadRequest, KeyError, ArgumentError then "malformed_request"
     else "unclassified"

@@ -20,6 +20,7 @@ class SignRiskEnforcer
       require_step_up!(resource)
     end
   end
+  public_class_method :call
 
   # D-172 S-1: a risk stop ends every root of the principal with an epoch cutoff, through the
   # identity-stop path (Zenith event under the actor lock, then the OP apply with its retry).
@@ -33,10 +34,12 @@ class SignRiskEnforcer
     end
     delivery_result
   end
+  public_class_method :revoke!
 
   def self.require_step_up!(_resource)
     raise AccessOpDataUnavailableError
   end
+  public_class_method :require_step_up!
 
   def self.feature_enabled?
     return false if ENV["RISK_ENFORCEMENT_DISABLED"] == "true"
@@ -44,4 +47,5 @@ class SignRiskEnforcer
     enabled_config = Rails.configuration.try(:x).try(:risk_enforcement).try(:enabled)
     enabled_config || ENV["RISK_ENFORCEMENT_ENABLED"] == "true" || Rails.env.production?
   end
+  public_class_method :feature_enabled?
 end

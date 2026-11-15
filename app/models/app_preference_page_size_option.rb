@@ -20,6 +20,8 @@ class AppPreferencePageSizeOption < AppSettingRecord
 
   DEFAULTS = [NOTHING, PER_10, PER_20, PER_50, PER_100, PER_INFINITY].freeze
 
+  self.record_timestamps = false
+
   has_many :app_preference_page_sizes,
            class_name: "AppPreferencePageSize",
            foreign_key: :option_id,
@@ -29,7 +31,9 @@ class AppPreferencePageSizeOption < AppSettingRecord
   def self.ensure_defaults!
     insert_missing_fixed_ids!(DEFAULTS)
   end
+  public_class_method :ensure_defaults!
 
+  public
   def name
     case id
     when 1 then "10"

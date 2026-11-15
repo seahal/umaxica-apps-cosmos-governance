@@ -2,9 +2,9 @@
 # frozen_string_literal: true
 
 # Org Base Self-RP client for the org administration owners: IAM, Support and Enforcement
-# (R5-WU12, approved pattern 2026-10-17). Each call carries a fresh base-org-ww private_key_jwt
-# bound to the exact URL, the Operator's Access JWT and the browser facts the owner records in its
-# administrative audit (request id, IP, User-Agent). Typed outcomes; writes are never retried.
+# (R5-WU12). Each call carries a fresh Governance bearer derived from its active RP session and the
+# browser facts the owner records in its administrative audit (request id, IP, User-Agent). Typed
+# outcomes; writes are never retried.
 # TODO: AUDIT external access: calls the Org admin authority API.
 class OrgAdminAuthorityClient
   # http_status keeps the owner's exact code (e.g. 201/202) for JSON responses relayed as-is.
@@ -29,11 +29,11 @@ class OrgAdminAuthorityClient
   OPEN_TIMEOUT = 2
   READ_TIMEOUT = 5
 
-  def initialize(access_token:, browser_request:, surface: "org")
-    @client_id, resource_type = CLIENTS.fetch(surface.to_s)
-    base_origin = Rails.configuration.x.boot_config.fetch(:hosts).base_for_resource_type(resource_type)
+  def initialize(rp_session:, browser_request:, surface: "org")
+    @resource_type = CLIENTS.fetch(surface.to_s).fetch(1)
+    base_origin = Rails.configuration.x.boot_config.fetch(:hosts).base_for_resource_type(@resource_type)
     @base = OutboundHttp::LocalBackChannel.url("#{base_origin}/api/v0")
-    @access_token = access_token.to_s
+    @rp_session = rp_session
     @browser_request = browser_request
   end
 
@@ -45,22 +45,20 @@ class OrgAdminAuthorityClient
 
   private
 
-  attr_reader :client_id, :base, :access_token, :browser_request
+  attr_reader :base, :browser_request, :rp_session, :resource_type
 
   def call(verb, path, params, extra_headers)
-    return Result.new(status: :unauthorized, data: nil, errors: {}, http_status: 401) if access_token.blank?
+    return Result.new(status: :unauthorized, data: nil, errors: {}, http_status: 401) if rp_session.blank?
 
     url = "#{base}#{path}"
-    assertion = OidcClientAssertionJwt.issue(client_id:, token_url: url)
-    return Result.new(status: :dependency, data: nil, errors: {}, http_status: 503) if assertion.blank?
+    token = BaseApiAuthorityTokenIssuer.issue(rp_session:, audience_resource_type: resource_type)
 
     uri = URI.parse(url)
     connection = OutboundHttp::Connection.build(
       url: uri, open_timeout: OPEN_TIMEOUT, read_timeout: READ_TIMEOUT, require_https: OutboundHttp::LocalBackChannel.require_https?(url),
     )
     headers = {
-      "Authorization" => "Bearer #{access_token}",
-      "X-Client-Assertion" => assertion,
+      "Authorization" => "Bearer #{token}",
       "Accept" => "application/json",
       "X-Browser-Request-Id" => browser_request.request_id.to_s,
       "X-Browser-Ip" => browser_request.remote_ip.to_s,
@@ -84,5 +82,7 @@ class OrgAdminAuthorityClient
     )
   rescue Faraday::Error, JSON::ParserError, URI::InvalidURIError, OutboundHttp::Connection::InsecureEndpointError
     Result.new(status: :dependency, data: nil, errors: {}, http_status: 503)
+  rescue BaseApiAuthorityTokenIssuer::InactiveRpSession
+    Result.new(status: :unauthorized, data: nil, errors: {}, http_status: 401)
   end
 end

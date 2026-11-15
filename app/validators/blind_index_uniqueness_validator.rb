@@ -7,8 +7,9 @@ class BlindIndexUniquenessValidator < ActiveModel::EachValidator
   end
   public_class_method :kind
 
+  public
   def validate_each(record, attribute, value)
-    return if value.blank?
+    return if value.nil?
 
     operation = -> { uniqueness_scope(record, attribute, value).exists? }
     duplicate = defined?(Prosopite) ? Prosopite.pause(&operation) : operation.call

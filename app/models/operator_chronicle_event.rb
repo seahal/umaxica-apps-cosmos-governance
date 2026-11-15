@@ -40,6 +40,8 @@ class OperatorChronicleEvent < ChronicleRecord
     SIGN_FLOW_HALTED,
   ].freeze
 
+  self.record_timestamps = false
+
   # Association with staff_chronicles
   has_many :staff_chronicles, class_name: "OperatorChronicle", foreign_key: :event_id,
                               dependent: :destroy,
@@ -48,4 +50,5 @@ class OperatorChronicleEvent < ChronicleRecord
   def self.ensure_defaults!
     insert_missing_fixed_ids!(DEFAULTS)
   end
+  public_class_method :ensure_defaults!
 end

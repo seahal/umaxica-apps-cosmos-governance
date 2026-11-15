@@ -16,13 +16,16 @@ the destination access to the initiating surface's credentials, permissions, ses
 
 ## Authentication and ceremony results
 
-Authentication and credential changes are committed from verified, purpose-bound server state.
-The browser must not turn a redirect target, query string, or fragment into proof. Form submissions
-that change local state retain the owning surface's CSRF checks, actor authorization, transaction
+Authentication and credential changes are committed from verified, purpose-bound server state. The
+browser must not turn a redirect target, query string, or fragment into proof. Form submissions that
+change local state retain the owning surface's CSRF checks, actor authorization, transaction
 binding, expiry checks, and replay controls.
 
-Base app and org retain local verification and credential-management routes. This process has no
-provider authorization, callback, or logout routes, so it cannot start a new OIDC sign-in flow.
+Base app and org retain local verification and credential-management routes. Base App also has a
+neutral relying-party entry and callback; the browser leaves through Jump, and the verified callback
+commits only local RP state. A successful redirect alone never proves sign-in. Base App sign-out
+commits local revocation before the no-hint Visa handoff, while Back-Channel Logout commits its
+verified event before acknowledging it. Governance does not host provider or credential ceremonies.
 
 ## Related
 

@@ -7,21 +7,24 @@ Accepted on 2026-10-31 by the owner. This decision supersedes
 for Preference credential scope and lifecycle. Its family-and-surface capability and endpoint
 ownership decisions remain useful where they do not conflict with this ADR. The Preference
 credential scope clauses in [`cookie-domain-scope-by-surface.md`](cookie-domain-scope-by-surface.md)
-are also superseded.
+are also superseded. Amended 2026-11-13: every realm uses the single Governance PS256 key set.
+Realm-specific issuer, audience, host, and claim checks remain the authorization boundary.
 
 ## Decision
 
 Each preference realm issues one signed Preference JWT on the `umaxica.<realm>` cookie domain and
 two readable display cookies (`language` and `__Secure-experience`) from the same database snapshot.
-Only that realm's Base and Visa surfaces hold the signing key and write Preference state. Other
-hosts verify with the configured realm public key and never write, create a row, or issue or delete
-the shared cookies.
+Only that realm's owning Base and Visa surfaces may write Preference state; host and route ownership
+remain the boundary for that write. Governance processes use one shared repository signing key set,
+so possession of that key is not a realm authorization boundary. Verification-only hosts use the
+public JWKS and never write, create a row, or issue or delete the shared cookies.
 
-The realm JWT uses ES384 with JOSE header `typ=JWT` and exactly seven claims: `iss`, `sub`, `aud`,
-`iat`, `exp`, `jti`, and `preferences`. `sub` is the anonymous Preference row's public identifier;
-`aud` is exactly `app`, `com`, or `org` for the corresponding realm. Each realm has an independent
-keyring (`preference_app`, `preference_com`, or `preference_org`). The token lifetime is 400 days
-from the successful database write. The former RFC 9068 Preference shape and generic
+The realm JWT uses PS256 with an RSA key of at least 3072 bits, JOSE header `typ=JWT`, and exactly
+seven claims: `iss`, `sub`, `aud`, `iat`, `exp`, `jti`, and `preferences`. `sub` is the anonymous
+Preference row's public identifier; `aud` is exactly `app`, `com`, or `org` for the corresponding
+realm. Each realm has a separate issuer record (`preference_app`, `preference_com`, or
+`preference_org`), and all records use the repository's shared key set and JWKS. The token lifetime
+is 400 days from the successful database write. The former RFC 9068 Preference shape and generic
 `PREFERENCE_JWT_*` issuer/key namespace have no compatibility reader.
 
 Cookie consent and Web Push are gated by the Base host-only `__Host-preference_binding` cookie. Its
@@ -45,6 +48,6 @@ sign-out may rotate shared Preference state but does not issue, delete, or alter
   APP/ORG consent and Web Push state; other hosts report no consent decision and never enable Web
   Push.
 - The realm-scoped cookie is delivered across that realm's hosts. No CORS or cross-origin fetch is
-  introduced. Readers need the configured public key, issuer, audience, active key id, and rejected
-  key ids.
+  introduced. Readers need the repository's configured public key set and the realm's issuer,
+  audience, active key id, and rejected key ids.
 - The JWT shape is a wire break. No compatibility reader is retained for the old shape.

@@ -2,11 +2,8 @@
 # frozen_string_literal: true
 
 require "test_helper"
-require "support/external_identity_test_helper"
 
 class ClientCoverageTest < ActiveSupport::TestCase
-  include ExternalIdentityTestHelper
-
   setup do
     ClientStatus.find_or_create_by!(id: 1)
     ClientVisibility.find_or_create_by!(id: 1)
@@ -38,13 +35,6 @@ class ClientCoverageTest < ActiveSupport::TestCase
     assert_predicate @user, :user?
   end
 
-  test "client_google_identities shim" do
-    assert_empty @user.client_google_identities
-    google = create_active_external_identity(client: @user, provider: "google", subject: "u")
-
-    assert_equal [google], @user.client_google_identities
-  end
-
   test "verified_email? and verified_telephone?" do
     assert_not @user.verified_email?
     ClientEmail.create!(user: @user, address: "v@example.com", user_email_status_id: ClientEmailStatus::VERIFIED)
@@ -74,23 +64,6 @@ class ClientCoverageTest < ActiveSupport::TestCase
 
     assert_predicate @user, :deactivated?
     assert_predicate @user, :withdrawal_in_progress?
-  end
-
-  test "active_social_provider?" do
-    assert_not @user.active_social_provider?("google")
-    google = create_active_external_identity(client: @user, provider: "google", subject: "g")
-
-    assert @user.active_social_provider?("google")
-
-    assert_not @user.active_social_provider?("apple")
-    google.release!
-
-    assert_not @user.active_social_provider?("google")
-    create_active_external_identity(client: @user, provider: "apple", subject: "a")
-
-    assert @user.active_social_provider?("apple")
-
-    assert_not @user.active_social_provider?("unknown")
   end
 
   test "ClientEmail verification tokens" do

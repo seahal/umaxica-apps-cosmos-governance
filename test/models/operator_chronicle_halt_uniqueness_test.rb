@@ -54,11 +54,16 @@ class OperatorChronicleHaltUniquenessTest < ActiveSupport::TestCase
     assert_predicate OperatorChronicle.create!(
       **attributes.merge(event_id: OperatorChronicleEvent::LOGIN_SUCCESS),
     ), :persisted?
-    2.times do
-      assert_predicate OperatorChronicle.create!(
-        **attributes.merge(context: { "transaction_public_id" => nil, "halt_generation" => 1 }),
-      ), :persisted?
+    missing_transaction = OperatorChronicle.new(
+      **attributes.merge(context: { "transaction_public_id" => nil, "halt_generation" => 1 }),
+    )
+
+    assert_not missing_transaction.valid?
+    assert missing_transaction.errors.of_kind?(:context, :invalid)
+    assert_raises(ActiveRecord::StatementInvalid) do
+      OperatorChronicle.transaction(requires_new: true) { missing_transaction.save!(validate: false) }
     end
+
     hostile_identity = "txn' OR 1=1 --"
     hostile_attributes = attributes.merge(
       context: { "transaction_public_id" => hostile_identity, "halt_generation" => 1 },

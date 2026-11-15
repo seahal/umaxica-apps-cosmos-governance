@@ -17,6 +17,8 @@ module PreferenceGlobal
       .transform_values { |value| value.to_s.downcase }
       .freeze
 
+  public
+
   def resolve_param_context
     effective_context
   end
@@ -45,7 +47,22 @@ module PreferenceGlobal
 
   def request_context
     PUBLIC_CONTEXT_KEYS.each_with_object({}) do |key, memo|
-      value = request_context_value(key)
+      value =
+        case key
+        when :ri then request_context_ri
+        when :pt then request_context_pt
+        when :nt then request_context_nt
+        when :lx then request_context_lx
+        when :ct then request_context_ct
+        when :tz then request_context_tz
+        when :cu then request_context_cu
+        when :df then request_context_df
+        when :tf then request_context_tf
+        when :mo then request_context_mo
+        when :dn then request_context_dn
+        when :ps then request_context_ps
+        else raise ArgumentError, "unsupported public request context key: #{key.inspect}"
+        end
       memo[key] = value if value.present?
     end
   end

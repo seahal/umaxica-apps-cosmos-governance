@@ -30,6 +30,7 @@ class SecurityJwtPreferenceTokenCodec
   ANONYMOUS_CLAIMS = %w(iss sub aud iat exp jti preferences).freeze
 
   class << self
+    public
     def encode(preferences, host:, preference_type:, public_id:, jti:, jwt_issuer_id: nil, issued_at: nil)
       return nil unless valid_encode_params?(preferences, host, preference_type, public_id, jti)
 
@@ -304,6 +305,8 @@ class SecurityJwtPreferenceTokenCodec
     def report_claim_error(host:, header:, error:)
       reason =
         case error
+        when JWT::MissingRequiredClaim
+          JitSecurityJwtAnomalyReporter.reason_for_missing_claim(error.message)
         when JWT::InvalidIssuerError then "ISS_MISMATCH"
         when JWT::InvalidIatError then "IAT_INVALID"
         when JWT::ImmatureSignature then "IMMATURE"

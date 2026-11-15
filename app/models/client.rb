@@ -74,17 +74,57 @@
 #   audit linkage; identifier-only purge preserves their dead histories.
 class Client < AppPrincipalRecord
   include Retainable
+
+  attribute :discard_at, :datetime, default: -> { Retainable::SENTINEL }
+  attribute :purge_eligible_at, :datetime, default: -> { Retainable::SENTINEL }
+  validates :discard_at, presence: true
+  validates :purge_eligible_at, presence: true
+  validate :retention_order_valid
+  validate :retention_times_not_before_created_at, on: :update
+  Retainable.register_host(self)
+
   include Withdrawable
+
+  scope :withdrawn, -> { where.not(withdrawn_at: nil) }
   include HasBirthdate
+
+  encrypts :birthdate
+  validates :birthdate, length: { maximum: 10 }, allow_blank: true
+  validate :birthdate_format
+  validate :birthdate_not_future
   include ::PublicId
+
+  before_validation :generate_public_id, on: :create
+  before_validation :refresh_generated_public_id_after_collision, on: :create
+  before_validation :ensure_webauthn_user_handle, on: :create
+  before_validation :assign_calculated_mfa_status, if: :mfa_status_placeholder?
+  # before_save covers writes with validation disabled so the database NOT NULL still holds.
+  before_save :ensure_webauthn_user_handle
+  before_create :generate_public_id
+  around_create :retry_public_id_collision
+  validate :public_id_immutable_after_create, on: :update
+  validates :public_id, presence: true, length: { is: PublicId::GENERATION_SIZE }, uniqueness: true
   include ::Identity
   include AuthenticationCredentialInventoryOwner
   include WebauthnUserHandleOwner
+
+  validates :webauthn_user_handle, presence: true, uniqueness: true
   include SecurityModeConfigurable
   include MfaStatusTrackable
+
+  after_create :refresh_mfa_status!
   include ActorLifecycleConsistency
+
+  validate :lifecycle_timestamps_are_consistent
   include AdministrativeAccessLockable
-  include Retainable
+
+  attribute :access_state, :string, default: AdministrativeAccessLockable::ACCESS_STATE_ENABLED
+  validates :access_state, presence: true, inclusion: { in: AdministrativeAccessLockable::ACCESS_STATES }
+  validates :admin_locked_reason_code,
+            inclusion: { in: AdministrativeAccessLockable::ADMIN_LOCK_REASON_CODES },
+            allow_nil: true,
+            if: :admin_locked_reason_code_column?
+  validate :administrative_lock_columns_are_consistent
 
   LOGIN_BLOCKED_STATUS_IDS = [ClientStatus::RESERVED].freeze
   # D-106 (WU-34): statuses of a registration that has not reached its decisive commit (D-131).
@@ -295,6 +335,7 @@ class Client < AppPrincipalRecord
   has_many :telephone_histories, class_name: "ClientTelephoneHistory", foreign_key: :user_id,
                                  inverse_of: :user, dependent: :restrict_with_error
 
+  public
   def totp_enabled?
     if client_totp_credentials.loaded?
       client_totp_credentials.any? { |otp| otp.user_totp_credential_status_id == ClientTotpCredentialStatus::ACTIVE }
@@ -315,11 +356,6 @@ class Client < AppPrincipalRecord
     true
   end
 
-  def client_google_identities
-    identity = client_external_identities.effective_binding.find_by(provider: "google", state: "active")
-    identity ? [identity] : []
-  end
-
   # what is this?
   def has_verified_recovery_identity?
     has_verified_pii?
@@ -327,48 +363,6 @@ class Client < AppPrincipalRecord
 
   def has_verified_pii?
     verified_email? || verified_telephone?
-  end
-
-  def login_methods_remaining?(excluding_provider: nil)
-    remaining_login_methods(excluding_provider: excluding_provider).any?
-  end
-
-  def social_unlink_methods_remaining?(excluding_provider:)
-    remaining_social_unlink_methods(excluding_provider: excluding_provider).any?
-  end
-
-  def remaining_social_unlink_methods(excluding_provider:)
-    excluded = SocialIdentifiable.normalize_provider(excluding_provider)
-    methods = []
-    methods << :email if client_emails.effective_binding.exists?(user_email_status_id: AuthMethodGuard::VERIFIED_EMAIL_STATUSES)
-    methods << :passkey if client_passkeys.exists?(status_id: ClientPasskeyStatus::ACTIVE)
-    methods << :google if excluded != "google" && active_google_identity_exists?
-    methods << :apple if excluded != "apple" && active_apple_identity_exists?
-    methods
-  end
-
-  def remaining_login_methods(excluding_provider: nil)
-    excluded = excluding_provider.present? ? SocialIdentifiable.normalize_provider(excluding_provider) : nil
-    methods =
-      authentication_credential_inventory.sign_in_methods.map { |method|
-        (method == :email_otp) ? :email : method
-      }
-    return methods unless excluded
-
-    methods - [excluded.to_sym]
-  end
-
-  def active_social_provider?(provider)
-    normalized = SocialIdentifiable.normalize_provider(provider)
-    client_external_identities.effective_binding.exists?(provider: normalized, state: "active")
-  end
-
-  def active_google_identity_exists?
-    client_external_identities.effective_binding.exists?(provider: "google", state: "active")
-  end
-
-  def active_apple_identity_exists?
-    client_external_identities.effective_binding.exists?(provider: "apple", state: "active")
   end
 
   def verified_email?
@@ -388,28 +382,6 @@ class Client < AppPrincipalRecord
     client_telephones.effective_binding.exists?(
       user_identity_telephone_status_id: VERIFIED_RECOVERY_TELEPHONE_STATUS_IDS,
     )
-  end
-
-  def passkey_login_available?
-    has_active_passkey =
-      if client_passkeys.loaded?
-        client_passkeys.any? { |passkey| passkey.status_id == ClientPasskeyStatus::ACTIVE }
-      else
-        client_passkeys.active.exists?
-      end
-    return false unless has_active_passkey
-
-    verified_telephone?
-  end
-
-  public
-
-  def finalize_email_sign_up!(email:, flow:)
-    raise AccessOpDataUnavailableError
-  end
-
-  def finalize_telephone_sign_up!(telephone:, flow:)
-    raise AccessOpDataUnavailableError
   end
 
   private

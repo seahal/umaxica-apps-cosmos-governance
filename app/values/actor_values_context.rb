@@ -51,6 +51,7 @@ class ActorValuesContext < Data.define(
   class << self
     # The safe baseline context for unbound paths: BareController, jobs,
     # mailers, tests, and any request before the lifecycle installs state.
+    public
     def empty
       new(
         subject: Unauthenticated.instance,
@@ -109,6 +110,7 @@ class ActorValuesContext < Data.define(
   # historical alias retained for ActionPolicy and lifecycle compatibility.
   alias_method :actor, :subject
 
+  public
   def authenticated? = ROLE_TYPES.include?(actor_type)
 
   def unauthenticated? = actor_type == :unauthenticated

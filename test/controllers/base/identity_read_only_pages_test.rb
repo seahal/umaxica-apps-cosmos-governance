@@ -11,7 +11,7 @@ class BaseIdentityReadOnlyPagesTest < ActionDispatch::IntegrationTest
   fixtures :clients, :client_statuses, :client_chronicle_events, :client_chronicle_levels, :operators,
            :operator_statuses, :operator_chronicle_events, :operator_chronicle_levels
 
-  test "app standing page reports unavailable external authority for a verified client" do
+  test "app standing page reads Governance enforcement state for a verified client" do
     host = ENV.fetch("PUBLIC_BASE_SERVICE_URL")
     host! host
     client = clients(:one)
@@ -19,11 +19,13 @@ class BaseIdentityReadOnlyPagesTest < ActionDispatch::IntegrationTest
     headers = as_user_headers(client, host: host)
     get base_app_identity_standing_url(ri: "jp", host: host), headers: headers
 
-    assert_response :service_unavailable
+    assert_response :success
     assert_includes response.headers["Cache-Control"], "no-store"
+    assert_kind_of String, inertia_props.fetch("status_label")
+    assert_kind_of Array, inertia_props.fetch("decisions")
   end
 
-  test "org standing page reports unavailable external authority for a verified operator" do
+  test "org standing page reads Governance enforcement state for a verified operator" do
     host = ENV.fetch("PUBLIC_BASE_STAFF_URL")
     host! host
     operator = operators(:one)
@@ -39,8 +41,10 @@ class BaseIdentityReadOnlyPagesTest < ActionDispatch::IntegrationTest
     headers = as_staff_headers(operator, host: host)
     get base_org_identity_standing_url(ri: "jp", host: host), headers: headers
 
-    assert_response :service_unavailable
+    assert_response :success
     assert_includes response.headers["Cache-Control"], "no-store"
+    assert_kind_of String, inertia_props.fetch("status_label")
+    assert_kind_of Array, inertia_props.fetch("decisions")
   end
 
   test "app activity log lists only normalized activity for the signed-in client" do
@@ -176,7 +180,7 @@ class BaseIdentityReadOnlyPagesTest < ActionDispatch::IntegrationTest
 
     assert_not_equal 200, response.status
   end
-  test "app standing dependency failure preserves the client in-force decision" do
+  test "app standing reads the active Governance decision without changing it" do
     host = ENV.fetch("PUBLIC_BASE_SERVICE_URL")
     host! host
     client = clients(:one)
@@ -194,14 +198,17 @@ class BaseIdentityReadOnlyPagesTest < ActionDispatch::IntegrationTest
     headers = as_user_headers(client, host: host)
     get base_app_identity_standing_url(ri: "jp", host: host), headers: headers
 
-    assert_response :service_unavailable
+    assert_response :success
     assert_includes response.headers["Cache-Control"], "no-store"
+    decision_public_ids = inertia_props.fetch("decisions").map { |decision| decision.fetch("public_id") }
+
+    assert_includes decision_public_ids, enforcement_case.public_id
     assert_equal "active", enforcement_case.reload.state
     assert_equal "abuse", enforcement_case.reason_code
     assert_predicate enforcement_case.expires_at, :present?
   end
 
-  test "org standing dependency failure preserves the operator in-force decision" do
+  test "org standing reads the active Governance decision without changing it" do
     host = ENV.fetch("PUBLIC_BASE_STAFF_URL")
     host! host
     operator = operators(:one)
@@ -225,8 +232,11 @@ class BaseIdentityReadOnlyPagesTest < ActionDispatch::IntegrationTest
     headers = as_staff_headers(operator, host: host)
     get base_org_identity_standing_url(ri: "jp", host: host), headers: headers
 
-    assert_response :service_unavailable
+    assert_response :success
     assert_includes response.headers["Cache-Control"], "no-store"
+    decision_public_ids = inertia_props.fetch("decisions").map { |decision| decision.fetch("public_id") }
+
+    assert_includes decision_public_ids, enforcement_case.public_id
     assert_equal "active", enforcement_case.reload.state
   end
 end

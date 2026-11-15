@@ -26,8 +26,8 @@ module Security
             host: "base.app.localhost",
             paths: [
               ["/", :success],
-              # Anonymous Base Dashboard redirects to passive Sign (accepted ADR amendment 2026-10-08).
-              ["/dashboard", :unauthorized],
+              # Anonymous Base App Dashboard redirects to neutral Sign without starting a flow.
+              ["/dashboard", :see_other],
               ["/preference", :success],
               ["/preference/region/edit", :success],
               ["/preference/theme/edit", :success],
@@ -46,7 +46,8 @@ module Security
             host: "base.org.localhost",
             paths: [
               ["/", :success],
-              ["/dashboard", :unauthorized],
+              ["/dashboard", :see_other],
+              ["/sign", :success],
               ["/preference", :success],
               ["/preference/region/edit", :success],
               ["/preference/theme/edit", :success],

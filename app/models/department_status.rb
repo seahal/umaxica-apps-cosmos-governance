@@ -19,6 +19,8 @@ class DepartmentStatus < OrgPrincipalRecord
   DELETED = 4
   DEFAULTS = [NOTHING, ACTIVE, INACTIVE, DELETED].freeze
 
+  self.record_timestamps = false
+
   has_many :departments,
            inverse_of: :department_status,
            dependent: :restrict_with_error

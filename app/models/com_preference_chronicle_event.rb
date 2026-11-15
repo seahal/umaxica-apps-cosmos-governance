@@ -46,6 +46,8 @@ class ComPreferenceChronicleEvent < ChronicleRecord
     UPDATE_PREFERENCE_PAGE_SIZE,
   ].freeze
 
+  self.record_timestamps = false
+
   # Placeholder for audit event types; ids are string tokens (e.g., 'CREATED')
   has_many :com_preference_chronicles,
            class_name: "ComPreferenceChronicle",
@@ -57,4 +59,5 @@ class ComPreferenceChronicleEvent < ChronicleRecord
   def self.ensure_defaults!
     insert_missing_fixed_ids!(DEFAULTS)
   end
+  public_class_method :ensure_defaults!
 end

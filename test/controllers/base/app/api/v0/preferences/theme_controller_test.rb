@@ -243,7 +243,7 @@ class Base::App::Api::V0::Preferences::ThemeControllerTest
 
   def load_jump_rt_env!
     @jump_rt_env_originals ||= {}
-    jump_rt_key = Base64.strict_encode64(OpenSSL::PKey::EC.generate("secp384r1").to_der)
+    jump_rt_key = Base64.strict_encode64(OpenSSL::PKey::RSA.generate(3072).to_der)
     %w(FOREIGN_APP FOREIGN_ORG BASE_APP BASE_ORG).each do |namespace|
       ENV["JWT_#{namespace}_ACTIVE_KID"] = "#{namespace.downcase.tr("_", "-")}-test"
       ENV["JWT_#{namespace}_PRIVATE_KEY"] = jump_rt_key

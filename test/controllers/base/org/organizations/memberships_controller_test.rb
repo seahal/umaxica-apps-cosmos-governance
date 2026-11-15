@@ -16,22 +16,34 @@ class Base::Org::Organizations::MembershipsControllerTest < ActionDispatch::Inte
   test "anonymous membership access refuses without starting OP sign-in" do
     get base_org_organization_memberships_url(@organization, ri: "jp", host: @host), headers: host_headers(@host)
 
-    assert_response :unauthorized
-    assert_nil response.location
+    assert_response :see_other
+    target = URI.parse(response.location)
+
+    assert_equal URI.parse(base_org_sign_show_path(ri: "jp")).path, target.path
+    assert_includes [nil, request.host], target.host
   end
 
-  test "ORG membership reads do not disclose owner data while Access verification is unavailable" do
+  test "ORG membership reads use Governance authority and preserve ownership boundaries" do
     original = @membership.reload.attributes
 
-    [base_org_organization_memberships_url(@organization, ri: "jp", host: @host),
-     base_org_organization_membership_url(@organization, @membership.id, ri: "jp", host: @host),
-     base_org_organization_membership_url("foreign-org", "foreign-member", ri: "jp", host: @host),].each do |path|
-      get path, headers: @headers, as: :json
+    get base_org_organization_memberships_url(@organization, ri: "jp", host: @host), headers: @headers, as: :json
 
-      assert_response :service_unavailable
-      assert_includes response.headers["Cache-Control"], "no-store"
-      assert_not_includes response.body, @bootstrap.account.public_id
-    end
+    assert_response :success
+    assert_includes response.headers["Cache-Control"], "no-store"
+    assert_includes response.parsed_body.fetch("memberships").map { |row| row.fetch("id") }, @membership.id
+    assert_equal @bootstrap.account.public_id,
+                 response.parsed_body.fetch("memberships").sole.fetch("agent_public_id")
+
+    get base_org_organization_membership_url(@organization, @membership.id, ri: "jp", host: @host),
+        headers: @headers, as: :json
+
+    assert_response :success
+    assert_equal @membership.id, response.parsed_body.fetch("id")
+
+    get base_org_organization_membership_url("foreign-org", "foreign-member", ri: "jp", host: @host),
+        headers: @headers, as: :json
+
+    assert_response :not_found
     assert_equal original, @membership.reload.attributes
   end
 
@@ -40,7 +52,7 @@ class Base::Org::Organizations::MembershipsControllerTest < ActionDispatch::Inte
       get base_org_organization_memberships_url(@organization, page: page, ri: "jp", host: @host),
           headers: @headers, as: :json
 
-      assert_response :service_unavailable
+      assert_response :success
     end
   end
 

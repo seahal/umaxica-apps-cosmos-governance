@@ -1,8 +1,16 @@
 > **Historical social ceremony details:** Social callback/candidate identifiers below describe the
-> retired local provider flows. They are not current route or service contracts; retained model
-> classes are included in the hard-reset evidence pending model/database cleanup.
+> retired local provider flows. They are not current route or service contracts. Governance removed
+> the local model and service readers; the corresponding schema and records were retained for
+> separate owner-directed database review (see the ceremony-retirement evidence).
 
 # Identifier conventions and scoped column classification
+
+> **Governance ceremony runtime status (2026-11-13):** Access owns authentication ceremony
+> execution; Governance runs none. The local sign-in, sign-up, recovery, contact-proof, WebAuthn,
+> TOTP, social callback, step-up result and OP transaction mappings below are historical when they
+> describe Governance writers or consumers. Governance identity and credential records, existing
+> identifiers, audit records and RP-local step-up state remain. This work changed no schema or
+> persisted data; the historical mappings do not authorize dropping their columns or records.
 
 The [identifier ADR](../../adr/identifier-contract.md) owns the approved design. The
 [identifier checklist](../checklists/identifier-contracts.md) owns observable acceptance. This
@@ -181,9 +189,17 @@ and [OperatorPasskeyPolicy](../../app/policies/operator_passkey_policy.rb). APP/
 primarily uses public_id; that fact alone does not prove external_id unused or safe to drop.
 Per-column code exception comments and a complete credential-consumer inventory remain required.
 
-## Other classified areas and remaining inventory
+## Historical ceremony identifier snapshot and remaining inventory
 
-The following additional mappings are source-observed, not a complete writer/API inventory or
+> **Superseded for Governance runtime (2026-11-13):** The ceremony rows and prose in this section
+> record the former local Email, Telephone, TOTP, Secret Credential, Social, Step-Up, OIDC and
+> passkey transaction writers and consumers. Access now owns ceremony execution, and the associated
+> Governance runtime code and tests were removed after caller searches. These entries, including
+> source/test links and present-tense issuer descriptions, are historical implementation evidence;
+> they are not current producer contracts. This cleanup made no schema or persisted-data changes, so
+> retained record columns and audit history still require a separately authorized data decision.
+
+The following additional mappings were source-observed, not a complete writer/API inventory or
 catalog-conformance claim. Their current UUID generation is not a provider-format justification.
 
 | Producer / column                                         | Role and meaning                                                                  | Required boundary and remaining work                                                                                                                                                                                                                                                                                      |
@@ -217,17 +233,17 @@ focused regression coverage is in
 [`test/models/logout_transaction_test.rb`](../../test/models/logout_transaction_test.rb) and
 [`test/models/enforcement_case_public_id_test.rb`](../../test/models/enforcement_case_public_id_test.rb).
 
-`SignInSequenceCarrier` stores a separate surface-scoped workflow `id` in the Rails session. New
-sequence starts use `PublicId.generate`; this value is an internal workflow identity and is not a
-provider/protocol value, secret, database primary key or public API reference. The session key is
-surface-scoped; the removed shared-key compatibility reader is not supported.
+**Historical note (2026-11-13):** Governance no longer runs authentication ceremonies. The unused
+`SignInSequenceCarrier` and `SignInSequence` implementation was removed; no current session key or
+identifier contract exists for that workflow. The old sequence inventory remains historical under
+the superseded browser-flow-state-cookies specification.
 
 The `SocialCeremonyResultAdapter` reference is a short-lived Valkey receiver capability, not a
-durable resource identity. It carries no raw result code and is looked up only through its
-purpose-, surface-, flow- and generation-bound store. Its browser receiver shares the strict UUID-v4
-admission transport pattern, so existing UUID references remain readable and new format changes
-require a consumer-specific transport decision. It must not be treated as public resource IDs, substituted for the
-signed/result evidence, or resolved through a cross-surface fallback. A future bounded format
+durable resource identity. It carries no raw result code and is looked up only through its purpose-,
+surface-, flow- and generation-bound store. Its browser receiver shares the strict UUID-v4 admission
+transport pattern, so existing UUID references remain readable and new format changes require a
+consumer-specific transport decision. It must not be treated as public resource IDs, substituted for
+the signed/result evidence, or resolved through a cross-surface fallback. A future bounded format
 transition would need to update the matching receiver validation and its exact legacy reader
 together; the standard NanoID rule alone is not authority to reformat these capability values.
 
@@ -249,10 +265,10 @@ and
 consumer-specific transition. New candidates use `PublicId.generate` (NanoID-21), while existing
 UUID-v4 rows remain readable to the model-level lookup. The former Social link-completion controller
 used the candidate model's strict NanoID-or-legacy-UUID pattern; no local route or callback consumer
-remains. This model contract does not widen the shared `AuthAdmissionBinding::REFERENCE_PATTERN`
-used by unrelated admissions. Provider subject values,
-OAuth/OIDC state, callback payloads and result identities retain separate contracts, and no old
-candidate is rewritten merely to change its format. The retained model contract is covered by
+remains. The former shared admission-reference pattern is retired with Governance's unreachable
+admission implementation. Provider subject values, OAuth/OIDC state, callback payloads and result
+identities retain separate contracts, and no old candidate is rewritten merely to change its format.
+The retained model contract is covered by
 [`test/models/model_only_line_coverage_test.rb`](../../test/models/model_only_line_coverage_test.rb)
 and
 [`test/models/concerns/social_ceremony_transactionable_test.rb`](../../test/models/concerns/social_ceremony_transactionable_test.rb).

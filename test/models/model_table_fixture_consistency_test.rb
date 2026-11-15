@@ -34,9 +34,13 @@ class ModelTableFixtureConsistencyTest < ActiveSupport::TestCase
         "#{cell.record_prefix}IdentityBinding" => "rp_identity_bindings",
         "#{cell.record_prefix}OpSessionBinding" => "rp_op_session_bindings",
         "#{cell.record_prefix}Session" => "rp_sessions",
-        "#{cell.record_prefix}CallbackState" => "rp_callback_states",
+        "#{cell.record_prefix}ConsumedIdTokenJti" => "rp_consumed_id_token_jtis",
+        "#{cell.record_prefix}SessionAuthenticationEvidence" => "rp_session_authentication_evidences",
         "#{cell.record_prefix}EventReceipt" => "rp_event_receipts",
       }.each { |model, table| mapping[model] = table }
+      if cell.connection == "rp_tech_org"
+        mapping["#{cell.record_prefix}CallbackState"] = "rp_callback_states"
+      end
     end,
   ).freeze
 

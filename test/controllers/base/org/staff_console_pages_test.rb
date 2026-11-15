@@ -59,7 +59,7 @@ class Base::Org::StaffConsolePagesTest < ActionDispatch::IntegrationTest
     end
   end
 
-  test "Support landing cannot invent an owner response when Access actor resolution is unavailable" do
+  test "Support landing renders only the areas allowed by Governance capabilities" do
     OperatorCapabilityGrant.create!(
       operator: @operator, origin: "bootstrap",
       capability: OperatorCapabilityGrant::SUPPORT_CONSOLE_READ,
@@ -69,11 +69,12 @@ class Base::Org::StaffConsolePagesTest < ActionDispatch::IntegrationTest
     assert OrgConsolePolicy.new(:org_console, user: @operator).apply(:support?)
     get base_org_support_index_url(ri: "jp", host: @host), headers: @headers
 
-    assert_response :service_unavailable
-    assert_not response.parsed_body.key?("props")
+    assert_response :success
+    assert_equal "base/org/support/index", inertia_component
+    assert_empty inertia_props.fetch("sections").sole.fetch("items")
   end
 
-  test "selected local RP session survives unavailable dashboard identity without an invented persona response" do
+  test "selected local RP session renders its Governance identity without changing selection" do
     BaseSelectorBootstrapAuthority.call(surface: :org, principal: @operator)
     pairs = @headers.fetch("Cookie").split("; ").to_h { |pair| pair.split("=", 2) }
     session = RpBaseOrgSession.includes(:op_session_binding).find_by!(public_id: Rack::Utils.unescape(pairs.fetch(OidcRpBrowserCredentialContract::SESSION_COOKIE)))
@@ -82,7 +83,8 @@ class Base::Org::StaffConsolePagesTest < ActionDispatch::IntegrationTest
     before = selection.reload.attributes
     get base_org_dashboard_url(ri: "jp", host: @host), headers: @headers, as: :json
 
-    assert_response :service_unavailable
+    assert_response :success
+    assert_equal "base/org/dashboards/show", inertia_component
     assert_equal before, selection.reload.attributes
     assert_equal 1, RpBaseOrgSessionSelection.where(rp_session_id: session.id).count
   end

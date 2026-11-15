@@ -4,6 +4,9 @@
 module BaseSettingsWithdrawalFlow
   extend ActiveSupport::Concern
 
+  # The including controller provides the verified current session through
+  # `current_session_public_id` and `current_session`.
+
   private
 
   def render_withdrawal_entry(actor)
@@ -139,9 +142,10 @@ module BaseSettingsWithdrawalFlow
   end
 
   def withdrawal_current_session_public_id
-    current_session_public_id.presence ||
-      instance_variable_get(:@current_token_public_id).presence ||
-      (current_session.public_id if respond_to?(:current_session, true))
+    session_public_id = current_session_public_id.presence || current_session&.public_id
+    return session_public_id if session_public_id.present?
+
+    raise AccessOpDataUnavailableError
   end
 
   def assign_status_view_state(actor)

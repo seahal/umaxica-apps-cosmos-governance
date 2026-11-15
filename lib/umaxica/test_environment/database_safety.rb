@@ -38,19 +38,6 @@ module Umaxica
         true
       end
 
-      def report(configurations: nil, environment: ENV, rails_environment: Rails.env)
-        verify!(configurations:, environment:, rails_environment:)
-        effective_configurations = configurations || effective_test_configurations
-        effective_configurations.map do |configuration|
-          {
-            name: configuration.name,
-            database: configuration.database,
-            host: configuration.configuration_hash[:host],
-            port: configuration.configuration_hash[:port],
-          }
-        end
-      end
-
       # Verify the database catalog before a test preparation task mutates any schema. The
       # configuration check above proves that Rails will address test-prefixed names on the
       # expected host; this check proves those names exist on the same PostgreSQL server and that

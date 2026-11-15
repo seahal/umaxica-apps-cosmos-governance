@@ -126,4 +126,38 @@ class ClientPasskeyPolicyTest < ActiveSupport::TestCase
 
     assert_not policy.destroy?
   end
+
+  test "a class-level show decision allows only a token subject matching the client" do
+    client = Client.new(security_mode_id: SecurityModeConfigurable::NORMAL, id: 1)
+    Actor.install_context!(
+      authz: Actor::Authz.new(policy_user: client, token_claims: { "sub" => client.id.to_s }, surface: :app),
+    )
+    policy = ClientPasskeyPolicy.new(nil, user: client)
+
+    assert policy.apply(:show?)
+  ensure
+    Actor.reset
+  end
+
+  test "a class-level show decision rejects a different token subject" do
+    client = Client.new(security_mode_id: SecurityModeConfigurable::NORMAL, id: 1)
+    Actor.install_context!(
+      authz: Actor::Authz.new(policy_user: client, token_claims: { "sub" => "2" }, surface: :app),
+    )
+    policy = ClientPasskeyPolicy.new(nil, user: client)
+
+    assert_not policy.apply(:show?)
+  ensure
+    Actor.reset
+  end
+
+  test "a class-level show decision denies when the token subject is absent" do
+    client = Client.new(security_mode_id: SecurityModeConfigurable::NORMAL, id: 1)
+    Actor.install_context!(authz: Actor::Authz.new(policy_user: client, token_claims: nil, surface: :app))
+    policy = ClientPasskeyPolicy.new(nil, user: client)
+
+    assert_not policy.apply(:show?)
+  ensure
+    Actor.reset
+  end
 end

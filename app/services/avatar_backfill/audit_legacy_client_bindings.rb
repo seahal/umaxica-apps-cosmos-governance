@@ -33,6 +33,7 @@ module AvatarBackfill
       @output_path = output_path
     end
 
+    public
     def call
       details = legacy_avatars.map { |avatar| audit_avatar(avatar) }
       summary = build_summary(details)

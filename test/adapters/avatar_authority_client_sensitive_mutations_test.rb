@@ -15,21 +15,12 @@ class AvatarAuthorityClientSensitiveMutationsTest < ActiveSupport::TestCase
         requests << [verb, uri, body, headers]
         response
       end
-    url = nil
-    assertion =
-      lambda do |client_id:, token_url:|
-        url = token_url
-
-        assert_equal "base-app-ww", client_id
-        "test-client-assertion"
-      end
-
-    OidcClientAssertionJwt.stub(:issue, assertion) do
+    BaseApiAuthorityTokenIssuer.stub(:issue, "test-governance-token") do
       OutboundHttp::Connection.stub(:build, connection) do
         connection.stub(:run_request, request) do
           TestSupport::OutboundHttpGuard.allow do
             result = AvatarAuthorityClient.new(
-              surface: "app", access_token: "test-access-token", persona: "persona-reference",
+              surface: "app", rp_session: RpBaseAppSession.new, persona: "persona-reference",
             ).accept_transfer(ref, transfer_kind: "app")
 
             assert_equal :forbidden, result.status
@@ -45,9 +36,8 @@ class AvatarAuthorityClientSensitiveMutationsTest < ActiveSupport::TestCase
     assert_equal "/api/v0/avatar/app/ownership-transfers/#{ERB::Util.url_encode(ref)}/accept", uri.path
     assert_nil uri.query
     assert_nil uri.fragment
-    assert_equal url, uri.to_s
-    assert_equal "Bearer test-access-token", headers.fetch("Authorization")
-    assert_equal "test-client-assertion", headers.fetch("X-Client-Assertion")
+    assert_equal "Bearer test-governance-token", headers.fetch("Authorization")
+    assert_not headers.key?("X-Client-Assertion")
     assert_equal "app", Rack::Utils.parse_nested_query(body).fetch("transfer_kind")
   end
 
@@ -62,12 +52,12 @@ class AvatarAuthorityClientSensitiveMutationsTest < ActiveSupport::TestCase
         response
       end
 
-    OidcClientAssertionJwt.stub(:issue, "test-client-assertion") do
+    BaseApiAuthorityTokenIssuer.stub(:issue, "test-governance-token") do
       OutboundHttp::Connection.stub(:build, connection) do
         connection.stub(:run_request, request) do
           TestSupport::OutboundHttpGuard.allow do
             result = AvatarAuthorityClient.new(
-              surface: "org", access_token: "test-access-token", persona: "persona-reference",
+              surface: "org", rp_session: RpBaseOrgSession.new, persona: "persona-reference",
             ).cancel_transfer("transfer-reference", transfer_kind: "org")
 
             assert_equal :ok, result.status
@@ -90,12 +80,12 @@ class AvatarAuthorityClientSensitiveMutationsTest < ActiveSupport::TestCase
         responses.shift
       end
 
-    OidcClientAssertionJwt.stub(:issue, "test-client-assertion") do
+    BaseApiAuthorityTokenIssuer.stub(:issue, "test-governance-token") do
       OutboundHttp::Connection.stub(:build, connection) do
         connection.stub(:run_request, request) do
           TestSupport::OutboundHttpGuard.allow do
             client = AvatarAuthorityClient.new(
-              surface: "org", access_token: "test-access-token", persona: "persona-reference",
+              surface: "org", rp_session: RpBaseOrgSession.new, persona: "persona-reference",
             )
 
             assert_equal :ok, client.destroy_selected_avatar.status

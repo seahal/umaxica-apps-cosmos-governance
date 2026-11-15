@@ -28,30 +28,6 @@ module EnforcementCaseApplicable
 
   class InvalidStateTransitionError < StandardError; end
 
-  # FIXME: Violates Umaxica/NoConcernInclusionHooks; move the declarations in this block into each class that includes this concern.
-  included do
-    validates :public_id, presence: true, uniqueness: true, length: { maximum: 21 }
-    validates :kind, presence: true, inclusion: { in: KINDS }
-    validates :state, presence: true, inclusion: { in: STATES }
-    validates :duration_mode, presence: true, inclusion: { in: DURATION_MODES }
-    validates :visibility, presence: true, inclusion: { in: VISIBILITIES }
-    validates :release_mode, presence: true, inclusion: { in: RELEASE_MODES }
-    validates :end_reason, inclusion: { in: END_REASONS }, allow_nil: true
-    # Reused from AdministrativeAccessLockable rather than redefined: the
-    # operational vocabulary for "why did an operator restrict this account"
-    # does not change because the scope widened to Unified Enforcement.
-    validates :reason_code, presence: true, inclusion: { in: AdministrativeAccessLockable::ADMIN_LOCK_REASON_CODES }
-    validates :principal_public_id, presence: true
-    validates :applied_by_operator_public_id, presence: true
-    validates :effective_at, presence: true
-    validate :public_id_immutable_after_create, on: :update
-
-    before_validation :assign_public_id, on: :create
-    before_validation :refresh_generated_public_id_after_collision, on: :create
-    before_create :assign_public_id
-    around_create :retry_generated_public_id_collision
-  end
-
   class_methods do
     def in_force
       where(state: "active", ended_at: nil)

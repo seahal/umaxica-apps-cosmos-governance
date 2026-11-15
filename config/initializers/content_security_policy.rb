@@ -21,6 +21,13 @@ Rails.application.configure do
       ]
     # The jump gateway is the first-party redirect broker that validates signed `rt` tokens.
     jump_form_hosts = [boot_config.fetch(:jump).origin.to_s]
+    # Browsers apply form-action to every redirect that follows a submission, not only to the form
+    # target. POST /sign answers 303 to Jump, and Jump answers 302 to the OP's authorization
+    # endpoint, so the OP origin must be listed or the browser drops the navigation silently.
+    op_form_hosts = [boot_config.fetch(:hosts).visa_service.to_s, boot_config.fetch(:hosts).visa_staff.to_s]
+    # The OP then sends the browser through Jump to its Auth sign-in ceremony, so the same rule
+    # requires the Auth origins.
+    auth_form_hosts = [boot_config.fetch(:hosts).auth_service.to_s, boot_config.fetch(:hosts).auth_staff.to_s]
 
     policy.default_src(:self)
     policy.base_uri(:self)
@@ -63,6 +70,8 @@ Rails.application.configure do
       :self,
       *base_form_hosts,
       *jump_form_hosts,
+      *op_form_hosts,
+      *auth_form_hosts,
     )
     policy.frame_ancestors(:self)
     policy.frame_src(:self, "https://challenges.cloudflare.com")

@@ -43,6 +43,7 @@ class AppEnforcementIdentifierEffect < AppPrincipalRecord
     # must happen before any anonymization step runs, since anonymization
     # nulls the credential digest the raw value can no longer be recovered
     # from (D6, ordering constraint).
+    public
     def build_for_email(value:, **attrs)
       digest = EnforcementIdentifierDigest.for_email(realm: "app", value: value)
       return nil unless digest

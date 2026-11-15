@@ -5,11 +5,13 @@ class WithdrawalPersonalDataAnonymizer
   def self.call(actor:)
     new(actor:).call
   end
+  public_class_method :call
 
   def initialize(actor:)
     @actor = actor
   end
 
+  public
   def call
     anonymize_client if actor.is_a?(Client)
     # Explicit, ordered cleanup of non-audit children that live in other

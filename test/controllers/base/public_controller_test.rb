@@ -233,13 +233,13 @@ class Base::App::TestCsrfController
 
   def load_jump_rt_env!
     @jump_rt_env_originals ||= {}
-    jump_rt_key = Base64.strict_encode64(OpenSSL::PKey::EC.generate("secp384r1").to_der)
+    kid = "governance-test"
+    jump_rt_key = Base64.strict_encode64(OpenSSL::PKey::RSA.generate(3072).private_to_der)
     {
       "PUBLIC_JUMP_GATEWAY_URL" => "https://jump.umaxica.net",
-      "JWT_BASE_APP_ACTIVE_KID" => "sign-app-test",
-      "JWT_BASE_APP_PRIVATE_KEY" => jump_rt_key,
-      "JWT_BASE_ORG_ACTIVE_KID" => "sign-org-test",
-      "JWT_BASE_ORG_PRIVATE_KEY" => jump_rt_key,
+      "AUTH_JWT_ACTIVE_KID" => kid,
+      "AUTH_JWT_PRIVATE_KEYSET" => JSON.generate(kid => jump_rt_key),
+      "AUTH_JWT_PUBLIC_KEYSET" => JSON.generate(keys: []),
     }.each do |key, value|
       @jump_rt_env_originals[key] = ENV[key] unless @jump_rt_env_originals.key?(key)
       ENV[key] = value
@@ -368,12 +368,12 @@ class Base::App::BasePublicControllerTest
 
   def load_jump_rt_env!
     @jump_rt_env_originals ||= {}
-    jump_rt_key = Base64.strict_encode64(OpenSSL::PKey::EC.generate("secp384r1").to_der)
-    %w(BASE_APP BASE_ORG).each do |namespace|
-      ENV["JWT_#{namespace}_ACTIVE_KID"] = "#{namespace.downcase.tr("_", "-")}-test"
-      ENV["JWT_#{namespace}_PRIVATE_KEY"] = jump_rt_key
-    end
+    kid = "governance-test"
+    jump_rt_key = Base64.strict_encode64(OpenSSL::PKey::RSA.generate(3072).private_to_der)
     ENV["PUBLIC_JUMP_GATEWAY_URL"] = "https://jump.umaxica.net"
+    ENV["AUTH_JWT_ACTIVE_KID"] = kid
+    ENV["AUTH_JWT_PRIVATE_KEYSET"] = JSON.generate(kid => jump_rt_key)
+    ENV["AUTH_JWT_PUBLIC_KEYSET"] = JSON.generate(keys: [])
     JitSecurityJwtRegistry.reload! if defined?(JitSecurityJwtRegistry)
   end
 

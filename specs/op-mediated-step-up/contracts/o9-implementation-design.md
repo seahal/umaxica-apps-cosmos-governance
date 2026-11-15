@@ -1,9 +1,15 @@
 # O-9 implementation design
 
-Status: working implementation design for the accepted revision 13; not evidence of implemented
-behavior. This document fixes the protocol choices needed by unit 6b. Revision 13 remains the
-governing contract. Existing bootstrap and legacy admission flows retain their own entry and
-lifecycle.
+Status: historical implementation design for accepted revision 13; not evidence of implemented
+behavior. This document fixes the protocol choices once considered for unit 6b. Revision 13 remains
+the historical cross-service design record. Governance has no local bootstrap or legacy admission
+flow; any future handoff must follow the current owner boundary.
+
+> **Governance runtime status (2026-11-13):** Access owns authentication ceremony execution, and
+> Governance runs none. The Governance legacy admission/store code described by this design was
+> rechecked for application callers and removed where unreachable. This document remains a
+> historical cross-service design proposal; it does not assert that Governance has those admission
+> paths today.
 
 ## Owners and persistent records
 

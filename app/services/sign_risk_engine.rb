@@ -16,6 +16,7 @@ class SignRiskEngine
       score_for_user(user_id, window_start)
     end
   end
+  public_class_method :score
 
   def self.score_for_user(user_id, window_start)
     scope = ClientOccurrence
@@ -45,6 +46,7 @@ class SignRiskEngine
     ENV.fetch("IP_ANOMALY_REVOKE_ENABLED", "false") == "true" ||
       !!Rails.configuration.try(:x).try(:ip_anomaly_revoke).try(:enabled)
   end
+  public_class_method :ip_anomaly_revoke_enabled?
 
   def self.evaluate_rules(scope)
     # Rule 1: Refresh Token Reuse Detected -> 100

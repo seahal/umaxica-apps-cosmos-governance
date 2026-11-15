@@ -13,6 +13,10 @@ module Base
 
         AUTHENTICATION_MODE = :open
 
+        layout "base/app/inertia"
+        inertia_share chrome: -> { surface_chrome }
+        inertia_share clear_history: -> { session[:inertia_clear_history] == true }
+
         declare_authentication_mode! :open
 
         before_action :withdrawal_ceremony_required!, only: %i(edit create destroy)
@@ -22,6 +26,9 @@ module Base
         before_action :authenticate_browser_rp!, only: %i(new update)
         before_action :authorize_withdrawal!, only: %i(new update)
         before_action :authorize_withdrawal_ceremony!, only: %i(edit create destroy)
+
+        public
+
         def new
           render_withdrawal_entry(current_client)
           render_withdrawal_new unless performed?

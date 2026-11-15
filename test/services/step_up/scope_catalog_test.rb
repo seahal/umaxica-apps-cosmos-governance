@@ -56,36 +56,17 @@ class StepUpScopeCatalogTest < ActiveSupport::TestCase
     end
   end
 
-  test "later step up scopes remain registered" do
-    assert StepUpScopeCatalog::APP.key?("social_link")
-    assert StepUpScopeCatalog::ORG.key?("operator_lifecycle")
-    assert_match StepUpScopeCatalog::ORG.fetch("operator_lifecycle"), "/identity/withdrawal?ri=jp"
-    assert_match StepUpScopeCatalog::ORG.fetch("operator_lifecycle"), "/settings/operator_lifecycle_requests"
-  end
-
-  test "social link scope is offered only on app and matches its provider settings pages" do
-    app_pattern = StepUpScopeCatalog::APP.fetch("social_link")
-
-    assert_match app_pattern, "/settings/google"
-    assert_match app_pattern, "/settings/google/edit?ri=jp"
-    assert_match app_pattern, "/settings/apple?ri=jp"
-    assert_match app_pattern, "/settings/apple/edit"
-    assert_no_match app_pattern, "/social/auth/google_app/continue"
-    assert_no_match app_pattern, "/settings/emails"
-
+  test "social sign-in scopes are absent after ceremony ownership moved to Access" do
+    assert_not StepUpScopeCatalog::APP.key?("social_link")
+    assert_not StepUpScopeCatalog::APP.key?("social_unlink")
     assert_not StepUpScopeCatalog::ORG.key?("social_link")
     assert_not StepUpScopeCatalog::ORG.key?("social_unlink")
   end
 
-  test "social unlink scope matches only provider settings pages" do
-    app_pattern = StepUpScopeCatalog::APP.fetch("social_unlink")
-
-    assert_match app_pattern, "/settings/google"
-    assert_match app_pattern, "/settings/google/edit?ri=jp"
-    assert_match app_pattern, "/settings/apple"
-    assert_match app_pattern, "/settings/apple/edit"
-    assert_no_match app_pattern, "/social/google/disconnection"
-    assert_no_match app_pattern, "/settings/emails"
+  test "later step up scopes remain registered" do
+    assert StepUpScopeCatalog::ORG.key?("operator_lifecycle")
+    assert_match StepUpScopeCatalog::ORG.fetch("operator_lifecycle"), "/identity/withdrawal?ri=jp"
+    assert_match StepUpScopeCatalog::ORG.fetch("operator_lifecycle"), "/settings/operator_lifecycle_requests"
   end
 
   test "settings birthdate scope only matches the birthdate path" do

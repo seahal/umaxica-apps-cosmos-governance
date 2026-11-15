@@ -56,6 +56,15 @@ module Preference
                    PreferenceJwtConfiguration.leeway_seconds
     end
 
+    test "the shared repository keyset does not require a retired COM key setting" do
+      setting = "PREFERENCE_COM_JWT_REVOKED_KIDS"
+      previous_value = ENV.delete(setting)
+
+      assert_equal "https://www.umaxica.com", PreferenceJwtConfiguration.com_issuer
+    ensure
+      ENV[setting] = previous_value if previous_value
+    end
+
     test "parse_header decodes token header" do
       token = JWT.encode({ foo: "bar" }, nil, "none", { kid: "test_kid" })
       header = PreferenceJwtConfiguration.parse_header(token)
@@ -225,7 +234,7 @@ class Preference::BaseTest
 
   def load_jump_rt_env!
     @jump_rt_env_originals ||= {}
-    jump_rt_key = Base64.strict_encode64(OpenSSL::PKey::EC.generate("secp384r1").to_der)
+    jump_rt_key = Base64.strict_encode64(OpenSSL::PKey::RSA.generate(3072).to_der)
     %w(FOREIGN_APP FOREIGN_ORG BASE_APP BASE_ORG).each do |namespace|
       ENV["JWT_#{namespace}_ACTIVE_KID"] = "#{namespace.downcase.tr("_", "-")}-test"
       ENV["JWT_#{namespace}_PRIVATE_KEY"] = jump_rt_key

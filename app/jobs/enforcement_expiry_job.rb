@@ -11,6 +11,7 @@ class EnforcementExpiryJob < ApplicationJob
 
   CASE_CLASSES = [AppEnforcementCase, OrgEnforcementCase].freeze
 
+  public
   def perform(batch_size: 200)
     now = Time.current
     CASE_CLASSES.each do |case_class|

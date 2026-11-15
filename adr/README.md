@@ -4,10 +4,10 @@ This directory stores accepted architecture and design decisions.
 
 Local-surface reset note (2026-11-10): the owner-approved hard reset keeps Base app/com/org, Tech,
 and operator tools as this repository's local surfaces. Local Auth, Visa, Core, Warp, Palm, Edit,
-Press (Docs, News, Help, and Info), and Guid routes/controllers are removed. Base.com remains only for Base
-com routes that are intentionally retained. These local route changes do not by themselves retire
-external identity/OIDC contracts, client registrations, models, databases, or persisted data. ADRs
-with route assignments superseded by the reset carry dated amendments; use current code and
+Press (Docs, News, Help, and Info), and Guid routes/controllers are removed. Base.com remains only
+for Base com routes that are intentionally retained. These local route changes do not by themselves
+retire external identity/OIDC contracts, client registrations, models, databases, or persisted data.
+ADRs with route assignments superseded by the reset carry dated amendments; use current code and
 `docs/reference/subdomains.md` for local route ownership.
 
 Current Rails naming note (2026-09-25): references to the Rails `Side`/`Wide` surface in older
@@ -59,9 +59,10 @@ stated per record):
   redirected, unsupported `prompt` a direct 400, per-realm `prompt_values_supported`,
   `invalid_grant` for mismatches and PKCE failures, boot-time registration validation.
 - [RP OIDC state and return target](rp-oidc-state-and-return-target.md) — **RP Rails slice
-  implemented 2026-10-24 (WU-39).** ES384 JWS `state` (30 minutes), one pending entry per browser
-  and RP, path-only `target_link_uri` replacing the RP `pt`, Cancel and abnormal endings on
-  `GET /sign/interruption`; external Jump/Edge and deployment evidence remain separate.
+  implemented 2026-10-24 (WU-39).** PS256 JWS `state` (30 minutes) on Governance's shared key set,
+  one pending entry per browser and RP, path-only `target_link_uri` replacing the RP `pt`, Cancel
+  and abnormal endings on `GET /sign/interruption`; external Jump/Edge and deployment evidence
+  remain separate.
 
 Current authentication Security Mode decision (accepted; not implemented):
 
@@ -124,7 +125,10 @@ Current identity authority decision:
   2026-10-24)**; Auth creates pending principals and runs the shared Finalization for all six
   sign-up paths, the principal's registered status is the decisive commit before the curfew, and
   Google/Apple sign-up ends in canonical Sign In First. Supersedes the social-commit-at-Base parts
-  of `adr/sign-up-authentication-handoff-and-social-rt.md`.
+  of `adr/sign-up-authentication-handoff-and-social-rt.md`. **Split amendment accepted (owner,
+  2026-11-15), design only:** Governance owns the pending registration (`ClientRegistration`) and
+  completes it in one `app_zenith` transaction from browser-carried PS256 handoffs; owner items O-1
+  to O-6 are decided as recommended; nothing implements it yet.
 
 - [Sign-up One-Day Minimum Age and Feature-Level Age Restrictions](sign-up-one-day-minimum-age-and-feature-level-age-restrictions.md)
   — **Accepted (2026-10-28); not implemented.** `.app` and `.org` sign-up accept a birthdate at
@@ -308,6 +312,8 @@ Superseded IdP/RP-centered ADRs:
 - `adr/split-into-regional-and-global-repos.md`
 - `adr/acme-rp-boundary-naming.md`
 - `adr/oidc-claims-decision.md`
+- `adr/base-api-authority-governance-issued-token.md` — Base API calls use a short-lived
+  Governance-signed token derived from the RP session, not an Access-issued Access Token.
 - `adr/oidc-authn-hardening-implementation-decisions.md`
 - `adr/refresh-revoke-aal-downgrade-and-replay-hardening.md`
 - `adr/logout-primitive-and-composition.md`

@@ -18,5 +18,7 @@ class AvatarOwnershipStatus < AvatarRecord
   DELETED = 4
   DEFAULTS = [NOTHING, ACTIVE, INACTIVE, DELETED].freeze
 
+  self.record_timestamps = false
+
   has_many :avatar_ownership_periods, dependent: :restrict_with_error
 end

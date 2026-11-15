@@ -8,11 +8,6 @@ module WithdrawalCeremonyReentry
   REENTRY_SESSION_KEY = :withdrawal_ceremony_reentry
   GENERIC_MESSAGE = I18n.t("withdrawal_ceremony_reentry.generic_message").freeze
 
-  # FIXME: Violates Umaxica/NoConcernInclusionHooks; move the declarations in this block into each class that includes this concern.
-  included do
-    helper_method :withdrawal_reentry_generic_message
-  end
-
   public
 
   def new

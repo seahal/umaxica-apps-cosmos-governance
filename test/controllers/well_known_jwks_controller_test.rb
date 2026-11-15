@@ -50,9 +50,9 @@ class WellKnownJwksControllerTest < ActionDispatch::IntegrationTest
       key = response.parsed_body.fetch("keys").first
 
       assert_equal JitSecurityJwtRegistry.surface(namespace).current_kid, key.fetch("kid")
-      assert_equal "EC", key.fetch("kty")
-      assert_equal "P-384", key.fetch("crv")
-      assert_equal "ES384", key.fetch("alg")
+      assert_equal "RSA", key.fetch("kty")
+      assert_operator JWT::JWK.import(key).public_key.n.num_bits, :>=, 3_072
+      assert_equal "PS256", key.fetch("alg")
       assert_equal "sig", key.fetch("use")
       assert_not_equal "none", key.fetch("alg")
       assert_not_includes key.keys, "d"
@@ -74,31 +74,15 @@ class WellKnownJwksControllerTest < ActionDispatch::IntegrationTest
   end
 
   def docker_core_jwt_env
-    key = Base64.strict_encode64(OpenSSL::PKey::EC.generate("secp384r1").to_der)
-    env = {
+    key = Base64.strict_encode64(OpenSSL::PKey::RSA.generate(3072).to_der)
+    {
       "AUTH_JWT_ACTIVE_KID" => "auth-test",
       "AUTH_JWT_ISSUER" => "auth-test-issuer",
       "AUTH_JWT_PRIVATE_KEYSET" => JSON.generate("auth-test" => key),
       "AUTH_JWT_PUBLIC_KEYSET" => JSON.generate(keys: []),
       "PREFERENCE_COM_JWT_ISSUER" => "https://www.umaxica.com",
       "PREFERENCE_COM_JWT_AUDIENCE" => "com",
-      "PREFERENCE_COM_JWT_REVOKED_KIDS" => "",
     }
-    {
-      "PREFERENCE_APP" => "preference-app-test",
-      "PREFERENCE_COM" => "preference-com-test",
-      "PREFERENCE_ORG" => "preference-org-test",
-    }.each do |prefix, kid|
-      preference_key = Base64.strict_encode64(OpenSSL::PKey::EC.generate("secp384r1").to_der)
-      env["#{prefix}_JWT_ACTIVE_KID"] = kid
-      env["#{prefix}_JWT_PRIVATE_KEYSET"] = JSON.generate(kid => preference_key)
-      env["#{prefix}_JWT_PUBLIC_KEYSET"] = JSON.generate(keys: [])
-    end
-    ENDPOINTS.each_with_object(env) do |(_name, namespace, _host), jwt_env|
-      jwt_env["JWT_#{namespace}_ACTIVE_KID"] = "#{namespace.downcase.tr("_", "-")}-test"
-      jwt_env["JWT_#{namespace}_PRIVATE_KEY"] = key
-      jwt_env["JWT_#{namespace}_PUBLIC_KEYSET"] = JSON.generate(keys: [])
-    end
   end
   private
 

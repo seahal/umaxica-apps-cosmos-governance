@@ -16,7 +16,6 @@ module PreferenceJwtConfiguration
   end
 
   def self.com_issuer
-    ENV.fetch("PREFERENCE_COM_JWT_REVOKED_KIDS")
     record = JitSecurityJwtRegistry.issuer("preference_com")
     unless record.issuer.present? && record.audiences == ["com"] && record.current_kid.present?
       raise JitSecurityJwtRegistry::ConfigurationError, "com preference JWT issuer, audience or active key is missing"

@@ -76,7 +76,7 @@ class AuthenticationTokenServiceTest < ActiveSupport::TestCase
       "scope" => "authenticated domain:client read:self write:self",
     }
     token = JWT.encode(
-      payload, AuthenticationJwtConfiguration.private_key, "ES384",
+      payload, AuthenticationJwtConfiguration.private_key, "PS256",
       { "typ" => "at+jwt", "kid" => JitSecurityJwtKeyring.active_kid },
     )
 
@@ -105,7 +105,7 @@ class AuthenticationTokenServiceTest < ActiveSupport::TestCase
       "scope" => "authenticated domain:client read:self write:self",
     }
     token = JWT.encode(
-      payload, AuthenticationJwtConfiguration.private_key, "ES384",
+      payload, AuthenticationJwtConfiguration.private_key, "PS256",
       { "typ" => "at+jwt", "kid" => JitSecurityJwtKeyring.active_kid },
     )
 

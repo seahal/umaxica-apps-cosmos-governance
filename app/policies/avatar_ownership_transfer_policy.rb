@@ -2,6 +2,7 @@
 # frozen_string_literal: true
 
 class AvatarOwnershipTransferPolicy < ApplicationPolicy
+  public
   def create?
     return false unless record == AvatarOwnershipTransfer
 

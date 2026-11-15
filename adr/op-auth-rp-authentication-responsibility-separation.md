@@ -6,6 +6,12 @@
 implementation details listed under Open Questions are not accepted specifications. This record
 changes documentation only and certifies no implementation, deployment, or test result.
 
+> **Cosmos ownership amendment (2026-11-13, owner):** Access owns the OP data and executes all
+> authentication ceremonies. This supersedes the `Auth` physical-service assignments below for
+> Governance runtime ownership. Governance remains an RP: its own RP state, authorization checks and
+> identity/credential records remain local. Access's new query/revocation APIs are not available in
+> this repository; affected OP-data paths fail closed until that contract is delivered.
+
 This ADR is the canonical decision for the three paths and their logical responsibility split. It
 partially supersedes the Base-as-physical-OP-and-self-RP model in
 [Base authority and self-RP separation](base-authority-and-self-rp-separation.md) and

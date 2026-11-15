@@ -228,6 +228,84 @@ class ClientTotpCredentialTest < ActiveSupport::TestCase
     end
   end
 
+  test "public status predicates distinguish lifecycle states and slot eligibility" do
+    cases = [
+      [ClientTotpCredentialStatus::ACTIVE, false, false, true, true],
+      [ClientTotpCredentialStatus::INACTIVE, true, false, false, true],
+      [ClientTotpCredentialStatus::REVOKED, false, false, false, false],
+      [ClientTotpCredentialStatus::DELETED, false, true, false, false],
+    ]
+
+    cases.each do |status_id, inactive, deleted, usable, slot_consuming|
+      credential = ClientTotpCredential.new(
+        user: @user,
+        user_identity_totp_credential_status_id: status_id,
+        private_key: @private_key,
+      )
+
+      assert_equal [inactive, deleted, usable, slot_consuming],
+                   [credential.inactive?, credential.deleted?, credential.usable?, credential.slot_consuming?]
+    end
+  end
+
+  test "a TOTP verification failure advances the counter and revokes at the configured limit" do
+    credential = ClientTotpCredential.create!(
+      user: @user,
+      user_identity_totp_credential_status_id: ClientTotpCredentialStatus::ACTIVE,
+      otp_attempts_count: ClientTotpCredential::MAX_CONSECUTIVE_FAILURES - 2,
+      private_key: @private_key,
+    )
+
+    assert_equal :failed, credential.record_totp_failure!
+    assert_equal ClientTotpCredential::MAX_CONSECUTIVE_FAILURES - 1, credential.reload.otp_attempts_count
+    assert_predicate credential, :active?
+
+    assert_equal :revoked, credential.record_totp_failure!
+    assert_equal ClientTotpCredential::MAX_CONSECUTIVE_FAILURES, credential.reload.otp_attempts_count
+    assert_predicate credential, :revoked?
+  end
+
+  test "a TOTP verification failure for a revoked credential is ignored" do
+    credential = ClientTotpCredential.create!(
+      user: @user,
+      user_identity_totp_credential_status_id: ClientTotpCredentialStatus::REVOKED,
+      otp_attempts_count: 4,
+      private_key: @private_key,
+    )
+
+    assert_equal :ignored, credential.record_totp_failure!
+    assert_equal 4, credential.reload.otp_attempts_count
+    assert_predicate credential, :revoked?
+  end
+
+  test "a successful TOTP verification records its time and resets failures" do
+    credential = ClientTotpCredential.create!(
+      user: @user,
+      user_identity_totp_credential_status_id: ClientTotpCredentialStatus::ACTIVE,
+      otp_attempts_count: 3,
+      private_key: @private_key,
+    )
+    accepted_at = Time.utc(2026, 11, 13, 12, 30)
+
+    assert credential.record_totp_success!(otp_at: accepted_at.to_i)
+    assert_equal Time.zone.at(accepted_at.to_i), credential.reload.last_otp_at
+    assert_equal 0, credential.otp_attempts_count
+  end
+
+  test "a successful TOTP verification cannot update an inactive credential" do
+    credential = ClientTotpCredential.create!(
+      user: @user,
+      user_identity_totp_credential_status_id: ClientTotpCredentialStatus::INACTIVE,
+      otp_attempts_count: 3,
+      last_otp_at: @last_otp_at,
+      private_key: @private_key,
+    )
+
+    assert_not credential.record_totp_success!(otp_at: Time.utc(2026, 11, 13, 12, 30).to_i)
+    assert_equal 3, credential.reload.otp_attempts_count
+    assert_equal @last_otp_at.to_i, credential.last_otp_at.to_i
+  end
+
   test "revoked status is terminal through the model write path" do
     record = ClientTotpCredential.create!(
       user: @user,

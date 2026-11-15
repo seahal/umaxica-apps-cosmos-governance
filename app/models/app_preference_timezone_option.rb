@@ -34,6 +34,8 @@ class AppPreferenceTimezoneOption < AppSettingRecord
     PACIFIC_HONOLULU,
   ].freeze
 
+  self.record_timestamps = false
+
   has_many :app_preference_timezones,
            class_name: "AppPreferenceTimezone",
            foreign_key: :option_id,
@@ -43,7 +45,9 @@ class AppPreferenceTimezoneOption < AppSettingRecord
   def self.ensure_defaults!
     insert_missing_fixed_ids!(DEFAULTS)
   end
+  public_class_method :ensure_defaults!
 
+  public
   def name
     case id
     when ETC_UTC then "Etc/UTC"

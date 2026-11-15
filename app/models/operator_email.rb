@@ -37,7 +37,29 @@
 
 class OperatorEmail < OrgPrincipalRecord
   include PublicId
+
+  after_initialize :initialize_email_otp_state
+  before_validation :generate_public_id, on: :create
+  before_validation :refresh_generated_public_id_after_collision, on: :create
+  before_validation :normalize_address_from_raw
+  before_validation :set_address_digests
+  before_create :generate_public_id
+  around_create :retry_public_id_collision
+  validate :public_id_immutable_after_create, on: :update
+  validates :public_id, presence: true, length: { is: PublicId::GENERATION_SIZE }, uniqueness: true
   include Email
+
+  scope :with_address, ->(value) do
+    digest = IdentifierBlindIndex.bidx_for_email(value, realm: identifier_hmac_realm)
+    digest.present? ? where(address_digest: digest) : none
+  end
+  validate :validate_email_address
+  validates :confirm_policy, acceptance: true, on: :create,
+                             unless: proc { |a| a.raw_address.blank? && a.pass_code.present? }
+  validates :pass_code, numericality: { only_integer: true },
+                        length: { is: 6 },
+                        presence: true,
+                        unless: proc { |a| a.pass_code.blank? && a.raw_address.present? }
   include EmailDeadIdentifierHistory
 
   include PromotionalEmailUnsubscribable
@@ -58,9 +80,7 @@ class OperatorEmail < OrgPrincipalRecord
   validates :address, presence: true, length: { maximum: 255 }
   validates :otp_attempts_count, presence: true, numericality: { only_integer: true }
   validates :staff_identity_email_status_id, numericality: { only_integer: true }
-  validates :address_digest, blind_index_uniqueness: { error_attribute: :address }, allow_blank: true
-
-  after_initialize :initialize_email_otp_state
+  validates :address_digest, blind_index_uniqueness: { error_attribute: :address }, allow_nil: true
 
   before_destroy :archive_dead_email_identifier, prepend: true
 
@@ -83,10 +103,6 @@ class OperatorEmail < OrgPrincipalRecord
 
   after_initialize do
     self.address ||= ""
-  end
-
-  def finalize_email_registration!(transaction:, code:, session_ref:)
-    raise AccessOpDataUnavailableError
   end
 
   def to_param

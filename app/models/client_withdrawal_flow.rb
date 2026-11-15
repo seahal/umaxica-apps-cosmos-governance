@@ -34,8 +34,53 @@
 #  fk_rails_...  (status_id => client_withdrawal_flow_statuses.id)
 #
 class ClientWithdrawalFlow < AppPrincipalRecord
+  include ::PublicId
+
+  before_validation :generate_public_id, on: :create
+  before_validation :refresh_generated_public_id_after_collision, on: :create
+  before_validation :ensure_withdrawal_flow_reference_defaults
+  before_validation :assign_default_status_id
+  before_create :generate_public_id
+  around_create :retry_public_id_collision
+  validate :public_id_immutable_after_create, on: :update
+  validates :public_id, presence: true, length: { is: PublicId::GENERATION_SIZE }, uniqueness: true
+
+  include Retainable
+
+  attribute :discard_at, :datetime, default: -> { Retainable::SENTINEL }
+  attribute :purge_eligible_at, :datetime, default: -> { Retainable::SENTINEL }
+  validates :discard_at, presence: true
+  validates :purge_eligible_at, presence: true
+  validate :retention_order_valid
+  validate :retention_times_not_before_created_at, on: :update
+  Retainable.register_host(self)
+
   include WithdrawalFlow
+
+  attribute :began_at, :datetime, default: -> { Time.current }
+  after_create :record_initial_withdrawal_event
+  validates :status_id, inclusion: { in: ->(record) { record.class::STATUS_IDS } }
+  validates :began_at, presence: true
+  validate :terminal_status_has_completed_at
+  validate :failed_status_has_failed_at
+  scope :recent_first, -> { order(created_at: :desc) }
+  scope :active,
+        -> do
+          where(status_id: status_ids_for("REQUESTED", "CLOSING", "DISCARDED"))
+            .where(arel_table[:discard_at].gt(Time.current))
+        end
+
+  include FlowBase
+
+  class << self
+    public
+
+    def cycle_status_column_name = :status_id
+  end
+
   include FlowWithdrawal
+
+  cycle_status_column :status_id
 
   STATUS_MODEL = ClientWithdrawalFlowStatus
   EVENT_MODEL = ClientWithdrawalFlowEvent

@@ -13,6 +13,7 @@ module CollectiveMembership
       @granted_by = granted_by
     end
 
+    public
     def call
       membership_class.transaction do
         raise DuplicateActiveMembership, "duplicate active membership" if duplicate_active_membership?

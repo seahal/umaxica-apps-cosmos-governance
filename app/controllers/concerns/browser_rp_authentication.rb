@@ -11,31 +11,8 @@ module BrowserRpAuthentication
   include RpCellLocalSession
 
   AccessState = Data.define(:status, :resource, :rp_session, :payload, :security_context)
-  AccessPolicyContext = Data.define(
-    :policy,
-    :options,
-    :controller_name,
-    :action_name,
-    :logged_in,
-    :current_resource_deactivated,
-  )
-
-  VALID_POLICIES = %i(deny_all public_strict auth_required guest_only).freeze
-  POLICY_AUTHENTICATION_MODES = {
-    deny_all: :deny_all,
-    public_strict: :open,
-    auth_required: :private,
-    guest_only: :guest,
-  }.freeze
-  AUTHENTICATION_MODE_POLICIES = {
-    bare: :public_strict,
-    deny_all: :deny_all,
-    guest: :guest_only,
-    private: :auth_required,
-    open: :public_strict,
-  }.freeze
   AUTHENTICATION_MODE_RULES = Concurrent::Map.new
-  ACCESS_POLICY_RULES = Concurrent::Map.new
+  BASE_RP_CLIENT_IDS = %w(base-app-ww base-org-ww).freeze
   AUTHENTICATION_REQUIRED_REASONS = {
     missing: "access_credential_missing",
     invalid: "access_credential_invalid",
@@ -50,24 +27,6 @@ module BrowserRpAuthentication
   class SkipNotAllowedError < StandardError; end
 
   class_methods do
-    def access_policy_rules
-      ACCESS_POLICY_RULES.fetch_or_store(self) { [] }
-    end
-
-    def access_policy(policy, only: nil, except: nil, **options)
-      policy = policy.to_sym
-      raise InvalidPolicyError, "Invalid policy: #{policy.inspect}" unless VALID_POLICIES.include?(policy)
-
-      rule = {
-        policy: policy,
-        only: Array(only).map(&:to_s).presence,
-        except: Array(except).map(&:to_s).presence,
-        options: options,
-      }
-      ACCESS_POLICY_RULES[self] = access_policy_rules + [rule]
-      declare_authentication_mode!(POLICY_AUTHENTICATION_MODES.fetch(policy), only: only, except: except, **options)
-    end
-
     def authentication_mode_rules
       AUTHENTICATION_MODE_RULES.fetch_or_store(self) { [] }
     end
@@ -127,48 +86,12 @@ module BrowserRpAuthentication
     browser_rp_access_state.resource
   end
 
-  def current_account
-    current_resource
-  end
-
   def current_client
     current_resource if browser_rp_resource_type.to_s == "client"
   end
 
   def current_operator
     current_resource if browser_rp_resource_type.to_s == "operator"
-  end
-
-  def active_client?
-    current_client&.active? || false
-  end
-
-  def active_operator?
-    current_operator&.active? || false
-  end
-
-  def logged_in_client?
-    current_client.present?
-  end
-
-  def logged_in_operator?
-    current_operator.present?
-  end
-
-  def am_i_client?
-    browser_rp_resource_type.to_s == "client"
-  end
-
-  def am_i_user?
-    am_i_client?
-  end
-
-  def am_i_operator?
-    browser_rp_resource_type.to_s == "operator"
-  end
-
-  def am_i_staff?
-    am_i_operator?
   end
 
   def logged_in?
@@ -236,33 +159,6 @@ module BrowserRpAuthentication
     end
   end
 
-  def access_policy_context(policy, options)
-    AccessPolicyContext.new(
-      policy: policy,
-      options: options,
-      controller_name: self.class.name,
-      action_name: action_name,
-      logged_in: browser_rp_authenticated?,
-      current_resource_deactivated: current_resource_deactivated_for_policy?,
-    )
-  end
-
-  def access_policy_allows?(rule, context)
-    allowed_to?(rule, context, with: Authentication::AccessPolicy)
-  end
-
-  def policy_for_authentication_mode(mode)
-    AUTHENTICATION_MODE_POLICIES.fetch(mode.to_sym)
-  rescue KeyError
-    raise InvalidPolicyError, "Unexpected authentication mode: #{mode.inspect}"
-  end
-
-  def access_policy_options_for(action)
-    resolve_browser_rp_authentication_mode_rule_for(action)&.fetch(:options, {}) ||
-      resolve_browser_rp_access_policy_for(action)&.fetch(:options, {}) ||
-      {}
-  end
-
   # Guards shared with root-authenticated controllers branch on this instead of probing for
   # Browser RP methods.
   def browser_rp_controller? = true
@@ -288,10 +184,6 @@ module BrowserRpAuthentication
 
   def current_session
     current_browser_session_security_context&.root_token
-  end
-
-  def browser_rp_session_public_id
-    current_browser_session_security_context&.rp_session_public_id
   end
 
   def current_browser_session_security_context
@@ -329,36 +221,8 @@ module BrowserRpAuthentication
     raise NotImplementedError, "controller must define browser_rp_resource_type"
   end
 
-  def browser_rp_resource_class
-    case browser_rp_resource_type.to_s
-    when "operator" then Operator
-    when "client" then Client
-    else raise ArgumentError, "unsupported Browser RP resource type"
-    end
-  end
-
-  def browser_rp_resource_foreign_key
-    case browser_rp_resource_type.to_s
-    when "operator" then :staff_id
-    when "client" then :user_id
-    else raise ArgumentError, "unsupported Browser RP resource type"
-    end
-  end
-
-  def resource_class
-    browser_rp_resource_class
-  end
-
   def token_class
     raise AccessOpDataUnavailableError
-  end
-
-  def resource_type
-    browser_rp_resource_type
-  end
-
-  def resource_foreign_key
-    browser_rp_resource_foreign_key
   end
 
   def browser_rp_trusted_origins
@@ -370,15 +234,6 @@ module BrowserRpAuthentication
   # authentication failure response.
   def browser_rp_invalid_credentials_are_ignored?
     request.format.html?
-  end
-
-  def browser_rp_unauthenticated_redirect_path
-    nil
-  end
-
-  def current_resource_deactivated_for_policy?
-    resource = current_resource
-    resource.respond_to?(:deactivated?) && resource.deactivated?
   end
 
   def render_browser_rp_unauthenticated!
@@ -415,7 +270,8 @@ module BrowserRpAuthentication
     return @browser_rp_access_state if defined?(@browser_rp_access_state)
 
     @browser_rp_access_state = resolve_browser_rp_access_cookie
-  rescue ActiveRecord::ActiveRecordError, OidcOpJwksClient::FetchError, AccessOpDataUnavailableError => e
+  rescue ActiveRecord::ActiveRecordError, OidcOpJwksClient::FetchError, AccessOpDataUnavailableError,
+         Oidc::AcmeServiceOrigin::ConfigurationUnavailable => e
     log_browser_rp_dependency_failure(stage: "access_state", detail: e.class.name)
     @browser_rp_dependency_failed = true
     render_browser_rp_dependency_failure! unless performed?
@@ -424,35 +280,19 @@ module BrowserRpAuthentication
     )
   end
 
-  def resolve_browser_rp_authentication_mode_rule_for(action)
-    action = action.to_s
-    self.class.local_authentication_mode_rules.reverse_each do |rule|
-      next if rule[:only].present? && rule[:only].exclude?(action)
-      next if rule[:except].present? && rule[:except].include?(action)
-
-      return rule
-    end
-    nil
-  end
-
-  def resolve_browser_rp_access_policy_for(action)
-    action = action.to_s
-    self.class.access_policy_rules.reverse_each do |rule|
-      next if rule[:only].present? && rule[:only].exclude?(action)
-      next if rule[:except].present? && rule[:except].include?(action)
-
-      return rule
-    end
-    nil
-  end
-
   def browser_rp_dependency_failed?
     defined?(@browser_rp_dependency_failed) && @browser_rp_dependency_failed
   end
 
   def resolve_browser_rp_access_cookie(access_token: nil)
+    return resolve_rp_cell_access(nil) if base_rp_cell_process?
+
     access_token ||= BrowserCredentialCookie.read(cookies, OidcRpBrowserCredentialContract::ACCESS_COOKIE)
     return resolve_rp_cell_access(access_token) if rp_cell_process?
+
+    if BrowserCredentialCookie.read(cookies, OidcRpBrowserCredentialContract::SESSION_COOKIE).present?
+      raise AccessOpDataUnavailableError
+    end
 
     return AccessState.new(status: :missing, resource: nil, rp_session: nil, payload: nil, security_context: nil) if
       access_token.blank?
@@ -462,25 +302,37 @@ module BrowserRpAuthentication
 
   # R5-WU17 cell process: the resource is the cell's local principal, the session its local session.
   def resolve_rp_cell_access(access_token)
-    result = authenticate_rp_cell_request(access_token:)
+    result =
+      if base_rp_cell_process?
+        BaseRpSessionAuthenticator.call(
+          cell: rp_cell, local_session_id: cookies[OidcRpBrowserCredentialContract::SESSION_COOKIE],
+          issuer: rp_op_origin.origin,
+        )
+      else
+        authenticate_rp_cell_request(access_token:)
+      end
     return AccessState.new(
       status: result.status, resource: nil, rp_session: nil, payload: nil,
       security_context: nil,
     ) unless
       result.authenticated?
 
-    @current_access_token_payload = result.payload
+    @current_rp_authentication_payload = result.payload
     AccessState.new(
       status: :valid, resource: result.principal, rp_session: result.session, payload: result.payload,
       security_context: nil,
     )
   end
 
+  def base_rp_cell_process?
+    rp_cell_process? && BASE_RP_CLIENT_IDS.include?(rp_cell.client_id)
+  end
+
   # Base APP and ORG selections are RP-local; other RP cells read their owner API.
   def rp_cell_selected_context
     return unless rp_cell_process?
-    # Base APP and ORG selections belong to their RP sessions. The actor comes from the verified
-    # Access Token above; no OP root token or remote selection API participates.
+    # Base APP and ORG selections belong to their RP sessions; no OP root token or remote
+    # selection API participates.
     return Actor::SelectedContext::NULL unless browser_rp_authenticated? && rp_cell.client_id.start_with?("base-")
 
     if rp_cell.client_id == RpBaseAppSession::CLIENT_ID
@@ -505,7 +357,7 @@ module BrowserRpAuthentication
     return rp_org_cell_selected_context if rp_cell.client_id == RpBaseOrgSession::CLIENT_ID
 
     result = OrgAdminAuthorityClient.new(
-      access_token: BrowserCredentialCookie.read(cookies, OidcRpBrowserCredentialContract::ACCESS_COOKIE),
+      rp_session: browser_rp_access_state.rp_session,
       browser_request: request, surface: rp_cell.realm,
     ).get("/identity/selection")
     return selected_context_from_owner(result.data) if result.ok?
@@ -608,17 +460,18 @@ module BrowserRpAuthentication
   end
 
   def clear_browser_rp_access_cookie!
-    cookies.delete(
-      OidcRpBrowserCredentialContract::ACCESS_COOKIE,
-      OidcRpBrowserCredentialContract.access_cookie_deletion_options,
-    )
-    @current_access_token_payload = nil
+    cookie_name = OidcRpBrowserCredentialContract::ACCESS_COOKIE
+    deletion_options = OidcRpBrowserCredentialContract.access_cookie_deletion_options
+    cookies.delete(cookie_name, deletion_options)
+    CredentialDeletionFinalizer.register(request.env, cookie_name, deletion_options)
+    @current_rp_authentication_payload = nil
   end
 
   def clear_browser_rp_cookies!
     # Whenever the browser's RP credential is dropped, the signed-in pages are still in the
     # document's Inertia history; the next page must clear it.
     session[:inertia_clear_history] = true
+    preserve_browser_rp_renewal_candidate! if @browser_rp_access_state&.status == :invalid
     clear_browser_rp_access_cookie!
     clear_rp_cell_session_cookie!
     cookies.delete(
@@ -634,26 +487,7 @@ module BrowserRpAuthentication
     )
   end
 
-  def install_browser_rp_token_response!(result)
-    token_response = result.token_response
-    access_token, refresh_token = OidcRpBrowserCredentialContract.require_token_response!(token_response)
-    raise AccessOpDataUnavailableError unless rp_cell_process?
-
-    now = Time.current
-    access_expires_at = OidcRpBrowserCredentialContract.access_expires_at_from_response(token_response, now: now)
-    refresh_expires_at = OidcRpBrowserCredentialContract.refresh_expires_at_from_response(token_response, now: now)
-    raise ArgumentError, "RP refresh expiry precedes access expiry" if refresh_expires_at < access_expires_at
-
-    cookies[OidcRpBrowserCredentialContract::ACCESS_COOKIE] =
-      OidcRpBrowserCredentialContract.access_cookie_options(expires_at: access_expires_at).merge(
-        value: access_token,
-      )
-    cookies[OidcRpBrowserCredentialContract::REFRESH_COOKIE] =
-      OidcRpBrowserCredentialContract.refresh_cookie_options(expires_at: refresh_expires_at).merge(
-        value: refresh_token,
-      )
-    @browser_rp_access_state = resolve_browser_rp_access_cookie(access_token: access_token)
-    browser_rp_access_state
+  def preserve_browser_rp_renewal_candidate!
   end
 end
 # rubocop:enable I18n/RailsI18n/DecorateString

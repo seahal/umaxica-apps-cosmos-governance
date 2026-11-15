@@ -18,19 +18,6 @@ module SecretCredential
     limited_session
   ).freeze
 
-  # FIXME: Violates Umaxica/NoConcernInclusionHooks; move the declarations in this block into each class that includes this concern.
-  included do
-    has_secure_password algorithm: :argon2, validations: false
-    validates :name, presence: true
-    validates :password,
-              length: {
-                is: SECRET_PASSWORD_LENGTH,
-                message: "must be #{SECRET_PASSWORD_LENGTH} characters",
-              },
-              allow_nil: true
-    validate :new_axis_secret_fields_are_consistent
-  end
-
   class_methods do
     def issue!(name:, length: SECRET_PASSWORD_LENGTH, discard_at: nil, uses: 1, status: :active, **attributes)
       raw_secret_credential = SecureRandom.base58(length)
@@ -90,6 +77,7 @@ module SecretCredential
     end
   end
 
+  public
   def expire_if_needed!(now: Time.current)
     return false unless active?
     return false unless expired_by_time?(now)

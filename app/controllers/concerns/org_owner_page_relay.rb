@@ -15,7 +15,7 @@ module OrgOwnerPageRelay
   def relay_owner_page!
     forwarded = request.request_parameters.merge(request.query_parameters).except(*FORWARDED_PARAM_EXCLUSIONS)
     client = OrgAdminAuthorityClient.new(
-      access_token: BrowserCredentialCookie.read(cookies, OidcRpBrowserCredentialContract::ACCESS_COOKIE),
+      rp_session: browser_rp_access_state.rp_session,
       browser_request: request,
       surface: owner_page_surface,
     )

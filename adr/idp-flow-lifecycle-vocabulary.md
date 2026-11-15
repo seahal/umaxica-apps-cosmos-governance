@@ -5,13 +5,18 @@
 Accepted (2026-10-01) as documentation and target vocabulary.
 
 Implementation status: the vocabulary and invariants in this ADR are accepted. The broad lifecycle
-migration remains incremental. Current sign-in, sign-up, and sign-out code still uses its own
-status names, events, and result statuses (including legacy `FAILED`) where a slice has not yet
-been migrated. The strict sign-in phase-admission amendment below is implemented for its listed
-local flow paths and does not claim that every ceremony has adopted one universal state object. The
-future migration is planned in
-`plans/backlog/idp-flow-state-machine-unification.md`; the reference and current-to-target mapping
-live in `docs/security/idp-flow-lifecycle.md`.
+migration remains incremental. Current sign-in, sign-up, and sign-out code still uses its own status
+names, events, and result statuses (including legacy `FAILED`) where a slice has not yet been
+migrated. The strict sign-in phase-admission amendment below is implemented for its listed local
+flow paths and does not claim that every ceremony has adopted one universal state object. The future
+migration is planned in `plans/backlog/idp-flow-state-machine-unification.md`; the reference and
+current-to-target mapping live in `docs/security/idp-flow-lifecycle.md`.
+
+> **Governance runtime supersession (2026-11-13):** Access operates authentication ceremonies;
+> Governance runs none. The local sign-in, sign-up, and sign-out implementation statements below
+> describe the former runtime or a target vocabulary, not current Governance call paths. The
+> Governance state-machine unification backlog is superseded. Identity and credential records and
+> the separate relying-party step-up contract remain owned by their current data and RP paths.
 
 ## Context
 
@@ -23,8 +28,8 @@ spelled differently and the same word means different things:
 - `FAILED` is the only terminal non-success status in sign-in and sign-out, so it absorbs user
   cancellation (sign-in session-limit cancel calls `fail_sign_in!`), policy blocks, and operational
   failures alike.
-- Sign-up has `FAILED`, `EXPIRED`, and `CANCELLED`, but a successful `cancel` returns
-  `SignUpResult` status `:failed`.
+- Sign-up has `FAILED`, `EXPIRED`, and `CANCELLED`, but a successful `cancel` returns `SignUpResult`
+  status `:failed`.
 - Sign-in has no `EXPIRED` or `CANCELLED` status; expiry is a request-time `expires_at` check. The
   sign-in Mermaid diagrams nevertheless draw both states.
 - Request outcomes (`credential_rejected`, `session_limit_hard_reject`, `blocked`,
@@ -40,16 +45,16 @@ ambiguities permanently.
 
 ### Scope
 
-This ADR governs the lifecycle vocabulary and invariants of end-user authentication flows:
-sign-in, sign-up, and sign-out on the `app`, `com`, and `org` surfaces, including the sign-up to
-sign-in handoff. It applies to future shared lifecycle code, new documentation, and new tests.
+This ADR governs the lifecycle vocabulary and invariants of end-user authentication flows: sign-in,
+sign-up, and sign-out on the `app`, `com`, and `org` surfaces, including the sign-up to sign-in
+handoff. It applies to future shared lifecycle code, new documentation, and new tests.
 
 ### Non-goals
 
-- No runtime, schema, migration, route, controller, service, or test change is made or authorized
-  by this ADR.
-- No single unified sign state machine. Only the lifecycle contract, terminology, and invariants
-  are shared.
+- No runtime, schema, migration, route, controller, service, or test change is made or authorized by
+  this ADR.
+- No single unified sign state machine. Only the lifecycle contract, terminology, and invariants are
+  shared.
 - No renaming of flow-specific phases. Sign-in keeps primary, MFA, session limit, guardrail,
   checkpoint, selector, and session issuance; sign-up keeps identity, contact, credential,
   guardrail, checkpoint, finalization, and handoff; sign-out keeps requested, access discard,
@@ -73,18 +78,18 @@ phase     = CHECKPOINT_PENDING
 ```
 
 The canonical lifecycle values are `ACTIVE`, `COMPLETED`, `CANCELLED`, `EXPIRED`, and `HALTED`.
-Phase is meaningful only while the lifecycle is `ACTIVE`. Phase names stay flow-specific and are
-not unified across flows.
+Phase is meaningful only while the lifecycle is `ACTIVE`. Phase names stay flow-specific and are not
+unified across flows.
 
 ### Canonical terminal states
 
 Exactly four terminal lifecycle states exist:
 
-| State       | Meaning                                                                                                      |
-| ----------- | ------------------------------------------------------------------------------------------------------------ |
-| `COMPLETED` | The flow finished normally.                                                                                  |
-| `CANCELLED` | The user ended the flow by explicit intent.                                                                  |
-| `EXPIRED`   | The flow's validity period ended according to the authoritative clock or TTL.                                |
+| State       | Meaning                                                                                                    |
+| ----------- | ---------------------------------------------------------------------------------------------------------- |
+| `COMPLETED` | The flow finished normally.                                                                                |
+| `CANCELLED` | The user ended the flow by explicit intent.                                                                |
+| `EXPIRED`   | The flow's validity period ended according to the authoritative clock or TTL.                              |
 | `HALTED`    | The system irreversibly ended the flow because continuing is unsafe, inconsistent, or forbidden by policy. |
 
 Terminal states are absorbing. No transition leads from a terminal state to `ACTIVE` or to another
@@ -98,15 +103,15 @@ The lifecycle event vocabulary is exactly:
 start  advance  back  cancel  external_result  complete  expire  halt
 ```
 
-- `start` creates a new flow instance. It is used even where runtime creates the record outside
-  the state machine. `begin`, `initialize`, and `open` are not lifecycle synonyms.
+- `start` creates a new flow instance. It is used even where runtime creates the record outside the
+  state machine. `begin`, `initialize`, and `open` are not lifecycle synonyms.
 - `advance` moves forward after the current phase's conditions are met. Flow-internal domain events
   (`verify_contact`, `clear_requirement`, `advance_sign_in_to_selector!`, and so on) remain valid
   internal names and are classified as `advance`. `proceed` is not a canonical term.
 - `back` returns to an earlier phase only when the flow explicitly allows that edge. It is not the
-  browser Back button. When `back` leaves a phase that issued a one-time challenge, token, or
-  nonce, that artifact is invalidated as part of the transition. `back` never crosses an
-  irreversible commit or authority handoff.
+  browser Back button. When `back` leaves a phase that issued a one-time challenge, token, or nonce,
+  that artifact is invalidated as part of the transition. `back` never crosses an irreversible
+  commit or authority handoff.
 - `cancel` is the user's explicit decision to end the flow and produces `CANCELLED`. The system
   never emits `cancel`. It is idempotent where possible. It never reverts a commit that already
   happened.
@@ -117,15 +122,15 @@ start  advance  back  cancel  external_result  complete  expire  halt
   logical discard, purge, and physical deletion.
 - `halt` produces `HALTED`. It is system-only, requires a `reason_code` (for example
   `credential_locked`, `integrity_violation`, `policy_terminal_block`; the full set is left to
-  implementation), and is auditable. No UI action or request parameter can request `halt`.
-  Database timeouts, transient provider errors, and other operational failures do not halt a flow
+  implementation), and is auditable. No UI action or request parameter can request `halt`. Database
+  timeouts, transient provider errors, and other operational failures do not halt a flow
   automatically.
 
 ### external_result single-term rule
 
-`external_result` is the only lifecycle event for results that cross an external boundary
-(social or OIDC provider callback, cross-surface ceremony result, RP to IdP logout return).
-Provider, protocol, and ceremony differences live in the payload:
+`external_result` is the only lifecycle event for results that cross an external boundary (social or
+OIDC provider callback, cross-surface ceremony result, RP to IdP logout return). Provider, protocol,
+and ceremony differences live in the payload:
 
 ```text
 external_result(source:, outcome:, reason_code:, correlation:)
@@ -143,15 +148,15 @@ These are request semantics, not transition events.
 - **reentry** (replaces `reenter`): a request reaches an existing `ACTIVE` flow through reload,
   bookmark, or returning from another page. The server re-resolves the authoritative state. It does
   not move phase by itself, but expiry is evaluated first, so `reentry` can result in `expire`.
-- **replay** (replaces "retry / replay"): an already-processed mutation or event arrives again in the
-  same or substantially the same form. Replay never repeats side effects. `retry` is not
+- **replay** (replaces "retry / replay"): an already-processed mutation or event arrives again in
+  the same or substantially the same form. Replay never repeats side effects. `retry` is not
   state-machine vocabulary. A user submitting a new credential value after a mismatch is a new
   `advance` attempt, not a replay.
 - **conflict** (replaces "stale / conflict"): the request's assumed flow state differs from the
   authoritative state (multi-tab, concurrent request, outdated checkpoint version, another request
   already advanced or completed the flow). Conflict never rolls back authoritative state, and the
-  user can always be brought to the current state through reentry. `stale` survives only as a
-  reason code, for example `conflict` with `reason_code = stale_version`.
+  user can always be brought to the current state through reentry. `stale` survives only as a reason
+  code, for example `conflict` with `reason_code = stale_version`.
 
 ### Outcomes and reason codes
 
@@ -172,29 +177,29 @@ Reason codes carry implementation-specific detail. They never become lifecycle s
 `FAILED` is not a canonical terminal state. The following runtime names remain until migrated and
 are classified, not mechanically renamed:
 
-| Situation                                          | Target classification                                            |
-| -------------------------------------------------- | ---------------------------------------------------------------- |
-| User intentionally ends the flow                   | `cancel` and `CANCELLED`                                         |
-| System declares the flow permanently non-continuable | `halt` and `HALTED` with a reason code                         |
-| Request refused, flow still active                 | `rejected` outcome, lifecycle unchanged                          |
-| Authoritative state changed concurrently           | `conflict` outcome, lifecycle unchanged                          |
-| Temporary operational failure                      | lifecycle unchanged unless an explicit invariant requires `halt` |
+| Situation                                            | Target classification                                            |
+| ---------------------------------------------------- | ---------------------------------------------------------------- |
+| User intentionally ends the flow                     | `cancel` and `CANCELLED`                                         |
+| System declares the flow permanently non-continuable | `halt` and `HALTED` with a reason code                           |
+| Request refused, flow still active                   | `rejected` outcome, lifecycle unchanged                          |
+| Authoritative state changed concurrently             | `conflict` outcome, lifecycle unchanged                          |
+| Temporary operational failure                        | lifecycle unchanged unless an explicit invariant requires `halt` |
 
 `FAILED` maps to `HALTED` only where it means unrecoverable, non-resumable, terminal. `stopped`,
 `failure`, `fail`, `hard_reject`, `credential_rejected`, `blocked`, and `rejected` are classified
 case by case by the same rules. `stopped` is removed from the future lifecycle vocabulary.
 
-The following are never introduced as lifecycle states or events: `SUSPENDED`, `RESUMED`,
-`STOPPED`, `FAILED`, `REJECTED`, `LOCKED`, `RETRY`, `STALE`, `ABORTED`, `external_success`,
-`external_failure`, `provider_result`, `callback_result`. Existing runtime occurrences are recorded
-as legacy vocabulary.
+The following are never introduced as lifecycle states or events: `SUSPENDED`, `RESUMED`, `STOPPED`,
+`FAILED`, `REJECTED`, `LOCKED`, `RETRY`, `STALE`, `ABORTED`, `external_success`, `external_failure`,
+`provider_result`, `callback_result`. Existing runtime occurrences are recorded as legacy
+vocabulary.
 
 ### Authority and handoff boundaries
 
 Shared vocabulary does not merge authority. These boundaries stay explicit:
 
-- Auth (historically `sign/id`) performs credential ceremonies; Base (historically `acme/www`)
-  owns the OIDC transaction, browser session, RP session, and tokens, per
+- Auth (historically `sign/id`) performs credential ceremonies; Base (historically `acme/www`) owns
+  the OIDC transaction, browser session, RP session, and tokens, per
   `adr/base-auth-ceremony-and-seven-rp-boundary.md`.
 - Sign-up durable finalization followed by sign-in handoff are two flows. Once sign-up has durably
   committed an account, no `back` or `cancel` in sign-up withdraws it, and a sign-in failure after
@@ -230,13 +235,13 @@ The following are normative for any future shared lifecycle implementation:
 
 ## Consequences
 
-- New docs, tests, and code reviews have one vocabulary for lifecycle, events, outcomes, and
-  reason codes, and can flag drift.
-- Current documentation must label runtime names as current vocabulary instead of presenting them
-  as target semantics. Mermaid diagrams keep drawing runtime states until runtime changes.
+- New docs, tests, and code reviews have one vocabulary for lifecycle, events, outcomes, and reason
+  codes, and can flag drift.
+- Current documentation must label runtime names as current vocabulary instead of presenting them as
+  target semantics. Mermaid diagrams keep drawing runtime states until runtime changes.
 - Several current behaviors are explicitly non-conforming and become migration items rather than
-  silent debt: user cancellation recorded as `FAILED` in sign-in session-limit handling, the
-  sign-up cancel result status `:failed`, sign-in lacking a recorded expiry terminal, and sign-up
+  silent debt: user cancellation recorded as `FAILED` in sign-in session-limit handling, the sign-up
+  cancel result status `:failed`, sign-in lacking a recorded expiry terminal, and sign-up
   post-commit phases whose terminal path on handoff failure or TTL lapse is not defined.
 - Introducing `HALTED` and splitting `FAILED` need DB reference-row and audit decisions. The
   reference-row decisions (`HALTED = 930`, `FAILED = 900` kept as a tombstone, immutable ids) are in
@@ -258,34 +263,33 @@ The following are normative for any future shared lifecycle implementation:
 ## Strict sign-in phase-admission amendment (2026-10-10)
 
 The implementation adds a purpose-bound, signed server binding for local sign-in requests. It
-records the expected surface, flow public identifier, phase, and immutable generation. The
-binding is an admission capability only; the locked flow row, actor binding, expiry, provider
-transaction where applicable, and the existing Auth/Base session-issuance boundary remain the
-authorities.
+records the expected surface, flow public identifier, phase, and immutable generation. The binding
+is an admission capability only; the locked flow row, actor binding, expiry, provider transaction
+where applicable, and the existing Auth/Base session-issuance boundary remain the authorities.
 
 Same-phase reload is valid. A contradictory GET or HEAD is rejected with HTTP 409 and the exact
-plain-text body `この画面は古くなっています。最初からやり直してください。`, with no redirect, lifecycle mutation, or credential/session
-side effect. A state-changing request that is bound to the original flow but uses an obsolete or
-otherwise contradictory phase enters `HALTED = 930` with an auditable `phase_regression` or
-`phase_violation` reason. HALTED is absorbing and cannot issue a new session, OTP, challenge, or
-provider transaction. A missing, malformed, cross-surface, or cross-flow binding is refused and
-must not be redirected onto the current session locator or used to halt another flow.
+plain-text body `この画面は古くなっています。最初からやり直してください。`, with no redirect,
+lifecycle mutation, or credential/session side effect. A state-changing request that is bound to the
+original flow but uses an obsolete or otherwise contradictory phase enters `HALTED = 930` with an
+auditable `phase_regression` or `phase_violation` reason. HALTED is absorbing and cannot issue a new
+session, OTP, challenge, or provider transaction. A missing, malformed, cross-surface, or cross-flow
+binding is refused and must not be redirected onto the current session locator or used to halt
+another flow.
 
 The amendment is intentionally scoped. Local app/com routes and other routes with a local
 `SignInFlow` use the binding; social, Entra, and other provider-owned ceremonies continue to use
-their concrete state and correlation contracts. No browser History API, client-side Back
-detection, raw nonce exposure, or reuse of OAuth state, PKCE, CSRF, or return-target tokens is
-introduced. The existing `commit_login_session!` and `lock_sign_in_flow_for_issuance!` checks are
-retained.
+their concrete state and correlation contracts. No browser History API, client-side Back detection,
+raw nonce exposure, or reuse of OAuth state, PKCE, CSRF, or return-target tokens is introduced. The
+existing `commit_login_session!` and `lock_sign_in_flow_for_issuance!` checks are retained.
 
 ## Unified implementation amendment (2026-10-06)
 
-The implementation cycle amends this ADR's target vocabulary with the durable storage and
-transition contract in `two.md`. `ACTIVE` remains derived from a non-terminal row and is never
-stored. Sign-in, sign-up, and sign-out use named row-locked transitions and the immutable terminal
-ids `COMPLETED = 100`, `FAILED = 900` as a legacy tombstone, `EXPIRED = 910`, `CANCELLED = 920`,
-and `HALTED = 930`. Sign-in expiry is a durable `EXPIRED` transition evaluated with the owning
-writer's database clock; a terminal row is absorbing and never rewritten.
+The implementation cycle amends this ADR's target vocabulary with the durable storage and transition
+contract in `two.md`. `ACTIVE` remains derived from a non-terminal row and is never stored. Sign-in,
+sign-up, and sign-out use named row-locked transitions and the immutable terminal ids
+`COMPLETED = 100`, `FAILED = 900` as a legacy tombstone, `EXPIRED = 910`, `CANCELLED = 920`, and
+`HALTED = 930`. Sign-in expiry is a durable `EXPIRED` transition evaluated with the owning writer's
+database clock; a terminal row is absorbing and never rewritten.
 
 For sign-in, dashboard, welcome, return-target, OIDC continuation, and RP continuation are
 post-completion routing decisions. They are not lifecycle states. Session-limit resolution is a

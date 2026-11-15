@@ -15,6 +15,7 @@ class SecurityJwtAuthAccessTokenCodec
   DEFAULT_JWT_ISSUER_ID = "auth"
 
   class << self
+    public
     def decode(token, host:, resource_type: nil, issuer: nil, audiences: nil, jwt_issuer_id: nil)
       decode_with_expiration(
         token, host: host, resource_type: resource_type, issuer: issuer,

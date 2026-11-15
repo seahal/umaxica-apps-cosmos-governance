@@ -20,7 +20,23 @@ class BaseOrgIdentityRpRootFeatureRefusalTest < ActionDispatch::IntegrationTest
       assert_response :service_unavailable
       assert_equal I18n.t("auth.rp_feature_unavailable"), response.body
       assert_includes response.headers["Cache-Control"], "no-store"
+
+      [
+        [:get, "/identity/secrets/new"],
+        [:get, "/identity/secrets/nonexistent"],
+        [:get, "/identity/secrets/nonexistent/edit"],
+        [:post, "/identity/secrets"],
+        [:patch, "/identity/secrets/nonexistent"],
+        [:delete, "/identity/secrets/nonexistent"],
+      ].each do |method, path|
+        process(method, path, params: { ri: "jp" }, headers: headers)
+
+        assert_response :service_unavailable, "#{method.upcase} #{path} must fail closed"
+        assert_equal I18n.t("auth.rp_feature_unavailable"), response.body
+        assert_includes response.headers["Cache-Control"], "no-store"
+      end
     end
+
     assert_equal original_credentials, operator.staff_secret_credentials.count
   end
 end

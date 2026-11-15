@@ -24,6 +24,13 @@ class Base::App::Identity::WithdrawalsControllerTest < ActionDispatch::Integrati
     assert_not ClientWithdrawalFlow.exists?(client_id: @client.id)
   end
 
+  test "withdrawal ceremony re-entry page presents its generic message" do
+    get new_base_app_identity_withdrawal_session_url(ri: "jp", host: @host)
+
+    assert_response :success
+    assert_equal I18n.t("withdrawal_ceremony_reentry.generic_message"), inertia_props["description"]
+  end
+
   test "acknowledging the schedule does not bypass fresh evidence" do
     get new_base_app_identity_withdrawal_url(ri: "jp", host: @host, ack_schedule_purge: "1"), headers: @headers
 
@@ -46,6 +53,21 @@ class Base::App::Identity::WithdrawalsControllerTest < ActionDispatch::Integrati
 
     assert_response :unauthorized
     assert_not ClientWithdrawalFlow.exists?(client_id: @client.id)
+  end
+
+  test "withdrawal refuses unsupported step-up evidence and leaves the client active" do
+    get new_base_app_identity_withdrawal_url(ri: "jp", host: @host), headers: @headers
+
+    assert_response :redirect
+    assert_equal "/verification", URI.parse(response.location).path
+    assert_not ClientWithdrawalFlow.exists?(client_id: @client.id)
+
+    patch base_app_identity_withdrawal_url(ri: "jp", host: @host),
+          params: { ack_schedule_purge: "1" }, headers: @headers
+
+    assert_response :unauthorized
+    assert_not ClientWithdrawalFlow.exists?(client_id: @client.id)
+    assert_nil @client.reload.deactivated_at
   end
 
   test "recovery page and privacy erasure pages are reachable once the ceremony is issued" do

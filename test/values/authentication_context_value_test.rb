@@ -62,4 +62,9 @@ class AuthenticationContextValueTest < ActiveSupport::TestCase
       assert context.permits_rule?(rule), "#{rule} must follow the ordinary policy rule in a standby session"
     end
   end
+
+  test "string representation preserves the registered authentication context key" do
+    assert_equal "normal", AuthenticationContextValue.normal.to_s
+    assert_equal "standby", AuthenticationContextValue.standby.to_s
+  end
 end

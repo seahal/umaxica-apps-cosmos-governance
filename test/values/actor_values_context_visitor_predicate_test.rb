@@ -8,4 +8,9 @@ class ActorValuesContextVisitorPredicateTest < ActiveSupport::TestCase
     assert_predicate ActorValuesContext.empty.with(actor_type: :client), :client?
     assert_predicate ActorValuesContext.empty.with(actor_type: :operator), :operator?
   end
+
+  test "anonymous predicate follows the explicit unauthenticated actor type" do
+    assert_predicate ActorValuesContext.empty, :anonymous?
+    assert_not_predicate ActorValuesContext.empty.with(actor_type: :client), :anonymous?
+  end
 end

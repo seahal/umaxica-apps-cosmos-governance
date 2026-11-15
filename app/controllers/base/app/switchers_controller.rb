@@ -11,6 +11,11 @@ module Base
       include ::SurfaceInertiaPage
 
       AUTHENTICATION_MODE = :private
+
+      layout "base/app/inertia"
+      inertia_share chrome: -> { surface_chrome }
+      inertia_share clear_history: -> { session[:inertia_clear_history] == true }
+
       declare_authentication_mode! :private
 
       public
@@ -95,7 +100,7 @@ module Base
       def switcher_authority
         @switcher_authority ||= AvatarAuthorityClient.new(
           surface: "app",
-          access_token: BrowserCredentialCookie.read(cookies, OidcRpBrowserCredentialContract::ACCESS_COOKIE),
+          rp_session: browser_rp_access_state.rp_session,
           persona: Actor.selection.account_public_id,
           selection: Actor.selection,
         )

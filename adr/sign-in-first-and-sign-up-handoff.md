@@ -6,6 +6,12 @@
 Com registration handoff. It does not certify that every current route or abnormal path already
 conforms.
 
+> **Pending split amendment (proposed 2026-11-14):** The
+> [split amendment](sign-up-finalization-in-auth.md#cosmos-split-amendment-governance-owned-pending-registration-2026-11-14)
+> keeps this decision. Completion is still not a session grant, and a later Sign In failure never
+> deletes the account. Access enters canonical Sign In after Governance's completion answer. Read
+> "guardrail" and "checkpoint" here as eligibility and requirements.
+
 ## Decision
 
 Sign In is UMAXICA's primary session-admission boundary. App and Com Sign Up keep independent

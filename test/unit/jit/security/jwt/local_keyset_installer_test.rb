@@ -88,64 +88,25 @@ module Jit
 
         test "partial keyset env is repaired from local store as one matching set" do
           JitSecurityJwtLocalKeysetInstaller.install!(store_path: @store_path)
-          original_private_keyset = ENV.fetch("PREFERENCE_APP_JWT_PRIVATE_KEYSET")
-          original_public_keyset = ENV.fetch("PREFERENCE_APP_JWT_PUBLIC_KEYSET")
+          original_private_keyset = ENV.fetch("AUTH_JWT_PRIVATE_KEYSET")
+          original_public_keyset = ENV.fetch("AUTH_JWT_PUBLIC_KEYSET")
 
-          ENV["PREFERENCE_APP_JWT_PRIVATE_KEYSET"] = nil
-
-          JitSecurityJwtLocalKeysetInstaller.install!(store_path: @store_path)
-
-          assert_equal original_private_keyset, ENV["PREFERENCE_APP_JWT_PRIVATE_KEYSET"]
-          assert_equal original_public_keyset, ENV["PREFERENCE_APP_JWT_PUBLIC_KEYSET"]
-        end
-
-        test "partial surface env is repaired from local store as one matching set" do
-          JitSecurityJwtLocalKeysetInstaller.install!(store_path: @store_path)
-          original_private_key = ENV.fetch("JWT_BASE_APP_PRIVATE_KEY")
-          original_public_keyset = ENV.fetch("JWT_BASE_APP_PUBLIC_KEYSET")
-
-          ENV["JWT_BASE_APP_PRIVATE_KEY"] = nil
+          ENV["AUTH_JWT_PRIVATE_KEYSET"] = nil
 
           JitSecurityJwtLocalKeysetInstaller.install!(store_path: @store_path)
 
-          assert_equal original_private_key, ENV["JWT_BASE_APP_PRIVATE_KEY"]
-          assert_equal original_public_keyset, ENV["JWT_BASE_APP_PUBLIC_KEYSET"]
-          JitSecurityJwtRegistry.reload!
-
-          assert JitSecurityJwtRegistry.private_key_for("surface:BASE_APP")
-          assert JitSecurityJwtRegistry.public_key_for("surface:BASE_APP", ENV.fetch("JWT_BASE_APP_ACTIVE_KID"))
-        end
-
-        test "partial oidc client env is repaired from local store as one matching set" do
-          JitSecurityJwtLocalKeysetInstaller.install!(store_path: @store_path)
-          original_private_key = ENV.fetch("OIDC_CLIENT_BASE_RP_APP_WW_PRIVATE_KEY")
-          original_public_keyset = ENV.fetch("OIDC_CLIENT_BASE_RP_APP_WW_PUBLIC_KEYSET")
-
-          ENV["OIDC_CLIENT_BASE_RP_APP_WW_PRIVATE_KEY"] = nil
-
-          JitSecurityJwtLocalKeysetInstaller.install!(store_path: @store_path)
-
-          assert_equal original_private_key, ENV["OIDC_CLIENT_BASE_RP_APP_WW_PRIVATE_KEY"]
-          assert_equal original_public_keyset, ENV["OIDC_CLIENT_BASE_RP_APP_WW_PUBLIC_KEYSET"]
-          JitSecurityJwtRegistry.reload!
-
-          assert JitSecurityJwtRegistry.private_key_for("oidc_client:BASE_RP_APP_WW")
-          assert JitSecurityJwtRegistry.public_key_for(
-            "oidc_client:BASE_RP_APP_WW",
-            ENV.fetch("OIDC_CLIENT_BASE_RP_APP_WW_ACTIVE_KID"),
-          )
+          assert_equal original_private_keyset, ENV["AUTH_JWT_PRIVATE_KEYSET"]
+          assert_equal original_public_keyset, ENV["AUTH_JWT_PUBLIC_KEYSET"]
         end
 
         test "install writes all local issuers to ignored tmp store" do
           JitSecurityJwtLocalKeysetInstaller.install!(store_path: @store_path)
 
           store = JSON.parse(File.read(@store_path))
-          expected_keys =
-            %w(AUTH PREFERENCE_APP PREFERENCE_COM PREFERENCE_ORG) +
-            JitSecurityJwtRegistry::SURFACE_NAMESPACES.map { |namespace| "JWT_#{namespace}" } +
-            JitSecurityJwtRegistry::OIDC_CLIENT_NAMESPACES.map { |namespace| "OIDC_CLIENT_#{namespace}" }
 
-          assert_equal expected_keys.sort, store.keys.sort
+          assert_equal %w(AUTH _algorithm _format).sort, store.keys.sort
+          assert_equal "PS256", store.fetch("_algorithm")
+          assert_equal JitSecurityJwtLocalKeysetInstaller::STORE_FORMAT, store.fetch("_format")
           assert_equal 0o600, File.stat(@store_path).mode & 0o777
         end
 
@@ -153,26 +114,33 @@ module Jit
           JitSecurityJwtLocalKeysetInstaller.install!(store_path: @store_path)
 
           store = JSON.parse(File.read(@store_path))
-          public_keysets = [
-            JSON.parse(store.fetch("AUTH").fetch("public_keyset")),
-            JSON.parse(store.fetch("PREFERENCE_APP").fetch("public_keyset")),
-            JSON.parse(store.fetch("PREFERENCE_COM").fetch("public_keyset")),
-            JSON.parse(store.fetch("PREFERENCE_ORG").fetch("public_keyset")),
-          ]
-          JitSecurityJwtRegistry::SURFACE_NAMESPACES.each do |namespace|
-            public_keysets << JSON.parse(store.fetch("JWT_#{namespace}").fetch("public_keyset"))
+          keyset = JSON.parse(store.fetch("AUTH").fetch("public_keyset"))
+
+          keyset.fetch("keys").each do |jwk|
+            assert_empty JitSecurityJwtJwk::PRIVATE_FIELDS & jwk.keys
+            assert_equal "PS256", jwk.fetch("alg")
+            assert_equal "RSA", jwk.fetch("kty")
+            assert_operator JWT::JWK.import(jwk).public_key.n.num_bits, :>=, 3_072
+            assert_equal "sig", jwk.fetch("use")
           end
-          JitSecurityJwtRegistry::OIDC_CLIENT_NAMESPACES.each do |namespace|
-            public_keysets << JSON.parse(store.fetch("OIDC_CLIENT_#{namespace}").fetch("public_keyset"))
+        end
+
+        test "replaces an unversioned EC local key store with a PS256 RSA key store" do
+          FileUtils.mkdir_p(File.dirname(@store_path))
+          File.write(@store_path, JSON.generate("AUTH" => { "active_kid" => "old-ec-key" }))
+
+          warnings = []
+          Rails.logger.stub(:warn, ->(message) { warnings << message }) do
+            JitSecurityJwtLocalKeysetInstaller.install!(store_path: @store_path)
           end
 
-          public_keysets.each do |keyset|
-            keyset.fetch("keys").each do |jwk|
-              assert_empty JitSecurityJwtJwk::PRIVATE_FIELDS & jwk.keys
-              assert_equal "ES384", jwk.fetch("alg")
-              assert_equal "sig", jwk.fetch("use")
-            end
-          end
+          store = JSON.parse(File.read(@store_path))
+
+          assert_equal "PS256", store.fetch("_algorithm")
+          assert_equal "test-governance-ps256-a", store.fetch("AUTH").fetch("active_kid")
+          assert_not_includes JSON.generate(store), "old-ec-key"
+          assert(warnings.any? { |message| message.include?("jwt.local_keyset_store.contract_changed") })
+          assert(warnings.any? { |message| message.include?("jwt.local_keyset.regenerated") })
         end
 
         test "malformed local store is regenerated into usable keys" do
@@ -187,7 +155,7 @@ module Jit
 
           assert(logged.any? { |message| message.include?("jwt.local_keyset_store.malformed") })
           assert JitSecurityJwtRegistry.private_key_for("preference_app")
-          assert JitSecurityJwtRegistry.public_key_for("preference_app", ENV.fetch("PREFERENCE_APP_JWT_ACTIVE_KID"))
+          assert JitSecurityJwtRegistry.public_key_for("preference_app", ENV.fetch("AUTH_JWT_ACTIVE_KID"))
         end
 
         test "generating fresh local keys warns that prior tokens will fail verification" do
@@ -200,9 +168,8 @@ module Jit
 
           assert_predicate regenerated, :present?,
                            "first install with no store should warn that local keys were minted"
-          assert(regenerated.any? { |message| message.include?("PREFERENCE_APP") })
-          assert(regenerated.any? { |message| message.include?("PREFERENCE_COM") })
-          assert(regenerated.any? { |message| message.include?("PREFERENCE_ORG") })
+          assert_equal 1, regenerated.length
+          assert_includes regenerated.first, "GOVERNANCE"
           assert(regenerated.all? { |message| message.include?("will fail verification") })
         end
 
@@ -219,60 +186,38 @@ module Jit
                        "reusing persisted keys must not look like a key rotation"
         end
 
-        test "a surface signing key preset in ENV is refused instead of being used as a local Jump key" do
-          foreign = OpenSSL::PKey::EC.generate("secp384r1")
-          ENV["JWT_BASE_APP_PRIVATE_KEY"] = Base64.strict_encode64(foreign.to_der)
-
-          error =
-            assert_raises(ArgumentError) do
-              JitSecurityJwtLocalKeysetInstaller.install!(store_path: @store_path)
-            end
-
-          assert_match(/JWT_BASE_APP_PRIVATE_KEY must not be set/, error.message)
-          assert_not_includes error.message, ENV.fetch("JWT_BASE_APP_PRIVATE_KEY")
-        end
-
-        test "a surface kid preset in ENV is refused even when a store already exists" do
+        test "a restart reuses the one persisted repository keyset from the local store" do
           JitSecurityJwtLocalKeysetInstaller.install!(store_path: @store_path)
-          ENV["JWT_BASE_APP_ACTIVE_KID"] = "production-base-app-es384-a"
-
-          assert_raises(ArgumentError) do
-            JitSecurityJwtLocalKeysetInstaller.install!(store_path: @store_path)
-          end
-        end
-
-        test "a restart reuses the persisted surface Jump key from the local store" do
-          JitSecurityJwtLocalKeysetInstaller.install!(store_path: @store_path)
-          kid = ENV.fetch("JWT_BASE_APP_ACTIVE_KID")
-          private_key = ENV.fetch("JWT_BASE_APP_PRIVATE_KEY")
+          kid = ENV.fetch("AUTH_JWT_ACTIVE_KID")
+          private_keyset = ENV.fetch("AUTH_JWT_PRIVATE_KEYSET")
           clear_local_jwt_env!
 
           JitSecurityJwtLocalKeysetInstaller.install!(store_path: @store_path)
 
-          assert_equal kid, ENV.fetch("JWT_BASE_APP_ACTIVE_KID")
-          assert_equal private_key, ENV.fetch("JWT_BASE_APP_PRIVATE_KEY")
-          assert_equal "#{Rails.env}-base-app-es384-a", kid
+          assert_equal kid, ENV.fetch("AUTH_JWT_ACTIVE_KID")
+          assert_equal private_keyset, ENV.fetch("AUTH_JWT_PRIVATE_KEYSET")
+          assert_equal "#{Rails.env}-governance-ps256-a", kid
         end
 
         test "installing twice in one process accepts the values the installer exported" do
           JitSecurityJwtLocalKeysetInstaller.install!(store_path: @store_path)
-          kid = ENV.fetch("JWT_BASE_ORG_ACTIVE_KID")
+          kid = ENV.fetch("AUTH_JWT_ACTIVE_KID")
 
           JitSecurityJwtLocalKeysetInstaller.install!(store_path: @store_path)
 
-          assert_equal kid, ENV.fetch("JWT_BASE_ORG_ACTIVE_KID")
+          assert_equal kid, ENV.fetch("AUTH_JWT_ACTIVE_KID")
         end
 
         test "explicit local jwt env values are not replaced" do
-          ENV["PREFERENCE_APP_JWT_ACTIVE_KID"] = "explicit-pref-app-kid"
-          ENV["PREFERENCE_APP_JWT_PRIVATE_KEYSET"] = '{"explicit-pref-app-kid":"private"}'
-          ENV["PREFERENCE_APP_JWT_PUBLIC_KEYSET"] = '{"keys":[]}'
+          ENV["AUTH_JWT_ACTIVE_KID"] = "explicit-governance-kid"
+          ENV["AUTH_JWT_PRIVATE_KEYSET"] = '{"explicit-governance-kid":"private"}'
+          ENV["AUTH_JWT_PUBLIC_KEYSET"] = '{"keys":[]}'
 
           JitSecurityJwtLocalKeysetInstaller.install!(store_path: @store_path)
 
-          assert_equal "explicit-pref-app-kid", ENV["PREFERENCE_APP_JWT_ACTIVE_KID"]
-          assert_equal '{"explicit-pref-app-kid":"private"}', ENV["PREFERENCE_APP_JWT_PRIVATE_KEYSET"]
-          assert_equal '{"keys":[]}', ENV["PREFERENCE_APP_JWT_PUBLIC_KEYSET"]
+          assert_equal "explicit-governance-kid", ENV["AUTH_JWT_ACTIVE_KID"]
+          assert_equal '{"explicit-governance-kid":"private"}', ENV["AUTH_JWT_PRIVATE_KEYSET"]
+          assert_equal '{"keys":[]}', ENV["AUTH_JWT_PUBLIC_KEYSET"]
         end
 
         private

@@ -11,10 +11,17 @@ module Base
         include ::SurfaceInertiaPage
 
         AUTHENTICATION_MODE = :bare
+
+        layout "base/org/inertia"
+        inertia_share chrome: -> { surface_chrome }
+        inertia_share clear_history: -> { session[:inertia_clear_history] == true }
+
         before_action :set_promotional_email
 
         # The unsubscribe screen is reached from an email with a signed token rather than a session,
         # so everything it shows is derived from that token's email here.
+        public
+
         def edit
           render inertia: true, props: unsubscribe_page_props
         end

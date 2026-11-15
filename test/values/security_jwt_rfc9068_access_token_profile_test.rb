@@ -38,22 +38,23 @@ class SecurityJwtRfc9068AccessTokenProfileTest < ActiveSupport::TestCase
       "scope" => "authenticated domain:client read:self write:self",
     }
     token = JWT.encode(
-      payload, AuthenticationJwtConfiguration.private_key, "ES384",
+      payload, AuthenticationJwtConfiguration.private_key, "PS256",
       { "typ" => "at+jwt", "kid" => JitSecurityJwtKeyring.active_kid },
     )
 
-    assert_predicate AuthenticationToken.decode(token, host: "example.com", resource_type: "client"), :present?
+    assert_predicate AuthenticationTokenService.decode(token, host: "example.com", resource_type: "client"),
+                     :present?
 
     payload, header = JWT.decode(token, nil, false)
     key = AuthenticationJwtConfiguration.private_key
 
-    wrong_typ = JWT.encode(payload, key, "ES384", header.merge("typ" => "auth-access-token;client"))
-    missing_typ = JWT.encode(payload, key, "ES384", header.except("typ"))
+    wrong_typ = JWT.encode(payload, key, "PS256", header.merge("typ" => "auth-access-token;client"))
+    missing_typ = JWT.encode(payload, key, "PS256", header.except("typ"))
     none_alg = JWT.encode(payload, nil, "none", header.merge("alg" => "none"))
 
-    assert_nil AuthenticationToken.decode(wrong_typ, host: "example.com", resource_type: "client")
-    assert_nil AuthenticationToken.decode(missing_typ, host: "example.com", resource_type: "client")
-    assert_nil AuthenticationToken.decode(none_alg, host: "example.com", resource_type: "client")
+    assert_nil AuthenticationTokenService.decode(wrong_typ, host: "example.com", resource_type: "client")
+    assert_nil AuthenticationTokenService.decode(missing_typ, host: "example.com", resource_type: "client")
+    assert_nil AuthenticationTokenService.decode(none_alg, host: "example.com", resource_type: "client")
   end
 
   test "auth access verification rejects expired tokens and wrong issuer or audience" do
@@ -71,22 +72,23 @@ class SecurityJwtRfc9068AccessTokenProfileTest < ActiveSupport::TestCase
       "scope" => "authenticated domain:client read:self write:self",
     }
     token = JWT.encode(
-      payload, AuthenticationJwtConfiguration.private_key, "ES384",
+      payload, AuthenticationJwtConfiguration.private_key, "PS256",
       { "typ" => "at+jwt", "kid" => JitSecurityJwtKeyring.active_kid },
     )
 
-    assert_predicate AuthenticationToken.decode(token, host: "example.com", resource_type: "client"), :present?
+    assert_predicate AuthenticationTokenService.decode(token, host: "example.com", resource_type: "client"),
+                     :present?
 
     payload, header = JWT.decode(token, nil, false)
     key = AuthenticationJwtConfiguration.private_key
 
-    expired = JWT.encode(payload.merge("exp" => 1.hour.ago.to_i), key, "ES384", header)
-    wrong_iss = JWT.encode(payload.merge("iss" => "urn:umaxica:other:auth"), key, "ES384", header)
-    wrong_aud = JWT.encode(payload.merge("aud" => ["not-this-resource"]), key, "ES384", header)
+    expired = JWT.encode(payload.merge("exp" => 1.hour.ago.to_i), key, "PS256", header)
+    wrong_iss = JWT.encode(payload.merge("iss" => "urn:umaxica:other:auth"), key, "PS256", header)
+    wrong_aud = JWT.encode(payload.merge("aud" => ["not-this-resource"]), key, "PS256", header)
 
-    assert_nil AuthenticationToken.decode(expired, host: "example.com", resource_type: "client")
-    assert_nil AuthenticationToken.decode(wrong_iss, host: "example.com", resource_type: "client")
-    assert_nil AuthenticationToken.decode(wrong_aud, host: "example.com", resource_type: "client")
+    assert_nil AuthenticationTokenService.decode(expired, host: "example.com", resource_type: "client")
+    assert_nil AuthenticationTokenService.decode(wrong_iss, host: "example.com", resource_type: "client")
+    assert_nil AuthenticationTokenService.decode(wrong_aud, host: "example.com", resource_type: "client")
   end
 
   test "auth access verification rejects a development issuer when expecting the test issuer" do
@@ -104,22 +106,23 @@ class SecurityJwtRfc9068AccessTokenProfileTest < ActiveSupport::TestCase
       "scope" => "authenticated domain:client read:self write:self",
     }
     token = JWT.encode(
-      payload, AuthenticationJwtConfiguration.private_key, "ES384",
+      payload, AuthenticationJwtConfiguration.private_key, "PS256",
       { "typ" => "at+jwt", "kid" => JitSecurityJwtKeyring.active_kid },
     )
 
-    assert_predicate AuthenticationToken.decode(token, host: "example.com", resource_type: "client"), :present?
+    assert_predicate AuthenticationTokenService.decode(token, host: "example.com", resource_type: "client"),
+                     :present?
 
     payload, header = JWT.decode(token, nil, false)
     key = AuthenticationJwtConfiguration.private_key
     foreign = JWT.encode(
       payload.merge("iss" => "urn:umaxica:development:auth"),
       key,
-      "ES384",
+      "PS256",
       header,
     )
 
-    assert_nil AuthenticationToken.decode(foreign, host: "example.com", resource_type: "client")
+    assert_nil AuthenticationTokenService.decode(foreign, host: "example.com", resource_type: "client")
   end
 
   test "production auth audience configuration rejects localhost" do

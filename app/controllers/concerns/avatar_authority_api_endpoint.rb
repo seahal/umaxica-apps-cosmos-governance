@@ -4,11 +4,10 @@
 # Shared receiver checks for the Avatar authority API under /api/v0/avatar/:surface (R5-WU14,
 # docs/architecture/avatar-authority-contract-proposal.md, approved 2026-10-17).
 #
-# Server-to-server from the Base Self-RP of the same realm: the caller proves itself with its
-# private_key_jwt bound to the exact URL (no query string) and presents the actor's Access JWT.
-# The owner re-resolves everything itself: the real actor from the token and the complete selected
-# context from request identifiers. It matches that tuple against the actor's selectable candidates;
-# the RP's selection is transport, never authority. Existing Avatar policy, ownership-period and
+# Server-to-server from a Base Self-RP: the caller presents a fresh Governance token derived from
+# its active local RP session. The owner re-resolves the real actor and the complete selected context
+# from request identifiers. It matches that tuple against the actor's selectable candidates; the
+# RP's selection is transport, never authority. Existing Avatar policy, ownership-period and
 # membership checks then apply.
 module AvatarAuthorityApiEndpoint
   extend ActiveSupport::Concern
@@ -35,16 +34,37 @@ module AvatarAuthorityApiEndpoint
   def authenticate_avatar_caller!
     response.headers["Cache-Control"] = "no-store"
     realm = avatar_realm
-    unless OidcClientRegistry.authenticate_assertion(
-      realm.fetch(:client_id), request.headers["X-Client-Assertion"].to_s,
-      token_url: "#{request.base_url}#{request.path}",
+    verification = BaseApiAuthorityTokenVerifier.call(
+      token: bearer_token,
+      expected_client_id: realm.fetch(:client_id),
+      expected_audience_resource_type: realm.fetch(:resource_type),
     )
-      return render(json: { error: "invalid_client" }, status: :unauthorized)
+    unless verification.authenticated?
+      return render(json: { error: "invalid_token" }, status: :unauthorized)
     end
 
-    raise AccessOpDataUnavailableError
-  rescue AccessOpDataUnavailableError
+    access_state = BrowserRpAuthentication::AccessState.new(
+      status: :valid,
+      resource: verification.principal,
+      rp_session: verification.session,
+      payload: verification.authentication_payload,
+      security_context: nil,
+    )
+    @avatar_actor = BaseZenithIdentityResolver.call(access_state:, surface: realm.fetch(:surface))
+    @avatar_root = verification.session
+  rescue AccessOpDataUnavailableError, BaseZenithIdentityResolver::DependencyUnavailable
     render_problem(:service_unavailable)
+  rescue BaseZenithIdentityResolver::LoginBlocked, BaseZenithIdentityResolver::WithdrawalRequired
+    render(json: { error: "forbidden" }, status: :forbidden)
+  rescue ActiveRecord::RecordNotFound
+    render(json: { error: "invalid_token" }, status: :unauthorized)
+  end
+
+  def bearer_token
+    scheme, token = request.authorization.to_s.split(" ", 2)
+    return if scheme != "Bearer" || token.blank? || token.match?(/\s/)
+
+    token
   end
 
   # Base APP and ORG selections are owned by their RP sessions. The owner treats every supplied

@@ -20,6 +20,8 @@ class MemberStatus < AppPrincipalRecord
   NOTHING = 5
   DEFAULTS = [ACTIVE, INACTIVE, PENDING, DELETED, NOTHING].freeze
 
+  self.record_timestamps = false
+
   has_many :members,
            foreign_key: :status_id,
            dependent: :restrict_with_error,

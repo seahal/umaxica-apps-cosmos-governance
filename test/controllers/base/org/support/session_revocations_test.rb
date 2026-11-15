@@ -60,13 +60,36 @@ class Base::Org::Support::SessionRevocationsTest < ActionDispatch::IntegrationTe
     assert_not SupportClientPolicy.new(@other, user: @operator).apply(:show?)
   end
 
-  test "unavailable Access never turns a revocation request into a local epoch change or confirmed audit" do
-    headers = as_staff_headers(@operator, host: @host)
+  test "Governance account listing remains available while Access-owned session reads and revocation fail closed" do
+    [OperatorCapabilityGrant::SUPPORT_ACCOUNT_READ_APP,
+     OperatorCapabilityGrant::SUPPORT_SESSION_REVOKE_APP,].each do |capability|
+      OperatorCapabilityGrant.create!(
+        operator: @operator, origin: "bootstrap", capability:, reason_code: "bootstrap",
+        starts_at: 1.minute.ago, expires_at: 1.day.from_now,
+      )
+    end
+    headers = as_staff_headers(@operator, host: @host, select_available_org_persona: true)
     before = @client.reload.attributes
     before_audits = Chronicle.where(action: "support.session.revoked").count
-    get base_org_support_clients_url(ri: "jp", host: @host), headers: headers
+
+    get base_org_support_client_url(@client.public_id, ri: "jp", host: @host), headers: headers
 
     assert_response :service_unavailable
+    assert_nil response.location
+    assert_not_includes response.body, @client.public_id
+
+    get base_org_support_client_revocation_url(@client.public_id, SecureRandom.uuid, ri: "jp", host: @host),
+        headers: headers
+
+    assert_response :not_found
+    assert_nil response.location
+
+    get base_org_support_clients_url(ri: "jp", host: @host), headers: headers
+
+    assert_response :success
+    assert_equal "private, no-store", response.headers["Cache-Control"]
+    assert_includes response.body, @client.public_id
+
     post base_org_support_client_revocations_url(@client.public_id, host: @host),
          params: { reason_code: "security_incident", ticket_id: "ticket-1", operation_id: SecureRandom.uuid },
          headers: headers
@@ -77,7 +100,7 @@ class Base::Org::Support::SessionRevocationsTest < ActionDispatch::IntegrationTe
   end
 
   test "cross-site revocation is refused by CSRF before any Access or account mutation" do
-    headers = as_staff_headers(@operator, host: @host)
+    headers = as_staff_headers(@operator, host: @host, select_available_org_persona: true)
     before = @client.reload.attributes
     before_audits = Chronicle.where(action: "support.session.revoked").count
     original = ActionController::Base.allow_forgery_protection

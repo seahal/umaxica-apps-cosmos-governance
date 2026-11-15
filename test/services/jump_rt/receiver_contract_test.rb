@@ -10,7 +10,7 @@ class JumpRtReceiverContractTest < ActiveSupport::TestCase
     "0.3.0 existing fixture" => JSON.parse(
       Rails.root.join("test/fixtures/files/jump_receiver_contract.json").read,
     ).freeze,
-    "0.4.0 pinned candidate" => JSON.parse(
+    "0.4.0 pre-cutover candidate" => JSON.parse(
       Rails.root.join("test/fixtures/files/jump_receiver_contract_0_4_0.json").read,
     ).freeze,
   }.freeze
@@ -18,9 +18,11 @@ class JumpRtReceiverContractTest < ActiveSupport::TestCase
   self.fixture_table_names = []
 
   setup do
-    @private_key = OpenSSL::PKey::EC.generate("secp384r1")
-    @public_jwk = JWT::JWK.new(@private_key, kid: "jump-test").export.stringify_keys.except("d").merge(
-      "alg" => "ES384",
+    @private_key = OpenSSL::PKey::RSA.generate(3072)
+    @public_jwk = JWT::JWK.new(@private_key, kid: "jump-test").export.stringify_keys.except(
+      *JitSecurityJwtJwk::PRIVATE_FIELDS,
+    ).merge(
+      "alg" => "PS256",
       "use" => "sig",
     )
     @now = Time.current.change(usec: 0)
@@ -52,7 +54,7 @@ class JumpRtReceiverContractTest < ActiveSupport::TestCase
           rpl: "reuse",
           url: url_case.fetch("signed_url"),
         }
-        token = JWT.encode(payload, @private_key, "ES384", { typ: "JWT", kid: "jump-test" })
+        token = JWT.encode(payload, @private_key, "PS256", { typ: "JWT", kid: "jump-test" })
 
         result = JumpRtReturnVerifier.call(
           token: token,
@@ -68,7 +70,7 @@ class JumpRtReceiverContractTest < ActiveSupport::TestCase
   end
 
   test "contract time and size limits match the receiver" do
-    candidate = CONTRACTS.fetch("0.4.0 pinned candidate")
+    candidate = CONTRACTS.fetch("0.4.0 pre-cutover candidate")
 
     assert_equal candidate.fetch("inbound_max_ttl_seconds"), JumpRtReturnVerifier::MAX_RETURN_TTL
     assert_equal candidate.fetch("clock_tolerance_seconds"), JumpRtReturnVerifier::LEEWAY
@@ -76,12 +78,12 @@ class JumpRtReceiverContractTest < ActiveSupport::TestCase
   end
 
   test "contract claim and header values match the receiver codec" do
-    candidate = CONTRACTS.fetch("0.4.0 pinned candidate")
+    candidate = CONTRACTS.fetch("0.4.0 pre-cutover candidate")
 
     assert_equal candidate.fetch("schema"), SecurityJwtJumpRtTokenCodec::SCHEMA
     assert_equal candidate.fetch("rpl"), SecurityJwtJumpRtTokenCodec::REPLAY_POLICY
     assert_equal candidate.fetch("sub"), SecurityJwtJumpRtTokenCodec::TOKEN_SUBJECT
-    assert_equal candidate.dig("header", "alg"), SecurityJwtJumpRtTokenCodec::ALGORITHM
+    assert_equal "PS256", SecurityJwtJumpRtTokenCodec::ALGORITHM
     assert_equal candidate.dig("header", "typ"), SecurityJwtJumpRtTokenCodec::TOKEN_TYPE
   end
 

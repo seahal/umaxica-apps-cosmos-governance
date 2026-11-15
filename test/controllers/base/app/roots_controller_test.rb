@@ -7,14 +7,18 @@ require "test_helper"
 class Base::App::RootsControllerTest < ActionDispatch::IntegrationTest
   fixtures :clients, :client_statuses
 
-  test "renders the public root without retired sign-in navigation" do
+  test "renders the public root with the Base App neutral entry link" do
     host! ENV.fetch("PUBLIC_BASE_SERVICE_URL")
     get base_app_root_url(ri: "jp")
 
     assert_response :success
     assert_equal "base/app/roots/index", inertia_component
     assert_equal "Base App", inertia_props.fetch("heading")
-    assert_nil inertia_props.dig("chrome", "account_navigation")
+    navigation = inertia_props.dig("chrome", "account_navigation")
+
+    assert_equal I18n.t("layouts.shared.account_navigation.label"), navigation.fetch("label")
+    assert_not navigation.fetch("signed_in")
+    assert_equal "/sign?ri=jp", navigation.fetch("links").sole.fetch("href")
   end
 
   test "a malformed RP credential is cleared before public Home renders anonymously" do
@@ -28,7 +32,10 @@ class Base::App::RootsControllerTest < ActionDispatch::IntegrationTest
 
     assert_response :success
     assert_equal "base/app/roots/index", inertia_component
-    assert_nil inertia_props.dig("chrome", "account_navigation")
+    navigation = inertia_props.dig("chrome", "account_navigation")
+
+    assert_equal I18n.t("layouts.shared.account_navigation.label"), navigation.fetch("label")
+    assert_equal "/sign?ri=jp", navigation.fetch("links").sole.fetch("href")
     assert_equal "private, no-store", response.headers.fetch("Cache-Control")
 
     set_cookie_header = Array(response.headers["Set-Cookie"]).join("\n")
@@ -173,12 +180,15 @@ class Base::App::RootsControllerTest < ActionDispatch::IntegrationTest
     assert_equal I18n.t("errors.messages.not_authorized"), response.body
   end
 
-  test "anonymous Dashboard remains unauthorized without a sign-in route" do
+  test "anonymous Dashboard is sent to the neutral sign entry" do
     host! ENV.fetch("PUBLIC_BASE_SERVICE_URL")
     get base_app_dashboard_url(ri: "jp")
 
-    assert_response :unauthorized
-    assert_nil response.location
+    assert_response :see_other
+    location = URI.parse(response.location)
+
+    assert_equal "/sign", location.path
+    assert_equal({ "ri" => "jp", "target_link_uri" => "/dashboard" }, Rack::Utils.parse_query(location.query))
     assert_equal "no-store", response.headers["Cache-Control"]
   end
   private
@@ -273,7 +283,7 @@ class Base::App::RootsControllerTest
 
   def load_jump_rt_env!
     @jump_rt_env_originals ||= {}
-    jump_rt_key = Base64.strict_encode64(OpenSSL::PKey::EC.generate("secp384r1").to_der)
+    jump_rt_key = Base64.strict_encode64(OpenSSL::PKey::RSA.generate(3072).to_der)
     %w(FOREIGN_APP FOREIGN_ORG BASE_APP BASE_ORG).each do |namespace|
       ENV["JWT_#{namespace}_ACTIVE_KID"] = "#{namespace.downcase.tr("_", "-")}-test"
       ENV["JWT_#{namespace}_PRIVATE_KEY"] = jump_rt_key

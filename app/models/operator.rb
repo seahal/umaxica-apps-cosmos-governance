@@ -58,15 +58,54 @@
 class Operator < OrgPrincipalRecord
   # rubocop:disable Rails/HasManyOrHasOneDependent
   include Retainable
+
+  attribute :discard_at, :datetime, default: -> { Retainable::SENTINEL }
+  attribute :purge_eligible_at, :datetime, default: -> { Retainable::SENTINEL }
+  validates :discard_at, presence: true
+  validates :purge_eligible_at, presence: true
+  validate :retention_order_valid
+  validate :retention_times_not_before_created_at, on: :update
+  Retainable.register_host(self)
+
   include HasBirthdate
 
+  encrypts :birthdate
+  validates :birthdate, length: { maximum: 10 }, allow_blank: true
+  validate :birthdate_format
+  validate :birthdate_not_future
+
   include ::Identity
+
+  scope :withdrawn, -> { where.not(withdrawn_at: nil) }
   include AuthenticationCredentialInventoryOwner
   include WebauthnUserHandleOwner
+
+  before_validation :ensure_webauthn_user_handle, on: :create
+  validates :webauthn_user_handle, presence: true, uniqueness: true
   include SecurityModeConfigurable
   include MfaStatusTrackable
+
+  before_validation :assign_calculated_mfa_status, if: :mfa_status_placeholder?
   include ActorLifecycleConsistency
+
+  validate :lifecycle_timestamps_are_consistent
   include AdministrativeAccessLockable
+
+  attribute :access_state, :string, default: AdministrativeAccessLockable::ACCESS_STATE_ENABLED
+  validates :access_state, presence: true, inclusion: { in: AdministrativeAccessLockable::ACCESS_STATES }
+  validates :admin_locked_reason_code,
+            inclusion: { in: AdministrativeAccessLockable::ADMIN_LOCK_REASON_CODES },
+            allow_nil: true,
+            if: :admin_locked_reason_code_column?
+  validate :administrative_lock_columns_are_consistent
+
+  before_validation :normalize_public_id
+  before_validation :assign_public_id!, on: :create
+  # before_save covers writes with validation disabled so the database NOT NULL still holds.
+  before_save :ensure_webauthn_user_handle
+  before_save :normalize_public_id
+  around_create :retry_on_public_id_collision
+  after_create :refresh_mfa_status!
 
   LOGIN_BLOCKED_STATUS_IDS = [OperatorStatus::RESERVED].freeze
   # ORG has no public registration; no Operator status is an unfinished registration.
@@ -213,11 +252,6 @@ class Operator < OrgPrincipalRecord
               with: PUBLIC_ID_FORMAT,
               message: :invalid_format,
             }
-  before_validation :normalize_public_id
-  before_validation :assign_public_id!, on: :create
-  before_save :normalize_public_id
-  around_create :retry_on_public_id_collision
-
   delegate :generate_public_id, to: :class
 
   # Lifecycle and administrative-lock writers acquire this before any Operator row lock.
@@ -233,12 +267,14 @@ class Operator < OrgPrincipalRecord
   def self.generate_public_id
     Array.new(PUBLIC_ID_LENGTH) { PUBLIC_ID_ALPHABET[SecureRandom.random_number(PUBLIC_ID_ALPHABET.length)] }.join
   end
+  public_class_method :generate_public_id
 
   def self.normalize_public_id(value)
     return value if value.nil?
 
     value.strip.gsub(/[-_]/, "").upcase
   end
+  public_class_method :normalize_public_id
 
   # SQL counterpart of capability_eligible?, used while guarding availability transitions.
   def self.capability_eligible_at(now)
@@ -249,6 +285,7 @@ class Operator < OrgPrincipalRecord
   end
   public_class_method :capability_eligible_at
 
+  public
   def operator?
     true
   end

@@ -10,6 +10,9 @@ module Tech
           include ::MachineJsonNegotiation
 
           AUTHENTICATION_MODE = :bare
+
+          before_action :disable_machine_json_response_cache
+
           before_action :refuse_unless_machine_json_acceptable
 
           public

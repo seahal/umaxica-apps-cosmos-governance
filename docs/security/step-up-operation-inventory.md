@@ -1,13 +1,21 @@
 # Step-Up Operation Inventory
 
-This inventory records the retained Base step-up requirements and mutation guards. Auth ceremony,
-OIDC result-delivery and Base/Tech RP entry routes were removed during the 2026-11-11 surface reset;
-those sign-in and provider continuation flows are unavailable. The runtime requirement remains
-owned by Base action policy. The scope catalog is only a destination validator, not a policy source.
+> **Cosmos ownership amendment (2026-11-13, owner):** Access executes authentication ceremonies.
+> Governance retains RP-local state, policy inputs, credential records and its Access handoff. It
+> does not execute sign-in, sign-up, step-up, WebAuthn, TOTP or social authentication ceremonies.
+> The matrices and verification results below describe the pre-split implementation and are
+> historical. Current route behavior is summarized in [`Step-Up MFA Status`](step-up-mfa-status.md).
 
-## Requirement vocabulary
+The current scope catalog is in `app/values/step_up_scope_catalog.rb`. The Base `/verification`
+entry constructs an RP-to-Access handoff; it does not run a local verifier. Completion and
+cancellation routes fail explicitly while the Access data API is unavailable. Base APP and ORG
+Passkey routes and Base APP TOTP routes expose retained credential records as read-only list/detail
+pages; no local enrollment or verification route remains. These boundaries are exercised by current
+controller and integration tests.
 
-| Requirement              | Current contract                                                                                                                 | Deadline / binding                                                                                                                                                   | First registration                                                                      | Additional registration                                                                               | Unavailable method                                                                                    |
+## Historical requirement vocabulary (pre-split)
+
+| Requirement              | Former contract                                                                                                                  | Deadline / binding                                                                                                                                                   | First registration                                                                      | Additional registration                                                                               | Unavailable method                                                                                    |
 | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
 | Normal step-up           | The operation's explicit scope, non-empty allowed methods, phishing-resistance and user-verification booleans, and a fresh event | 15 minutes; actor, resource, tenant, session and transaction bindings are checked at admission and mutation                                                          | Uses the separate `bootstrap` transaction only when the actor has no credential history | Uses `credential_registration` and an independent step-up where the operation requires it             | Recomputed from active credentials; no method is silently substituted                                 |
 | Full reauthentication    | `purpose: reauthentication` and `full_reauthentication_required: true`; the event is not interchangeable with ordinary freshness | The same current actor/resource/tenant and session checks apply; a successful full reauthentication replaces the root token under the session-reset contract         | Never satisfied by registration evidence                                                | Never satisfied by registration evidence                                                              | Refuse and require the configured full ceremony                                                       |
@@ -24,23 +32,23 @@ The explicitly scoped `bootstrap` and `credential_registration` ceremonies retai
 bindings and Boolean flags. They remain separate from ordinary disabled requirements and never grant
 step-up freshness.
 
-## Operation matrix
+## Historical operation matrix (pre-split)
 
-The former Google and Apple link/unlink entry is historical: its Auth settings controllers and
-Base social identity routes were removed, so no local caller remains.
+The former Google and Apple link/unlink entry is historical: its Auth settings controllers and Base
+social identity routes were removed, so no local caller remains.
 
-| Surface | Actor / resource | Operation | Current caller and scope | Current protection | Target
+| Surface | Actor / resource | Operation | Former caller and scope | Former protection | Target
 evidence / behavior | Unavailable-method behavior | | --- | --- | --- | --- | --- | --- | | app |
 Client / own identity | Google and Apple link or unlink |
 `Auth::App::Settings::{Googles,Apples}Controller`, `social_link` / `social_unlink` | Step-up before
 mutation | Normal step-up; provider identity itself is not evidence | Available methods are
 recomputed and the operation is refused when none remain | | app | Client / own identity | Passkey
-creation, update, removal | Base identity and passkey controllers, `settings_passkey` |
-Bootstrap for the first credential; step-up for existing credentials | Registration and ordinary
-step-up remain separate | Registration entry is available only through configured bootstrap rules;
-no credential is silently selected | | app | Client / own identity | TOTP creation and removal |
-Base TOTP controllers, `settings_totp` | Bootstrap for first TOTP; step-up for later changes |
-TOTP enrollment does not grant step-up freshness | Only active app TOTP is offered and permanent
+creation, update, removal | Base identity and passkey controllers, `settings_passkey` | Bootstrap
+for the first credential; step-up for existing credentials | Registration and ordinary step-up
+remain separate | Registration entry is available only through configured bootstrap rules; no
+credential is silently selected | | app | Client / own identity | TOTP creation and removal | Base
+TOTP controllers, `settings_totp` | Bootstrap for first TOTP; step-up for later changes | TOTP
+enrollment does not grant step-up freshness | Only active app TOTP is offered and permanent
 credential lock is respected | | app | Client / own identity | Email and telephone change or
 removal | Base identity controllers, `settings_email` / `settings_telephone` | Step-up and contact
 verification as applicable | Contact evidence remains bound to actor, candidate, flow and browser |
@@ -76,8 +84,8 @@ capability | `Base::Org::Iam::*`, `operator_capability` | Existing Action Policy
 read-only screen checks proof without taking a row lock, while mutations recheck under the owner
 lock | The screen returns grantable capabilities only after proof succeeds; mutations re-evaluate
 capability, tenant and target resource | Refuse without disclosing grant options or changing a
-grant | | org | Operator / support resource | Read the session-revocation screen or revoke
-Client sessions | `Base::Org::Support::Clients::*`, `support_session_revoke` | Existing support
+grant | | org | Operator / support resource | Read the session-revocation screen or revoke Client
+sessions | `Base::Org::Support::Clients::*`, `support_session_revoke` | Existing support
 authorization plus Step-Up; the read-only screen checks proof without taking a row lock, while the
 mutation rechecks under the owner lock | The screen returns the active-session count only after
 proof succeeds; the mutation rechecks target actor, tenant and sessions | Refuse without disclosing
@@ -117,9 +125,10 @@ for passkeys and TOTP are `/identity/passkeys` and `/identity/totps`; the catalo
 stored return target belongs to the scope. It does not decide allowed methods, assurance, actor,
 resource, tenant, or reauthentication policy.
 
-## AAL removal ledger
+## Historical AAL removal ledger
 
-The following production files were identified by the exact retirement search:
+The following paths were candidates in the pre-split AAL retirement audit. Some remain as owner-side
+policy or record code; this preserved list is not a current file inventory:
 
 ```text
 app/controllers/base/app/avatar_ownership_transfers_controller.rb
@@ -158,14 +167,14 @@ app/values/step_up_requirement.rb
 | `SUPPORTED_AALS`, `aal_matches?`, `aal_rank`, `aal_supported?`, `achieved_aal` | Removed from runtime authorization APIs.                                                                                                        | No production references remain outside this ledger and deprecation comments.                                                                 |
 | External OIDC `acr`                                                            | Preserved as an external authentication-context claim; it is not translated into the internal step-up policy.                                   | Only an explicitly accepted OIDC claims migration may change it.                                                                              |
 
-## Delivered verification status
+## Historical delivered verification status
 
-The operation matrix above describes the delivered Phase 15–18 contract, not an unfinished target.
-Requirement construction is strict, is carried through admission, Auth, result delivery and Base
-acceptance, and is rechecked against the current actor, resource, tenant and session immediately
-before the protected mutation. Cancellation, conflict, stale-result, continuation and method-choice
-paths are terminal or explicitly restarted; they do not promote a redirect or return target to
-proof.
+The operation matrix above records the delivered Phase 15–18 pre-split contract, not current
+Governance behavior or an unfinished Governance target. Requirement construction is strict, is
+carried through admission, Auth, result delivery and Base acceptance, and is rechecked against the
+current actor, resource, tenant and session immediately before the protected mutation. Cancellation,
+conflict, stale-result, continuation and method-choice paths are terminal or explicitly restarted;
+they do not promote a redirect or return target to proof.
 
 | Requirement                                                       | Source                         | Implementation boundary                                                                   | Verification                                                          | Status       |
 | ----------------------------------------------------------------- | ------------------------------ | ----------------------------------------------------------------------------------------- | --------------------------------------------------------------------- | ------------ |
@@ -184,7 +193,7 @@ or NIST conformance. See
 [OWASP CSRF guidance](https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html)
 for the browser-bound admission threat model.
 
-## Traceability status
+## Historical traceability status
 
 | Requirement                                   | Source                    | Implementation                                              | Test evidence                                            | Status                                                           |
 | --------------------------------------------- | ------------------------- | ----------------------------------------------------------- | -------------------------------------------------------- | ---------------------------------------------------------------- |

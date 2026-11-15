@@ -6,6 +6,11 @@ every such path is fixed before unit 7; the O-9 owner endpoint and admission per
 reported in `zero.md` with the implementation. This document amends contract revision 12 as
 revision 13.
 
+> **Runtime ownership update (2026-11-13):** Access owns OpenID Provider behavior and all
+> authentication ceremonies; Governance runs none. This remains a cross-service design proposal, not
+> evidence that Governance currently implements local admissions or ceremony flows. References to
+> the former Auth/Visa implementation are historical owner names.
+
 ## O-9: Base-to-Auth admissions
 
 Use one short-lived, single-use admission for each of two purposes: passkey registration and

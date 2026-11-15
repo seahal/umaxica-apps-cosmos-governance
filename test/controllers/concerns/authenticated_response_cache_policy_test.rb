@@ -43,8 +43,8 @@ class AuthenticatedResponseCachePolicyTest < ActionDispatch::IntegrationTest
 
     get base_app_identity_url(ri: "jp", host: @host), headers: host_headers(@host).merge("If-None-Match" => validator)
 
-    assert_response :unauthorized
-    assert_nil response.location
+    assert_response :see_other
+    assert_redirected_to base_app_sign_show_path(ri: "jp", target_link_uri: "/identity")
 
     session_id = Rack::Utils.parse_cookies_header(headers.fetch("Cookie")).fetch(
       OidcRpBrowserCredentialContract::SESSION_COOKIE,
@@ -54,7 +54,8 @@ class AuthenticatedResponseCachePolicyTest < ActionDispatch::IntegrationTest
     get base_app_identity_url(ri: "jp", host: @host), headers: headers.merge("If-None-Match" => validator)
 
     assert_not_equal 304, response.status
-    assert_response :unauthorized
+    assert_response :see_other
+    assert_redirected_to base_app_sign_show_path(ri: "jp", target_link_uri: "/identity")
   end
 
   test "an authenticated Inertia visit is no-store" do

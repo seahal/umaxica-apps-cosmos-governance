@@ -11,7 +11,7 @@ module BaseMembershipRelay
   def membership_authority
     @membership_authority ||= MembershipAuthorityClient.new(
       surface: self.class.const_get(:MEMBERSHIP_SURFACE, false),
-      access_token: BrowserCredentialCookie.read(cookies, OidcRpBrowserCredentialContract::ACCESS_COOKIE),
+      rp_session: browser_rp_access_state.rp_session,
       persona: Actor.selection.account_public_id,
     )
   end

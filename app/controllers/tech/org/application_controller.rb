@@ -18,18 +18,19 @@ module Tech
       include ::AuthorizationOperator
       include ::VerificationOperator
       include ActionPolicy::Controller
-      include SurfaceRouteAliasHelper
       include ::ActorSupport
       include ::Finisher
 
       AUTHENTICATION_MODE = :deny_all
 
+      prepend_before_action :enforce_fqdn_availability!
+
       after_action :verify_private_action_authorized!
       after_action :apply_authenticated_page_cache_policy!
-      helper_method :current_resource, :browser_rp_authenticated?, :browser_rp_session_public_id,
+      helper_method :current_resource, :browser_rp_authenticated?,
                     :current_browser_session_security_context, :current_session_public_id,
-                    :current_session, :logged_in?, :current_actor, :current_account,
-                    :current_operator, :active_operator?, :logged_in_operator?
+                    :current_session, :logged_in?, :current_actor,
+                    :current_operator
       prepend_before_action :guard_browser_rp_unsafe_request!
       layout "tech/org/application"
 
@@ -87,10 +88,12 @@ module Tech
       end
 
       # R5-WU11: the org authority decides tech.access over HTTPS for every private Tech action,
-      # from the Operator's current Access JWT; any failure denies (no positive cache).
+      # from the active Tech RP session; any failure denies (no positive cache).
       def enforce_tech_access!
-        access_token = BrowserCredentialCookie.read(cookies, OidcRpBrowserCredentialContract::ACCESS_COOKIE)
-        authorize!(TechRemoteAccessPolicy::Request.new(access_token:), to: :show?, with: TechRemoteAccessPolicy)
+        authorize!(
+          TechRemoteAccessPolicy::Request.new(rp_session: browser_rp_access_state.rp_session),
+          to: :show?, with: TechRemoteAccessPolicy,
+        )
       end
 
       def handle_authorization_error(exception)

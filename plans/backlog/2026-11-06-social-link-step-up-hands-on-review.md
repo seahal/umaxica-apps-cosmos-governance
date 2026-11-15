@@ -2,8 +2,11 @@
 
 Date: 2026-11-06
 
-Status: Backlog. The owner wants to try this in development once `specs/op-mediated-step-up` O-9
-(Base → Visa → Auth → Visa → Base) is connected; nothing here is a new requirement.
+Status: superseded for Governance on 2026-11-13. Access owns authentication ceremonies, and
+Governance no longer runs the local Auth/Visa social-link flow described here. The owner-side
+identity records and audit history remain in Governance. Do not resume this implementation as
+written; any future linking contract must use the accepted Access owner boundary. See
+[`evidence/2026-11-13-remove-unreachable-ceremony-code-Q7M2.md`](../../evidence/2026-11-13-remove-unreachable-ceremony-code-Q7M2.md).
 
 ## Intended behavior (contract, not yet runtime-verified)
 
@@ -15,11 +18,12 @@ Status: Backlog. The owner wants to try this in development once `specs/op-media
   Removing the last sign-in method is refused.
 - If the user has no step-up method yet (for example signed up with Google only), Base verification
   sends them to the bootstrap choice (register a passkey or TOTP first,
-  `Base::App::VerificationsController#redirect_to_bootstrap_choice`). Bootstrap under the RP cell path
-  is out of scope of the step-up spec and is unverified
+  `Base::App::VerificationsController#redirect_to_bootstrap_choice`). Bootstrap under the RP cell
+  path is out of scope of the step-up spec and is unverified
   (`2026-11-03-base-verification-setup-bootstrap-rp-cell.md`).
-- Current code before O-9 (for comparison): Auth `AppSocialCeremonyEntry#require_social_link_step_up!`
-  and `Auth::App::Settings::{Googles,Apples}Controller#require_step_up_for_mutation!`.
+- Current code before O-9 (for comparison): Auth
+  `AppSocialCeremonyEntry#require_social_link_step_up!` and
+  `Auth::App::Settings::{Googles,Apples}Controller#require_step_up_for_mutation!`.
 - After O-9, the APP identity hub keeps only the Base social identities link; the Auth
   `settings/google` and `settings/apple` show/edit pages and their hub links are removed.
 

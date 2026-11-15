@@ -1,5 +1,10 @@
 # Connect the Base Persona Selector to the Sign-In Flow State Machine
 
+**Superseded for Governance on 2026-11-13:** only the proposed integration with a local sign-in
+state machine is retired; Access owns authentication ceremonies and Governance runs none. Existing
+RP selector behavior remains governed by its current contracts. See
+[`evidence/2026-11-13-remove-unreachable-ceremony-code-Q7M2.md`](../../evidence/2026-11-13-remove-unreachable-ceremony-code-Q7M2.md).
+
 Date: 2026-11-06
 
 Status: Backlog. The owner chose option B on 2026-11-06; Base enforces the one-selection-per-session

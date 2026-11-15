@@ -22,7 +22,7 @@ class JumpRtIssuerJwksAuthorityTest < ActionDispatch::IntegrationTest
       claims, header = JWT.decode(token, nil, false)
 
       assert_equal origin, claims.fetch("iss"), namespace
-      assert_equal "ES384", header.fetch("alg"), namespace
+      assert_equal "PS256", header.fetch("alg"), namespace
       assert_equal "reuse", claims.fetch("rpl"), namespace
       host! host
       https!
@@ -39,16 +39,16 @@ class JumpRtIssuerJwksAuthorityTest < ActionDispatch::IntegrationTest
                       namespace
       assert_equal keys.size, keys.pluck("kid").uniq.size, namespace
       keys.each do |key|
-        assert_equal "ES384", key.fetch("alg"), namespace
+        assert_equal "PS256", key.fetch("alg"), namespace
         assert_equal "sig", key.fetch("use"), namespace
-        assert_equal "EC", key.fetch("kty"), namespace
-        assert_equal "P-384", key.fetch("crv"), namespace
+        assert_equal "RSA", key.fetch("kty"), namespace
+        assert_operator JWT::JWK.import(key).public_key.n.num_bits, :>=, 3_072, namespace
       end
       assert_includes keys.pluck("kid"), header.fetch("kid"), namespace
       assert_empty keys.flat_map(&:keys) & JitSecurityJwtJwk::PRIVATE_FIELDS, namespace
       published_keys[namespace] = keys
       verified, = JWT.decode(
-        token, nil, true, algorithms: ["ES384"],
+        token, nil, true, algorithms: ["PS256"],
                           jwks: JWT::JWK::Set.new(published),
                           verify_iss: true, iss: origin,
                           verify_aud: true, aud: Rails.configuration.x.boot_config.fetch(:jump).audience,
@@ -57,9 +57,9 @@ class JumpRtIssuerJwksAuthorityTest < ActionDispatch::IntegrationTest
       assert_equal claims, verified, namespace
     end
 
-    base_app_material = published_keys.fetch("BASE_APP").map { |key| key.slice("kty", "crv", "x", "y") }
-    base_org_material = published_keys.fetch("BASE_ORG").map { |key| key.slice("kty", "crv", "x", "y") }
+    base_app_material = published_keys.fetch("BASE_APP").map { |key| key.slice("kty", "n", "e") }
+    base_org_material = published_keys.fetch("BASE_ORG").map { |key| key.slice("kty", "n", "e") }
 
-    assert_empty base_app_material & base_org_material, "Base app and org JWKS must not share public key material"
+    assert_equal base_app_material, base_org_material, "Base app and org JWKS share the repository keyset"
   end
 end

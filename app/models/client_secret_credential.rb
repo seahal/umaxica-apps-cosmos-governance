@@ -2,7 +2,22 @@
 
 class ClientSecretCredential < AppZenithRecord
   include PublicId
+
+  before_validation :generate_public_id, on: :create
+  before_validation :refresh_generated_public_id_after_collision, on: :create
+  before_create :generate_public_id
+  around_create :retry_public_id_collision
+  validate :public_id_immutable_after_create, on: :update
+  validates :public_id, presence: true, length: { is: PublicId::GENERATION_SIZE }, uniqueness: true
   include Retainable
+
+  attribute :discard_at, :datetime, default: -> { Retainable::SENTINEL }
+  attribute :purge_eligible_at, :datetime, default: -> { Retainable::SENTINEL }
+  validates :discard_at, presence: true
+  validates :purge_eligible_at, presence: true
+  validate :retention_order_valid
+  validate :retention_times_not_before_created_at, on: :update
+  Retainable.register_host(self)
 
   MAX_PER_CLIENT = 20
   SECRET_FORMAT = /\A[1-9A-HJ-NP-Za-km-z]{32}\z/
@@ -33,14 +48,6 @@ class ClientSecretCredential < AppZenithRecord
   }
 
   public
-
-  def commit_sign_in_claim!(actor_context:, flow:, ceremony:, at:)
-    raise AccessOpDataUnavailableError
-  end
-
-  def commit_sign_in_retirement!(actor_context:, at:, purge_at:, successful:, flow:, reason:)
-    raise AccessOpDataUnavailableError
-  end
 
   # confirmed_at needs a validated transition, so fixed Rails writer guards
   # protect ordinary assignments instead of excluding the column from every save.
@@ -201,9 +208,8 @@ class ClientSecretCredential < AppZenithRecord
     return unless persisted?
 
     attribute = name.to_s
-    if %w(claimed_at claim_operation_id claim_sign_in_flow_ref claim_ceremony_session_id
-          consumed_at).include?(attribute) &&
-        !@authentication_fact_write
+    if %w(claimed_at claim_operation_id claim_sign_in_flow_ref claim_ceremony_session_id consumed_at)
+        .include?(attribute)
       raise ActiveRecord::ReadonlyAttributeError, attribute
     end
     if attribute == "confirmed_at" && !@storage_confirmation_write

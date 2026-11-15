@@ -1,6 +1,15 @@
 # Realm-separated identifiers, OTP ownership and dead history
 
-Status: accepted by the user on 2026-10-07; implementation in progress.
+Status: accepted by the user on 2026-10-07; authentication-ceremony execution is superseded for
+Governance by the owner decision dated 2026-11-13. Durable identity, credential and history
+contracts remain in force.
+
+> **Runtime ownership supersession (2026-11-13, owner):** Access owns authentication ceremony
+> execution, and Governance runs none. Local sign-in/sign-up/recovery/contact-proof/step-up ceremony
+> issuers and consumers described below are historical for Governance and were removed when they had
+> no application caller. Durable identity, credential, audit and history records remain owned here.
+> This change does not drop tables, columns, or persisted rows; the remaining data-placement and
+> schema-retirement work requires its own review.
 
 ## Additional implementation authorization
 
@@ -193,11 +202,11 @@ has no lifecycle or policy state; old plain-Root encoding is not accepted by the
 Issuance and verification preserve the existing live Root/device/candidate requirements while
 placing the random verifier, consumption and bounded receipt on the Email ceremony. APP/COM settings
 Email HTTP callers now use this series and store the original child UUID in their surface-local
-session. They do not issue or verify Source HOTP or registration JSON. Identifier-owned HOTP
-runtime methods and withdrawal proof writes are retired; the legacy physical columns and remaining
+session. They do not issue or verify Source HOTP or registration JSON. Identifier-owned HOTP runtime
+methods and withdrawal proof writes are retired; the legacy physical columns and remaining
 Telephone/ORG schema consumers still require a verified forward migration before overall completion.
-The Email
-registration delivery binding moves from `{contact_ceremony_transaction_ref,contact_otp_counter}` to
+The Email registration delivery binding moves from
+`{contact_ceremony_transaction_ref,contact_otp_counter}` to
 `{contact_ceremony_transaction_ref,contact_otp_generation}`. Both UUIDs are authoritative ceremony
 facts supplied by issuance; the random code travels only in the existing encrypted transport
 payload. The dedicated late guard resolves the original Root from the typed session tuple and keeps
@@ -337,25 +346,24 @@ not complete the outstanding migration of signup proof out of identifier rows.
 
 Email and Telephone ceremony OTPs are issued only when the requested purpose belongs to the
 transaction's authoritative operation. The current mapping is `sign_up` to `sign_up`, `sign_in` to
-`sign_in`, `recovery` to `recovery`, `withdrawal` to `withdrawal`, and
-`credential_registration` to the concrete `registration` or `replacement` operation. The mapping is
-defined independently in the Email and Telephone proof concerns; it does not reintroduce a shared
-stateful channel policy.
+`sign_in`, `recovery` to `recovery`, `withdrawal` to `withdrawal`, and `credential_registration` to
+the concrete `registration` or `replacement` operation. The mapping is defined independently in the
+Email and Telephone proof concerns; it does not reintroduce a shared stateful channel policy.
 
-The check is performed after the ceremony row is locked and reloaded, before a new code, generation or
-verifier is written. Delivery, verification and retained-evidence lookup apply the same pair check.
-Consequently, a persisted or stale cross-purpose operation cannot issue or consume a proof, and a
-purpose mismatch leaves the transaction's proof fields unchanged. Direct database rows with an invalid
-pair are rejected at every OTP use boundary; this runtime guard is not claimed as a universal database
-CHECK constraint.
+The check is performed after the ceremony row is locked and reloaded, before a new code, generation
+or verifier is written. Delivery, verification and retained-evidence lookup apply the same pair
+check. Consequently, a persisted or stale cross-purpose operation cannot issue or consume a proof,
+and a purpose mismatch leaves the transaction's proof fields unchanged. Direct database rows with an
+invalid pair are rejected at every OTP use boundary; this runtime guard is not claimed as a
+universal database CHECK constraint.
 
 ## Self-controlled TOTP ceremony references
 
-The APP TOTP enrollment transaction's `transaction_id` and `grant_jti` are self-controlled, non-secret
-ceremony identities. New values are issued independently through the shared NanoID-21 `PublicId`
-generator; they remain distinct from OTP generations, TOTP secrets, result identities, protocol
-claims and database primary keys. Explicit references supplied by an authorized internal caller are
-preserved rather than regenerated.
+The APP TOTP enrollment transaction's `transaction_id` and `grant_jti` are self-controlled,
+non-secret ceremony identities. New values are issued independently through the shared NanoID-21
+`PublicId` generator; they remain distinct from OTP generations, TOTP secrets, result identities,
+protocol claims and database primary keys. Explicit references supplied by an authorized internal
+caller are preserved rather than regenerated.
 
 The TOTP transaction factory retries only a database collision on the exact single-column unique
 B-tree for a value it generated, within the repository collision budget and a savepoint. Explicit
@@ -389,16 +397,16 @@ History cannot restore or reactivate an identifier; later reuse can create addit
 The six concrete identifier models expose two explicit destruction boundaries. The dedicated channel
 purgers call `purge_with_dead_history!`; this is the only identifier-level operation that authorizes
 the archive callback to lock the persisted owner and freshly loaded Source row, reject unsaved
-owner/primary-key substitutions, derive the fingerprint from database PII rather than unsaved
-caller edits, insert one history row and delete the Source in the same owning-database transaction.
-Normal user-facing identifier removal calls `destroy_without_dead_history!`, and owner-dependent
+owner/primary-key substitutions, derive the fingerprint from database PII rather than unsaved caller
+edits, insert one history row and delete the Source in the same owning-database transaction. Normal
+user-facing identifier removal calls `destroy_without_dead_history!`, and owner-dependent
 whole-Identity erasure bypasses creation of a new history row because that separate erasure contract
 deletes the owner's existing histories explicitly. An unmarked direct destruction of a persisted
 identifier aborts instead of silently deleting it without history. A scheduled recoverable or
 retained row cannot bypass its deadlines through either path. Protected Email, existing legal holds
 and enforcement protections refuse deletion without retaining a history-only result. A later
-destruction refusal rolls back the inserted history. Due ORG whole-Identity erasure now locks
-and reloads the Operator, rechecks both retention deadlines and enforcement, and performs identifier
+destruction refusal rolls back the inserted history. Due ORG whole-Identity erasure now locks and
+reloads the Operator, rechecks both retention deadlines and enforcement, and performs identifier
 purge, deletion of that Operator's two history collections and Operator deletion in one Zenith
 transaction. Protected Email refuses the transaction, retaining both the Identity and its existing
 histories. Existing idempotent cross-database child cleanup runs before that local commit; it can

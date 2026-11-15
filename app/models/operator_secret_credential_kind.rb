@@ -21,6 +21,8 @@ class OperatorSecretCredentialKind < OrgPrincipalRecord
   # Kind constants
   ALL = [LOGIN].freeze
 
+  self.record_timestamps = false
+
   has_many :staff_secret_credentials, class_name: "OperatorSecretCredential", inverse_of: :staff_secret_credential_kind,
                                       dependent: :restrict_with_exception
 

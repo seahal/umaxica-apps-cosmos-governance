@@ -317,7 +317,7 @@ class AvatarTransferReservationTest < ActiveSupport::TestCase
       attributes = {
         avatar: avatar,
         operation_kind: "enterprise_to_bureau",
-        idempotency_key: "018f2b18-6f5c-7a30-8ec2-4ebc1f0f7a31",
+        idempotency_key: SecureRandom.uuid,
         request_fingerprint: Digest::SHA256.hexdigest("same-request"),
         source_collective_public_id: "enterprise_source_1",
         destination_collective_public_id: "bureau_destination_1",
@@ -349,7 +349,7 @@ class AvatarTransferReservationTest < ActiveSupport::TestCase
       reservation = AvatarOwnershipTransfers::ReservationCreator.call(
         avatar: avatar,
         operation_kind: "enterprise_to_bureau",
-        idempotency_key: "018f2b18-6f5c-7a30-8ec2-4ebc1f0f7a33",
+        idempotency_key: SecureRandom.uuid,
         request_fingerprint: Digest::SHA256.hexdigest("timed-request"),
         source_collective_public_id: "enterprise_timed",
         destination_collective_public_id: "bureau_timed",
@@ -379,7 +379,7 @@ class AvatarTransferReservationTest < ActiveSupport::TestCase
         reservation = AvatarTransferReservation.create!(
           avatar: avatar,
           operation_kind: "enterprise_to_bureau",
-          idempotency_key: "018f2b18-6f5c-7a30-8ec2-4ebc1f0f7a34",
+          idempotency_key: SecureRandom.uuid,
           request_fingerprint: Digest::SHA256.hexdigest("boundary-valid"),
           requested_at: requested_at,
           expires_at: requested_at + 5.days,
@@ -395,7 +395,7 @@ class AvatarTransferReservationTest < ActiveSupport::TestCase
             AvatarTransferReservation.new(
               avatar: avatar,
               operation_kind: "enterprise_to_bureau",
-              idempotency_key: "018f2b18-6f5c-7a30-8ec2-4ebc1f0f7a35",
+              idempotency_key: SecureRandom.uuid,
               request_fingerprint: Digest::SHA256.hexdigest("boundary-invalid"),
               requested_at: requested_at,
               expires_at: requested_at + 5.days + Rational(1, 1_000_000),
@@ -421,7 +421,7 @@ class AvatarTransferReservationTest < ActiveSupport::TestCase
       reservation = AvatarOwnershipTransfers::ReservationCreator.call(
         avatar: avatar,
         operation_kind: "enterprise_to_bureau",
-        idempotency_key: "018f2b18-6f5c-7a30-8ec2-4ebc1f0f7a36",
+        idempotency_key: SecureRandom.uuid,
         request_fingerprint: Digest::SHA256.hexdigest("expire-request"),
         source_collective_public_id: "enterprise_expire",
         destination_collective_public_id: "bureau_expire",
@@ -466,7 +466,7 @@ class AvatarTransferReservationTest < ActiveSupport::TestCase
       first = AvatarOwnershipTransfers::ReservationCreator.call(
         avatar: avatar,
         operation_kind: "enterprise_to_bureau",
-        idempotency_key: "018f2b18-6f5c-7a30-8ec2-4ebc1f0f7a37",
+        idempotency_key: SecureRandom.uuid,
         request_fingerprint: Digest::SHA256.hexdigest("expire-before-create-first"),
         source_collective_public_id: "enterprise_expire_before_create",
         destination_collective_public_id: "bureau_expire_before_create",
@@ -478,7 +478,7 @@ class AvatarTransferReservationTest < ActiveSupport::TestCase
       second = AvatarOwnershipTransfers::ReservationCreator.call(
         avatar: avatar,
         operation_kind: "enterprise_to_bureau",
-        idempotency_key: "018f2b18-6f5c-7a30-8ec2-4ebc1f0f7a38",
+        idempotency_key: SecureRandom.uuid,
         request_fingerprint: Digest::SHA256.hexdigest("expire-before-create-second"),
         source_collective_public_id: "enterprise_expire_before_create",
         destination_collective_public_id: "bureau_expire_before_create",
@@ -508,7 +508,7 @@ class AvatarTransferReservationTest < ActiveSupport::TestCase
       attributes = {
         avatar: avatar,
         operation_kind: "enterprise_to_bureau",
-        idempotency_key: "018f2b18-6f5c-7a30-8ec2-4ebc1f0f7a32",
+        idempotency_key: SecureRandom.uuid,
         request_fingerprint: Digest::SHA256.hexdigest("original-request"),
         source_collective_public_id: "enterprise_source_1",
         destination_collective_public_id: "bureau_destination_1",
@@ -554,7 +554,7 @@ class AvatarTransferReservationTest < ActiveSupport::TestCase
       attributes = {
         avatar: avatar,
         operation_kind: "enterprise_to_bureau",
-        idempotency_key: "018f2b18-6f5c-7a30-8ec2-4ebc1f0f7a42",
+        idempotency_key: SecureRandom.uuid,
         request_fingerprint: Digest::SHA256.hexdigest("generation-request"),
         source_collective_public_id: "enterprise_generation_source",
         destination_collective_public_id: "bureau_generation_destination",

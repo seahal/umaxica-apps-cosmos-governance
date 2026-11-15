@@ -11,11 +11,11 @@ class MembershipAuthorityClient
   OPEN_TIMEOUT = 2
   READ_TIMEOUT = 5
 
-  def initialize(surface:, access_token:, persona:)
-    @client_id, resource_type = CLIENTS.fetch(surface.to_s)
-    base_origin = Rails.configuration.x.boot_config.fetch(:hosts).base_for_resource_type(resource_type)
+  def initialize(surface:, rp_session:, persona:)
+    @resource_type = CLIENTS.fetch(surface.to_s).fetch(1)
+    base_origin = Rails.configuration.x.boot_config.fetch(:hosts).base_for_resource_type(@resource_type)
     @base = OutboundHttp::LocalBackChannel.url("#{base_origin}/api/v0/membership/#{surface}")
-    @access_token = access_token.to_s
+    @rp_session = rp_session
     @persona = persona.to_s
   end
 
@@ -41,21 +41,19 @@ class MembershipAuthorityClient
 
   private
 
-  attr_reader :client_id, :base, :access_token, :persona
+  attr_reader :base, :persona, :rp_session, :resource_type
 
   def request(verb, path, params = {}, idempotency_key: nil)
-    return Result.new(status: :unauthorized, data: nil, errors: {}) if access_token.blank?
+    return Result.new(status: :unauthorized, data: nil, errors: {}) if rp_session.blank?
 
     url = "#{base}#{path}"
-    assertion = OidcClientAssertionJwt.issue(client_id:, token_url: url)
-    return Result.new(status: :dependency, data: nil, errors: {}) if assertion.blank?
+    token = BaseApiAuthorityTokenIssuer.issue(rp_session:, audience_resource_type: resource_type)
 
     uri = URI.parse(url)
     connection = OutboundHttp::Connection.build(
       url: uri, open_timeout: OPEN_TIMEOUT, read_timeout: READ_TIMEOUT, require_https: OutboundHttp::LocalBackChannel.require_https?(url),
     )
-    headers = { "Authorization" => "Bearer #{access_token}",
-                "X-Client-Assertion" => assertion,
+    headers = { "Authorization" => "Bearer #{token}",
                 "Accept" => "application/json", }
     headers["Idempotency-Key"] = idempotency_key if idempotency_key
     params = params.merge(persona:)
@@ -74,6 +72,8 @@ class MembershipAuthorityClient
     Result.new(status: STATUSES.fetch(response.status.to_i, :dependency), data: body, errors: body.fetch("errors", {}))
   rescue Faraday::Error, JSON::ParserError, URI::InvalidURIError, OutboundHttp::Connection::InsecureEndpointError
     Result.new(status: :dependency, data: nil, errors: {})
+  rescue BaseApiAuthorityTokenIssuer::InactiveRpSession
+    Result.new(status: :unauthorized, data: nil, errors: {})
   end
 
   def escape(value) = ERB::Util.url_encode(value.to_s)

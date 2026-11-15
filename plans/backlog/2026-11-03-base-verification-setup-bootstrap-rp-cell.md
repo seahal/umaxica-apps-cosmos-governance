@@ -2,8 +2,11 @@
 
 Date: 2026-11-03
 
-Status: Backlog. Found by Codex during unit 4 of `specs/op-mediated-step-up`; the owner decided to
-handle it separately from that change. Not fixed. Not reproduced at runtime.
+Status: Superseded on 2026-11-13 by the owner decision that Access owns authentication ceremony
+execution and Governance runs none. The local setup routes described here were removed; do not
+restore or repair this Governance bootstrap flow. Retained as a source-reading record, not an open
+implementation item. Originally found during unit 4 of `specs/op-mediated-step-up`; runtime behavior
+was not reproduced.
 
 ## Observation (source reading)
 

@@ -1,0 +1,24 @@
+%% Accepted (owner, 2026-11-15), design only; not implemented. Owner: Governance. Axis: client_registrations.status_id (app_zenith).
+%% Source: adr/sign-up-finalization-in-auth.md, Cosmos split amendment. Not implemented.
+stateDiagram-v2
+    [*] --> CREDENTIAL_PENDING: start (H1 accepted - eligibility and requirements cleared except one Auth credential)
+    [*] --> COMPLETED: start and complete in one transaction (H1 - method needs no Auth credential)
+    CREDENTIAL_PENDING --> COMPLETED: complete (H3 accepted - account rows, receipt and jti in one app_zenith transaction)
+    CREDENTIAL_PENDING --> CANCELLED: cancel (H5 accepted - cookie and cer match)
+    CREDENTIAL_PENDING --> EXPIRED: expire (deadline_at passed on database clock - request time or sweep)
+    CREDENTIAL_PENDING --> HALTED: halt (superseded_by_identifier, superseded_in_browser, identifier_taken, integrity_violation)
+    COMPLETED --> [*]
+    CANCELLED --> [*]
+    EXPIRED --> [*]
+    HALTED --> [*]
+
+    note right of CREDENTIAL_PENDING
+        Holds the identifier claim and the WebAuthn user handle reservation.
+        At most one per identifier and one per browser (partial unique indexes).
+        No Client, contact, external identity or passkey row exists yet.
+        A rejected credential, conflict or replay leaves this state unchanged.
+    end note
+    note right of COMPLETED
+        Terminal states are absorbing. Physical purge after purge_after is
+        deletion, not a state. Chronicle audit events survive the purge.
+    end note

@@ -18,6 +18,8 @@ class OrgPreferenceLanguageOption < OrgSettingRecord
 
   DEFAULTS = [JA, EN].freeze
 
+  self.record_timestamps = false
+
   has_many :org_preference_languages,
            class_name: "OrgPreferenceLanguage",
            foreign_key: :option_id,
@@ -27,7 +29,9 @@ class OrgPreferenceLanguageOption < OrgSettingRecord
   def self.ensure_defaults!
     insert_missing_fixed_ids!(DEFAULTS)
   end
+  public_class_method :ensure_defaults!
 
+  public
   def name
     case id
     when JA then "ja"

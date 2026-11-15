@@ -30,6 +30,18 @@
 #
 class EnterpriseUnit < AppRpRecord
   include ::CollectiveUnit
+  include ::PublicId
+
+  before_validation :generate_public_id, on: :create
+  before_validation :refresh_generated_public_id_after_collision, on: :create
+  before_create :generate_public_id
+  around_create :retry_public_id_collision
+  validate :public_id_immutable_after_create, on: :update
+  validates :public_id, presence: true, length: { is: PublicId::GENERATION_SIZE }, uniqueness: true
+  after_create :create_closure_rows
+  validates :name, presence: true
+  validate :parent_must_belong_to_same_collective
+  validate :parent_id_is_immutable, on: :update
 
   collective_unit_config collective_foreign_key: :enterprise_id,
                          closure_class_name: "EnterpriseUnitClosure"

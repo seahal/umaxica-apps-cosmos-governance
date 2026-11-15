@@ -12,8 +12,8 @@ Minitest method coverage.
 - The Avatar authority client operation tests first failed with two failures in 65 assertions. One
   test expectation was corrected to include the protocol's absent selection fields. The remaining
   failure showed that `switch_context` merged the previously selected organization over the new
-  requested selection. The request now supplies the caller's target organization while retaining
-  the current persona. The focused adapter regression passed **6 tests / 80 assertions**. A combined
+  requested selection. The request now supplies the caller's target organization while retaining the
+  current persona. The focused adapter regression passed **6 tests / 80 assertions**. A combined
   related run passed **28 tests / 214 assertions**, with no failures, errors or skips.
 - Added public-boundary cases for request-region normalization, the retired OIDC endpoint failures,
   Base self-RP identifiers and expired-token session-ID extraction. A previous full Rails test run
@@ -45,9 +45,9 @@ Minitest method coverage.
   Ruby 3.3 grammar / Ruby 4.0.9 runtime compatibility warning.
 - `bin/brakeman --quiet --no-pager --exit-on-warn --exit-on-error`: **0 errors, 0 security
   warnings**.
-- `bun run check`: exit 0 after formatting and typing fixes to moved WebAuthn, Turnstile, preference,
-  selector and surface-layout tests. Test mocks now use typed request signatures and visit lifecycle
-  helpers; no lint rule or check was suppressed.
+- `bun run check`: exit 0 after formatting and typing fixes to moved WebAuthn, Turnstile,
+  preference, selector and surface-layout tests. Test mocks now use typed request signatures and
+  visit lifecycle helpers; no lint rule or check was suppressed.
 
 ## Remaining work
 
@@ -57,15 +57,23 @@ fully reconciled with runtime reachability or classified. The 2026-11-06 invento
 not used as current evidence. No reflection or direct private-method calls were added. This coverage
 goal remains incomplete.
 
-A fresh runtime scan via `env -u POSTGRESQL_TEST_PREPARE_DATABASES RAILS_ENV=test bin/rails runner tmp/coverage-task/list_public_methods.rb` found 4,377 owner/method rows. The latest source path, definition-line and terminal method-name join maps 3,408 to reached methods, 752 uncovered rows over 581 source locations, and 217 rows to no single instrumented method entry. That join is preliminary: generated aliases and concern owner labels account for unmatched rows, so it is not presented as a complete public-method audit. Source review confirms `FlowSignIn`/`FlowSignUp` have no app includes, `OpaqueAdmissionStore` has no app caller, and the Avatar owner APIs fail closed before action until Access's API exists; the remaining locations have not all been classified.
+A fresh runtime scan via
+`env -u POSTGRESQL_TEST_PREPARE_DATABASES RAILS_ENV=test bin/rails runner tmp/coverage-task/list_public_methods.rb`
+found 4,377 owner/method rows. The latest source path, definition-line and terminal method-name join
+maps 3,408 to reached methods, 752 uncovered rows over 581 source locations, and 217 rows to no
+single instrumented method entry. That join is preliminary: generated aliases and concern owner
+labels account for unmatched rows, so it is not presented as a complete public-method audit. Source
+review confirms `FlowSignIn`/`FlowSignUp` have no app includes, `OpaqueAdmissionStore` has no app
+caller, and the Avatar owner APIs fail closed before action until Access's API exists; the remaining
+locations have not all been classified.
 
 ## Latest public-method audit batch
 
-The preceding full-run SimpleCov report had not reached `CoreRpBridge#actor`, `#subject` or `#core?`.
-Added model-level behavior cases for the live `CoreAppClientBridge` and `CoreOrgOperatorBridge`: they
-exercise default/legacy normalization, external RP identity preservation, actor and subject lookup,
-and Core classification. The focused run passed **6 tests / 49 assertions / 0 failures / 0 errors /
-0 skips**:
+The preceding full-run SimpleCov report had not reached `CoreRpBridge#actor`, `#subject` or
+`#core?`. Added model-level behavior cases for the live `CoreAppClientBridge` and
+`CoreOrgOperatorBridge`: they exercise default/legacy normalization, external RP identity
+preservation, actor and subject lookup, and Core classification. The focused run passed **6 tests /
+49 assertions / 0 failures / 0 errors / 0 skips**:
 
 ```text
 env -u POSTGRESQL_TEST_PREPARE_DATABASES RAILS_ENV=test PARALLEL_WORKERS=1 COVERAGE=false bin/rails test test/models/core_app_client_bridge_test.rb test/models/core_org_operator_bridge_test.rb
@@ -95,11 +103,11 @@ Command:
 env -u POSTGRESQL_TEST_PREPARE_DATABASES RAILS_ENV=test PARALLEL_WORKERS=1 COVERAGE=true RUBYOPT=-r/home/global/workspace/tmp/coverage-task/simplecov-latest-output.rb bin/rails test
 ```
 
-Minitest completed **7,668 runs / 51,426 assertions / 0 failures / 0 errors / 0 skips**. The
-process exited **2** after SimpleCov enforced the existing repository-wide minima: lines
-**30,488/35,376 (86.18%; minimum 98%)**, branches **3,687/6,431 (57.33%; minimum 93%)**, and
-methods **4,534/5,865 (77.30%; minimum 97%)**. No coverage thresholds, exclusions or source ignore
-annotations changed. The NanoID gem emitted its existing Ruby future-freeze warning repeatedly.
+Minitest completed **7,668 runs / 51,426 assertions / 0 failures / 0 errors / 0 skips**. The process
+exited **2** after SimpleCov enforced the existing repository-wide minima: lines **30,488/35,376
+(86.18%; minimum 98%)**, branches **3,687/6,431 (57.33%; minimum 93%)**, and methods **4,534/5,865
+(77.30%; minimum 97%)**. No coverage thresholds, exclusions or source ignore annotations changed.
+The NanoID gem emitted its existing Ruby future-freeze warning repeatedly.
 
 The corrected runtime public/protected inventory join yields **4,377 rows: 3,408 reached, 752
 uncovered across 581 source locations, and 217 unmatched**. By visibility: public instance **3,155
@@ -115,10 +123,43 @@ failures / 0 errors / 0 skips**. The full test process includes those tests. Thi
 incomplete reachability audit; no full Minitest coverage or AC-3 completion claim is made.
 
 Two new Base APP integration tests exercise actual routes. The foreign-Origin request is rejected
-with no Preference or Chronicle write and reaches `BrowserRpAuthentication#browser_rp_trusted_origins`;
-the malformed RP cookie request to JSON Home returns 401 and expires both RP cookies, reaching
+with no Preference or Chronicle write and reaches
+`BrowserRpAuthentication#browser_rp_trusted_origins`; the malformed RP cookie request to JSON Home
+returns 401 and expires both RP cookies, reaching
 `BrowserRpAuthentication#render_browser_rp_invalid_credentials!`. Focused runs passed **1 test / 7
-assertions** and **1 test / 13 assertions**; targeted RuboCop passed for both files. The first origin
-test attempt failed in test setup because `assert_no_difference` was given an array; separate count
-assertions corrected it. The full Minitest run above includes both new cases. The public/protected
-reachability audit remains incomplete.
+assertions** and **1 test / 13 assertions**; targeted RuboCop passed for both files. The first
+origin test attempt failed in test setup because `assert_no_difference` was given an array; separate
+count assertions corrected it. The full Minitest run above includes both new cases. The
+public/protected reachability audit remains incomplete.
+
+## Latest Minitest refresh after membership-directory fail-closed coverage
+
+Full HEAD: `43db4906742db2fb13b238c9ccde378e4e1583b4`. The worktree already contained extensive
+uncommitted changes; they were preserved. No coverage threshold, exclusion, or source ignore was
+changed.
+
+Command:
+
+```text
+env -u POSTGRESQL_TEST_PREPARE_DATABASES RAILS_ENV=test PARALLEL_WORKERS=1 COVERAGE=true RUBYOPT=-r/home/global/workspace/tmp/coverage-task/simplecov-latest-output.rb bin/rails test
+```
+
+Minitest completed **7,669 runs / 51,530 assertions / 0 failures / 0 errors / 0 skips**. The process
+then exited **2** because SimpleCov enforced the existing repository minima: lines **30,479/35,376
+(86.15%; minimum 98%)**, branches **3,685/6,431 (57.30%; minimum 93%)**, and methods **4,534/5,865
+(77.30%; minimum 97%)**. The repeated NanoID future-freeze warning remains from the installed
+dependency.
+
+A new HTTP integration test exercises all seven APP and all seven ORG membership-directory routes
+while the Access authority API is unavailable. Each request receives an explicit 503 problem
+response with `no-store`, no redirect and no fabricated empty account list. The focused test passed
+**1 test / 112 assertions / 0 failures / 0 errors / 0 skips**; targeted RuboCop passed. The external
+client assertion verifier is stubbed at that boundary; the Access lookup and fail-closed response
+are the real application path.
+
+The runtime public/protected inventory was refreshed against the latest SimpleCov report: **4,377
+rows, 3,408 reached, 752 uncovered across 581 source locations, 217 unmatched**. Visibility counts
+remain public instance **3,155 (2,351 reached / 589 uncovered / 215 unmatched)**, public class
+**1,145 (1,009 / 134 / 2)** and protected instance **77 (48 / 29 / 0)**. The reachability
+classification is incomplete. The latest run therefore confirms green behavioral assertions but does
+not pass the repository SimpleCov gates or complete the public/protected audit.

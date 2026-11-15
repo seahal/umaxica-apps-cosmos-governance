@@ -23,11 +23,11 @@ class Base::App::SelectorControllerTest < ActionDispatch::IntegrationTest
     assert_response :unauthorized
   end
 
-  test "unauthenticated html selector refuses without an Access sign-in entry" do
+  test "unauthenticated html selector redirects to neutral Base App sign" do
     get base_app_selector_url(host: @host, ri: "jp"), headers: host_headers(@host)
 
-    assert_response :unauthorized
-    assert_nil response.location
+    assert_response :see_other
+    assert_equal "/sign", URI.parse(response.location).path
   end
 
   test "authenticated RP session automatically selects its only candidate" do
@@ -465,7 +465,7 @@ class Base::App::SelectorControllerTest
 
   def load_jump_rt_env!
     @jump_rt_env_originals ||= {}
-    jump_rt_key = Base64.strict_encode64(OpenSSL::PKey::EC.generate("secp384r1").to_der)
+    jump_rt_key = Base64.strict_encode64(OpenSSL::PKey::RSA.generate(3072).to_der)
     %w(FOREIGN_APP FOREIGN_ORG BASE_APP BASE_ORG).each do |namespace|
       ENV["JWT_#{namespace}_ACTIVE_KID"] = "#{namespace.downcase.tr("_", "-")}-test"
       ENV["JWT_#{namespace}_PRIVATE_KEY"] = jump_rt_key

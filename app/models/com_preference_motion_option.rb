@@ -17,6 +17,8 @@ class ComPreferenceMotionOption < ComSettingRecord
 
   DEFAULTS = [NOTHING, STANDARD, REDUCED].freeze
 
+  self.record_timestamps = false
+
   has_many :com_preference_motions,
            class_name: "ComPreferenceMotion",
            foreign_key: :option_id,
@@ -26,7 +28,9 @@ class ComPreferenceMotionOption < ComSettingRecord
   def self.ensure_defaults!
     insert_missing_fixed_ids!(DEFAULTS)
   end
+  public_class_method :ensure_defaults!
 
+  public
   def name
     case id
     when 1 then "standard"

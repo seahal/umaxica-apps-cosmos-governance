@@ -18,29 +18,6 @@ module ProcessorErasureNotificationState
   ATTEMPT_OUTCOMES = %w(IN_FLIGHT ACCEPTED_PENDING SUCCEEDED RETRYABLE_FAILURE PERMANENT_FAILURE).freeze
   DISPATCH_LEASE = 5.minutes
 
-  # FIXME: Violates Umaxica/NoConcernInclusionHooks; move the declarations in this block into each class that includes this concern.
-  included do
-    include PublicId
-    include Retainable
-
-    before_validation :assign_processor_notification_defaults, on: :create
-
-    validates :processor_key, inclusion: { in: PROCESSOR_KEYS }
-    validates :status_id, inclusion: { in: ->(record) { record.class::STATUS_IDS } }
-    validates :requested_at, presence: true
-    validates :delivery_generation, numericality: { only_integer: true, greater_than: 0 }
-    validates :delivery_idempotency_key_digest,
-              format: { with: /\A[0-9a-f]{64}\z/ }
-    validates :retry_count, numericality: { only_integer: true, greater_than_or_equal_to: 0 }
-
-    scope :pending_for_processing,
-          lambda { |now = nil|
-            now ||= database_now
-            where(status_id: [status_id_for("PENDING"), status_id_for("RETRYABLE_FAILURE")])
-              .where(arel_table[:next_retry_at].eq(nil).or(arel_table[:next_retry_at].lteq(now)))
-          }
-  end
-
   class_methods do
     def status_id_for(status_name)
       self::STATUSES.fetch(status_name.to_s)

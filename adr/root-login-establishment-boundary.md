@@ -4,6 +4,12 @@
 
 Accepted (2026-10-02)
 
+> **Governance runtime status (2026-11-13):** This decision records the former Governance root-login
+> issuance boundary. The current owner decision assigns authentication ceremony execution to Access;
+> Governance has no local root-login ceremony path. Treat the implementation details below as
+> historical for Governance. Identity and credential records and the separate RP session boundary
+> are not changed by this status note.
+
 Supersedes, where they conflict:
 
 - `adr/social-login-cooldown-and-one-shot-completion.md`: the cooldown anchor ("a freshly issued
@@ -142,11 +148,11 @@ The cooldown blocks a new root login for 30 seconds after the previous root logi
 on the same surface was established. The anchor is the newest `root_login_established_at`, read on
 the writer inside the issuance transaction. Signing out does not clear it. Failures, pending or
 refused attempts, callback retries, refresh, step-up, and RP sessions do not write it, so repeated
-refusals do not extend the wait. A refusal answers `429` with `Cache-Control: no-store` and tells the
-person to wait and sign in again; it names no URL, because a sign-in can start from any relying party
-(amended 2026-11-07 by the owner; it previously named the surface's Base `/sign` entry). The response
-must not disclose that the account exists, that it signed in recently, or when: the message is
-generic, and `Retry-After` is always the full cooldown window, never the time remaining since the
+refusals do not extend the wait. A refusal answers `429` with `Cache-Control: no-store` and tells
+the person to wait and sign in again; it names no URL, because a sign-in can start from any relying
+party (amended 2026-11-07 by the owner; it previously named the surface's Base `/sign` entry). The
+response must not disclose that the account exists, that it signed in recently, or when: the message
+is generic, and `Retry-After` is always the full cooldown window, never the time remaining since the
 previous login.
 
 ### Uniqueness and replay

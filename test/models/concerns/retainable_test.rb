@@ -10,6 +10,14 @@ class RetainableTest < ActiveSupport::TestCase
     include ActiveModel::Validations
     include Retainable
 
+    attribute :discard_at, :datetime, default: -> { Retainable::SENTINEL }
+    attribute :purge_eligible_at, :datetime, default: -> { Retainable::SENTINEL }
+    validates :discard_at, presence: true
+    validates :purge_eligible_at, presence: true
+    validate :retention_order_valid
+    validate :retention_times_not_before_created_at, on: :update
+    Retainable.register_host(self)
+
     attribute :created_at, :datetime, default: -> { Time.current }
 
     class << self
@@ -54,6 +62,33 @@ class RetainableTest < ActiveSupport::TestCase
     assert_includes Client.column_names, "purge_eligible_at"
     assert_not_includes Client.column_names, "discarded_at"
     assert_not_includes Client.column_names, "purged_at"
+  end
+
+  test "each Retainable model declares its storage contract and purge registration" do
+    expected_declarations = [
+      "attribute :discard_at, :datetime, default: -> { Retainable::SENTINEL }",
+      "attribute :purge_eligible_at, :datetime, default: -> { Retainable::SENTINEL }",
+      "validates :discard_at, presence: true",
+      "validates :purge_eligible_at, presence: true",
+      "validate :retention_order_valid",
+      "validate :retention_times_not_before_created_at, on: :update",
+      "Retainable.register_host(self)",
+    ]
+    retainable_hosts =
+      Rails.root.glob("app/models/*.rb").select do |path|
+        path.each_line.any? { |line| ["include Retainable", "include ::Retainable"].include?(line.strip) }
+      end
+    incomplete_hosts =
+      retainable_hosts.filter_map do |path|
+        missing_declarations =
+          expected_declarations.reject do |declaration|
+            path.each_line.any? { |line| line.strip == declaration }
+          end
+        [path.relative_path_from(Rails.root).to_s, missing_declarations] unless missing_declarations.empty?
+      end
+
+    assert_not_empty retainable_hosts
+    assert_empty incomplete_hosts, -> { "Retainable host contracts are incomplete: #{incomplete_hosts.inspect}" }
   end
 
   test "accessible? returns true if discard_at is in the future" do

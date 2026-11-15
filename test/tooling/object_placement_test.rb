@@ -67,8 +67,6 @@ class ObjectPlacementTest < Minitest::Test
   # research/2026-08-29-object-placement-inventory.md after reading each Issuer individually.
   TOKEN_MINTERS = %w(
     app/lib/jump_rt_issuer.rb
-    app/lib/oidc_id_token_issuer.rb
-    app/lib/identity_step_up_ceremony_result_issuer.rb
   ).freeze
 
   def test_write_side_objects_are_not_in_app_services

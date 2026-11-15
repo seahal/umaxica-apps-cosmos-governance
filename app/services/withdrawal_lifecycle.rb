@@ -7,18 +7,22 @@ class WithdrawalLifecycle
   def self.start!(actor:, current_session_public_id: nil, request: nil)
     new(actor:, current_session_public_id:, request:).start!
   end
+  public_class_method :start!
 
   def self.suspend!(actor:, current_session_public_id: nil, request: nil)
     new(actor:, current_session_public_id:, request:).suspend!
   end
+  public_class_method :suspend!
 
   def self.recover!(actor:, request: nil)
     new(actor:, request:).recover!
   end
+  public_class_method :recover!
 
   def self.terminate!(actor:, request: nil)
     new(actor:, request:).terminate!
   end
+  public_class_method :terminate!
 
   def initialize(actor:, current_session_public_id: nil, request: nil)
     @actor = actor
@@ -26,6 +30,7 @@ class WithdrawalLifecycle
     @request = request
   end
 
+  public
   def start!
     actor.class.transaction do
       actor.lock!

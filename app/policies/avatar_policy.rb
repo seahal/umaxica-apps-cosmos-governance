@@ -2,6 +2,7 @@
 # frozen_string_literal: true
 
 class AvatarPolicy < ApplicationPolicy
+  public
   def index?
     permission_for_selected_collective?("avatar.view")
   end

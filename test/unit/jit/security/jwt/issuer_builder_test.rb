@@ -11,8 +11,8 @@ module Jit
         self.fixture_table_names = []
 
         setup do
-          @active_key = OpenSSL::PKey::EC.generate("secp384r1")
-          @legacy_key = OpenSSL::PKey::EC.generate("secp384r1")
+          @active_key = OpenSSL::PKey::RSA.generate(3072)
+          @legacy_key = OpenSSL::PKey::RSA.generate(3072)
         end
 
         test "builds keyset issuer with active private key and grace public key" do
@@ -36,47 +36,6 @@ module Jit
           assert_includes record.jwks.fetch(:keys).map { |jwk| jwk.fetch("kid") }, "legacy-kid"
         end
 
-        test "builds surface issuer with active private key and public jwks" do
-          record = JitSecurityJwtIssuerBuilder.build_surface_issuer(
-            namespace: "BASE_APP",
-            active_kid: "active-kid",
-            private_key: base64_der(@active_key),
-            private_key_source: "JWT_BASE_APP_PRIVATE_KEY",
-            public_keyset: JSON.generate(keys: [JitSecurityJwtJwk.export_public(@legacy_key, kid: "legacy-kid")]),
-            public_keyset_source: "JWT_BASE_APP_PUBLIC_KEYSET",
-            revoked_kids: [],
-            issuer: "https://log.umaxica.app",
-            audiences: ["https://jump.umaxica.net"],
-          )
-
-          assert_equal "surface:BASE_APP", record.id
-          assert_equal "BASE_APP", record.namespace
-          assert_not_nil record.keys.fetch("active-kid").private_key
-          assert_nil record.keys.fetch("legacy-kid").private_key
-          assert_equal %w(legacy-kid active-kid), record.jwks.fetch(:keys).map { |jwk| jwk.fetch("kid") }
-        end
-
-        test "rejects active public jwk mismatch for surface issuer" do
-          wrong_public_jwk = JitSecurityJwtJwk.export_public(@legacy_key, kid: "active-kid")
-
-          error =
-            assert_raises(JitSecurityJwtIssuerBuilder::Error) do
-              JitSecurityJwtIssuerBuilder.build_surface_issuer(
-                namespace: "BASE_APP",
-                active_kid: "active-kid",
-                private_key: base64_der(@active_key),
-                private_key_source: "JWT_BASE_APP_PRIVATE_KEY",
-                public_keyset: JSON.generate(keys: [wrong_public_jwk]),
-                public_keyset_source: "JWT_BASE_APP_PUBLIC_KEYSET",
-                revoked_kids: [],
-                issuer: "https://log.umaxica.app",
-                audiences: ["https://jump.umaxica.net"],
-              )
-            end
-
-          assert_match(/active public JWK does not match active private key/, error.message)
-        end
-
         test "marks revoked public keys as unpublished and unverifiable" do
           record = JitSecurityJwtIssuerBuilder.build_keyset_issuer(
             id: "auth",
@@ -97,7 +56,7 @@ module Jit
         private
 
         def base64_der(key)
-          Base64.strict_encode64(key.to_der)
+          Base64.strict_encode64(key.private_to_der)
         end
       end
     end

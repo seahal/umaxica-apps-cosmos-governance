@@ -15,6 +15,8 @@ module SignErrorResponses
   include CommonRedirect
   include ProblemDetailsRendering
 
+  public
+
   def handle_application_error(exception)
     if exception.is_a?(AccessOpDataUnavailableError)
       response.headers["Cache-Control"] = "no-store"

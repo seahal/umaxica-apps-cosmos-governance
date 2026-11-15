@@ -19,6 +19,7 @@ class ClientAppleNotificationEvent < AppPrincipalRecord
 
   scope :due, ->(now = Time.current) { where(status: %w(received retrying)).where(next_retry_at: ..now) }
 
+  public
   def terminal?
     %w(completed dead_letter).include?(status)
   end

@@ -10,6 +10,10 @@ under-age `HALTED` branch and the `.app` age-restricted copy are removed, and
 **Amended (2026-10-28, owner decision):** decision 7 classifies the Preference adult-content gate as
 a dormant, browser-scoped setting of the same kind as cookie consent.
 
+> **Pending split amendment (proposed 2026-11-14):** The
+> [split amendment](sign-up-finalization-in-auth.md#cosmos-split-amendment-governance-owned-pending-registration-2026-11-14)
+> keeps this rule. Governance evaluates it as eligibility when it receives the registration start.
+
 ## Context
 
 Account sign-up currently gates on age. `SignUpEligibilityPolicy` requires 16 years for an `.app`

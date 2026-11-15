@@ -32,10 +32,4 @@ class AccessOpRequirementUnavailableTest < ActiveSupport::TestCase
     assert_raises(AccessOpDataUnavailableError) { email.credential_registration_requirement(token: nil) }
     assert_raises(AccessOpDataUnavailableError) { telephone.credential_registration_requirement(token: nil) }
   end
-
-  test "organization invitation validation cannot query retired OP storage" do
-    assert_raises(AccessOpDataUnavailableError) do
-      OrgRegistrationPolicy.validate!(invitation_code: "unavailable")
-    end
-  end
 end

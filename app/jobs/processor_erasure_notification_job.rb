@@ -9,6 +9,7 @@ class ProcessorErasureNotificationJob < ApplicationJob
   # the authorized manual-recovery operation after the adapter contract is available.
   UNCONFIGURED_RETRY_POLICY = ProcessorErasureRetryPolicy.new(max_attempts: 1, retry_delay_seconds: 0)
 
+  public
   def perform(surface:, public_id:)
     notification = notification_class_for(surface).find_by!(public_id: public_id)
     adapter = ProcessorErasureNotificationAdapterRegistry.fetch(notification.processor_key)

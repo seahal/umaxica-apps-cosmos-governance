@@ -65,4 +65,30 @@ class AvatarGroupConcreteOwnershipPeriodTest < ActiveSupport::TestCase
 
     assert_match(/truncate|history/i, error.message)
   end
+
+  test "current? distinguishes the open period from a closed historical period" do
+    group = AvatarGroup.create!(
+      account_surface: "app",
+      account_public_id: "period-state-account-#{SecureRandom.hex(4)}",
+      name: "Period state",
+      state: "active",
+    )
+    transfer_at = Time.utc(2026, 11, 13)
+    historical = AvatarGroupConcreteOwnershipPeriod.create!(
+      avatar_group: group,
+      owner_surface: "app",
+      owner_collective_public_id: "period-state-owner",
+      valid_from: transfer_at - 1.hour,
+      valid_to: transfer_at,
+    )
+    current = AvatarGroupConcreteOwnershipPeriod.create!(
+      avatar_group: group,
+      owner_surface: "org",
+      owner_collective_public_id: "period-state-successor",
+      valid_from: transfer_at,
+    )
+
+    assert_not_predicate historical, :current?
+    assert_predicate current, :current?
+  end
 end

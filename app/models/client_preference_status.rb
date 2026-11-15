@@ -8,6 +8,8 @@ class ClientPreferenceStatus < AppPrincipalRecord
   RETIRED = 1
   DEFAULTS = [ACTIVE, RETIRED].freeze
 
+  self.record_timestamps = false
+
   has_many :client_preferences, foreign_key: :status_id,
                                 inverse_of: :client_preference_status,
                                 dependent: :restrict_with_error

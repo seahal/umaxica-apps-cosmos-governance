@@ -42,7 +42,12 @@ class RiRoutingContractTest < ActiveSupport::TestCase
   #
   # This list is compared by equality, not inclusion, so a NEW skip fails the test and so does a
   # skip that silently disappears. Adding an entry is a deliberate, reviewable act.
-  RI_SKIP_ALLOWLIST = [].freeze
+  # Process the OP response before region canonicalization can echo its query to the browser.
+  RI_SKIP_ALLOWLIST = %w(
+    app/controllers/base/app/oidc/callbacks_controller.rb
+    app/controllers/base/org/oidc/callbacks_controller.rb
+    app/controllers/base/org/sign/interruptions_controller.rb
+  ).freeze
 
   # Controllers that render HTML on a participating target and still run without region
   # enforcement.

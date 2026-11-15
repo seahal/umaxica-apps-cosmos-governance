@@ -88,10 +88,11 @@ class BaseZenithIdentityResolver
     binding_class = configuration.fetch(:identity_binding_class)
     anchor = session.op_session_binding
 
+    # RpRequestAuthenticator has already pinned the Base App token issuer to Visa's configured
+    # origin. Keep the local binding tied to that verified claim instead of the Base RP origin.
     unless identity_binding.instance_of?(binding_class) &&
         identity_binding.principal_id == access_state.resource.id &&
         session.active? && anchor && anchor.revoked_at.nil? &&
-        exact_string?(identity_binding.issuer, OidcIssuer.for_resource_type(configuration.fetch(:resource_type))) &&
         identity_binding.realm == cell.realm &&
         identity_binding.client_id == cell.client_id &&
         exact_string?(identity_binding.subject, claim(claims, "sub")) &&

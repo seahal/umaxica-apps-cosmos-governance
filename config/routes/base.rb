@@ -10,6 +10,21 @@ scope(module: :base, as: :base) do
   ) do
     scope(module: :app, as: :app) do
       root "roots#index"
+      scope path: "sign", as: :sign do
+        get "", to: "sign/entries#show", as: :show
+        post "", to: "sign/entries#create", as: :create
+        resource :interruption, only: :show, module: :sign
+      end
+      namespace :oidc do
+        resource :callback, only: :show
+        resources :closures, only: :create
+      end
+      scope path: :sign do
+        resource :termination, path: "out", controller: :sign_outs, as: :sign_out,
+                               only: %i(show new edit create)
+        resource :out_completion, only: :show, path: "out/completion",
+                                  controller: :sign_outs, as: :sign_out_completion
+      end
       resource :welcome, only: :show
       resource :dashboard, only: :show, controller: :roots do
         # Streams the selected Avatar's private image; see adr/base-dashboard-avatar-image-delivery.md.
@@ -159,8 +174,6 @@ scope(module: :base, as: :base) do
       namespace :verification do
         resource :cancellation, only: %i(show create)
         resource :completion, only: %i(show create)
-        # Choice of a first authenticator. GET shows the methods; POST starts one bootstrap.
-        resource :setup, only: %i(show create)
       end
 
       resource :identity, only: :show
@@ -271,6 +284,21 @@ scope(module: :base, as: :base) do
   ) do
     scope(module: :org, as: :org) do
       root "roots#index"
+      scope path: "sign", as: :sign do
+        get "", to: "sign/entries#show", as: :show
+        post "", to: "sign/entries#create", as: :create
+        resource :interruption, only: :show, module: :sign
+      end
+      namespace :oidc do
+        resource :callback, only: :show
+        resources :closures, only: :create
+      end
+      scope path: :sign do
+        resource :termination, path: "out", controller: :sign_outs, as: :sign_out,
+                               only: %i(show new edit create)
+        resource :out_completion, only: :show, path: "out/completion",
+                                  controller: :sign_outs, as: :sign_out_completion
+      end
       resource :welcome, only: :show
       resource :dashboard, only: :show, controller: :roots do
         # Streams the selected Avatar's private image; see adr/base-dashboard-avatar-image-delivery.md.
@@ -471,7 +499,6 @@ scope(module: :base, as: :base) do
       namespace :verification do
         resource :cancellation, only: %i(show create)
         resource :completion, only: %i(show create)
-        resource :setup, only: %i(show create)
       end
 
       resource :identity, only: :show

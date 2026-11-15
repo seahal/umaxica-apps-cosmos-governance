@@ -40,6 +40,7 @@ class ApplicationUploader < Shrine
   def self.storage_boundary
     nil
   end
+  public_class_method :storage_boundary
 
   def self.storage_boundary!
     storage_boundary ||
@@ -48,6 +49,7 @@ class ApplicationUploader < Shrine
         "#{name} must declare self.storage_boundary before it can select a storage",
       )
   end
+  public_class_method :storage_boundary!
 
   # Storage is selected from the uploader's declared boundary alone. It is never
   # derived from Current, Actor, the request host, the session, or cookies, so
@@ -84,6 +86,7 @@ class ApplicationUploader < Shrine
   #
   # The original filename is deliberately not used, not even for its extension;
   # content type is recorded in metadata instead.
+  public
   def generate_location(_io, record: nil, name: nil, **)
     raise ArgumentError, "cannot generate an attachment location without a record" if record.nil?
 

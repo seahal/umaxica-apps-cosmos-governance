@@ -19,6 +19,7 @@ module CommonRedirect
     # strip scheme remnants and spaces
     host.to_s.downcase.sub(%r{^https?://}i, "").split("/").first
   end
+  public_class_method :normalize_host
 
   private
 

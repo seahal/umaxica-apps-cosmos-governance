@@ -2,6 +2,7 @@
 # frozen_string_literal: true
 
 class OrganizationPolicy < ApplicationPolicy
+  public
   def show?
     organization_has_current_principal_membership?
   end

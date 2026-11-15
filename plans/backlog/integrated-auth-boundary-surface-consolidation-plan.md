@@ -1,5 +1,12 @@
 # Integrated Auth, OIDC, Browser Routes, and Edit Surface Implementation Plan
 
+> **Superseded for Governance (2026-11-13):** The Cosmos split and the owner decision assigning
+> authentication ceremonies to Access supersede this monolith-era implementation plan for this
+> repository. Governance runs no authentication ceremony. Do not implement its historical Base/Auth
+> sign-in, sign-up or callback flows here. Retained identity and credential records, RP-local state
+> and OIDC handoff behavior follow their current owning ADRs and specs. This plan remains historical
+> context; its route, database and ceremony descriptions are not current Governance requirements.
+
 > **Canonical RP-entry correction (2026-09-22):** The accepted
 > `adr/base-auth-ceremony-and-seven-rp-boundary.md` amendment supersedes any historical plan text
 > that describes an RP `/sign/in` or `/sign/in/callback` entry. The first-party RP contract is
@@ -8,10 +15,11 @@
 > apply the current ADR and route registry to the historical workstream descriptions below; the
 > historical `/sign/in` wording is not an additional compatibility requirement.
 
-**Status:** Architecture plan approved for implementation; local repository verification is
-available, while authority-cutover, external RP registration, and deployment gates remain blocked.
-**Prepared:** 2026-09-13; status revalidated 2026-09-22 **Scope:** One coordinated implementation
-project in this Rails repository. No deployment, push, PR, or external write is included.
+**Status:** Superseded for Governance on 2026-11-13; the former architecture plan was approved for
+implementation before the Cosmos split. Authority-cutover, external RP registration and deployment
+details in this record remain historical. **Prepared:** 2026-09-13; status revalidated 2026-09-22
+**Scope:** One coordinated implementation project in this Rails repository. No deployment, push, PR,
+or external write is included.
 
 ### Current Base/Auth result-finalization amendment (2026-09-22)
 

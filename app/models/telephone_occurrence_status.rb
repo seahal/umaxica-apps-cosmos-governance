@@ -19,10 +19,13 @@ class TelephoneOccurrenceStatus < OccurrenceRecord
   LEGACY_NOTHING = 2
   DEFAULTS = [NOTHING, ACTIVE, LEGACY_NOTHING].freeze
 
+  self.record_timestamps = false
+
   has_many :telephone_occurrences, foreign_key: :status_id, dependent: :restrict_with_error,
                                    inverse_of: :telephone_occurrence_status
 
   def self.ensure_defaults!
     insert_missing_fixed_ids!(DEFAULTS)
   end
+  public_class_method :ensure_defaults!
 end

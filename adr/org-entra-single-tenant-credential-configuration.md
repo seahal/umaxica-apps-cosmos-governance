@@ -2,6 +2,13 @@
 
 **Status:** Accepted (2026-08-11)
 
+> **Governance runtime scope (2026-11-13):** Access owns authentication ceremonies and Governance
+> runs none. The sign-in implementation described below is historical for Governance runtime;
+> provider-configuration and credential-record ownership remain for the responsible owner to
+> reconcile. This cleanup changed no provider configuration, stored credential, or database schema.
+> See
+> [`evidence/2026-11-13-remove-unreachable-ceremony-code-Q7M2.md`](../evidence/2026-11-13-remove-unreachable-ceremony-code-Q7M2.md).
+
 **Supersedes:** the client-authentication and per-connection sections of
 `org-entra-id-sign-in-boundary.md` and `org-entra-omniauth-strategy-migration.md`. Every other
 decision in those ADRs is unchanged and still governs; see "What is unchanged" below.

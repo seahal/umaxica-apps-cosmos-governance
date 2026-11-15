@@ -7,6 +7,7 @@ class AvatarImageUploader < ApplicationUploader
   def self.storage_boundary
     :avatar
   end
+  public_class_method :storage_boundary
 
   Attacher.validate do
     validate_max_size MAX_SIZE

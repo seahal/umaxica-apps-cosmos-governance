@@ -60,11 +60,8 @@
 
 require "test_helper"
 require_relative "../support/avatar_test_factory"
-require "support/external_identity_test_helper"
 
 class ClientTest < ActiveSupport::TestCase
-  include ExternalIdentityTestHelper
-
   NIL_UUID = "00000000-0000-0000-0000-000000000000"
   CLIENT_DESTRUCTIVE_ASSOCIATIONS = %i(
     client_external_identities client_apple_notification_events client_emails client_telephones
@@ -287,16 +284,6 @@ class ClientTest < ActiveSupport::TestCase
     assert_not @user.totp_enabled?
   end
 
-  test "client_google_identities returns array with google when present" do
-    google = create_active_external_identity(client: @user, provider: "google")
-
-    assert_equal [google], @user.client_google_identities
-  end
-
-  test "client_google_identities returns empty array when no google" do
-    assert_equal [], @user.client_google_identities
-  end
-
   test "withdrawal_started? returns false when not started" do
     assert_not @user.withdrawal_started?
   end
@@ -315,39 +302,6 @@ class ClientTest < ActiveSupport::TestCase
     @user.update!(deactivated_at: Time.current)
 
     assert_predicate @user, :deactivated?
-  end
-
-  test "login_methods_remaining? returns false when no methods" do
-    client = Client.create!(
-      security_mode_id: SecurityModeConfigurable::NORMAL,
-      id: 8_000_000_000_000_000_000 + SecureRandom.random_number(1_000_000_000),
-    )
-
-    assert_not client.login_methods_remaining?
-  end
-
-  test "login_methods_remaining? returns true when email verified" do
-    ClientEmail.create!(
-      user: @user,
-      address: "verified@example.com",
-      user_email_status_id: ClientEmailStatus::VERIFIED,
-      confirm_policy: "1",
-    ).tap { |binding_record| binding_record.update!(binding_finalized_at: Time.current) }
-
-    assert_predicate @user, :login_methods_remaining?
-  end
-
-  test "remaining_login_methods returns email when verified" do
-    ClientEmail.create!(
-      user: @user,
-      address: "verified@example.com",
-      user_email_status_id: ClientEmailStatus::VERIFIED,
-      confirm_policy: "1",
-    ).tap { |binding_record| binding_record.update!(binding_finalized_at: Time.current) }
-
-    methods = @user.remaining_login_methods
-
-    assert_includes methods, :email
   end
 
   test "verified_email? returns true with verified email" do
@@ -404,10 +358,6 @@ class ClientTest < ActiveSupport::TestCase
     assert_not @user.verified_telephone?
   end
 
-  test "passkey_login_available? returns false when no passkeys" do
-    assert_not @user.passkey_login_available?
-  end
-
   test "has_verified_pii? returns true with verified email" do
     ClientEmail.create!(
       user: @user,
@@ -437,48 +387,6 @@ class ClientTest < ActiveSupport::TestCase
     assert_equal @user.has_verified_pii?, @user.has_verified_recovery_identity?
   end
 
-  test "active_social_provider? returns false when no social provider" do
-    assert_not @user.active_social_provider?("google")
-    assert_not @user.active_social_provider?("apple")
-  end
-
-  test "active_social_provider? returns true for active google" do
-    create_active_external_identity(client: @user, provider: "google")
-
-    assert @user.active_social_provider?("google")
-  end
-
-  test "active_social_provider? returns true for active apple" do
-    create_active_external_identity(client: @user, provider: "apple")
-
-    assert @user.active_social_provider?("apple")
-  end
-
-  test "remaining_login_methods excludes provider when specified" do
-    create_active_external_identity(client: @user, provider: "google")
-    ClientEmail.create!(
-      user: @user,
-      address: "verified@example.com",
-      user_email_status_id: ClientEmailStatus::VERIFIED,
-      confirm_policy: "1",
-    ).tap { |binding_record| binding_record.update!(binding_finalized_at: Time.current) }
-
-    methods = @user.remaining_login_methods(excluding_provider: "google")
-
-    assert_not_includes methods, :google
-    assert_includes methods, :email
-  end
-
-  test "remaining_social_unlink_methods ignores stale social association cache" do
-    @user = Client.includes(:client_external_identities).find(@user.id)
-
-    assert_empty @user.client_external_identities.to_a
-
-    create_active_external_identity(client: @user, provider: "apple", subject: "cached_apple_uid")
-
-    assert_includes @user.remaining_social_unlink_methods(excluding_provider: "google_app"), :apple
-  end
-
   test "withdrawal_in_progress? returns false when not started" do
     assert_not @user.withdrawal_in_progress?
   end
@@ -495,74 +403,8 @@ class ClientTest < ActiveSupport::TestCase
     assert_predicate @user, :withdrawal_in_progress?
   end
 
-  test "passkey_login_available? returns true when passkey and phone verified" do
-    ClientTelephone.create!(
-      user: @user,
-      number: "+15551234567",
-      user_identity_telephone_status_id: ClientTelephoneStatus::VERIFIED,
-    ).tap { |binding_record| binding_record.update!(binding_finalized_at: Time.current) }
-    ClientPasskey.create!(
-      user: @user,
-      status_id: ClientPasskeyStatus::ACTIVE,
-      public_key: "test_key",
-      webauthn_id: "test_webauthn_id",
-      description: "My Passkey",
-    )
-
-    @user.reload
-
-    assert_predicate @user, :passkey_login_available?
-  end
-
-  test "remaining_login_methods returns apple when active" do
-    create_active_external_identity(client: @user, provider: "apple", subject: "apple_uid")
-
-    assert_includes @user.remaining_login_methods, :apple
-  end
-
-  test "remaining_login_methods returns passkey when available" do
-    ClientTelephone.create!(
-      user: @user,
-      number: "+15551234567",
-      user_identity_telephone_status_id: ClientTelephoneStatus::VERIFIED,
-    ).tap { |binding_record| binding_record.update!(binding_finalized_at: Time.current) }
-    ClientPasskey.create!(
-      user: @user,
-      status_id: ClientPasskeyStatus::ACTIVE,
-      public_key: "test_key",
-      webauthn_id: "test_webauthn_id",
-      description: "My Passkey",
-    )
-
-    assert_includes @user.remaining_login_methods, :passkey
-  end
-
   test "client? should return true" do
     assert_predicate @user, :client?
-  end
-
-  test "active_google_identity_exists? returns true when active google identity exists" do
-    create_active_external_identity(client: @user, provider: "google")
-
-    assert_predicate @user, :active_google_identity_exists?
-  end
-
-  test "active_google_identity_exists? returns false when no google identity" do
-    assert_not @user.active_google_identity_exists?
-  end
-
-  test "active_apple_identity_exists? returns true when active apple identity exists" do
-    create_active_external_identity(client: @user, provider: "apple")
-
-    assert_predicate @user, :active_apple_identity_exists?
-  end
-
-  test "active_apple_identity_exists? returns false when no apple identity" do
-    assert_not @user.active_apple_identity_exists?
-  end
-
-  test "active_social_provider? returns false for unknown provider" do
-    assert_not @user.active_social_provider?("unknown")
   end
 
   test "totp_enabled? with loaded association checks array" do
@@ -585,51 +427,6 @@ class ClientTest < ActiveSupport::TestCase
     @user = Client.includes(:client_totp_credentials).find(@user.id)
 
     assert_not @user.totp_enabled?
-  end
-
-  test "social_unlink_methods_remaining includes email when verified" do
-    ClientEmail.create!(
-      user: @user,
-      address: "verified@example.com",
-      user_email_status_id: ClientEmailStatus::VERIFIED,
-      confirm_policy: "1",
-    ).tap { |binding_record| binding_record.update!(binding_finalized_at: Time.current) }
-
-    assert_includes @user.remaining_social_unlink_methods(excluding_provider: "google"), :email
-  end
-
-  test "social_unlink_methods_remaining includes passkey when active" do
-    ClientPasskey.create!(
-      user: @user,
-      status_id: ClientPasskeyStatus::ACTIVE,
-      public_key: "test_key",
-      webauthn_id: "test_webauthn_id",
-      description: "My Passkey",
-    )
-
-    assert_includes @user.remaining_social_unlink_methods(excluding_provider: "google"), :passkey
-  end
-
-  test "social_unlink_methods_remaining includes google when active" do
-    create_active_external_identity(client: @user, provider: "google")
-
-    assert_includes @user.remaining_social_unlink_methods(excluding_provider: "apple"), :google
-  end
-
-  test "social_unlink_methods_remaining includes apple when active" do
-    create_active_external_identity(client: @user, provider: "apple")
-
-    assert_includes @user.remaining_social_unlink_methods(excluding_provider: "google"), :apple
-  end
-
-  test "social_unlink_methods_remaining excludes provider when specified" do
-    create_active_external_identity(client: @user, provider: "google")
-
-    assert_not_includes @user.remaining_social_unlink_methods(excluding_provider: "google"), :google
-  end
-
-  test "social_unlink_methods_remaining returns empty when no methods" do
-    assert_empty @user.remaining_social_unlink_methods(excluding_provider: "google")
   end
 
   test "verified_email? returns true with verified_with_sign_up status" do
@@ -664,54 +461,6 @@ class ClientTest < ActiveSupport::TestCase
     ).tap { |binding_record| binding_record.update!(binding_finalized_at: Time.current) }
 
     assert_predicate @user, :verified_telephone?
-  end
-
-  test "passkey_login_available? returns false when no telephone" do
-    ClientPasskey.create!(
-      user: @user,
-      status_id: ClientPasskeyStatus::ACTIVE,
-      public_key: "test_key",
-      webauthn_id: "test_webauthn_id",
-      description: "My Passkey",
-    )
-
-    assert_not @user.passkey_login_available?
-  end
-
-  test "passkey_login_available? returns false when telephone not verified" do
-    ClientTelephone.create!(
-      user: @user,
-      number: "+15551234567",
-      user_identity_telephone_status_id: ClientTelephoneStatus::UNVERIFIED,
-    ).tap { |binding_record| binding_record.update!(binding_finalized_at: Time.current) }
-    ClientPasskey.create!(
-      user: @user,
-      status_id: ClientPasskeyStatus::ACTIVE,
-      public_key: "test_key",
-      webauthn_id: "test_webauthn_id",
-      description: "My Passkey",
-    )
-
-    assert_not @user.passkey_login_available?
-  end
-
-  test "passkey_login_available? with loaded passkeys association" do
-    ClientTelephone.create!(
-      user: @user,
-      number: "+15551234567",
-      user_identity_telephone_status_id: ClientTelephoneStatus::VERIFIED,
-    ).tap { |binding_record| binding_record.update!(binding_finalized_at: Time.current) }
-    ClientPasskey.create!(
-      user: @user,
-      status_id: ClientPasskeyStatus::ACTIVE,
-      public_key: "test_key",
-      webauthn_id: "test_webauthn_id",
-      description: "My Passkey",
-    )
-
-    @user = Client.includes(:client_passkeys, :client_telephones).find(@user.id)
-
-    assert_predicate @user, :passkey_login_available?
   end
 
   test "public_id is a fixed 21-character NanoID" do

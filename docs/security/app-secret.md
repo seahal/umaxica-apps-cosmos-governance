@@ -1,6 +1,7 @@
-> **Current route status (2026-11-10):** Local Auth sign-in and sign-up endpoints described below are
-> no longer served by this repository. Base identity and secret-issuance routes remain local;
-> credential ceremony and authentication endpoints are external.
+> **Governance runtime status (2026-11-13):** Access owns authentication ceremonies. Local Auth
+> sign-in/sign-up endpoints described below are not served by this repository. Base identity and
+> Secret data-management routes remain local; credential ceremony and authentication endpoints are
+> external.
 
 # app Secret implementation boundary
 
@@ -333,17 +334,15 @@ allowed Passkey/TOTP Step-Up; Secret itself is excluded. Storage declaration is 
 not proof of authentication or actual safe storage. Losing every other Step-Up method may prevent
 credential changes.
 
-Current evidence files cover persistence, count/query, indexed lookup, ownership, name mutation,
-Step-Up admission, cancellation, expiry retirement and source audit boundaries. Separate writer
-connections cover manual allocation, cancellation versus reservation, and expiry cleanup versus
-reservation. The 2026-10-05 continuation also verifies manual HTTP delivery through canonical Base
-login and receipt consumption, rejects a second-flow reuse, and checks completion replay without
-another root Token. Signed-in Passkey registration uses real WebAuthn verification and HTTP delivery
-at every active count from zero through twenty; nineteen/twenty notices and zero-generation omission
-are asserted. Signup delivery, confirmation/claim races, complete proof/outbox cleanup and browser
-secrecy remain outstanding. Tested revocation purge and source acknowledgment failure are documented
-in the continuation evidence. Completion requires those public journeys and app/com/org regressions
-without weakened gates.
+The 2026-10-05 evidence files cover persistence, count/query, indexed lookup, ownership, name
+mutation, Step-Up admission, cancellation, expiry retirement and source audit boundaries. Separate
+writer connections cover manual allocation, cancellation versus reservation, and expiry cleanup
+versus reservation. That historical continuation also verified manual HTTP delivery through
+canonical Base login and receipt consumption. Its signed-in Passkey registration report used the
+former local WebAuthn flow and is superseded by the 2026-11-13 owner decision; it is not evidence of
+a current Governance route. Passkey and Secret records remain owned here. Access ceremony delivery,
+confirmation/claim races, complete proof/outbox cleanup and browser secrecy are outside this
+repository's current execution boundary.
 
 ## Shared recovery framework separation
 

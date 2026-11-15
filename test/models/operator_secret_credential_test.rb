@@ -95,6 +95,17 @@ class OperatorSecretCredentialTest < ActiveSupport::TestCase
     assert_not_includes record.attributes.values, raw_secret_credential
   end
 
+  test "expire_if_needed! persists expiry for an active credential past its deadline" do
+    record = create_secret_credential!
+    decision_time = record.created_at + 2.seconds
+    record.update!(discard_at: decision_time - 1.second)
+
+    assert record.expire_if_needed!(now: decision_time)
+    assert_equal OperatorSecretCredentialStatus::EXPIRED,
+                 record.reload.staff_identity_secret_status_id
+    assert_not record.expire_if_needed!(now: decision_time)
+  end
+
   test "sample fixture secret_credential authenticates with fixed raw secret_credential" do
     secret_credential = operator_secret_credentials(:sample_login)
 
@@ -130,6 +141,43 @@ class OperatorSecretCredentialTest < ActiveSupport::TestCase
     record = OperatorSecretCredential.new(staff: @staff, name: "Key", staff_secret_kind_id: OperatorSecretCredentialKind::LOGIN)
 
     assert_predicate record, :login_secret_credential?
+  end
+
+  test "credential kind and lifecycle predicates classify supported persisted states" do
+    one_time = OperatorSecretCredential.new(
+      staff: @staff,
+      name: "One-time credential",
+      staff_secret_kind_id: OperatorSecretCredentialKind::ONE_TIME,
+    )
+
+    assert_predicate one_time, :one_time_secret_credential?
+
+    used = OperatorSecretCredential.new(
+      staff: @staff, name: "Used credential", staff_identity_secret_status_id: OperatorSecretCredentialStatus::USED,
+    )
+
+    assert_predicate used, :used?
+    assert_not_predicate used, :revoked?
+    assert_not_predicate used, :expired?
+    assert_not_predicate used, :deleted?
+
+    revoked = OperatorSecretCredential.new(
+      staff: @staff, name: "Revoked credential", staff_identity_secret_status_id: OperatorSecretCredentialStatus::REVOKED,
+    )
+
+    assert_predicate revoked, :revoked?
+
+    expired = OperatorSecretCredential.new(
+      staff: @staff, name: "Expired credential", staff_identity_secret_status_id: OperatorSecretCredentialStatus::EXPIRED,
+    )
+
+    assert_predicate expired, :expired?
+
+    deleted = OperatorSecretCredential.new(
+      staff: @staff, name: "Deleted credential", staff_identity_secret_status_id: OperatorSecretCredentialStatus::DELETED,
+    )
+
+    assert_predicate deleted, :deleted?
   end
 
   test "public_id is automatically generated on create" do

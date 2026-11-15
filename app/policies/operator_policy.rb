@@ -3,6 +3,7 @@
 
 class OperatorPolicy < ApplicationPolicy
   # An operator may view their own account-scoped attributes (e.g. the birthdate page).
+  public
   def show?
     owner?
   end

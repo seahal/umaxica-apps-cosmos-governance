@@ -18,6 +18,8 @@ class ComPreferenceStatus < ComSettingRecord
 
   DEFAULTS = [RETIRED, ACTIVE].freeze
 
+  self.record_timestamps = false
+
   has_many :com_preferences,
            class_name: "ComPreference",
            foreign_key: "status_id",
@@ -28,4 +30,5 @@ class ComPreferenceStatus < ComSettingRecord
   def self.ensure_defaults!
     insert_missing_fixed_ids!(DEFAULTS)
   end
+  public_class_method :ensure_defaults!
 end

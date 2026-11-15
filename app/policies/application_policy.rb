@@ -19,6 +19,7 @@ class ApplicationPolicy < ActionPolicy::Base
   # here (docs/security/org-emergency-access.md).
   pre_check :deny_capability_restricted_context
 
+  public
   def edit? = update?
 
   def new? = create?
@@ -84,17 +85,6 @@ class ApplicationPolicy < ActionPolicy::Base
     resource
   end
 
-  # Get the organization from the record if it has one
-  # @return [Object, nil]
-  def organization
-    @organization ||=
-      if record.respond_to?(:organization)
-        record.organization
-      elsif record.respond_to?(:organization_id)
-        record.organization_id
-      end
-  end
-
   # Get JWT subject (user ID) from the current user token.
   def jwt_subject
     return nil if current_token.blank?
@@ -134,28 +124,6 @@ class ApplicationPolicy < ActionPolicy::Base
   # sufficient.
   def operator_capability?(capability)
     user.is_a?(::Operator) && user.capability?(capability)
-  end
-
-  # Role-based checks
-  def operator?
-    user&.has_role?("operator", organization: organization)
-  end
-
-  # Combined role checks
-  def operator_or_manager?
-    user&.operator_or_manager?(organization: organization)
-  end
-
-  def can_edit?
-    user&.can_edit?(organization: organization)
-  end
-
-  def can_view?
-    user&.can_view?(organization: organization)
-  end
-
-  def can_contribute?
-    user&.can_contribute?(organization: organization)
   end
 
   def current_token

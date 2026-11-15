@@ -8,9 +8,16 @@ module Base
         include ::SurfaceInertiaPage
 
         AUTHENTICATION_MODE = :private
+
+        layout "base/org/inertia"
+        inertia_share chrome: -> { surface_chrome }
+        inertia_share clear_history: -> { session[:inertia_clear_history] == true }
+
         declare_authentication_mode! :private
 
         before_action :authorize_activity_log!, only: %i(index)
+
+        public
 
         def index
           activities = activity_log.activities(activity_scope).limit(100)

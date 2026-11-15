@@ -50,6 +50,11 @@ class RuntimeRoleRouteOwnershipTest < ActiveSupport::TestCase
 
   test "retained Base app and org pages belong to their RP cell" do
     assert_equal "rp-base-app-ww", RuntimeRole.route_owner("base/app/roots")
+    assert_equal "rp-base-app-ww", RuntimeRole.route_owner("base/app/sign/entries")
+    assert_equal "rp-base-app-ww", RuntimeRole.route_owner("base/app/oidc/callbacks")
+    assert_equal "rp-base-org-ww", RuntimeRole.route_owner("base/org/sign/entries")
+    assert_equal "rp-base-org-ww", RuntimeRole.route_owner("base/org/oidc/callbacks")
+    assert_equal "rp-base-org-ww", RuntimeRole.route_owner("base/org/oidc/closures")
     assert_equal RuntimeRole::ANY_ROLE, RuntimeRole.route_owner("base/com/preferences")
     assert_equal "rp-base-org-ww", RuntimeRole.route_owner("base/org/verification/completions")
     assert_equal "rp-base-app-ww", RuntimeRole.route_owner("base/app/avatars")
@@ -87,6 +92,7 @@ class RuntimeRoleRouteOwnershipTest < ActiveSupport::TestCase
     ENV["UMAXICA_RP_BROWSER_ADMISSION"] = "open"
 
     assert RuntimeRole.serves?("base/app/roots", "rp-base-app-ww")
+    assert RuntimeRole.serves?("base/org/sign/entries", "rp-base-org-ww")
     assert RuntimeRole.serves?("base/app/healths", "rp-tech-org-ww")
     assert_not RuntimeRole.serves?("base/org/roots", "rp-base-app-ww")
     assert RuntimeRole.serves?("base/app/identity/birthdates", "rp-base-app-ww")
@@ -103,8 +109,15 @@ class RuntimeRoleRouteOwnershipTest < ActiveSupport::TestCase
     assert_not RuntimeRole.serves?("base/app/avatars", "rp-base-app-ww")
   end
 
-  test "Tech cells keep only their client assertion private key" do
-    assert_equal ["OIDC_CLIENT_TECH_ORG_WW_PRIVATE_KEY"], RuntimeRole.rp_private_env_names("rp-tech-org-ww")
+  test "RP cells keep only the repository JWT signing keyset" do
+    assert_equal ["AUTH_JWT_PRIVATE_KEYSET"], RuntimeRole.rp_private_env_names("rp-tech-org-ww")
+  end
+
+  test "RP cell roles resolve to their exact database connections" do
+    assert_equal "rp_base_app", RuntimeRole.cell_connection("rp-base-app-ww")
+    assert_equal "rp_base_org", RuntimeRole.cell_connection("rp-base-org-ww")
+    assert_equal "rp_tech_org", RuntimeRole.cell_connection("rp-tech-org-ww")
+    assert_raises(RuntimeRole::UnknownRole) { RuntimeRole.cell_connection(RuntimeRole::SHARED) }
   end
 
   test "an RP cell refuses to guess its browser admission" do

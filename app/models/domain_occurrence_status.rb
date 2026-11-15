@@ -23,10 +23,13 @@ class DomainOccurrenceStatus < OccurrenceRecord
   PENDING = 5
   DEFAULTS = [NOTHING, ACTIVE, DELETED, INACTIVE, LEGACY_NOTHING, PENDING].freeze
 
+  self.record_timestamps = false
+
   has_many :domain_occurrences, foreign_key: :status_id, dependent: :restrict_with_error,
                                 inverse_of: :domain_occurrence_status
 
   def self.ensure_defaults!
     insert_missing_fixed_ids!(DEFAULTS)
   end
+  public_class_method :ensure_defaults!
 end

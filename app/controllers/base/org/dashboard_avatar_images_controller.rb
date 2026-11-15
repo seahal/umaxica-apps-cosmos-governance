@@ -19,7 +19,7 @@ module Base
         status, body, mime_type, cache_key =
           AvatarAuthorityClient.new(
             surface: "org",
-            access_token: BrowserCredentialCookie.read(cookies, OidcRpBrowserCredentialContract::ACCESS_COOKIE),
+            rp_session: browser_rp_access_state.rp_session,
             persona: Actor.selection.account_public_id,
             selection: Actor.selection,
           ).selected_image
@@ -38,14 +38,6 @@ module Base
         when :forbidden then head(:forbidden)
         else head(:service_unavailable)
         end
-      end
-
-      protected
-
-      def track_authenticated_session_activity?
-        return false if request.get? || request.head?
-
-        super
       end
 
       private

@@ -18,5 +18,8 @@ class HandleStatus < AvatarRecord
   DELETED = 4
   NOTHING = 5
   DEFAULTS = [INACTIVE, PENDING, ACTIVE, DELETED, NOTHING].freeze
+
+  self.record_timestamps = false
+
   has_many :handles, dependent: :restrict_with_error
 end

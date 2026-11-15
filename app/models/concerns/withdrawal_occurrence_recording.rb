@@ -37,6 +37,7 @@ module WithdrawalOccurrenceRecording
       context: allowed_context(subject:, actor:, request:, occurred_at: now, context: context),
     )
   end
+  public_class_method :record!
 
   def self.occurrence_class_for(subject)
     case subject
@@ -45,18 +46,21 @@ module WithdrawalOccurrenceRecording
       raise ArgumentError, "unsupported withdrawal occurrence subject: #{subject.class.name}"
     end
   end
+  public_class_method :occurrence_class_for
 
   def self.occurrence_status_id_for(occurrence_class)
     return ClientOccurrenceStatus::ACTIVE if occurrence_class == ClientOccurrence
 
     raise ArgumentError, "unsupported occurrence class: #{occurrence_class.name}"
   end
+  public_class_method :occurrence_status_id_for
 
   def self.occurrence_status_class_for(occurrence_class)
     return ClientOccurrenceStatus if occurrence_class == ClientOccurrence
 
     raise ArgumentError, "unsupported occurrence class: #{occurrence_class.name}"
   end
+  public_class_method :occurrence_status_class_for
 
   def self.allowed_context(subject:, actor:, request:, occurred_at:, context:)
     base = {
@@ -71,6 +75,7 @@ module WithdrawalOccurrenceRecording
     }
     base.merge(context.transform_keys(&:to_s)).slice(*ALLOWED_CONTEXT_KEYS).compact_blank
   end
+  public_class_method :allowed_context
 
   def self.surface_for(subject)
     case subject
@@ -79,10 +84,12 @@ module WithdrawalOccurrenceRecording
       raise ArgumentError, "unsupported subject: #{subject.class.name}"
     end
   end
+  public_class_method :surface_for
 
   def self.digest_optional(value)
     return nil if value.blank?
 
     Digest::SHA256.hexdigest(value.to_s)
   end
+  public_class_method :digest_optional
 end

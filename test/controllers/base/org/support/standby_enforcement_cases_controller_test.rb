@@ -28,8 +28,8 @@ class Base::Org::Support::StandbyEnforcementCasesControllerTest < ActionDispatch
     end
   end
 
-  test "a signed Standby context cannot mutate enforcement or grants without Access authority" do
-    headers = as_staff_headers(@operator, host: @host)
+  test "a Governance API token cannot assert Access Standby authority to mutate enforcement or grants" do
+    headers = as_staff_headers(@operator, host: @host, select_available_org_persona: true)
     payload, = JWT.decode(headers.fetch("Authorization").delete_prefix("Bearer "), nil, false)
     payload[AuthenticationContextValue::CLAIM] = AuthenticationContextValue::STANDBY_KEY
     access = JitSecurityJwtKeyring.encode(payload, typ: "at+jwt", issuer_id: "surface:BASE_ORG")
@@ -49,7 +49,7 @@ class Base::Org::Support::StandbyEnforcementCasesControllerTest < ActionDispatch
                           operation_id: SecureRandom.uuid, },
                 headers: headers, as: :json
 
-      assert_response :service_unavailable
+      assert_response :forbidden
       assert_equal before_cases, AppEnforcementCase.count
       assert_equal before_grants, OperatorCapabilityGrant.count
       assert_equal before_actor, @operator.reload.attributes

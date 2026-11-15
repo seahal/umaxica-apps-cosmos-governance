@@ -85,8 +85,13 @@ module Security
 
         get base_org_identity_url(ri: "jp"), headers: headers
 
-        assert_response :unauthorized
-        assert_nil response.location
+        assert_response :see_other
+        URI.parse(response.location).request_uri
+        target = URI.parse(response.location)
+
+        assert_equal URI.parse(base_org_sign_show_path(ri: "jp")).path, target.path
+        assert_includes [nil, request.host], target.host
+        assert_not_equal URI.parse(base_org_identity_withdrawal_path(ri: "jp")).path, target.path
       end
 
       test "an active operator can open the Base org identity surface" do

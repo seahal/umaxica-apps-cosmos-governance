@@ -18,6 +18,8 @@ class ClientTotpCredentialStatus < AppPrincipalRecord
   NOTHING = 5
   DEFAULTS = [ACTIVE, INACTIVE, REVOKED, DELETED, NOTHING].freeze
 
+  self.record_timestamps = false
+
   has_many :client_totp_credentials, dependent: :restrict_with_error,
                                      inverse_of: :user_totp_credential_status
 end

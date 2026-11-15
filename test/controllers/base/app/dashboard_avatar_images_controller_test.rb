@@ -24,7 +24,7 @@ class Base::App::DashboardAvatarImagesControllerTest < ActionDispatch::Integrati
     assert_nil response.location
   end
 
-  test "verified RP image GET and HEAD refuse missing authority without a cacheable image or session write" do
+  test "verified RP image GET and HEAD use Governance authority with private revalidation and no session write" do
     original_session = @rp_session.reload.attributes
     selection = RpBaseAppSessionSelection.find_by!(rp_session_id: @rp_session.id)
     original_selection = selection.attributes
@@ -32,17 +32,16 @@ class Base::App::DashboardAvatarImagesControllerTest < ActionDispatch::Integrati
 
     get base_app_dashboard_avatar_image_url(ri: "jp", host: @host), headers: image_headers
 
-    assert_response :service_unavailable
-    assert_includes response.headers["Cache-Control"], "no-store"
-    assert_empty response.body
-    assert_nil response.headers["ETag"]
+    assert_response :success
+    assert_equal "max-age=0, private, must-revalidate", response.headers["Cache-Control"]
+    assert_equal "image/png", response.media_type
+    assert_predicate response.headers["ETag"], :present?
     assert_nil response.location
     head base_app_dashboard_avatar_image_url(ri: "jp", host: @host), headers: image_headers
 
-    assert_response :service_unavailable
-    assert_includes response.headers["Cache-Control"], "no-store"
-    assert_empty response.body
-    assert_nil response.headers["ETag"]
+    assert_response :success
+    assert_equal "max-age=0, private, must-revalidate", response.headers["Cache-Control"]
+    assert_predicate response.headers["ETag"], :present?
     assert_equal original_session, @rp_session.reload.attributes
     assert_equal original_selection, selection.reload.attributes
   end

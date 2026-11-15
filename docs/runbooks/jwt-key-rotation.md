@@ -1,61 +1,77 @@
-# JWT Key Rotation
+# Governance JWT Key Rotation
 
-## Scope
+## Scope and trigger
 
-Use this runbook for the JWT key families still configured by this Rails process:
+This procedure rotates the single Governance signing key set used by first-party JWTs: Auth access
+tokens, Preference tokens, RP client assertions, OIDC client assertions and ID tokens, Jump RTs, and
+locally issued ceremony tokens. Token claims and issuer records remain purpose-specific. This
+runbook does not rotate Access's OpenID Provider keys or the Jump gateway's return-signing key.
 
-- browser access tokens accepted by Base app/org;
-- anonymous Preference tokens for Base app/com/org;
-- Base app/org Jump return tokens;
-- private-key JWT assertions used by retained Base and Tech owner APIs;
-- public JWKS served by Base app/org.
+Use this procedure for a planned key rotation or an emergency replacement. The protocol is PS256
+only; there is no ES384 overlap or fallback.
 
-This repository no longer exposes an Auth or Visa provider endpoint or starts provider sign-in,
-callback, or logout flows. `AUTH_JWT_*` remains the configured access-token key family used by the
-retained Base browser-token contract; the name does not imply a local Auth surface.
+## Configuration and prerequisites
 
-## Key families
+The runtime reads this repository key set through `JitSecurityJwtKeySource` from environment or
+Rails credentials:
 
-| Family | Environment names | Current use |
-| --- | --- | --- |
-| Browser access | `AUTH_JWT_ACTIVE_KID`, `AUTH_JWT_PRIVATE_KEYSET`, `AUTH_JWT_PUBLIC_KEYSET`, `AUTH_JWT_REVOKED_KIDS`, `AUTH_JWT_ISSUER`, `AUTH_JWT_CLIENT_AUDIENCES`, `AUTH_JWT_OPERATOR_AUDIENCES`, `AUTH_JWT_CLIENT_CLIENT_ID`, `AUTH_JWT_OPERATOR_CLIENT_ID` | Base app/org browser access-token verification and issuance code |
-| Preference APP | `PREFERENCE_APP_JWT_ACTIVE_KID`, `PREFERENCE_APP_JWT_PRIVATE_KEYSET`, `PREFERENCE_APP_JWT_PUBLIC_KEYSET`, `PREFERENCE_APP_JWT_REVOKED_KIDS` | Base app anonymous Preference tokens |
-| Preference COM | `PREFERENCE_COM_JWT_ACTIVE_KID`, `PREFERENCE_COM_JWT_PRIVATE_KEYSET`, `PREFERENCE_COM_JWT_PUBLIC_KEYSET`, `PREFERENCE_COM_JWT_REVOKED_KIDS`, `PREFERENCE_COM_JWT_ISSUER`, `PREFERENCE_COM_JWT_AUDIENCE` | Base com anonymous Preference tokens |
-| Preference ORG | `PREFERENCE_ORG_JWT_ACTIVE_KID`, `PREFERENCE_ORG_JWT_PRIVATE_KEYSET`, `PREFERENCE_ORG_JWT_PUBLIC_KEYSET`, `PREFERENCE_ORG_JWT_REVOKED_KIDS` | Base org anonymous Preference tokens |
-| Base Jump RT and JWKS | `JWT_BASE_APP_ACTIVE_KID`, `JWT_BASE_APP_PRIVATE_KEY`, `JWT_BASE_APP_PUBLIC_KEYSET`, `JWT_BASE_APP_REVOKED_KIDS`; corresponding `JWT_BASE_ORG_*` names | Base app/org Jump return tokens and public JWKS |
-| Client assertions | `OIDC_CLIENT_<NAMESPACE>_ACTIVE_KID`, `OIDC_CLIENT_<NAMESPACE>_PRIVATE_KEY`, `OIDC_CLIENT_<NAMESPACE>_PUBLIC_KEYSET`, `OIDC_CLIENT_<NAMESPACE>_REVOKED_KIDS` | Base app/org and Tech org owner API assertions |
+- `AUTH_JWT_PRIVATE_KEYSET`: JSON object mapping `kid` values to strict Base64-encoded PKCS#8 RSA
+  private-key DER. The active key must be RSA 3072 bits or larger.
+- `AUTH_JWT_PUBLIC_KEYSET`: public JWK Set JSON containing current and grace RSA PS256 signing keys.
+- `AUTH_JWT_ACTIVE_KID`: the key used to sign new JWTs.
+- `AUTH_JWT_REVOKED_KIDS`: optional comma-separated revoked `kid` values, read from the environment.
 
-The registered client namespaces are `BASE_RP_APP_WW`, `BASE_RP_ORG_WW`, and `TECH_ORG_WW`.
-The registry requires client-key material for `TECH_ORG_WW` in the shared process and requires the
-current client key in a cell process. Runtime configuration validates active keys, matching public
-JWKs, issuer/audience separation, revoked kids, and globally unique kids at boot.
+Only the active private key belongs in `AUTH_JWT_PRIVATE_KEYSET`; grace keys are public-only. The
+active public JWK must match the private key, and all public JWKs must use `kty=RSA`, `alg=PS256`,
+`use=sig`, and public members only. Keep issuer, audience, `typ`, purpose, and lifetime settings
+unchanged during key rotation. Do not place secret values or key material in this runbook.
 
-Private keys are loaded once at boot. Public JWKs are derived once from their private keys; request
-handlers do not parse keysets, read key files, call KMS, or make network requests to sign a token.
-Public keysets contain public JWK fields only.
+The local installer creates disposable RSA 3072 keys in `tmp/local_jwt_keysets.json` for development
+and test. Clearing that store invalidates previously issued local tokens. Production key
+provisioning and deployment are outside this repository procedure and must be performed by the
+authorized secret owner.
 
-## Rotation
+## Planned rotation
 
-1. Generate a P-384 ES384 key and choose a globally unique `kid`.
-2. Add the new public JWK as a grace key while keeping the current signer active.
-3. Deploy and confirm boot validation passes on every process that loads the key family.
-4. Switch `ACTIVE_KID` and the matching private key together, then deploy all signers.
-5. Confirm newly issued tokens carry the new `kid` and verifiers accept both active and grace keys.
-6. Keep the old public key until the longest token or signed-state lifetime and the applicable
-   verifier/cache grace period have elapsed.
-7. Remove the old public key and deploy the pruned keyset.
+Let `K1` be the active key and `K2` the replacement. Coordinate the cut-over with every verifier
+that consumes Governance's shared JWKS, including Access registrations and the Jump gateway. This
+repository does not perform those external registrations or deployments.
 
-For Jump RT, also follow [Jump RT key rotation](jump-rt-key-rotation.md) and confirm the published
-Base JWKS is reachable from the Jump service. Client assertions are short-lived and their rotation
-must retain the old public key for any assertion already in flight.
+1. Generate `K2` as RSA 3072 or larger and choose a new repository-unique `kid`.
+2. Publish the public JWK for `K2` as `state=grace` in `AUTH_JWT_PUBLIC_KEYSET`, retaining the `K1`
+   public JWK. Keep `K1` as `AUTH_JWT_ACTIVE_KID` and its private key as the only private entry.
+3. Deploy the pre-published JWKS and confirm all consumers can fetch it before switching signers.
+4. In one deployment, set `AUTH_JWT_ACTIVE_KID` to `K2`, replace the sole private entry with `K2`,
+   and mark `K2` active in the public JWK Set. Retain `K1` as a public-only grace key. The registry
+   rejects a mismatched active key, so these values must change together.
+5. Verify boot validation, the public JWKS, and a locally issued token's `alg=PS256` and `kid`. Run
+   the relevant integration checks against each consuming verifier before declaring the rotation
+   complete.
+6. Retain `K1` in the public JWK Set through the longest first-party token lifetime (currently 400
+   days for Preference) plus the applicable verification leeway. Then remove its public JWK. Retain
+   its private secret version only as long as the approved rollback window requires.
+
+If a consumer cannot be prepared for this PS256-only cut-over, stop the deployment and record the
+consumer and required owner action. Do not temporarily accept ES384.
 
 ## Emergency revocation
 
-1. Add the compromised `kid` to the family’s `*_REVOKED_KIDS` setting and remove its public key
-   from the published keyset.
-2. Deploy verifiers first and confirm the revoked key is rejected.
-3. Install and activate a new private key, then deploy signers.
-4. Confirm new tokens use the replacement `kid` and the public JWKS contains only approved keys.
+1. Provision a replacement RSA key and public JWK.
+2. In one deployment, set the replacement as active, include only its private key, add the
+   compromised `kid` to `AUTH_JWT_REVOKED_KIDS`, and remove the compromised public JWK.
+3. Purge or invalidate cached Governance JWKS at every consumer and apply that consumer's revocation
+   mechanism. A Rails-side revoked-kid setting cannot force an external verifier to discard an
+   already cached public key.
+4. Confirm Governance no longer publishes the key and the external consumers reject tokens carrying
+   its `kid`.
 
-Record key IDs, affected family names, deployment revisions, and verification time in the release
-evidence. Never record key material, tokens, or environment values in evidence.
+Never log JWTs, private keys, secret values, or complete authorization data. Record only the
+non-secret key identifier, affected verifier, configuration source name, and verification result.
+
+## Verification and recovery
+
+Before production execution, verify the public keys' RSA size and PS256 metadata, active/private
+matching, key identifiers, consumer JWKS reachability, and the maximum issued-token lifetime. A
+rollback must restore the previous active kid and matching private key together while leaving every
+public key needed by tokens already issued. Emergency revocation overrides normal rollback for a
+compromised key.

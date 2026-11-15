@@ -7,6 +7,7 @@ class StepUpMethodsResolver
   def self.call(actor:, ticket:, supported_methods:)
     new(actor: actor, ticket: ticket, supported_methods: supported_methods).call
   end
+  public_class_method :call
 
   def initialize(actor:, ticket:, supported_methods:)
     @actor = actor
@@ -14,6 +15,7 @@ class StepUpMethodsResolver
     @supported_methods = supported_methods
   end
 
+  public
   def call
     return Result.new(available: [], configured: []) if actor.blank?
 

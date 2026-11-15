@@ -4,20 +4,10 @@
 module CollectiveUnit
   extend ActiveSupport::Concern
 
-  include ::PublicId
-
-  # FIXME: Violates Umaxica/NoConcernInclusionHooks; move the declarations in this block into each class that includes this concern.
-  included do
-    after_create :create_closure_rows
-
-    validates :name, presence: true
-    validate :parent_must_belong_to_same_collective
-    validate :parent_id_is_immutable, on: :update
-  end
-
   CONFIG_REGISTRY = {}
   private_constant :CONFIG_REGISTRY
 
+  public
   def ancestors(include_self: false)
     relation = self.class.where(id: ancestor_links.select(:ancestor_id))
     include_self ? relation : relation.where.not(id:)

@@ -9,6 +9,7 @@ module CollectiveMembership
       @approved_by = approved_by
     end
 
+    public
     def call
       membership.update!(
         :membership_state_id => state_class::ACTIVE,

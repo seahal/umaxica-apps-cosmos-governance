@@ -9,6 +9,7 @@
 # actor; per-record actions (edit/update/destroy) require ownership. Step-up freshness is enforced
 # separately by the controller's verification before_actions.
 class ClientTotpCredentialPolicy < ApplicationPolicy
+  public
   def index?
     user.is_a?(Client)
   end

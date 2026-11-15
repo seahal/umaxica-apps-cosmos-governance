@@ -6,6 +6,10 @@ Accepted (2026-11-09). Implementation starts after the Cosmos repository split i
 then the existing ES384 keys and key handling stay unchanged. The implementation proposal is
 `docs/backlog/2026-11-08-jwt-key-handling-after-cosmos-split.md` (Access repository).
 
+The initial status and pre-cutover context below are historical. Governance's current PS256-only
+contract is defined by the 2026-11-13 implementation amendment; Access and the Jump gateway have
+separate owner-controlled migrations.
+
 This record replaces the key specification in the 2026-10-23 amendment of
 `adr/runtime-secret-isolation-deferred.md` (`ECC_NIST_P384`, `ECDSA_SHA_384`) and the "Only ES384"
 part of decision 5 of `adr/cosmos-signing-key-management.md` (Proposed, on hold). The other parts of
@@ -34,16 +38,43 @@ must check them, so a token issued for one purpose is refused for another.
 
 Amended a third time 2026-11-10 (owner): **Jump tokens move to PS256 as well.** Both the `rt` tokens
 Rails issues to Jump and the return tokens Jump issues back (today ES384,
-`adr/secure-jump-link-redirector.md`) follow this record. This needs changes in Rails and in the Jump
-gateway (Hono on Cloudflare Workers, `umaxica-apps-edge-jump`), in this order: verifiers on both
-sides accept PS256 alongside ES384 by `kid`; issuers switch to PS256; ES384 is removed once no
+`adr/secure-jump-link-redirector.md`) follow this record. This needs changes in Rails and in the
+Jump gateway (Hono on Cloudflare Workers, `umaxica-apps-edge-jump`), in this order: verifiers on
+both sides accept PS256 alongside ES384 by `kid`; issuers switch to PS256; ES384 is removed once no
 unexpired ES384 token can remain. Jump keeps its own signing key in Cloudflare Workers secrets and
 signs with WebCrypto RSA-PSS (owner, 2026-11-10): Workers have no AWS KMS binding, and calling KMS
 would add latency to a gateway whose value is having none. This is a deliberate exception to "the
 private key never leaves KMS": the Jump key is visible to whoever administers the Workers secrets,
 so restrict that access, rotate the key on any suspicion, and keep Jump's token lifetime short.
 
+## Governance implementation amendment (2026-11-13)
+
+The owner-approved Governance cut-over is PS256-only and atomic: no Governance verifier accepts
+ES384, no issuer continues to sign ES384, and there is no overlap period. It covers every
+first-party JWT this repository signs or verifies, including Auth access tokens, Preference tokens,
+RP client assertions, OIDC client assertions and ID tokens, Jump RTs, and ceremony tokens. Access's
+OP keys remain owned and provisioned by Access; the Jump gateway return key remains owned by the
+gateway. Their consumers use the corresponding public JWKS and fail closed.
+
+Governance uses one repository key set and JWKS across all surfaces, realms, clients, and locally
+issued JWT purposes. `typ`, issuer, audience, and purpose claims remain distinct and are validated
+by each consumer. Signing uses RSA keys of at least 3072 bits. The Governance key set continues to
+load from its existing ENV or Rails credentials source; AWS KMS signing is deferred for this
+repository. Provision `AUTH_JWT_PRIVATE_KEYSET` as a JSON kid-to-Base64-PKCS#8-RSA-private-key map,
+`AUTH_JWT_PUBLIC_KEYSET` as public PS256 JWKs, and `AUTH_JWT_ACTIVE_KID` as the active identifier.
+`AUTH_JWT_REVOKED_KIDS` remains the shared revoked-kid list. Existing per-surface, per-Preference,
+and per-client private-key settings are no longer read by Governance.
+
+This amendment supersedes the Governance portions of the 2026-11-10 KMS and ES384-overlap directions
+above. Access and the external Jump gateway remain governed by their own owner-approved cut-over
+work orders; no changes to those repositories or live deployments are made here. Governance's
+PS256-only Jump return verifier requires the gateway owner to provision and publish a compatible
+PS256 key before production traffic uses the cut-over; that external state was not verified here.
+
 ## Context
+
+The following describes the state when this decision was first accepted, before the Governance
+cut-over. It is retained as decision history and does not describe current Governance code.
 
 Every JWT is signed with ES384 today, and Discovery advertises only ES384 for both
 `id_token_signing_alg_values_supported` and `token_endpoint_auth_signing_alg_values_supported`
@@ -120,7 +151,8 @@ not make Cosmos conformant to FAPI 2.0 as a whole.
 - Storage of RP private keys for `private_key_jwt`, including Sphere regions without AWS.
 - Whether ID tokens, access tokens and other JWTs share a key.
 - Signing in development and test, where AWS KMS is not available.
-- The ES384-to-PS256 migration window and the handling of tokens issued before it.
+- The Governance ES384-to-PS256 migration window was resolved by the 2026-11-13 implementation
+  amendment. Access and Jump gateway deployment timing remains with those repository owners.
 - Algorithms of JWTs that Cosmos verifies but does not sign, such as DPoP proofs.
 - Whether `kms:Sign` stays with the Access Rails process or moves to a narrow signing component that
   sets `iat` and `exp` itself (see the threats section of the backlog entry).

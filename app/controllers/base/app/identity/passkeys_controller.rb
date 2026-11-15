@@ -5,6 +5,11 @@ class Base::App::Identity::PasskeysController < Base::App::Identity::BaseControl
   include ::BaseIdentityPasskeyManagement
 
   AUTHENTICATION_MODE = :private
+
+  layout "base/app/inertia"
+  inertia_share chrome: -> { surface_chrome }
+  inertia_share clear_history: -> { session[:inertia_clear_history] == true }
+
   declare_authentication_mode! :private
 
   public

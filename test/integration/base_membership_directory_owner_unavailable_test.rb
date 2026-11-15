@@ -4,7 +4,7 @@
 require "test_helper"
 
 class BaseMembershipDirectoryOwnerUnavailableTest < ActionDispatch::IntegrationTest
-  test "APP and ORG membership directory routes refuse unavailable Access authority" do
+  test "APP and ORG membership owner routes reject an Access credential in place of Governance authority" do
     endpoints = [
       ["PUBLIC_BASE_SERVICE_URL", "app"],
       ["PUBLIC_BASE_STAFF_URL", "org"],
@@ -33,13 +33,11 @@ class BaseMembershipDirectoryOwnerUnavailableTest < ActionDispatch::IntegrationT
             },
           )
 
-          assert_response :service_unavailable, "#{method.upcase} #{path} on #{realm}"
-          assert_equal "application/problem+json", response.media_type
-          assert_equal "urn:umaxica:problem:service-unavailable", response.parsed_body.fetch("type")
-          assert_equal 503, response.parsed_body.fetch("status")
+          assert_response :unauthorized, "#{method.upcase} #{path} on #{realm}"
+          assert_equal "application/json", response.media_type
+          assert_equal "invalid_token", response.parsed_body.fetch("error")
           assert_equal "no-store", response.headers["Cache-Control"]
           assert_nil response.location
-          assert_not_includes response.body, '"accounts":[]'
         end
       end
     end

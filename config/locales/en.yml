@@ -689,9 +689,6 @@ en:
       client_secret_credential:
         client: Client
         issuance: Secret issuance
-      client_sign_up_flow:
-        auth_admission_binding: Admission binding
-        cleanup_status: Cleanup status reference
       client_telephone:
         number: Telephone number
         number_digest: Telephone number digest
@@ -867,7 +864,8 @@ en:
     external_id: Credential reference
     incoming_agent_ownership_transfer_requests: Incoming agent ownership transfer requests
     incoming_bureau_ownership_transfer_requests: Incoming bureau ownership transfer requests
-    incoming_client_persona_ownership_transfer_requests: Incoming persona ownership transfer requests
+    incoming_client_persona_ownership_transfer_requests:
+      Incoming persona ownership transfer requests
     incoming_enterprise_ownership_transfer_requests: Incoming enterprise ownership transfer requests
     lifecycle_requests_as_approver: Approved lifecycle changes
     lifecycle_requests_as_executor: Executed lifecycle changes
@@ -882,7 +880,8 @@ en:
     outbox_id: Audit outbox
     outgoing_agent_ownership_transfer_requests: Outgoing agent ownership transfer requests
     outgoing_bureau_ownership_transfer_requests: Outgoing bureau ownership transfer requests
-    outgoing_client_persona_ownership_transfer_requests: Outgoing persona ownership transfer requests
+    outgoing_client_persona_ownership_transfer_requests:
+      Outgoing persona ownership transfer requests
     outgoing_enterprise_ownership_transfer_requests: Outgoing enterprise ownership transfer requests
     owned_members: Owned members
     public_key: Public key
@@ -1044,7 +1043,6 @@ en:
     sequence: Sequence number
     sid: Session reference
     sign_count: Sign count
-    sign_in_flow_id: Sign-in flow
     sign_up_flow_ref: Signup flow reference
     source_record_id: Source record ID
     staff: Staff
@@ -1062,7 +1060,6 @@ en:
     state_digest: State digest
     status: Status
     status_id: Status
-    step_up_ceremony_transaction_ref: Step-up transaction reference
     storage_key: Storage reference
     subject: Subject reference
     subject_id: Subject
@@ -1107,10 +1104,8 @@ en:
       emergency_unavailable:
         This session was established through Emergency Access and cannot perform step-up
         verification. Sign out and sign in normally to continue.
-      fresh_sign_in_required: Sign out and sign in again to register your first verification method.
       invalid_request: Invalid verification request.
       method_unavailable: Selected verification method is unavailable.
-      register_methods_required: No step-up methods available. Please register passkey/email/totp.
       required: Step-up authentication is required to continue.
       session_expired: Verification required.
       verification_required: Verification required.
@@ -1121,6 +1116,12 @@ en:
       mutate.
   base:
     app:
+      sign_out:
+        completed_description:
+          This browser is signed out. Visa could not confirm whether other sessions remain active.
+        unavailable_after_local_description:
+          This browser is signed out, but Visa could not confirm the sign-out. Other sessions may
+          remain active.
       selectors:
         show:
           account_label: Persona
@@ -1493,6 +1494,12 @@ en:
       roots:
         message: Developer access and support entry point.
     org:
+      sign_out:
+        completed_description:
+          This browser is signed out. Visa could not confirm whether other sessions remain active.
+        unavailable_after_local_description:
+          This browser is signed out, but Visa could not confirm the sign-out. Other sessions may
+          remain active.
       selectors:
         show:
           account_label: Agent
@@ -2364,6 +2371,10 @@ en:
     japanese: 日本語
   layouts:
     shared:
+      account_navigation:
+        label: Account
+        sign_up_or_in: Sign up / Sign in
+        sign_out: Sign out
       footer_cookie_controls:
         accept_all: Accept all
         close_button: Close
@@ -2386,28 +2397,12 @@ en:
       cta: Learn more
       footer_note: This is an automated message. Please do not reply.
       greeting: Hello,
-    email:
-      app:
-        otp_mailer:
-          create:
-            expiration_note: This code will expire in 10 minutes.
-            ignore_instruction: If you did not request this, please ignore this email.
-            instruction: "Please use the following verification code to complete your registration:"
-            subject: Your verification code
-            subjects:
-              sign_in: UMAXICA - Confirm your sign-in
-              sign_up: UMAXICA - Verify your email address
-            title: Verify your email address
-            verify_link: Verify email
-      org:
-        otp_mailer:
-          create:
-            expiration_note: This code will expire in 10 minutes.
-            ignore_instruction: If you did not request this, please ignore this email.
-            instruction: "Please use the following verification code to continue:"
-            subject: Your verification code
-            title: Verify your staff email address
-            verify_link: Verify email
+  oidc_rp:
+    interruption:
+      body: Sign-in could not be completed. Please sign in again.
+      sign_in: Sign in
+      title: Sign-in could not be completed
+      top: Top page
   messages:
     access_blocked_auth_error: "Access blocked: Authentication error"
     cannot_delete_last_passkey: Cannot delete the last passkey. You must have at least one passkey.
@@ -2947,30 +2942,6 @@ en:
           update:
             failure: Failed to update MFA settings.
             success: MFA settings updated.
-        passkey:
-          index:
-            description: Manage your registered passkeys
-            title: Passkey Management
-        passkeys:
-          edit:
-            description: Update the name for this passkey.
-            title: Edit passkey
-          index:
-            add: Register new passkey
-            back: Back to settings
-            description: Manage your registered passkeys
-            empty: No passkeys registered
-            title: Passkey Management
-          new:
-            description: Register a new passkey to sign in without a password
-            description_label: Passkey name
-            description_placeholder: e.g., MacBook Pro
-            page_title: Register Passkey
-            submit: Register Passkey
-          show:
-            back: Back to list
-            description: Review the details of this registered passkey.
-            title: Passkey details
         recovery:
           index:
             description: Review existing recovery codes and ensure they stay up to date.
@@ -3131,14 +3102,6 @@ en:
             totp: Authenticator App (TOTP)
           submit: Continue
           title: Verification
-        setup:
-          description:
-            Please register a passkey, an authenticator app, or an email address before continuing.
-          methods:
-            email: Register email
-            passkey: Register passkey
-            totp: Register authenticator app (TOTP)
-          title: Set up verification methods
         step_up_refused:
           Additional verification was not completed. Return to the page that requested it and start
           again.
@@ -3274,24 +3237,6 @@ en:
             invitation_link: Open invitation acceptance
             status: Status
             title: Lifecycle request
-        passkeys:
-          edit:
-            title: Edit Passkey
-          index:
-            add: Register new passkey
-            back: Back to settings
-            description: Manage your registered passkeys
-            empty: No passkeys registered
-            title: Passkey Management
-          new:
-            description: Register a new passkey to sign in without a password
-            description_label: Passkey name
-            description_placeholder: e.g., MacBook Pro
-            page_title: Register Passkey
-            submit: Register Passkey
-          show:
-            back: Back to list
-            title: Passkey Details
         recovery:
           index:
             description: Review existing recovery codes and ensure they stay up to date.
@@ -3381,11 +3326,6 @@ en:
             passkey: Passkey
           submit: Continue
           title: Verification
-        setup:
-          description: "Before you continue, register a passkey or an authenticator app."
-          methods:
-            passkey: Register passkey
-          title: Set up verification methods
         step_up_refused:
           Additional verification was not completed. Return to the page that requested it and start
           again.
@@ -3587,9 +3527,6 @@ en:
                 If you cannot scan the QR code, enter the secret_credential manually into your
                 authenticator app.
               submit: "Submit"
-        verifications:
-          show:
-            no_methods: Please register an email, passkey, or TOTP.
       org:
         settings:
           emails:
@@ -3603,9 +3540,6 @@ en:
             index:
               unverified: Unverified
               verified: Verified
-        verifications:
-          show:
-            no_methods: Please register a passkey.
   withdrawal_ceremony_reentry:
     generic_message:
       If an account can continue withdrawal procedures for the information entered, the next step is

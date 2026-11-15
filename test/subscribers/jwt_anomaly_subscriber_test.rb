@@ -81,7 +81,7 @@ class JwtAnomalySubscriberTest < ActiveSupport::TestCase
         code: "AUTH_USER_MALFORMED_TOKEN",
         request_host: "id.app.localhost",
         kid: "kid-1",
-        alg: "ES384",
+        alg: "PS256",
         typ: "JWT",
         iss: "jit",
         jti: "jti-123",
@@ -147,7 +147,7 @@ class JwtAnomalySubscriberTest < ActiveSupport::TestCase
     event, _occurred_at = setup_anomaly_event_test
 
     assert_equal "kid-1", event.kid
-    assert_equal "ES384", event.alg
+    assert_equal "PS256", event.alg
     assert_equal "JWT", event.typ
   end
 

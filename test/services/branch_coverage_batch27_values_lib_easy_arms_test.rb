@@ -11,47 +11,8 @@ class BranchCoverageBatch27ValuesLibEasyArmsTest < ActiveSupport::TestCase
     assert_raises(ArgumentError) { AccountStanding.new(level: :nope, decisions: {}) }
   end
 
-  test "IdentityStepUpCeremonyContract validate helpers raise" do
-    assert_raises(IdentityStepUpCeremonyContract::Error) do
-      IdentityStepUpCeremonyContract.validate_required!({ "a" => "" }, %w(a))
-    end
-    assert_raises(IdentityStepUpCeremonyContract::Error) do
-      IdentityStepUpCeremonyContract.validate_exact!({ "k" => "x" }, "k", "y")
-    end
-    assert_raises(IdentityStepUpCeremonyContract::Error) do
-      IdentityStepUpCeremonyContract.validate_boolean!({ "k" => "yes" }, "k")
-    end
-  end
-
-  test "IdentityTelephoneCeremonyContract blank return_to early return" do
-    assert_nil IdentityTelephoneCeremonyContract.validate_return_to!({ "return_to" => "" })
-  end
-
   test "SecurityJwtAuthAccessTokenCodec resource type blank arm" do
     assert_nil SecurityJwtAuthAccessTokenCodec.extract_resource_type({})
-  end
-
-  test "SignInSequence valid_for and actor_matches false arms" do
-    seq = SignInSequence.new(
-      id: "1",
-      surface: "app",
-      participant: "guardrail",
-      state: "STARTED",
-      actor_type: "Client",
-      actor_id: "1",
-      expires_at: 1.hour.from_now.iso8601,
-    )
-
-    assert_not seq.valid_for?(
-      surface: "com", actor: Client.new(security_mode_id: SecurityModeConfigurable::NORMAL),
-      participant: "guardrail",
-    )
-    assert_not seq.valid_for?(
-      surface: "app", actor: Client.new(security_mode_id: SecurityModeConfigurable::NORMAL),
-      participant: "checkpoint",
-    )
-    assert_not seq.actor_matches?(nil)
-    assert_not seq.actor_matches?(Object.new)
   end
 
   test "TimezoneIdentifier returns nil for unknown zone" do

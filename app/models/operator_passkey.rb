@@ -62,6 +62,7 @@ class OperatorPasskey < OrgPrincipalRecord
   validates :status_id, numericality: { only_integer: true }
   validates :sign_count, presence: true, numericality: { greater_than_or_equal_to: 0 }
   before_validation :set_defaults, on: :create
+  after_commit :refresh_owner_mfa_status
 
   scope :active, -> { where(status_id: OperatorPasskeyStatus::ACTIVE) }
 

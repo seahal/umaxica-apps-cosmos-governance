@@ -36,9 +36,11 @@ module Security
           get base_app_identity_url(ri: "jp", host: @host),
               headers: headers
 
-          assert request.cookies.key?(OidcRpBrowserCredentialContract::ACCESS_COOKIE)
+          assert request.cookies.key?(OidcRpBrowserCredentialContract::SESSION_COOKIE)
+          assert_not request.cookies.key?(OidcRpBrowserCredentialContract::ACCESS_COOKIE)
           assert_predicate user.reload, :closing?
-          assert_response :unauthorized
+          assert_response :see_other
+          assert_equal "/sign", URI.parse(response.location).path
         end
       end
 
@@ -91,7 +93,8 @@ module Security
           get new_base_app_identity_withdrawal_url(ri: "jp"), headers: headers
 
           assert_predicate user.reload, :closing?
-          assert_response :unauthorized
+          assert_response :see_other
+          assert_equal "/sign", URI.parse(response.location).path
         end
       end
 

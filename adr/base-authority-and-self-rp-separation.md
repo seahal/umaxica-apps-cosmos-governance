@@ -115,3 +115,13 @@ Consequences accepted with this decision:
 
 Every other credential keeps its existing verification contract; this amendment changes none of
 them. Optimizations that weaken revocation or the fail-closed behavior are outside this decision.
+
+## Scoped Base front-channel amendment (2026-11-14)
+
+For `base-app-ww` and `base-org-ww` only, the later owner decision in
+[`oidc-authorization-code-only-implicit-and-hybrid-non-adoption.md`](oidc-authorization-code-only-implicit-and-hybrid-non-adoption.md)
+replaces the shared layer's Code/PKCE, UserInfo, and Access/Refresh Token steps with the exact
+front-channel ID Token profile. The RP still commits its own `sid`-bound session and checks that
+session on every request. Base-owned API calls use the separate Governance token defined in
+[`base-api-authority-governance-issued-token.md`](base-api-authority-governance-issued-token.md).
+Other RP clients retain their existing Code/PKCE contract.

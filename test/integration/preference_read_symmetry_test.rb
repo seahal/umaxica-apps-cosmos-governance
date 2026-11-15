@@ -240,20 +240,29 @@ class PreferenceReadSymmetryTest < ActionDispatch::IntegrationTest
     assert_select "html[lang=?]", "ja"
   end
 
-  test "signed-in preference writes expose unavailable Access authority without changing the saved actor value" do
+  test "a non-RP process refuses a Base RP session without writing visitor or actor preferences" do
     host = ENV.fetch("PUBLIC_BASE_SERVICE_URL")
     user = clients(:one)
     headers = as_user_headers(user, host: host)
-    original = ClientPreference.where(client_id: user.id).map(&:attributes)
-    original_themes = ClientPreferenceTheme.all.map(&:attributes)
+    actor_preference = ClientPreference.includes(:client_preference_theme).find_by(
+      client_id: user.id, status_id: ClientPreferenceStatus::ACTIVE,
+    )
+    actor_theme = actor_preference&.client_preference_theme&.option_id
+    preference_ids = ClientPreference.where(client_id: user.id).order(:id).pluck(:id)
+    anonymous_preference_count = AppPreference.count
 
     patch base_app_preference_theme_url(ri: "jp"), headers: headers, as: :json,
                                                    params: { preference_theme: { option_id: AppPreferenceThemeOption::DARK.to_s } }
 
     assert_response :service_unavailable
-    assert_equal original, ClientPreference.where(client_id: user.id).map(&:attributes)
-    assert_equal original_themes, ClientPreferenceTheme.all.map(&:attributes)
-    assert_nil response.location
+    assert_equal preference_ids, ClientPreference.where(client_id: user.id).order(:id).pluck(:id)
+    assert_equal anonymous_preference_count, AppPreference.count
+    current_preference = ClientPreference.includes(:client_preference_theme).find_by(
+      client_id: user.id, status_id: ClientPreferenceStatus::ACTIVE,
+    )
+
+    assert_equal actor_preference&.id, current_preference&.id
+    assert_equal actor_theme, current_preference&.client_preference_theme&.option_id
   end
 
   test "the APP RP process saves and reads its authenticated actor preference without OP storage" do

@@ -34,6 +34,25 @@ class RuntimeRoleRouteGuardTest < ActionDispatch::IntegrationTest
     assert_not_equal 404, response.status
   end
 
+  test "Base Org RP role serves its sign entry but Base App RP role does not" do
+    org_host = ENV.fetch("PUBLIC_BASE_STAFF_URL")
+    with_runtime_role("rp-base-org-ww") do
+      get "/sign", params: { ri: "jp" }, headers: { "Host" => org_host }
+
+      assert_response :success
+    end
+
+    app_host = ENV.fetch("PUBLIC_BASE_SERVICE_URL")
+    with_runtime_role("rp-base-app-ww") do
+      get "/sign", params: { ri: "jp" }, headers: { "Host" => app_host }
+
+      assert_response :success
+      get "/sign", params: { ri: "jp" }, headers: { "Host" => org_host }
+
+      assert_response :not_found
+    end
+  end
+
   # Auth/Visa URL removal retires the external logout-token receiver with the sign-in path.
   test "a closed RP cell refuses browser pages and has no back-channel logout route" do
     host = ENV.fetch("PUBLIC_BASE_SERVICE_URL")

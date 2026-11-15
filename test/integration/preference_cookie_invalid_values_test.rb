@@ -23,7 +23,7 @@ class PreferenceCookieInvalidValuesTest < ActionDispatch::IntegrationTest
       functional: false,
       consented: false,
     )
-    key = OpenSSL::PKey::EC.generate("secp384r1")
+    key = OpenSSL::PKey::RSA.generate(3072)
     public_key_for_stub = ->(_kid, **_options) { key }
     preferences = {
       "theme" => "system",

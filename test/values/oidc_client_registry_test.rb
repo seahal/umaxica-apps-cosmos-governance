@@ -17,6 +17,8 @@ class OidcClientRegistryTest < ActiveSupport::TestCase
     assert_not_predicate client, :public_client?
     assert_predicate client, :confidential_client?
     assert_predicate client, :private_key_jwt_client?
+    assert_not_respond_to client, :client_secret
+    assert_not_respond_to OidcClientRegistry, :authenticate
   end
 
   test "each first-party RP registers a callback on its own surface" do
@@ -35,33 +37,6 @@ class OidcClientRegistryTest < ActiveSupport::TestCase
       registered_paths = client.post_logout_redirect_uris.map { |uri| URI.parse(uri).path }.uniq
 
       assert_equal ["/sign/out/completion"], registered_paths, client_id
-
-      client.post_logout_redirect_uris.each do |registered_uri|
-        legacy_uri = URI.parse(registered_uri)
-        legacy_uri.path = "/sign/out"
-
-        assert_not OidcClientRegistry.valid_post_logout_redirect_uri?(
-          client_id: client_id,
-          uri: legacy_uri.to_s,
-          resource_type: client.resource_type,
-        ), "#{client_id} accepts the retired /sign/out return URI"
-      end
-    end
-  end
-
-  test "each first-party RP accepts its registered logout URI for its own realm" do
-    OidcRpSurfaceMap.first_party_rp_client_ids.each do |client_id|
-      client = OidcClientRegistry.find!(client_id)
-      client.post_logout_redirect_uris.each do |uri|
-        assert OidcClientRegistry.valid_post_logout_redirect_uri?(
-          client_id: client_id, uri: uri, resource_type: client.resource_type,
-        ), "#{client_id} rejects its registered logout URI"
-        other_realm = (client.resource_type == "client") ? "operator" : "client"
-
-        assert_not OidcClientRegistry.valid_post_logout_redirect_uri?(
-          client_id: client_id, uri: uri, resource_type: other_realm,
-        ), "#{client_id} accepts its logout URI for another realm"
-      end
     end
   end
 

@@ -149,6 +149,7 @@ class ActorTest < ActiveSupport::TestCase
   end
 
   test "step up null returns true for NULL and false for non-null" do
+    assert_equal Actor::StepUp::NULL, Actor::StepUp.null
     assert_predicate Actor::StepUp::NULL, :null?
     assert_not Actor::StepUp::NULL.with(scope: "email").null?
     assert_not Actor::StepUp::NULL.with(satisfied: true).null?
@@ -249,11 +250,13 @@ class ActorTest < ActiveSupport::TestCase
   test "channel drives browser and native predicates" do
     Actor.install_context!(channel: :browser)
 
+    assert_equal :browser, Actor.channel
     assert_predicate Actor, :browser?
     assert_not_predicate Actor, :native?
 
     Actor.install_context!(channel: :native)
 
+    assert_equal :native, Actor.channel
     assert_predicate Actor, :native?
     assert_not_predicate Actor, :browser?
   end
@@ -261,11 +264,13 @@ class ActorTest < ActiveSupport::TestCase
   test "transport drives cookie and bearer predicates" do
     Actor.install_context!(transport: :cookie)
 
+    assert_equal :cookie, Actor.transport
     assert_predicate Actor, :cookie?
     assert_not_predicate Actor, :bearer?
 
     Actor.install_context!(transport: :bearer)
 
+    assert_equal :bearer, Actor.transport
     assert_predicate Actor, :bearer?
     assert_not_predicate Actor, :cookie?
   end

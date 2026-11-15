@@ -36,10 +36,44 @@
 
 class ClientTelephone < AppPrincipalRecord
   include Retainable
+
+  attribute :discard_at, :datetime, default: -> { Retainable::SENTINEL }
+  attribute :purge_eligible_at, :datetime, default: -> { Retainable::SENTINEL }
+  validates :discard_at, presence: true
+  validates :purge_eligible_at, presence: true
+  validate :retention_order_valid
+  validate :retention_times_not_before_created_at, on: :update
+  Retainable.register_host(self)
+
   include Telephone
+
+  after_initialize :initialize_telephone_otp_state
+
+  before_validation :normalize_number_from_raw
+  before_validation :set_number_digests
+  scope :with_number, ->(value) do
+    digest = IdentifierBlindIndex.bidx_for_telephone(value, realm: identifier_hmac_realm)
+    digest.present? ? where(number_digest: digest) : none
+  end
+  validate :validate_telephone_number
+  validates :confirm_policy, acceptance: true,
+                             unless: proc { |record| record.raw_number.blank? && record.pass_code.present? }
+  validates :confirm_using_mfa, acceptance: true,
+                                unless: proc { |record| record.raw_number.blank? && record.pass_code.present? }
+  validates :pass_code, numericality: { only_integer: true },
+                        length: { is: 6 },
+                        presence: true,
+                        unless: proc { |record| record.pass_code.blank? && record.raw_number.present? }
   include TelephoneDeadIdentifierHistory
 
   include PublicId
+
+  before_validation :generate_public_id, on: :create
+  before_validation :refresh_generated_public_id_after_collision, on: :create
+  before_create :generate_public_id
+  around_create :retry_public_id_collision
+  validate :public_id_immutable_after_create, on: :update
+  validates :public_id, presence: true, length: { is: PublicId::GENERATION_SIZE }, uniqueness: true
   include TelephoneContactBinding
 
   IDENTIFIER_REALM = "app"
@@ -83,8 +117,6 @@ class ClientTelephone < AppPrincipalRecord
   validates :user_identity_telephone_status_id, numericality: { only_integer: true }
   validates :number_digest, presence: true, if: :binding_effective?
 
-  after_initialize :initialize_telephone_otp_state
-
   before_destroy :archive_dead_telephone_identifier, prepend: true
 
   after_initialize do
@@ -97,10 +129,6 @@ class ClientTelephone < AppPrincipalRecord
 
   def to_param
     public_id
-  end
-
-  def finalize_sign_up_binding!(flow:, transaction:, session_nonce:)
-    raise AccessOpDataUnavailableError
   end
 
   def contact_binding_digest

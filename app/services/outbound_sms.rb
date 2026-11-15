@@ -29,6 +29,7 @@ class OutboundSms < ApplicationService
     record_delivery_event_safely("delivery_failed", reason: e.class.name)
     raise
   end
+  public_class_method :deliver_now
 
   def self.deliver_later(to:, title:, body:, otp_binding: nil, otp_code: nil)
     return suspended_result if suspended?
@@ -45,10 +46,12 @@ class OutboundSms < ApplicationService
     record_delivery_event_safely("enqueue_failed", reason: e.class.name)
     raise
   end
+  public_class_method :deliver_later
 
   def self.suspended?
     OutboundChannelSuspension.suspended?(:sms)
   end
+  public_class_method :suspended?
 
   # The recipient is not logged: the outcome and the channel are what an operator needs
   # while the kill switch is pulled.
@@ -57,6 +60,7 @@ class OutboundSms < ApplicationService
     Rails.logger.warn(JitLogEvent.format("outbound.sms.suspended", channel: "sms"))
     OutboundResult.rejected(channel: :sms, error: SUSPENDED_ERROR)
   end
+  public_class_method :suspended_result
 
   def self.provider
     provider_name = Rails.application.config.sms_provider.to_s
@@ -67,6 +71,7 @@ class OutboundSms < ApplicationService
 
     provider_class.new
   end
+  public_class_method :provider
 
   def self.record_delivery_event_safely(event, metadata: {}, reason: nil)
     Chronicle.capture(
@@ -108,6 +113,7 @@ class OutboundSms < ApplicationService
     @options = options
   end
 
+  public
   def call
     self.class.deliver_later(to: to, title: title, body: body)
   end

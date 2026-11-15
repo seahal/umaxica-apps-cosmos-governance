@@ -8,6 +8,10 @@ module Base
 
       AUTHENTICATION_MODE = :open
 
+      layout "base/com/inertia"
+      inertia_share chrome: -> { surface_chrome }
+      inertia_share clear_history: -> { session[:inertia_clear_history] == true }
+
       public
 
       # The com root is the anonymous entry to the public preference screen. It carries no personal

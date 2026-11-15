@@ -9,7 +9,7 @@ class StepUpEvidenceResolverTest < ActiveSupport::TestCase
   setup do
     @actor = clients(:one)
     @cell = RpCellBinding.fetch("rp_base_app")
-    @issuer = OidcIssuer.for_resource_type("client")
+    @issuer = rp_test_issuer_for(OidcClientRegistry.find!(@cell.client_id))
     @subject = OidcSubject.for(@actor, resource_type: "client")
     @sid = SecureRandom.alphanumeric(21)
     @now = RpBaseAppRecord.database_now
@@ -44,7 +44,7 @@ class StepUpEvidenceResolverTest < ActiveSupport::TestCase
     )
   end
 
-  test "accepts a verified local RP event immediately inside the five-minute window" do
+  test "accepts verified OP evidence immediately inside the five-minute window" do
     access_state = @access_state.with(
       payload: @payload.merge("auth_time" => @now.to_i - StepUpEvidenceValue::MAX_AGE_SECONDS + 1),
     )
@@ -55,6 +55,14 @@ class StepUpEvidenceResolverTest < ActiveSupport::TestCase
       assert_instance_of StepUpEvidenceValue, evidence
       assert_equal @sid, evidence.sid
       assert_equal @subject, evidence.sub
+    end
+  end
+
+  test "rejects step-up evidence when its authenticated OP issuer differs from the stored binding" do
+    wrong_issuer = @access_state.with(payload: @payload.merge("iss" => "https://wrong-issuer.example.test"))
+
+    RpBaseAppRecord.stub(:database_now, @now) do
+      assert_nil StepUpEvidenceResolver.call(access_state: wrong_issuer, actor: @actor, cell: @cell)
     end
   end
 
@@ -89,7 +97,7 @@ class StepUpEvidenceResolverTest < ActiveSupport::TestCase
   test "rejects step-up evidence in an ORG standby authentication context" do
     actor = operators(:one)
     cell = RpCellBinding.fetch("rp_base_org")
-    issuer = OidcIssuer.for_resource_type("operator")
+    issuer = rp_test_issuer_for(OidcClientRegistry.find!(cell.client_id))
     subject = OidcSubject.for(actor, resource_type: "operator")
     sid = SecureRandom.alphanumeric(21)
     now = RpBaseOrgRecord.database_now

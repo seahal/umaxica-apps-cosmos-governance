@@ -43,8 +43,39 @@
 
 class ClientEmail < AppPrincipalRecord
   include PublicId
+
+  after_initialize :initialize_email_otp_state
+  before_validation :generate_public_id, on: :create
+  before_validation :refresh_generated_public_id_after_collision, on: :create
+  before_validation :normalize_address_from_raw
+  before_validation :set_address_digests
+  before_create :generate_public_id
+  around_create :retry_public_id_collision
+  validate :public_id_immutable_after_create, on: :update
+  validates :public_id, presence: true, length: { is: PublicId::GENERATION_SIZE }, uniqueness: true
   include Retainable
+
+  attribute :discard_at, :datetime, default: -> { Retainable::SENTINEL }
+  attribute :purge_eligible_at, :datetime, default: -> { Retainable::SENTINEL }
+  validates :discard_at, presence: true
+  validates :purge_eligible_at, presence: true
+  validate :retention_order_valid
+  validate :retention_times_not_before_created_at, on: :update
+  Retainable.register_host(self)
+
   include Email
+
+  scope :with_address, ->(value) do
+    digest = IdentifierBlindIndex.bidx_for_email(value, realm: identifier_hmac_realm)
+    digest.present? ? where(address_digest: digest) : none
+  end
+  validate :validate_email_address
+  validates :confirm_policy, acceptance: true, on: :create,
+                             unless: proc { |a| a.raw_address.blank? && a.pass_code.present? }
+  validates :pass_code, numericality: { only_integer: true },
+                        length: { is: 6 },
+                        presence: true,
+                        unless: proc { |a| a.pass_code.blank? && a.raw_address.present? }
   include EmailDeadIdentifierHistory
 
   include MfaStatusCredential
@@ -90,14 +121,13 @@ class ClientEmail < AppPrincipalRecord
   validates :user_email_status_id, numericality: { only_integer: true }
   validates :address_digest, presence: true, if: :binding_effective?
 
-  after_initialize :initialize_email_otp_state
-
   before_destroy :archive_dead_email_identifier, prepend: true
   before_destroy :prevent_destroy_when_undeletable
 
   after_initialize do
     self.address ||= ""
   end
+  after_commit :refresh_owner_mfa_status
 
   scope :effective_binding, -> { where.not(binding_finalized_at: nil).where(binding_released_at: nil) }
 

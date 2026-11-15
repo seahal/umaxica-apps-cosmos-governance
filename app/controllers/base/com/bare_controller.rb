@@ -12,6 +12,8 @@ module Base
 
       AUTHENTICATION_MODE = :bare
 
+      prepend_before_action :enforce_fqdn_availability!
+
       prepend_before_action :apply_default_no_store
 
       allow_browser versions: :modern

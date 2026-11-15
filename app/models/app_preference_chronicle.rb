@@ -44,6 +44,14 @@ class AppPreferenceChronicle < ChronicleRecord
 
   include Retainable
 
+  attribute :discard_at, :datetime, default: -> { Retainable::SENTINEL }
+  attribute :purge_eligible_at, :datetime, default: -> { Retainable::SENTINEL }
+  validates :discard_at, presence: true
+  validates :purge_eligible_at, presence: true
+  validate :retention_order_valid
+  validate :retention_times_not_before_created_at, on: :update
+  Retainable.register_host(self)
+
   # Audit rows may describe another subject type; the guarded callback checks AppPreference references.
   belongs_to :app_preference,
              class_name: "AppPreference",
@@ -90,6 +98,7 @@ class AppPreferenceChronicle < ChronicleRecord
   end
 
   # Helper methods for compatibility
+  public
   def app_preference
     return if subject_id.blank?
 

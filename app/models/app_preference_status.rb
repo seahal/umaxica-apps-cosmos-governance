@@ -16,6 +16,8 @@ class AppPreferenceStatus < AppSettingRecord
   RETIRED = 1
   DEFAULTS = [ACTIVE, RETIRED].freeze
 
+  self.record_timestamps = false
+
   has_many :app_preferences,
            class_name: "AppPreference",
            foreign_key: "status_id",
@@ -26,4 +28,5 @@ class AppPreferenceStatus < AppSettingRecord
   def self.ensure_defaults!
     insert_missing_fixed_ids!(DEFAULTS)
   end
+  public_class_method :ensure_defaults!
 end

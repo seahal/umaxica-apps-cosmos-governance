@@ -5,6 +5,13 @@ require "test_helper"
 class RegistrationCompletionUniquenessTest < ActiveSupport::TestCase
   self.fixture_table_names = []
 
+  test "a persisted completion method is read-only" do
+    method = ClientRegistrationCompletionMethod.find_by!(key: "email")
+
+    assert_predicate method, :readonly?
+    assert_not_predicate ClientRegistrationCompletionMethod.new(key: "email"), :readonly?
+  end
+
   test "completion catalog rejects an existing key before attempting its immutable insert" do
     method = ClientRegistrationCompletionMethod.new(id: 1, key: "email")
 

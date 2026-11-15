@@ -37,6 +37,19 @@ class FilterParameterLoggingTest < ActiveSupport::TestCase
     assert_equal "[FILTERED]", filtered.fetch("entry_ref")
   end
 
+  test "filters front-channel ID Token and remaining OAuth credential parameters" do
+    filter = ActiveSupport::ParameterFilter.new(Rails.application.config.filter_parameters)
+    filtered = filter.filter(
+      "id_token" => "front-channel-id-token",
+      "access_token" => "access-token",
+      "refresh_token" => "refresh-token",
+    )
+
+    assert_equal(
+      { "id_token" => "[FILTERED]", "access_token" => "[FILTERED]", "refresh_token" => "[FILTERED]" }, filtered,
+    )
+  end
+
   test "does not let short sensitive names hide safe diagnostic fields" do
     filter = ActiveSupport::ParameterFilter.new(Rails.application.config.filter_parameters)
     filtered = filter.filter(

@@ -4,6 +4,11 @@ class Base::App::SecretsController < Base::App::ApplicationController
   include SurfaceInertiaPage
 
   AUTHENTICATION_MODE = :private
+
+  layout "base/app/inertia"
+  inertia_share chrome: -> { surface_chrome }
+  inertia_share clear_history: -> { session[:inertia_clear_history] == true }
+
   declare_authentication_mode! :private
 
   step_up only: %i(new create edit update destroy), scope: "settings_secret_credential"

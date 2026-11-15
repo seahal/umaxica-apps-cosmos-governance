@@ -127,7 +127,7 @@ class AnonymousComPreferenceWriteJourneyTest < ActionDispatch::IntegrationTest
       expires: 400.days.from_now,
     }.compact
     candidates =
-      (1680..1810).filter_map do |padding|
+      (1380..1510).filter_map do |padding|
         issuer = "https://#{"a" * padding}.example"
         token = nil
         PreferenceJwtConfiguration.stub(:com_issuer, issuer) do

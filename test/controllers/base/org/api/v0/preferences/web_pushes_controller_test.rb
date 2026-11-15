@@ -153,7 +153,7 @@ class Base::Org::Api::V0::Preferences::WebPushesControllerTest < ActionDispatch:
     ActionController::Base.allow_forgery_protection = prior_forgery_protection
   end
 
-  test "an ORG RP session requires two active operator passkeys before changing browser web push" do
+  test "ORG actions fail closed below the two-passkey minimum while Access owns registration" do
     actor = Operator.create!(security_mode_id: SecurityModeConfigurable::ADVANCED, status_id: OperatorStatus::ACTIVE)
     prior_forgery_protection = ActionController::Base.allow_forgery_protection
     ActionController::Base.allow_forgery_protection = true
@@ -174,9 +174,15 @@ class Base::Org::Api::V0::Preferences::WebPushesControllerTest < ActionDispatch:
             )
           end
         end
+      create_operator_passkeys.call(1)
+      preference_count = OrgPreference.count
       get(base_org_preference_path(ri: "jp"))
 
-      assert_redirected_to base_org_verification_setup_path(ri: "jp")
+      assert_response :service_unavailable
+      assert_equal "application/json", response.media_type
+      assert_equal({ "error" => I18n.t("auth.rp_feature_unavailable") }, response.parsed_body)
+      assert_includes response.headers.fetch("Cache-Control"), "no-store"
+      assert_equal preference_count, OrgPreference.count
 
       create_operator_passkeys.call(2)
 
@@ -196,8 +202,9 @@ class Base::Org::Api::V0::Preferences::WebPushesControllerTest < ActionDispatch:
         )
 
         if passkey_count == 1
-          assert_response :forbidden
-          assert_equal({ "error" => "SECOND_PASSKEY_REQUIRED" }, response.parsed_body)
+          assert_response :service_unavailable
+          assert_equal "application/problem+json", response.media_type
+          assert_equal "urn:umaxica:problem:service-unavailable", response.parsed_body.fetch("type")
           assert_equal 0, OrgPreferenceWebPush.count
         else
           assert_response :ok

@@ -2,7 +2,7 @@
 
 require "test_helper"
 
-class ContactRegistrationOtpDeliveryBindingValueTest < ActiveSupport::TestCase
+class TelephoneCredentialRegistrationOtpDeliveryBindingValueTest < ActiveSupport::TestCase
   test "Telephone registration accepts exact five-field APP and opaque ORG bindings" do
     %w(app org).each do |surface|
       tuple = [surface, "credential_registration", "12345678-1234-4000-8000-123456789abc",
@@ -61,31 +61,23 @@ class ContactRegistrationOtpDeliveryBindingValueTest < ActiveSupport::TestCase
     end
   end
 
-  test "generation remains a UUID while transaction references accept UUID or NanoID" do
+  test "Telephone transaction reference accepts UUID or NanoID while generation remains a UUID" do
     uuid = "12345678-1234-4000-8000-123456789abc"
     %w(8 9 a b).each do |variant|
       reference = uuid.sub("-8000-", "-#{variant}000-")
-      value = EmailCredentialRegistrationOtpDeliveryBindingValue.for(
-        purpose: "credential_registration", contact_ceremony_transaction_ref: reference,
-        contact_otp_generation: reference,
+      value = TelephoneCredentialRegistrationOtpDeliveryBindingValue.for_sms(
+        otp_binding: ["app", "credential_registration", reference, "contact", uuid],
       )
 
-      assert_equal reference, value.contact_otp_generation
-      assert_equal reference, value.contact_ceremony_transaction_ref
+      assert_equal reference, value.transaction_ref
+      assert_equal uuid, value.generation
     end
     nanoid = "A1_b2-C3d4E5f6G7h8I9j"
-    value = EmailCredentialRegistrationOtpDeliveryBindingValue.for(
-      purpose: "credential_registration", contact_ceremony_transaction_ref: nanoid,
-      contact_otp_generation: uuid,
+    value = TelephoneCredentialRegistrationOtpDeliveryBindingValue.for_sms(
+      otp_binding: ["app", "credential_registration", nanoid, "contact", uuid],
     )
 
-    assert_equal nanoid, value.contact_ceremony_transaction_ref
-    assert_raises(ArgumentError) do
-      EmailCredentialRegistrationOtpDeliveryBindingValue.for(
-        purpose: "credential_registration", contact_ceremony_transaction_ref: uuid,
-        contact_otp_generation: nanoid,
-      )
-    end
+    assert_equal nanoid, value.transaction_ref
     [nil, "", " ", "transaction", uuid[0...35], uuid + "0", uuid.upcase,
      uuid.sub("-4000-", "-3000-"), uuid.sub("-4000-", "-5000-"),
      uuid.sub("-8000-", "-7000-"), uuid.sub("-8000-", "-c000-"),
@@ -94,17 +86,9 @@ class ContactRegistrationOtpDeliveryBindingValueTest < ActiveSupport::TestCase
       [2, 4].each do |index|
         tuple = ["app", "credential_registration", uuid, "contact", uuid]
         tuple[index] = invalid
-        assert_raises(ArgumentError) {
+        assert_raises(ArgumentError) do
           TelephoneCredentialRegistrationOtpDeliveryBindingValue.for_sms(otp_binding: tuple)
-        }
-      end
-      %i(contact_ceremony_transaction_ref contact_otp_generation).each do |key|
-        arguments = { purpose: "credential_registration",
-                      contact_ceremony_transaction_ref: uuid,
-                      contact_otp_generation: uuid, }
-        assert_raises(ArgumentError) {
-          EmailCredentialRegistrationOtpDeliveryBindingValue.for(**arguments.merge(key => invalid))
-        }
+        end
       end
     end
   end
@@ -141,72 +125,23 @@ class ContactRegistrationOtpDeliveryBindingValueTest < ActiveSupport::TestCase
           otp_binding: ["app", "credential_registration", "12345678-1234-4000-8000-123456789abc", "contact", invalid],
         )
       end
-      assert_raises(ArgumentError) do
-        EmailCredentialRegistrationOtpDeliveryBindingValue.for(
-          purpose: "credential_registration", contact_ceremony_transaction_ref: "12345678-1234-4000-8000-123456789abc",
-          contact_otp_generation: invalid,
-        )
-      end
     end
   end
 
-  test "Email registration requires complete typed transaction and generation metadata" do
-    arguments = {
-      purpose: "credential_registration",
-      contact_ceremony_transaction_ref: "12345678-1234-4000-8000-123456789abc",
-      contact_otp_generation: "87654321-4321-4000-b000-cba987654321",
-    }
-    value = EmailCredentialRegistrationOtpDeliveryBindingValue.for(**arguments)
-
-    assert_equal arguments.except(:purpose), value.to_h
-    arguments.each_key do |key|
-      assert_raises(ArgumentError) { EmailCredentialRegistrationOtpDeliveryBindingValue.for(**arguments.except(key)) }
-      assert_raises(ArgumentError) {
-        EmailCredentialRegistrationOtpDeliveryBindingValue.for(**arguments.merge(key => nil))
-      }
-    end
-  end
-
-  test "other Email purposes return nil only when both registration metadata fields are nil" do
-    [nil, "", "sign_in", "sign_up", "other"].each do |purpose|
-      assert_nil EmailCredentialRegistrationOtpDeliveryBindingValue.for(
-        purpose:, contact_ceremony_transaction_ref: nil, contact_otp_generation: nil,
-      )
-      [
-        ["12345678-1234-4000-8000-123456789abc", nil],
-        [nil, "87654321-4321-4000-b000-cba987654321"],
-        ["12345678-1234-4000-8000-123456789abc", "87654321-4321-4000-b000-cba987654321"],
-        ["", nil], [nil, ""], [[], nil], [nil, {}],
-      ].each do |reference, generation|
-        assert_raises(ArgumentError) do
-          EmailCredentialRegistrationOtpDeliveryBindingValue.for(
-            purpose:, contact_ceremony_transaction_ref: reference, contact_otp_generation: generation,
-          )
-        end
-      end
-    end
-  end
-
-  test "both channel bindings own immutable snapshots despite caller strings and exported container mutation" do
+  test "Telephone binding owns an immutable snapshot despite caller strings and exported container mutation" do
     tuple = [+"app", +"credential_registration", +"12345678-1234-4000-8000-123456789abc",
              +"contact", +"87654321-4321-4000-b000-cba987654321",]
     expected = tuple.map(&:dup)
     telephone = TelephoneCredentialRegistrationOtpDeliveryBindingValue.for_sms(otp_binding: tuple)
-    email = EmailCredentialRegistrationOtpDeliveryBindingValue.for(
-      purpose: tuple[1], contact_ceremony_transaction_ref: tuple[2], contact_otp_generation: tuple[4],
-    )
     tuple.each { |field| field.replace("changed") }
     exported = telephone.to_a
     exported[0] = "changed"
-    parameters = email.to_h
-    parameters[:contact_otp_generation] = "changed"
 
     assert_predicate telephone, :frozen?
-    assert_predicate email, :frozen?
     assert_equal expected, telephone.to_a
-    assert_equal({ contact_ceremony_transaction_ref: expected[2], contact_otp_generation: expected[4] }, email.to_h)
-    [telephone.surface, telephone.purpose, telephone.transaction_ref, telephone.candidate_ref, telephone.generation,
-     email.contact_ceremony_transaction_ref, email.contact_otp_generation,].each do |field|
+    [
+      telephone.surface, telephone.purpose, telephone.transaction_ref, telephone.candidate_ref, telephone.generation,
+    ].each do |field|
       assert_raises(FrozenError) { field.replace("changed") }
     end
   end

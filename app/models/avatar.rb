@@ -42,7 +42,24 @@
 
 class Avatar < AvatarRecord
   include Retainable
+
+  attribute :discard_at, :datetime, default: -> { Retainable::SENTINEL }
+  attribute :purge_eligible_at, :datetime, default: -> { Retainable::SENTINEL }
+  validates :discard_at, presence: true
+  validates :purge_eligible_at, presence: true
+  validate :retention_order_valid
+  validate :retention_times_not_before_created_at, on: :update
+  Retainable.register_host(self)
+
   include PublicId
+
+  before_validation :generate_public_id, on: :create
+  before_validation :refresh_generated_public_id_after_collision, on: :create
+  before_validation :default_lifecycle_state, on: :create
+  before_create :generate_public_id
+  around_create :retry_public_id_collision
+  validate :public_id_immutable_after_create, on: :update
+  validates :public_id, presence: true, length: { is: PublicId::GENERATION_SIZE }, uniqueness: true
   include AvatarImageUploader::Attachment[:image]
 
   belongs_to :capability, class_name: "AvatarCapability"
@@ -237,8 +254,6 @@ class Avatar < AvatarRecord
   validates :capability_id, numericality: { only_integer: true, greater_than: 0 }
   validates :lifecycle_state_id, exclusion: { in: [nil] }
 
-  before_validation :default_lifecycle_state, on: :create
-
   # Deprecated compatibility wrapper. New avatar creation must call AvatarProvisioning::Create
   # so ownership period, binding, moniker, handle, and lifecycle state are written consistently.
   def self.create_with_owner(attributes, user)
@@ -265,7 +280,9 @@ class Avatar < AvatarRecord
 
     result.avatar
   end
+  public_class_method :create_with_owner
 
+  public
   def current_avatar_persona_binding
     return nil unless persisted?
 

@@ -11,8 +11,9 @@ class ClientSecretNameCommittedHttpTest < ActionDispatch::IntegrationTest
     host = ENV.fetch("PUBLIC_BASE_SERVICE_URL")
     headers = as_user_headers(actor, host:)
     cookie_values = headers.fetch("Cookie").split("; ").to_h { |pair| pair.split("=", 2) }
+    access_token = jwt_access_token_for(actor, host:)
     payload, = JWT.decode(
-      Rack::Utils.unescape(cookie_values.fetch(OidcRpBrowserCredentialContract::ACCESS_COOKIE)),
+      access_token,
       nil, false,
     )
     payload.merge!("acr" => StepUpEvidenceResolver::STEP_UP_ACR, "amr" => ["passkey"], "auth_time" => Time.current.to_i)

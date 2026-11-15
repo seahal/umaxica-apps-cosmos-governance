@@ -2,7 +2,7 @@
 
 require "test_helper"
 
-# The Base chrome decides Preference controls by surface; Base owns the browser write routes.
+# Base chrome decides Preference controls and RP navigation by surface; Base owns the browser write routes.
 class SurfaceChromePreferenceControlsTest < ActionDispatch::IntegrationTest
   fixtures :clients, :client_preferences
 
@@ -35,6 +35,25 @@ class SurfaceChromePreferenceControlsTest < ActionDispatch::IntegrationTest
 
       assert_equal expected.theme_endpoint_path, chrome.dig("theme_controls", "endpoint_url"), label
       assert_equal expected.cookie_endpoint_path, chrome.dig("cookie_controls", "endpoint_url"), label
+      sign_path =
+        case page.fetch(:surface)
+        when "app" then base_app_sign_show_path(ri: "jp")
+        when "org" then base_org_sign_show_path(ri: "jp")
+        end
+      if sign_path
+        navigation = chrome.fetch("account_navigation")
+
+        assert_equal I18n.t("layouts.shared.account_navigation.label"), navigation.fetch("label")
+        assert_not navigation.fetch("signed_in")
+        assert_equal [
+          {
+            "label" => I18n.t("layouts.shared.account_navigation.sign_up_or_in"),
+            "href" => sign_path,
+          },
+        ], navigation.fetch("links")
+      else
+        assert_nil chrome["account_navigation"], label
+      end
       if expected.theme_endpoint_path
         assert_match %r{\A/(?!/)}, chrome.dig("theme_controls", "endpoint_url"), label
         assert_match %r{\A/(?!/)}, chrome.dig("cookie_controls", "endpoint_url"), label

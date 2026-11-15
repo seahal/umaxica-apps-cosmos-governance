@@ -29,6 +29,7 @@ module AvatarBackfill
       @output_path = output_path
     end
 
+    public
     def call
       audit = AuditLegacyClientBindings.call
       details = audit.details.map { |candidate| backfill_candidate(candidate) }

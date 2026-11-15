@@ -2,6 +2,7 @@
 # frozen_string_literal: true
 
 class AvatarBlockPolicy < ApplicationPolicy
+  public
   def create?
     actor_avatar = user
     target_avatar = record&.blocked_avatar

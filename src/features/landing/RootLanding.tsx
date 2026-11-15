@@ -13,7 +13,8 @@ export type RootLandingProps = {
   // its own sends null and the layout falls back to that contract.
   title: string | null;
   heading: string;
-  description: string;
+  // Only a landing that offers links describes them; a landing without links sends none.
+  description?: string | null;
   // The server has already decided which public destinations the visitor may see.
   links?: RootLandingLink[] | null;
 };
@@ -34,7 +35,9 @@ export default function RootLanding({ heading, description, links }: RootLanding
           >
             {heading}
           </h1>
-          <p className="max-w-prose text-lg text-pretty text-fg-muted">{description}</p>
+          {description ? (
+            <p className="max-w-prose text-lg text-pretty text-fg-muted">{description}</p>
+          ) : null}
         </header>
 
         {links?.length ? (

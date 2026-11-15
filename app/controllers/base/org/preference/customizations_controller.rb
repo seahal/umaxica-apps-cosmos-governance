@@ -12,6 +12,8 @@ module Base
 
         before_action :ensure_preferences_record
 
+        public
+
         def edit
           edit_reset_preference_screen
           return if performed?

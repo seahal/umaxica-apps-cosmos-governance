@@ -5,7 +5,7 @@ require "test_helper"
 class BaseSharedRpCellSelectionTest < ActionDispatch::IntegrationTest
   fixtures :clients, :operators
 
-  test "shared Base APP accepts only its live local RP session and refuses missing Access issuance" do
+  test "shared Base APP accepts its live local RP session and sends anonymous requests to its sign entry" do
     host = ENV.fetch("PUBLIC_BASE_SERVICE_URL")
     headers = as_user_headers(clients(:one), host:)
 
@@ -22,13 +22,15 @@ class BaseSharedRpCellSelectionTest < ActionDispatch::IntegrationTest
       pair.start_with?("#{OidcRpBrowserCredentialContract::SESSION_COOKIE}=")
     end.join("; ")
     headers["HTTP_COOKIE"] = headers.fetch("Cookie")
+    cookies.delete(OidcRpBrowserCredentialContract::SESSION_COOKIE)
     get base_app_verification_url(ri: "jp", host:), headers: headers
 
-    assert_response :unauthorized
-    assert_nil response.location
+    assert_response :see_other
+    assert_redirected_to base_app_sign_show_path(ri: "jp", target_link_uri: "/verification")
+    assert_equal "no-store", response.headers["Cache-Control"]
   end
 
-  test "shared Base ORG accepts only its live local RP session and refuses missing Access issuance" do
+  test "shared Base ORG accepts its live local RP session and sends anonymous requests to its sign entry" do
     host = ENV.fetch("PUBLIC_BASE_STAFF_URL")
     headers = as_staff_headers(operators(:one), host:)
 
@@ -45,9 +47,11 @@ class BaseSharedRpCellSelectionTest < ActionDispatch::IntegrationTest
       pair.start_with?("#{OidcRpBrowserCredentialContract::SESSION_COOKIE}=")
     end.join("; ")
     headers["HTTP_COOKIE"] = headers.fetch("Cookie")
+    cookies.delete(OidcRpBrowserCredentialContract::SESSION_COOKIE)
     get base_org_verification_url(ri: "jp", host:), headers: headers
 
-    assert_response :unauthorized
-    assert_nil response.location
+    assert_response :see_other
+    assert_redirected_to base_org_sign_show_path(ri: "jp", target_link_uri: "/verification")
+    assert_equal "no-store", response.headers["Cache-Control"]
   end
 end

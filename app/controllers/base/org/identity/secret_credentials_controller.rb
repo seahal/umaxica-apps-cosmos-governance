@@ -16,6 +16,10 @@ module Base
 
         AUTHENTICATION_MODE = :private
 
+        layout "base/org/inertia"
+        inertia_share chrome: -> { surface_chrome }
+        inertia_share clear_history: -> { session[:inertia_clear_history] == true }
+
         before_action :refuse_root_token_feature_in_rp_cell!
 
         step_up only: %i(new create), bootstrap: true
@@ -23,6 +27,8 @@ module Base
         before_action :set_no_store_for_secret_credential_pages
         before_action :set_secret_credential, only: %i(show edit update destroy)
         before_action :verify_secret_credential_turnstile!, only: :create
+
+        public
 
         def index
           authorize!(OperatorSecretCredential, to: :index?)
@@ -38,10 +44,6 @@ module Base
         def new
           authorize!(OperatorSecretCredential, to: :new?)
           @secret_credential = current_operator.staff_secret_credentials.new
-          start_secret_credential_ceremony!(
-            _surface: "org", _actor: current_operator,
-            _session_ref: current_session_public_id,
-          )
           @raw_secret_credential = OperatorSecretCredential.generate_raw_secret_credential
           session[:staff_secret_credential_raw] = @raw_secret_credential
           @secret_credential.name = @raw_secret_credential.first(4)
@@ -56,16 +58,12 @@ module Base
         def create
           authorize!(OperatorSecretCredential, to: :create?)
           raw_secret_credential = session.delete(:staff_secret_credential_raw)
-          finish_secret_credential_ceremony!(
-            surface: "org",
+          create_settings_secret_credential!(
             actor: current_operator,
-            session_ref: current_session_public_id,
-            record_class: OperatorSecretCredential,
             name: secret_credential_params[:name].to_s.strip,
             enabled: secret_credential_params[:enabled],
             raw_secret_credential: raw_secret_credential,
           )
-          reset_secret_credential_ceremony_session!
 
           redirect_to_surface_url(
             base_org_identity_secrets_url(

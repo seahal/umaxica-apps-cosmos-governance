@@ -134,6 +134,14 @@ describe("readThemeCookie", () => {
     await expect(readThemeCookie()).resolves.toBe("dark");
   });
 
+  test("com retains the server-rendered theme when the experience theme is unsupported", async () => {
+    document.documentElement.dataset["edition"] = "com";
+    document.documentElement.dataset["theme"] = "dark";
+    document.cookie = `__Secure-experience=${encodeURIComponent(JSON.stringify({ ...COM_EXPERIENCE, theme: "unsupported" }))}; Secure; Path=/`;
+
+    await expect(readThemeCookie()).resolves.toBe("dark");
+  });
+
   test("com does not trust either of two same-name experience cookies", async () => {
     document.documentElement.dataset["edition"] = "com";
     document.documentElement.dataset["theme"] = "dark";
@@ -152,7 +160,6 @@ describe("readThemeCookie", () => {
     JSON.stringify({ theme: "light" }),
     "null",
     "[]",
-    JSON.stringify({ ...COM_EXPERIENCE, theme: "unexpected" }),
     JSON.stringify({ ...COM_EXPERIENCE, theme: "light", timezone: "unknown" }),
     JSON.stringify({ ...COM_EXPERIENCE, theme: "light", unexpected: "value" }),
     JSON.stringify({ ...COM_EXPERIENCE, theme: "light" }).replace(

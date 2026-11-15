@@ -13,6 +13,7 @@ module Webauthn
         backup_observation: observation(symbolized[:backup_state]),
       )
     end
+    public_class_method :permit
 
     def self.eligibility(value)
       case value

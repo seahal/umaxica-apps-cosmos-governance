@@ -11,6 +11,10 @@ module Base
 
       AUTHENTICATION_MODE = :open
 
+      layout "base/org/inertia"
+      inertia_share chrome: -> { surface_chrome }
+      inertia_share clear_history: -> { session[:inertia_clear_history] == true }
+
       helper_method :preference_base_i18n_key, :preference_acme_i18n_key
 
       before_action :authorize_preference_write!, if: :preference_write_request?

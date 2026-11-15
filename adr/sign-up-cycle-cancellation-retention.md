@@ -11,6 +11,18 @@ Date: 2026-05-25
 > reintroduce sign-side sessions, refresh tokens, preference writes, dashboards, account lifecycle,
 > downstream token issuance, authorization decisions, or step-up freshness.
 
+> **Governance runtime supersession (2026-11-13):** Access owns authentication ceremonies and
+> Governance runs none. The sign-up cycle implementation described below is historical for this
+> repository; the cleanup did not change stored identity or credential records, database schema, or
+> retention constraints. See
+> [`evidence/2026-11-13-remove-unreachable-ceremony-code-Q7M2.md`](../evidence/2026-11-13-remove-unreachable-ceremony-code-Q7M2.md).
+
+> **Pending split amendment (proposed 2026-11-14):** The
+> [split amendment](sign-up-finalization-in-auth.md#cosmos-split-amendment-governance-owned-pending-registration-2026-11-14)
+> replaces these flow states and `SignUpExpiryJob` with the Governance `ClientRegistration`
+> lifecycle. It keeps this ADR's principles: cancel is idempotent and performs no physical deletion,
+> expiry is request-time authoritative with a sweep, and purge is a separate idempotent job.
+
 ## Context
 
 App and com sign-up flows use DB-backed sign-up cycles as the flow lifecycle authority. The

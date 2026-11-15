@@ -14,7 +14,6 @@
     "tailwindcss-react-aria-components",
     "@tailwindcss/forms",
     "@tailwindcss/typography",
-    "linkinator",
     // `.herb.yml` enables the Herb linter for editor template diagnostics.
     "@herb-tools/linter"
   ],

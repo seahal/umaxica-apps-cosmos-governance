@@ -39,12 +39,11 @@ module Security
 
     test "undeclared concrete controllers resolve to deny_all instead of inheriting parent mode" do
       assert_equal :open, ParentController.authentication_mode_for(:index)
-      assert_empty UndeclaredController.access_policy_rules
       assert_empty UndeclaredController.local_authentication_mode_rules
       assert_equal :deny_all, UndeclaredController.authentication_mode_for(:index)
     end
 
-    test "access policy declarations map to browser RP authentication mode metadata" do
+    test "private authentication mode declarations resolve through browser RP metadata" do
       assert_equal :private, PrivateController.authentication_mode_for(:show)
     end
 
@@ -93,6 +92,19 @@ module Security
         end
 
       assert_empty legacy, "Controllers must use AUTHENTICATION_MODE instead of legacy DSL:\n#{legacy.join("\n")}"
+    end
+
+    test "browser RP authentication has no parallel access policy declaration path" do
+      concern = Rails.root.join("app/controllers/concerns/browser_rp_authentication.rb").read
+
+      assert_no_match(/\b(?:AccessPolicyContext|ACCESS_POLICY_RULES|def\s+access_policy(?:_rules)?)\b/, concern)
+
+      legacy_policies =
+        Rails.root.glob("app/policies/**/*.rb").filter_map do |path|
+          path.relative_path_from(Rails.root).to_s if File.read(path).match?(/\bclass\s+AccessPolicy\b/)
+        end
+
+      assert_empty legacy_policies, "Authentication-mode policy classes are obsolete: #{legacy_policies.join(", ")}"
     end
 
     test "bare controllers inherit directly from action controller base" do

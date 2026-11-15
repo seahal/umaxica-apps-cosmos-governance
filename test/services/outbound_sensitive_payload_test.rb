@@ -59,6 +59,18 @@ class OutboundSensitivePayloadTest < ActiveSupport::TestCase
     end
   end
 
+  test "sign-up OTP SMS is refused after sign-up ceremonies move to Access" do
+    assert_raises(ArgumentError) do
+      OutboundSensitivePayload.encrypt_sms_delivery(
+        to: "+819012345678",
+        title: "Verification code",
+        body: "Your verification code: 123456",
+        otp_binding: ["app", "sign_up", "flow-ref", SecureRandom.uuid, SecureRandom.uuid],
+        otp_code: "123456",
+      )
+    end
+  end
+
   test "registration OTP SMS rejects missing malformed and mixed original ceremony bindings" do
     valid = ["app", "credential_registration", SecureRandom.uuid, "contact", SecureRandom.uuid]
 

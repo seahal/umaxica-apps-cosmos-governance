@@ -53,6 +53,21 @@
 class PersonaMembership < AppRpRecord
   include ::CollectiveMembership
 
+  scope :current, lambda {
+    now = Time.current
+    table = arel_table
+
+    where(revoked_at: nil)
+      .where(table[:starts_at].eq(nil).or(table[:starts_at].lteq(now)))
+      .where(table[:ends_at].eq(nil).or(table[:ends_at].gt(now)))
+  }
+  scope :active, -> { current.where(membership_state_id: membership_state_active_id) }
+  scope :primary_first, -> { order(primary: :desc, created_at: :asc, id: :asc) }
+  scope :primary_active, -> { active.where(primary: true) }
+
+  validate :unit_must_belong_to_same_collective
+  validate :only_one_active_primary_membership
+
   collective_membership_config account_foreign_key: :persona_id,
                                collective_foreign_key: :enterprise_id,
                                unit_association_name: :enterprise_unit

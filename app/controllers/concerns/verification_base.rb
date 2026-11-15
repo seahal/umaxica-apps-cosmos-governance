@@ -22,6 +22,8 @@ module VerificationBase
     @required_verification
   end
 
+  public
+
   def require_verification!(requirement)
     @required_verification = requirement.to_sym
   end
@@ -83,10 +85,6 @@ module VerificationBase
     ).satisfied?
   end
 
-  def step_up_satisfied?(scope:)
-    step_up_satisfied_with_requirement?(step_up_requirement(scope: scope))
-  end
-
   def require_step_up!(scope:, **policy)
     return false if reject_step_up_for_authentication_context!
     return false if step_up_session_revoked?
@@ -105,7 +103,7 @@ module VerificationBase
 
     log_step_up_required!(requirement: requirement)
     require_verification!(scope)
-    return false unless enforce_step_up_prereqs!(scope_override: scope)
+    return false unless enforce_step_up_prereqs!
 
     if browser_rp_controller? && requirement.purpose == "step_up" && requirement.step_up_required?
       render_step_up_challenge!
@@ -197,7 +195,7 @@ module VerificationBase
       ),
     )
     require_verification!(scope)
-    return false unless enforce_step_up_prereqs!(scope_override: scope)
+    return false unless enforce_step_up_prereqs!
 
     render_step_up_challenge!
     false
@@ -305,7 +303,7 @@ module VerificationBase
     return true if respond_to?(:logged_in?) && !logged_in?
     return true unless verification_required?
     return true if verification_satisfied?
-    return false unless enforce_step_up_prereqs!(scope_override: verification_scope)
+    return false unless enforce_step_up_prereqs!
 
     handle_unverified_actor!
     false
@@ -325,45 +323,11 @@ module VerificationBase
     end
   end
 
-  def enforce_step_up_prereqs!(scope_override: nil)
+  def enforce_step_up_prereqs!
     return false if reject_step_up_for_authentication_context!
     return true if available_step_up_methods.present?
 
-    if signed_in_client_without_step_up_methods?
-      return reject_signed_in_client_without_step_up_methods
-    end
-
-    if request.get? || request.head?
-      return true if configured_step_up_entry_request?
-
-      redirect_to_step_up_prerequisite(scope_override, status: :found)
-    elsif request.format.json?
-      render json: { error: I18n.t("auth.step_up.register_methods_required") }, status: :unprocessable_content
-    else
-      redirect_to_step_up_prerequisite(scope_override, status: :see_other)
-    end
-    false
-  end
-
-  def configured_step_up_entry_request?
-    configured_step_up_methods.present? && verification_entry_request?
-  end
-
-  def redirect_to_step_up_prerequisite(scope_override, status:)
-    destination, fallback = step_up_prerequisite_destination(scope_override)
-    redirect_to_verification_destination(destination, fallback: fallback, status: status)
-  end
-
-  def step_up_prerequisite_destination(scope_override)
-    if step_up_bootstrap_unconfigured?
-      [
-        verification_setup_redirect_path(pt: encoded_step_up_pt, scope: scope_override || verification_scope),
-        verification_setup_redirect_fallback,
-      ]
-    else
-      [verification_redirect_path(pt: encoded_step_up_pt, scope_override: scope_override),
-       verification_redirect_fallback,]
-    end
+    raise AccessOpDataUnavailableError
   end
 
   def log_step_up_required!(requirement:)
@@ -389,10 +353,6 @@ module VerificationBase
         step_up_expires_at: step_up&.expires_at&.iso8601,
       ),
     )
-  end
-
-  def verification_entry_request?
-    request.path == actor_verification_path
   end
 
   def encoded_step_up_pt
@@ -592,20 +552,6 @@ module VerificationBase
     )
   end
 
-  def reject_signed_in_client_without_step_up_methods
-    message = I18n.t("auth.step_up.register_methods_required")
-    if request.format.json?
-      render json: { error: message }, status: :unprocessable_content
-    else
-      render plain: message, status: :forbidden
-    end
-    false
-  end
-
-  def signed_in_client_without_step_up_methods?
-    raise AccessOpDataUnavailableError
-  end
-
   def step_up_bootstrap_unconfigured?(actor = current_verification_actor)
     return false unless actor
 
@@ -661,34 +607,8 @@ module VerificationBase
     destination
   end
 
-  def verification_setup_redirect_path(pt: nil, scope: nil)
-    actor_verification_setup_path(pt: pt, scope: scope, ri: params[:ri])
-  end
-
-  def verification_setup_redirect_fallback
-    destination = actor_dashboard_path(ri: params[:ri])
-    log_step_up_return_target(destination, reason: "authenticated_dashboard_fallback", protected_flow: false)
-    destination
-  end
-
-  def redirect_to_verification_destination(destination, fallback:, **redirect_options)
-    if destination.to_s.start_with?("/")
-      safe_redirect_to(destination, fallback: fallback, **redirect_options)
-    else
-      redirect_to_surface_url(
-        destination,
-        preserve_query_keys: ["pt"],
-        **redirect_options,
-      )
-    end
-  end
-
   def actor_verification_path(**args)
     actor_operator? ? base_org_verification_path(**args) : base_app_verification_path(**args)
-  end
-
-  def actor_verification_setup_path(**args)
-    actor_operator? ? base_org_verification_setup_path(**args) : base_app_verification_setup_path(**args)
   end
 
   def actor_root_path(**args)

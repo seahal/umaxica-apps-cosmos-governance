@@ -24,6 +24,7 @@ module AvatarProvisioning
       @owner_collective_public_id = owner_collective_public_id
     end
 
+    public
     def call
       validate_inputs!
       avatar = nil

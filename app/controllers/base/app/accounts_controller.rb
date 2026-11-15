@@ -16,6 +16,10 @@ module Base
 
       MEMBERSHIP_SURFACE = "app"
 
+      layout "base/app/inertia"
+      inertia_share chrome: -> { surface_chrome }
+      inertia_share clear_history: -> { session[:inertia_clear_history] == true }
+
       public
 
       # R5-WU15: listed and authorized by the owner over HTTPS.

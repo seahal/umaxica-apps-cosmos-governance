@@ -16,13 +16,17 @@ class AppPreferenceAdultContentGateOption < AppSettingRecord
   DENY = 2
   DEFAULTS = [NOTHING, APPROVED, DENY].freeze
 
+  self.record_timestamps = false
+
   has_many :app_preference_adult_content_gates,
            foreign_key: :option_id,
            inverse_of: :option,
            dependent: :restrict_with_error
 
   def self.ensure_defaults! = insert_missing_fixed_ids!(DEFAULTS)
+  public_class_method :ensure_defaults!
 
+  public
   def name
     case id
     when NOTHING then "nothing"

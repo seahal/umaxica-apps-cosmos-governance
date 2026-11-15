@@ -15,9 +15,16 @@ module Base
             include PrivacyErasureRequestFlow
 
             AUTHENTICATION_MODE = :open
+
+            layout "base/app/inertia"
+            inertia_share chrome: -> { surface_chrome }
+            inertia_share clear_history: -> { session[:inertia_clear_history] == true }
+
             declare_authentication_mode! :open
 
             before_action :withdrawal_ceremony_required!
+
+            public
 
             def show
               render_privacy_erasure_status(current_withdrawal_subject)

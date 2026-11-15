@@ -275,6 +275,17 @@ class WithdrawableTest < ActiveSupport::TestCase
     assert_empty withdrawn_users
   end
 
+  test "withdrawn scope returns only withdrawn operators" do
+    withdrawn_operator = Operator.create!(security_mode_id: SecurityModeConfigurable::ADVANCED)
+    withdrawn_operator.update!(withdrawn_at: 1.day.ago)
+    active_operator = Operator.create!(security_mode_id: SecurityModeConfigurable::ADVANCED)
+
+    withdrawn_operators = Operator.withdrawn
+
+    assert_includes withdrawn_operators, withdrawn_operator
+    assert_not_includes withdrawn_operators, active_operator
+  end
+
   # Staff integration tests
   test "staff withdrawn? works correctly" do
     staff = Operator.create!(security_mode_id: SecurityModeConfigurable::ADVANCED)

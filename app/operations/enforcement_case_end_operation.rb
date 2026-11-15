@@ -21,6 +21,7 @@ class EnforcementCaseEndOperation
   def self.call(...)
     new(...).call
   end
+  public_class_method :call
 
   def initialize(enforcement_case:, reason:, ended_by_operator_public_id: nil,
                  step_up_token: nil, step_up_actor: nil, step_up_evidence: nil, recovery_ceremony: nil,

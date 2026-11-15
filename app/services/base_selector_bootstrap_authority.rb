@@ -10,12 +10,14 @@ class BaseSelectorBootstrapAuthority
   def self.call(surface:, principal:)
     new(surface: surface, principal: principal).call
   end
+  public_class_method :call
 
   def initialize(surface:, principal:)
     @config = AcmeSelector.config_for(surface)
     @principal = principal
   end
 
+  public
   def call
     raise ArgumentError, "principal is required" unless principal.is_a?(config.principal_class)
 

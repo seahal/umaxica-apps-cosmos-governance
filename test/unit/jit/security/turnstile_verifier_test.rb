@@ -91,6 +91,54 @@ module Jit
         end
       end
 
+      test "stealth verification resolves the named credential without exposing it" do
+        TurnstileVerifierStub.enabled = false
+        credentials = Minitest::Mock.new
+        credentials.expect(:option, "fixture-only-stealth-secret", [:CLOUDFLARE_TURNSTILE_SECRET_STEALTH_KEY])
+        application = Minitest::Mock.new
+        application.expect(:creds, credentials)
+        connection = Minitest::Mock.new
+        response = Minitest::Mock.new
+        response.expect(:body, '{"success": true}')
+        connection.expect(
+          :post,
+          response,
+          [
+            JitSecurityTurnstileVerifier::VERIFY_URI,
+            {
+              "secret" => "fixture-only-stealth-secret",
+              "response" => "token",
+              "remoteip" => "127.0.0.1",
+            },
+          ],
+        )
+
+        Rails.stub(:app, application) do
+          OutboundHttp::Connection.stub(:build, ->(**_options) { connection }) do
+            result = JitSecurityTurnstileVerifier.verify(token: "token", remote_ip: "127.0.0.1", mode: :stealth)
+
+            assert result["success"]
+          end
+        end
+
+        credentials.verify
+        connection.verify
+        response.verify
+      end
+
+      test "stealth site key resolves its named credential" do
+        credentials = Minitest::Mock.new
+        credentials.expect(:option, "public-test-site-key", [:CLOUDFLARE_TURNSTILE_SITE_STEALTH_KEY])
+        application = Minitest::Mock.new
+        application.expect(:creds, credentials)
+
+        Rails.stub(:app, application) do
+          assert_equal "public-test-site-key", JitSecurityTurnstileConfig.stealth_site_key
+        end
+
+        credentials.verify
+      end
+
       test "mode stealth returns failure without HTTP when secret is nil" do
         TurnstileVerifierStub.enabled = false
 

@@ -1,15 +1,14 @@
 # typed: false
 # frozen_string_literal: true
 
-# D-132 (2026-10-23): every Operator is ADVANCED, which requires two active Passkeys. An Operator
-# who signed in with only one may register a second Passkey and sign out; every other ORG Base
-# action is refused until the second Passkey exists. Protocol, sign-in and Step-Up paths stay
-# reachable because the registration needs them.
+# D-132 (2026-10-23): every Operator is ADVANCED, which requires two active Passkeys. Access owns
+# ceremony execution, and Governance has no local registration path. Until the Access handoff can
+# register the second credential, protected ORG actions fail explicitly when only one exists.
 module OrgSecondPasskeyGate
   extend ActiveSupport::Concern
 
   ALLOWED_CONTROLLER_PREFIXES = %w(
-    base/org/identity/passkeys base/org/verification base/org/verifications
+    base/org/identity/passkeys base/org/verifications
   ).freeze
   MINIMUM_ACTIVE_PASSKEYS = 2
 
@@ -21,16 +20,7 @@ module OrgSecondPasskeyGate
     return if second_passkey_gate_allowlisted?
     return if active_operator_passkey_count(operator) >= MINIMUM_ACTIVE_PASSKEYS
 
-    if request.format.json? || !request.format.html?
-      render json: { error: "SECOND_PASSKEY_REQUIRED" }, status: :forbidden
-    else
-      redirect_to(
-        Rails.application.routes.url_helpers.base_org_verification_setup_path(
-          ri: params[AuthIoKeys::Params::RI],
-        ),
-        status: :see_other,
-      )
-    end
+    raise AccessOpDataUnavailableError
   end
 
   def second_passkey_gate_allowlisted?
