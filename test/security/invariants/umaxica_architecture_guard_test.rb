@@ -2,6 +2,7 @@
 # frozen_string_literal: true
 
 require "test_helper"
+require_relative "../../../lib/avatar_legacy_client_id_detector"
 
 module Security
   module Invariants
@@ -13,7 +14,6 @@ module Security
         /avatar_memberships/,
         /avatar_persona_bindings/,
         /avatar_agent_bindings/,
-        /avatar_individual_bindings/,
         /group_avatar_memberships/,
         /account_assignments/,
         /organization_memberships/,
@@ -29,10 +29,6 @@ module Security
 
       AVATAR_PROVISIONING_CREATE_PATH = "app/services/avatar_provisioning/create.rb"
       AVATAR_BACKFILL_LEGACY_CLIENT_BINDINGS_PATH = "app/services/avatar_backfill/backfill_legacy_client_bindings.rb"
-      NON_PERSISTENT_AVATAR_FORM_BUILDS = [
-        "app/controllers/base/app/avatars_controller.rb",
-      ].freeze
-
       FORBIDDEN_AVATAR_UGC_TABLES = %w(
         posts comments replies captions stories videos short_videos messages reactions feeds
         timelines ranking_events
@@ -56,8 +52,6 @@ module Security
         "db/app_zenith_migrate/20260520120000_create_persona_enterprise_model_layer.rb:10",
         "db/app_zenith_migrate/20260627000001_create_persona_assignments.rb:8",
         "db/app_principals_migrate/20260305114337_create_user_members.rb:7",
-        "db/com_zenith_migrate/20260520120001_create_individual_company_model_layer.rb:10",
-        "db/com_zenith_migrate/20260627000001_create_individual_assignments.rb:8",
         "db/org_principals_migrate/20260518130000_create_operator_lifecycle_requests.rb:11",
         "db/org_zenith_migrate/20260520120002_create_agent_bureau_model_layer.rb:10",
         "db/org_zenith_migrate/20260627000001_create_agent_assignments.rb:8",
@@ -94,21 +88,16 @@ module Security
       end
 
       test "new code does not add canonical avatars client_id writes beyond known violations" do
+        detector = AvatarLegacyClientIdDetector.new
         offenders =
           production_ruby_paths.flat_map do |path|
             relative_path = path.relative_path_from(Rails.root).to_s
-            File.readlines(path, chomp: true).each_with_index.filter_map do |line, index|
-              next unless line.match?(
-                # rubocop:disable Layout/LineLength -- splitting this regex corrupts it
-                /\bclient_id:\s*(?:(?:current_client|principal|actor|user|client|@user|@client)\.id|legacy_compatibility_client_id)\b/,
-                # rubocop:enable Layout/LineLength
-              )
-              next if [AVATAR_PROVISIONING_CREATE_PATH,
-                       AVATAR_BACKFILL_LEGACY_CLIENT_BINDINGS_PATH,].include?(relative_path)
+            next [] if [AVATAR_PROVISIONING_CREATE_PATH,
+                        AVATAR_BACKFILL_LEGACY_CLIENT_BINDINGS_PATH,].include?(relative_path)
 
-              location = "#{relative_path}:#{index + 1}"
-
-              "#{location}: #{line.strip}"
+            source = File.read(path)
+            detector.offending_lines(source).map do |line|
+              "#{relative_path}:#{line}: #{source.lines[line - 1].strip}"
             end
           end
 
@@ -121,7 +110,7 @@ module Security
           "Avatar.create!" => /Avatar\.create!\(/,
           "avatar_assignments.create!" => /avatar_assignments\.create!\(/,
           "Handle.create!" => /Handle\.create!\(/,
-          I18n.t("architecture_guard.avatar_binding_create") => /Avatar(?:Persona|Agent|Individual)Binding\.create!\(/,
+          I18n.t("architecture_guard.avatar_binding_create") => /Avatar(?:Persona|Agent)Binding\.create!\(/,
         }
         offenders =
           production_ruby_paths.flat_map do |path|
@@ -144,7 +133,6 @@ module Security
         offenders =
           production_ruby_paths.flat_map do |path|
             relative_path = path.relative_path_from(Rails.root).to_s
-            next [] if NON_PERSISTENT_AVATAR_FORM_BUILDS.include?(relative_path)
 
             File.readlines(path, chomp: true).each_with_index.filter_map do |line, index|
               next unless line.match?(/Avatar\.new\(/)

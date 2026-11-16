@@ -3,16 +3,14 @@
 
 # Backward-compatible facade for Auth access JWTs.
 #
-# JWT encode/decode behavior lives in `SecurityJwtAuthAccessTokenCodec`;
+# JWT decode behavior lives in `SecurityJwtAuthAccessTokenCodec`;
 # this service keeps the existing public API used by controllers and OIDC services.
 class AuthenticationTokenService
   JWT_ALGORITHM = SecurityJwtAuthAccessTokenCodec::JWT_ALGORITHM
-  VALID_ACTOR_TYPES = SecurityJwtAuthAccessTokenCodec::VALID_ACTOR_TYPES
+  VALID_RESOURCE_TYPES = SecurityJwtAuthAccessTokenCodec::VALID_RESOURCE_TYPES
 
   class << self
-    def encode(...)
-      codec.encode(...)
-    end
+    public
 
     def decode(...)
       codec.decode(...)
@@ -30,12 +28,8 @@ class AuthenticationTokenService
       AuthorizationTokenClaims.subject(payload)
     end
 
-    def extract_act(payload)
-      AuthorizationTokenClaims.actor(payload)
-    end
-
-    def extract_type(payload)
-      extract_act(payload)
+    def extract_resource_type(payload)
+      AuthorizationTokenClaims.resource_type(payload)
     end
 
     def extract_session_id(payload)
@@ -46,14 +40,8 @@ class AuthenticationTokenService
       AuthorizationTokenClaims.jti(payload)
     end
 
-    def validate_actor_claim!(payload, expected_act)
-      return false if payload.blank?
-
-      act = extract_act(payload)
-      return false if act.blank?
-      return false unless VALID_ACTOR_TYPES.include?(act)
-
-      act == expected_act
+    def resource_type_scope_matches?(payload, expected_resource_type)
+      codec.resource_type_scope_matches?(payload, expected_resource_type)
     end
 
     def extract_scopes(payload)

@@ -5,7 +5,6 @@ module PreferenceGlobal
   extend ActiveSupport::Concern
   include PreferenceBase
   include PreferenceLocalization
-  include PreferenceSignOutRotation
 
   PUBLIC_CONTEXT_KEYS = RequestContextContract.public_keys
   PARAM_CONTEXT_KEYS = (RequestContextContract.required_keys + RequestContextContract.optional_overlay_keys).freeze
@@ -17,6 +16,8 @@ module PreferenceGlobal
       .transform_keys(&:to_sym)
       .transform_values { |value| value.to_s.downcase }
       .freeze
+
+  public
 
   def resolve_param_context
     effective_context
@@ -46,7 +47,22 @@ module PreferenceGlobal
 
   def request_context
     PUBLIC_CONTEXT_KEYS.each_with_object({}) do |key, memo|
-      value = request_context_value(key)
+      value =
+        case key
+        when :ri then request_context_ri
+        when :pt then request_context_pt
+        when :nt then request_context_nt
+        when :lx then request_context_lx
+        when :ct then request_context_ct
+        when :tz then request_context_tz
+        when :cu then request_context_cu
+        when :df then request_context_df
+        when :tf then request_context_tf
+        when :mo then request_context_mo
+        when :dn then request_context_dn
+        when :ps then request_context_ps
+        else raise ArgumentError, "unsupported public request context key: #{key.inspect}"
+        end
       memo[key] = value if value.present?
     end
   end
@@ -73,6 +89,20 @@ module PreferenceGlobal
   end
 
   def preference_context_from_hash(preferences)
+    if anonymous_preference_payload?(@preference_payload)
+      return {
+        lx: normalized_preference_value(preferences, "language"),
+        tz: preferences["timezone"],
+        ct: theme_short_code(preferences["theme"]),
+        cu: normalized_preference_value(preferences, "currency"),
+        df: normalized_preference_value(preferences, "date_format"),
+        tf: normalized_preference_value(preferences, "time_format"),
+        mo: normalized_preference_value(preferences, "motion"),
+        dn: normalized_preference_value(preferences, "density"),
+        ps: normalized_preference_value(preferences, "page_size"),
+      }
+    end
+
     {
       ri: normalized_preference_value(preferences, "ri"),
       lx: normalized_preference_value(preferences, "lx"),
@@ -93,6 +123,12 @@ module PreferenceGlobal
 
   private
 
+  # Surfaces with a canonical preference writer override this on their application controller.
+  # The browser request and preference cookie never choose the account receiving a mirrored write.
+  def preference_write_actor
+    preference_current_resource
+  end
+
   def normalized_param_ri
     request_context_ri
   end
@@ -110,10 +146,52 @@ module PreferenceGlobal
     normalized_value
   end
 
-  PUBLIC_CONTEXT_KEYS.each do |key|
-    define_method(:"request_context_#{key}") do
-      request_context_value(key)
-    end
+  def request_context_ri
+    request_context_value(:ri)
+  end
+
+  def request_context_pt
+    request_context_value(:pt)
+  end
+
+  def request_context_nt
+    request_context_value(:nt)
+  end
+
+  def request_context_lx
+    request_context_value(:lx)
+  end
+
+  def request_context_ct
+    request_context_value(:ct)
+  end
+
+  def request_context_tz
+    request_context_value(:tz)
+  end
+
+  def request_context_cu
+    request_context_value(:cu)
+  end
+
+  def request_context_df
+    request_context_value(:df)
+  end
+
+  def request_context_tf
+    request_context_value(:tf)
+  end
+
+  def request_context_mo
+    request_context_value(:mo)
+  end
+
+  def request_context_dn
+    request_context_value(:dn)
+  end
+
+  def request_context_ps
+    request_context_value(:ps)
   end
 
   def valid_ri_value?(value)
@@ -179,14 +257,6 @@ module PreferenceGlobal
     (request.get? || request.head?) ? :found : :see_other
   end
 
-  def get_theme
-    "sy"
-  end
-
-  def get_language
-    I18n.locale.to_s
-  end
-
   def get_region
     required_ri.presence || "jp"
   end
@@ -243,9 +313,8 @@ module PreferenceGlobal
 
   def set_locale
     locale = normalized_locale(requested_context[:lx])
-    locale ||= Actor.preferences.locale if defined?(Actor)
+    locale ||= normalized_locale(Actor.preferences.locale) if defined?(Actor)
     I18n.locale = locale if locale.present?
-    write_preference_cookie(PreferenceBase::LANGUAGE_COOKIE_KEY, I18n.locale.to_s.downcase)
   end
 
   # The only request-time writer of Time.zone. It always resolves to a concrete
@@ -257,7 +326,8 @@ module PreferenceGlobal
     timezone = Actor.preferences.timezone if timezone.blank? && defined?(Actor)
     timezone_value = TimezoneIdentifier.resolve(timezone)
     Time.zone = timezone_value
-    session[:timezone] = timezone_value
-    write_preference_cookie(PreferenceBase::TIMEZONE_COOKIE_KEY, timezone_value)
+    session[:timezone] = timezone_value if !request.get? && !request.head?
   end
+
+  private :preference_context_from_hash, :normalized_preference_value
 end

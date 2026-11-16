@@ -77,6 +77,22 @@ class OrgEnforcementIdentifierEffectTest < ActiveSupport::TestCase
     assert_not_includes in_force, ended
   end
 
+  test "only one open identifier effect occupies a slot and ended history remains" do
+    enforcement_case = cooldown_case
+    original = create_effect(enforcement_case, "unique-org@example.test", effective_at: 1.hour.ago)
+    duplicate = OrgEnforcementIdentifierEffect.new(original.attributes.except("id"))
+
+    assert_not duplicate.valid?
+    assert duplicate.errors.of_kind?(:identifier_kind, :taken)
+    assert_raises(ActiveRecord::RecordNotUnique) do
+      OrgEnforcementIdentifierEffect.transaction(requires_new: true) { duplicate.save!(validate: false) }
+    end
+    original.update!(ended_at: Time.current)
+
+    assert_predicate duplicate, :valid?
+    assert_predicate duplicate.save!, :itself
+  end
+
   private
 
   def cooldown_case

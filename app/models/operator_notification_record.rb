@@ -18,8 +18,14 @@
 #  index_operator_notification_records_on_staff_id   (staff_id)
 #
 class OperatorNotificationRecord < OrgSignalRecord
-  include NotificationOwnerRecord
+  include ::PublicId
 
+  before_validation :generate_public_id, on: :create
+  before_validation :refresh_generated_public_id_after_collision, on: :create
+  before_create :generate_public_id
+  around_create :retry_public_id_collision
+  validate :public_id_immutable_after_create, on: :update
+  validates :public_id, presence: true, length: { is: PublicId::GENERATION_SIZE }, uniqueness: true
   belongs_to :operator, class_name: "Operator", foreign_key: :staff_id, inverse_of: :notification_records
   has_many :operator_notifications,
            foreign_key: :staff_notification_id,

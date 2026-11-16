@@ -45,10 +45,14 @@
 #  fk_rails_...  (requested_by_operator_id => operators.id) ON DELETE => restrict
 #
 class OperatorLifecycleRequest < OrgPrincipalRecord
-  self.belongs_to_required_by_default = false
-
   include PublicId
 
+  before_validation :generate_public_id, on: :create
+  before_validation :refresh_generated_public_id_after_collision, on: :create
+  before_create :generate_public_id
+  around_create :retry_public_id_collision
+  validate :public_id_immutable_after_create, on: :update
+  validates :public_id, presence: true, length: { is: PublicId::GENERATION_SIZE }, uniqueness: true
   ACTION_JOIN = "join"
   ACTION_WITHDRAW = "withdraw"
   ACTION_SUSPEND = "suspend"
@@ -65,16 +69,20 @@ class OperatorLifecycleRequest < OrgPrincipalRecord
 
   attr_accessor :target_operator_public_id
 
+  # Join requests name a not-yet-existing operator by email; other actions validate this association.
   belongs_to :target_operator,
-             class_name: "Operator"
+             class_name: "Operator", optional: true, inverse_of: :lifecycle_requests_as_target
   belongs_to :requested_by_operator,
-             class_name: "Operator"
+             class_name: "Operator", inverse_of: :lifecycle_requests_as_requester
+  # Pending requests have no approving actor.
   belongs_to :approved_by_operator,
-             class_name: "Operator"
+             class_name: "Operator", optional: true, inverse_of: :lifecycle_requests_as_approver
+  # Requests that were not rejected have no rejecting actor.
   belongs_to :rejected_by_operator,
-             class_name: "Operator"
+             class_name: "Operator", optional: true, inverse_of: :lifecycle_requests_as_rejector
+  # Requests that have not executed have no executing actor.
   belongs_to :executed_by_operator,
-             class_name: "Operator"
+             class_name: "Operator", optional: true, inverse_of: :lifecycle_requests_as_executor
 
   validates :action, presence: true, inclusion: { in: ACTIONS }
   validates :status, inclusion: { in: STATUSES }
@@ -83,10 +91,12 @@ class OperatorLifecycleRequest < OrgPrincipalRecord
   validates :target_operator, presence: true, unless: :join?
   validates :reason, length: { maximum: 2000 }, allow_blank: true
   validates :rejection_reason, length: { maximum: 2000 }, allow_blank: true
+  validates :requested_by_operator_id, exclusion: { in: [nil] }
 
   scope :pending, -> { where(status: STATUS_PENDING) }
   scope :approved, -> { where(status: STATUS_APPROVED) }
 
+  public
   def join? = action == ACTION_JOIN
 
   def withdraw? = action == ACTION_WITHDRAW

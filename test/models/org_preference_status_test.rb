@@ -14,25 +14,19 @@ class OrgPreferenceStatusTest < ActiveSupport::TestCase
   fixtures :org_preference_statuses
 
   test "has correct constants" do
-    assert_equal 1, OrgPreferenceStatus::DELETED
-    assert_equal 2, OrgPreferenceStatus::NOTHING
+    assert_equal 1, OrgPreferenceStatus::RETIRED
+    assert_equal 2, OrgPreferenceStatus::ACTIVE
   end
 
-  test "defaults includes DELETED and NOTHING" do
-    assert_includes OrgPreferenceStatus::DEFAULTS, OrgPreferenceStatus::DELETED
-    assert_includes OrgPreferenceStatus::DEFAULTS, OrgPreferenceStatus::NOTHING
+  test "defaults includes active and retired" do
+    assert_includes OrgPreferenceStatus::DEFAULTS, OrgPreferenceStatus::RETIRED
+    assert_includes OrgPreferenceStatus::DEFAULTS, OrgPreferenceStatus::ACTIVE
   end
 
   test "returns all statuses" do
     ids = OrgPreferenceStatus.pluck(:id)
 
     assert_equal [1, 2], ids.sort
-  end
-
-  test "accepts integer ids" do
-    status = OrgPreferenceStatus.new(id: 3)
-
-    assert_predicate status, :valid?
   end
 
   test "ensure_defaults! does nothing when defaults exist" do

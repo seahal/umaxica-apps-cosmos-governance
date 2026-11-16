@@ -4,93 +4,45 @@
 module Base
   module Org
     class SignOutsController < Base::Org::ApplicationController
-      include ::AuthenticationLogoutable
       include ::SignOutNotice
-      include ::SignOidcLogout
+      include ::OidcRpLogoutLauncher
+      include ::BaseSignOutDestination
       include ::SurfaceInertiaPage
 
       AUTHENTICATION_MODE = :open
-      # `reject_oidc_logout_challenge!` still renders the shared `auth/shared/sign_outs/unavailable`
-      # ERB template, which needs the surface ERB layout; the Inertia shell renders only an Inertia
-      # response body.
-      layout -> { @render_surface_erb_layout ? "base/org/application" : "base/org/inertia" }
 
+      layout "base/org/inertia"
+      inertia_share chrome: -> { surface_chrome }
       declare_authentication_mode! :open
-      after_action :sign_out_notice_cache_headers!, only: %i(edit complete)
+      prepend_before_action :apply_default_no_store
+      before_action :authenticate_oidc_rp_session!, only: :create
+      after_action :sign_out_notice_cache_headers!, only: %i(show edit create)
+
+      public
+
+      def show
+        complete_oidc_rp_logout!
+      end
 
       def new
-        redirect_to(sign_out_edit_path, status: :see_other)
+        redirect_to(
+          edit_base_org_sign_out_path(ri: RequestContextContract.normalize_region(params[:ri])),
+          status: :see_other,
+        )
       end
 
       def edit
-        render inertia: "base/org/sign_outs/edit", props: sign_out_edit_page_props
+        props = sign_out_edit_page_props
+        return if performed?
+
+        render inertia: "base/org/sign_outs/edit", props:
+      rescue ActiveRecord::ActiveRecordError, PG::Error => e
+        log_sign_out_failure("confirmation_page", e)
+        render_oidc_rp_logout_unavailable(after_local_commit: false)
       end
 
       def create
-        if current_resource.blank? && current_session_public_id.blank?
-          return render_oidc_logout_completion
-        end
-
-        prepare_sign_out_completion_notice!
-        logout_current_session!(reason: "user_logout")
-        issue_sign_out_notice!
-        redirect_to(sign_out_complete_path, status: :see_other)
-      end
-
-      def complete
-        render_oidc_logout_completion
-      end
-
-      private
-
-      def reject_oidc_logout_challenge!(reason)
-        @render_surface_erb_layout = true
-        super
-      end
-
-      # The sign-out confirmation and completion screens left ERB for Inertia on this surface only,
-      # so the shared rendering hooks are overridden here rather than in the concern the other
-      # surfaces still render templates through.
-      def render_oidc_logout_completion
-        @sign_out_notice = consume_sign_out_notice
-        render inertia: "base/org/sign_outs/complete",
-               props: sign_out_complete_page_props,
-               status: :ok,
-               clear_history: true
-      end
-
-      def sign_out_edit_page_props
-        active = sign_out_active_context_present?
-
-        {
-          title: t("sign.shared.sign_out.title"),
-          active: active,
-          description: active ? t("sign.shared.sign_out.confirm_description") :
-            t("sign.shared.sign_out.already_signed_out"),
-          form: active ? sign_out_confirmation_form : nil,
-          home_link: { label: t("sign.shared.sign_out.home_link"), href: sign_out_home_path },
-        }
-      end
-
-      def sign_out_confirmation_form
-        {
-          action: sign_out_post_path,
-          submit: t("sign.shared.sign_out.button"),
-          logout_challenge: params[:logout_challenge].presence,
-          confirm_description: t("sign.shared.sign_out.confirm_description"),
-        }
-      end
-
-      def sign_out_complete_page_props
-        {
-          title: t("sign.shared.sign_out.completed_title"),
-          description: sign_out_completed_description,
-          home_link: { label: t("sign.shared.sign_out.home_link"), href: sign_out_home_path },
-        }
-      end
-
-      def sign_out_confirmation_form_path
-        sign_out_post_path
+        launch_oidc_rp_logout!
       end
     end
   end

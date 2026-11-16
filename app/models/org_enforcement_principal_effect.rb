@@ -3,6 +3,8 @@
 
 # adr/unified-enforcement.md, Principal effects (org realm).
 class OrgEnforcementPrincipalEffect < OrgPrincipalRecord
+  validates :org_enforcement_case_id, uniqueness: true
+
   self.table_name = "org_enforcement_principal_effects"
 
   belongs_to :enforcement_case, class_name: "OrgEnforcementCase", foreign_key: :org_enforcement_case_id,
@@ -10,6 +12,10 @@ class OrgEnforcementPrincipalEffect < OrgPrincipalRecord
 
   validates :principal_public_id, presence: true
   validates :effective_at, presence: true
+  # The columns are NOT NULL; a blank or unparseable flag is refused as invalid input instead of
+  # reaching the database as a constraint violation.
+  validates :access_blocking, :recovery_blocked, :reactivation_blocked, :withdrawal_purge_blocked,
+            :principal_hard_delete_blocked, inclusion: { in: [true, false] }
   validate :kind_permits_principal_effect
 
   private

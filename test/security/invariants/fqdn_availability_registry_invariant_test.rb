@@ -35,10 +35,6 @@ module Security
       # scan above cannot see them. This covers the other half.
       #
       # The check is deliberately scoped to slots a route actually constrains on.
-      # `ConfigValues::HostFamilyValues` also carries slots nothing serves -- `palm_corporate` and
-      # `palm_staff` have configured hostnames but no `constraints(host:)` block, and the `acme_*`
-      # family's values are the `base.*.localhost` development aliases already registered under the
-      # `base_*` slots. Giving those a switch would give an operator a control with no effect.
       test "every boot-config host a route constrains on is registered" do
         unregistered =
           routed_host_slots.filter_map do |member|
@@ -51,14 +47,12 @@ module Security
       end
 
       # Route files also name hosts through environment variables, which neither the literal scan
-      # nor the boot-config scan above can see. That blind spot is how `core.{app,com,org}.localhost`
-      # came to route while resolving to no slot: the gate refused every request on the alias with
-      # `unknown_fqdn` even though the router served it.
+      # nor the boot-config scan above can see.
       test "every environment variable a route constrains on is registered" do
         unregistered =
           route_constraint_env_keys.filter_map do |key|
             host = ENV[key]
-            "#{key}=#{host}" if host.present? && FqdnAvailabilityRegistry.slot_for(host).nil?
+            key if host.present? && FqdnAvailabilityRegistry.slot_for(host).nil?
           end
 
         assert_empty unregistered,

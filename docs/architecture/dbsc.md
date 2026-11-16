@@ -1,10 +1,22 @@
 # Device Bound Session Credentials (DBSC)
 
+> **Runtime status (2026-11-11):** Local DBSC registration and verification endpoints and their
+> services, adapter, parser, serializer, and cookie-name helper were removed after the surface
+> reset found no remaining application caller. Client/operator token models, DBSC columns, status
+> models, and migrations are retained for the separate model/database review; they do not establish
+> a current DBSC route or proof-verification flow. The implementation sections below record the
+> former contract and are not current endpoint instructions. See the
+> [surface hard-reset report](../../evidence/2026-11-11-governance-round2-R2A7.md).
+
 > **Partially superseded by Identity Authority inversion:** The DBSC vocabulary in this document
 > remains useful only where it does not assign session or token authority to `sign/id`. `acme/www`
 > is the Session, Token, Account, Preference, Authorization, and downstream-token Authority.
 > `sign/id` is ceremony-only. Existing sign-side physical tables/models do not imply sign-side
 > authority.
+
+This document records former authentication-token DBSC behavior. Preference DBSC and Preference
+refresh credentials were separately retired; see [Preference architecture](preference.md). The
+surface reset has since removed the local authentication-token DBSC runtime as well.
 
 ## Specification
 
@@ -19,21 +31,49 @@ DBSC binds session cookies to a device-specific key pair. Even if a session cook
 cannot be used on a different device because the server requires proof-of-possession of the private
 key that is bound to the session.
 
-## Implementation
+## Former implementation
 
-The server-side DBSC implementation lives in `app/services/dbsc/`:
+The server-side DBSC implementation lives in flat `app/services/dbsc_*.rb` files:
 
 | File                                        | Purpose                                               |
 | ------------------------------------------- | ----------------------------------------------------- |
-| `app/services/dbsc/registration_service.rb` | Registers a device key pair and binds it to a session |
-| `app/services/dbsc/verification_service.rb` | Verifies device proof-of-possession on requests       |
-| `app/services/dbsc/record_adapter.rb`       | Persistence adapter for DBSC state                    |
+| `app/services/dbsc_registration_service.rb` | Registers a device key pair and binds it to a session |
+| `app/services/dbsc_verification_service.rb` | Verifies device proof-of-possession on requests       |
+| `app/services/dbsc_record_adapter.rb`       | Persistence adapter for DBSC state                    |
 
 Token tables (`user_tokens`, `staff_tokens`) store DBSC-related columns:
 
 - `dbsc_public_key` (JSONB) — the device's public key
 - `dbsc_challenge` — challenge value for registration
 - `dbsc_session_id` — session binding identifier
+
+## Former HTTP Header Boundary
+
+The header syntax follows sections 9.1–9.4 of the
+[W3C DBSC Editor's Draft](https://w3c.github.io/webappsec-dbsc/) inspected on 2026-10-22
+(draft dated 2026-09-08), and [RFC 9651](https://www.rfc-editor.org/rfc/rfc9651.html).
+This is a draft protocol; the checks below establish server behavior, not browser interoperability.
+
+`DbscHeaderParser` accepts a quoted Structured Field String, decodes escaped quotes and
+backslashes, and ignores syntactically valid item parameters. It rejects unquoted values,
+malformed escapes, control characters, non-ASCII strings, lists and trailing input.
+Controllers parse HTTP fields exactly once. The registration/verification services and
+`DbscProofVerifier` receive decoded strings, not HTTP field syntax.
+
+The token refresh endpoint compares the decoded identifier with the existing record before issuing
+a challenge. A missing record returns 401, malformed identifier syntax
+returns 400, and an unknown or unregistered identifier returns 403 without changing the challenge
+or setting a cookie. `Sec-Secure-Session-Id` is preferred over existing alternate field names.
+`DbscHeaderSerializer` quotes and escapes every registration/challenge string separately; the
+challenge response uses the stored identifier. Valid challenge responses remain 403.
+
+DBSC operational logs contain fixed event names and request paths, never session identifiers,
+proofs, challenges or their prefixes. Proof `iat` values are type-checked and compared as numeric
+epoch seconds before they can cause an out-of-range time conversion.
+
+This header hardening does not change DBSC lifecycle states, persistence, controller ownership,
+JWT algorithms or proof freshness policy. It does not establish conformance of the entire DBSC
+implementation to every provision of the current draft.
 
 ## Relationship to DPoP
 
@@ -44,7 +84,7 @@ DBSC and DPoP (RFC 9449) serve similar purposes (proof-of-possession) but target
 | DBSC      | Browser cookie-based sessions       | Session cookie bound to device key |
 | DPoP      | API access via Authorization header | Access token bound to client key   |
 
-DBSC is the active browser-session binding mechanism. DPoP remains available for
+DBSC was the former browser-session binding mechanism. DPoP remains available for
 Authorization-header token binding where an explicitly reviewed flow chooses it.
 
 ## VisitorAccount Token Strategy

@@ -19,25 +19,6 @@ class ClientPreferenceTimezoneOption < AppPrincipalRecord
   AMERICA_ANCHORAGE = 7
   PACIFIC_HONOLULU = 8
 
-  has_many :client_preference_timezones,
-           class_name: "ClientPreferenceTimezone",
-           foreign_key: :option_id,
-           inverse_of: :option,
-           dependent: :restrict_with_error
-
-  def name
-    case id
-    when ETC_UTC then "Etc/UTC"
-    when ASIA_TOKYO then "Asia/Tokyo"
-    when AMERICA_NEW_YORK then "America/New_York"
-    when AMERICA_CHICAGO then "America/Chicago"
-    when AMERICA_DENVER then "America/Denver"
-    when AMERICA_LOS_ANGELES then "America/Los_Angeles"
-    when AMERICA_ANCHORAGE then "America/Anchorage"
-    when PACIFIC_HONOLULU then "Pacific/Honolulu"
-    end
-  end
-
   DEFAULTS = [
     ETC_UTC,
     ASIA_TOKYO,
@@ -49,8 +30,29 @@ class ClientPreferenceTimezoneOption < AppPrincipalRecord
     PACIFIC_HONOLULU,
   ].freeze
 
+  has_many :client_preference_timezones,
+           class_name: "ClientPreferenceTimezone",
+           foreign_key: :option_id,
+           inverse_of: :option,
+           dependent: :restrict_with_error
+
   def self.ensure_defaults!
     insert_missing_fixed_ids!(DEFAULTS)
+  end
+  public_class_method :ensure_defaults!
+
+  public
+  def name
+    case id
+    when ETC_UTC then "Etc/UTC"
+    when ASIA_TOKYO then "Asia/Tokyo"
+    when AMERICA_NEW_YORK then "America/New_York"
+    when AMERICA_CHICAGO then "America/Chicago"
+    when AMERICA_DENVER then "America/Denver"
+    when AMERICA_LOS_ANGELES then "America/Los_Angeles"
+    when AMERICA_ANCHORAGE then "America/Anchorage"
+    when PACIFIC_HONOLULU then "Pacific/Honolulu"
+    end
   end
 
   self.primary_key = :id

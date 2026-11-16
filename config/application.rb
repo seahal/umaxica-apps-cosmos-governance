@@ -4,13 +4,62 @@
 require_relative "boot"
 
 require "ipaddr"
-require "rails/all"
+require "rails"
+require "active_record/railtie"
+require "active_storage/engine"
+require "action_controller/railtie"
+require "action_view/railtie"
+require "action_mailer/railtie"
+require "active_job/railtie"
+require "action_cable/engine"
+require "action_text/engine"
+require "rails/test_unit/railtie"
+
+if Rails.env.production?
+  # rubocop:disable I18n/RailsI18n/DecorateString -- raised before application translations load
+  raise RuntimeError, <<~MESSAGE
+    Production database is not configured; select a database provider before booting.
+  MESSAGE
+  # rubocop:enable I18n/RailsI18n/DecorateString
+end
 
 Bundler.require(*Rails.groups)
 
+# `pghero`, `blazer`, the two `rswag` halves, and `coverband` are
+# `group :development` gems with `require: false` (Gemfile), so Bundler.require never auto-requires
+# them and the gems are not on the load path outside development. They must be required here rather
+# than from config/initializers: an engine only
+# contributes its own config/routes.rb through the `add_routing_paths` initializer, which has
+# already run by the time config/initializers/* are loaded, so a late require leaves the engine
+# mounted with an empty route set and every request 404s past it.
+if Rails.env.development?
+  require "pghero"
+  require "blazer"
+  require "rswag/api"
+  require "rswag/ui"
+
+  # Coverband measures which Ruby lines execute, which is only a meaningful question for the
+  # process serving requests. Requiring the gem is what starts it: its railtie hooks
+  # `before_configuration`, which fires on the `class Application < Rails::Application` line below,
+  # and calls `Coverband.configure` (loading config/coverband.rb) followed by `Coverband.start`.
+  # Not requiring it is therefore the off switch for a console, a rake task, a Solid Queue worker,
+  # or the test suite -- see lib/coverband_process_gate.rb for why that is an allowlist.
+  #
+  # This require must also come before the Application class for the collector to see the
+  # application's own eager loading; a later require would start measurement after the code under
+  # observation had already been loaded.
+  require_relative "../lib/coverband_process_gate"
+  require "coverband" if CoverbandProcessGate.measuring?
+end
+
+require_relative "../lib/runtime_role"
 require_relative "../lib/jit_security_active_record_encryption_key_provider"
+require_relative "../lib/realm_identifier_encryption_key_provider"
 require_relative "../lib/app_config_loader"
+require_relative "../lib/request_body_size_limit"
+require_relative "../lib/credential_deletion_finalizer"
 require_relative "../lib/trusted_forwarded_headers"
+require_relative "../lib/umaxica/test_environment/database_safety"
 
 module Jit
   module TrustedProxiesConfig
@@ -45,14 +94,28 @@ module Jit
     # Initialize configuration defaults for originally generated Rails version.
     config.load_defaults(8.2)
 
+    # Base has no Active Storage attachments, Action Cable clients, or Turbo Native
+    # navigation endpoints. Keep those framework routes out of the public router.
+    config.active_storage.draw_routes = false
+    config.action_cable.mount_path = nil
+    config.turbo.draw_routes = false
+
+    # Accept JSON messages only; authenticated legacy Marshal payloads are rejected too.
+    config.active_support.message_serializer = JSON
+
+    # Raw email content is not application logging data. Keep the Rails delivery
+    # mechanism and its notifications intact while disabling ActionMailer's
+    # logger across every environment.
+    config.action_mailer.logger = nil
+
     # Please, add to the `ignore` list any other `lib` subdirectories that do
     # not contain `.rb` files, or that should not be reloaded or eager loaded.
     # CommonHelper ones are `templates`, `generators`, or `middleware`, for example.
-    # `omniauth` holds lib/omniauth/strategies/umaxica_entra.rb, which reopens
-    # the omniauth_openid_connect gem's own OmniAuth::Strategies module
-    # (capitalized "OmniAuth"); Zeitwerk's inflection for the directory name
-    # ("Omniauth") would otherwise collide with it.
-    config.autoload_lib(ignore: %w(assets tasks omniauth))
+    # `rubocop` holds lib/rubocop/cop/umaxica/*.rb, the repository's custom
+    # architecture cops. They subclass RuboCop::Cop::Base, which only exists
+    # under `bin/rubocop`; autoloading them into the application would raise at
+    # boot and, under eager loading, take the whole app down.
+    config.autoload_lib(ignore: %w(assets tasks rubocop))
 
     # Configuration for the application, engines, and railties goes here.
     #
@@ -84,13 +147,22 @@ module Jit
       TrustedForwardedHeaders,
       trusted_proxies: trusted_proxies,
     )
+    # Reject oversized JSON before Rails parameter parsing can read an unbounded request body.
+    # Multipart and other upload content types retain their existing, separate limits.
+    config.middleware.insert_after(ActionDispatch::RequestId, RequestBodySizeLimit)
+    # Outside ShowExceptions so a confirmed credential deletion survives an exception response.
+    config.middleware.insert_before(ActionDispatch::ShowExceptions, CredentialDeletionFinalizer)
     config.x.boot_config = AppConfigLoader.load!
+    # No processor delivery adapter is enabled until its authenticated request/receipt
+    # contract is implemented. The empty registry is intentionally fail-closed: a notification
+    # cannot become NOTIFIED merely because a processor key exists.
+    config.x.processor_erasure_notification_adapters = {}
 
     # Active Record Encryption Configuration
     if %w(test production development).include?(Rails.env)
       encryption_keys = JitSecurityActiveRecordEncryptionKeyProvider.fetch
-      config.active_record.encryption.primary_key = encryption_keys.fetch(:current)
-      config.active_record.encryption.previous = encryption_keys[:previous].map { |previous_key| { key: previous_key } }
+      config.active_record.encryption.primary_key = encryption_keys.fetch(:previous) + [encryption_keys.fetch(:current)]
+      config.active_record.encryption.previous = []
       config.active_record.encryption.deterministic_key = encryption_keys.fetch(:deterministic)
       config.active_record.encryption.key_derivation_salt = encryption_keys.fetch(:key_derivation_salt)
     end
@@ -107,6 +179,7 @@ module Jit
     # the single source of truth. config/environments/development.rb turns it back on,
     # where the raw reason is the useful signal and no real user data is present.
     config.action_controller.log_warning_on_csrf_failure = false
+    config.action_controller.forgery_protection_origin_check = true
 
     # Rails encrypted/signed cookies derive keys from secret_key_base.
     # Pin modern primitives explicitly and do not keep SHA1 compatibility rotations.
@@ -123,7 +196,11 @@ module Jit
     # `Time#iso8601` emit a numeric offset instead, which the API contract does not allow.
     config.time_zone = "UTC"
     config.active_record.default_timezone = :utc
+    # Add application and request context to SQL comments in every environment.
+    config.active_record.query_log_tags_enabled = true
     config.active_record.schema_format = :sql
+    config.active_record.strict_loading_by_default = true
+    config.active_record.action_on_strict_loading_violation = :raise
 
     # SMS Provider Configuration
     config.sms_provider = ENV.fetch("SMS_PROVIDER", "aws_sns")
@@ -139,6 +216,10 @@ module Jit
 
     # Multi-database async query executor (one thread pool per database)
     config.active_record.async_query_executor = :multi_thread_pool
+
+    initializer "umaxica.test_database_safety", before: "active_record.initialize_database" do
+      Umaxica::TestEnvironment::DatabaseSafety.verify!
+    end
 
     # Required belongs_to validation should confirm the associated row, not only
     # the foreign-key value. Tests that create many records should pass loaded

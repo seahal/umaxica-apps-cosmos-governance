@@ -1,76 +1,90 @@
-# typed: false
 # frozen_string_literal: true
 
 require "test_helper"
 
-# A security decision that cannot be applied must not be left looking active. If
-# an effect is rejected, the case is marked failed and the error is re-raised so
-# the caller sees it -- swallowing it would leave a case that reads as applied
-# while none of its effects ran.
 class EnforcementCaseApplyFailureTest < ActiveSupport::TestCase
   self.fixture_table_names = []
+  self.use_transactional_tests = false
 
-  class FakeCase
-    def self.transaction = yield
-
-    attr_accessor :state
-    attr_reader :persisted
-
-    def initialize(persisted:)
-      @persisted = persisted
-      @state = "draft"
-    end
-
-    def persisted? = persisted
-
-    def update_column(name, value)
-      instance_variable_set(:"@#{name}", value)
-    end
-
-    def revoke_method_sessions! = raise(ActiveRecord::RecordNotUnique, "duplicate revocation")
-
-    def write_audit_event!(_name) = true
-
-    def principal_effect = nil
-
-    def public_id = "case-public-id"
-
-    def principal_public_id = "principal-public-id"
-
-    def kind = "cooldown"
-
-    def requires_approval? = false
-
-    def transition_to_active! = @state = "active"
-
-    def update!(**) = true
-
-    def close_superseded_effects! = true
-
-    def save!(**) = true
-
-    def apply_principal_effect! = true
+  setup do
+    @existing_app_case_ids = AppEnforcementCase.pluck(:id)
+    @existing_org_case_ids = OrgEnforcementCase.pluck(:id)
+    @existing_operator_ids = Operator.pluck(:id)
+    @existing_capability_grant_ids = OperatorCapabilityGrant.pluck(:id)
+    @existing_client_ids = Client.pluck(:id)
+    @existing_enforcement_event_ids = EnforcementEvent.pluck(:id)
   end
 
-  test "a rejected effect marks the case failed and re-raises" do
-    enforcement_case = FakeCase.new(persisted: true)
-
-    assert_raises(ActiveRecord::RecordNotUnique) do
-      EnforcementCaseApplyOperation.call(enforcement_case: enforcement_case)
-    end
-
-    assert_equal "failed", enforcement_case.state
+  teardown do
+    EnforcementEvent.where.not(id: @existing_enforcement_event_ids).delete_all
+    AppEnforcementCase.where.not(id: @existing_app_case_ids).delete_all
+    OrgEnforcementCase.where.not(id: @existing_org_case_ids).delete_all
+    OperatorCapabilityGrant.where.not(id: @existing_capability_grant_ids).delete_all
+    Client.where.not(id: @existing_client_ids).delete_all
+    created_operator_ids = Operator.where.not(id: @existing_operator_ids).pluck(:id)
+    OperatorAuthorityLock.where(operator_id: created_operator_ids).delete_all
+    OperatorAccount.where(staff_id: created_operator_ids).delete_all
+    Operator.where.not(id: @existing_operator_ids).delete_all
   end
 
-  test "a case that was never persisted is re-raised without being marked failed" do
-    enforcement_case = FakeCase.new(persisted: false)
+  [AppEnforcementCase, OrgEnforcementCase].each do |case_class|
+    test "#{case_class.name} reports a missing principal after committing the decision" do
+      enforcement_case = case_class.new(
+        kind: "security_lock", state: "draft", duration_mode: "indefinite", visibility: "visible",
+        release_mode: "verification_required", effective_at: Time.current, reason_code: "security_incident",
+        principal_public_id: SecureRandom.uuid, applied_by_operator_public_id: "apply-test-operator",
+      )
 
-    assert_raises(ActiveRecord::RecordNotUnique) do
-      EnforcementCaseApplyOperation.call(enforcement_case: enforcement_case)
+      assert_raises(ActiveRecord::RecordNotFound) do
+        EnforcementCaseApplyOperation.call(
+          enforcement_case: enforcement_case, actor_operator_public_id: "apply-test-operator",
+        )
+      end
+      assert_equal "active", enforcement_case.reload.state
+      assert_nil enforcement_case.sessions_revoked_at
+      assert_nil enforcement_case.audited_at
+      assert case_class.pending_convergence.exists?(id: enforcement_case.id)
+    end
+  end
+
+  test "a rejected post-commit effect keeps the committed Case in force for reconciliation" do
+    client = Client.create!(security_mode_id: SecurityModeConfigurable::NORMAL, status_id: ClientStatus::ACTIVE)
+    enforcement_case = AppEnforcementCase.create!(
+      kind: "security_lock", state: "draft", duration_mode: "indefinite", visibility: "visible",
+      release_mode: "verification_required", effective_at: Time.current, reason_code: "security_incident",
+      principal_public_id: client.public_id, applied_by_operator_public_id: "apply-test-operator",
+    )
+
+    enforcement_case.stub(:revoke_method_sessions!, -> { raise ActiveRecord::RecordNotUnique }) do
+      assert_raises(ActiveRecord::RecordNotUnique) do
+        EnforcementCaseApplyOperation.call(
+          enforcement_case: enforcement_case,
+          actor_operator_public_id: "apply-test-operator",
+        )
+      end
     end
 
-    # The state transition itself committed; only the "failed" marking is skipped
-    # for a case that has no row to mark.
-    assert_equal "active", enforcement_case.state
+    assert_equal "active", enforcement_case.reload.state
+    assert AppEnforcementCase.in_force.exists?(id: enforcement_case.id)
+    assert AppEnforcementCase.pending_convergence.exists?(id: enforcement_case.id)
+  end
+
+  test "a new Case outside the applicable states is not persisted" do
+    client = Client.create!(security_mode_id: SecurityModeConfigurable::NORMAL, status_id: ClientStatus::ACTIVE)
+    enforcement_case = AppEnforcementCase.new(
+      kind: "security_lock", state: "failed", duration_mode: "indefinite", visibility: "visible",
+      release_mode: "verification_required", effective_at: Time.current, reason_code: "security_incident",
+      principal_public_id: client.public_id, applied_by_operator_public_id: "apply-test-operator",
+    )
+
+    assert_no_difference "AppEnforcementCase.count" do
+      assert_raises(EnforcementCaseApplicable::InvalidStateTransitionError) do
+        EnforcementCaseApplyOperation.call(
+          enforcement_case: enforcement_case,
+          actor_operator_public_id: "apply-test-operator",
+        )
+      end
+    end
+    assert_not_predicate enforcement_case, :persisted?
   end
 end

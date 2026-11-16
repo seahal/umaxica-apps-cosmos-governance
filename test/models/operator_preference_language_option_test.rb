@@ -80,21 +80,15 @@ class OperatorPreferenceLanguageOptionTest < ActiveSupport::TestCase
     end
   end
 
-  test "ensure_defaults! does nothing when all exist" do
-    assert_no_difference("OperatorPreferenceLanguageOption.count") do
-      OperatorPreferenceLanguageOption.ensure_defaults!
-    end
-  end
-
   test "primary_key is id" do
     assert_equal "id", OperatorPreferenceLanguageOption.primary_key
   end
 
   test "operator_preference_languages association works with dependent restrict" do
     option = OperatorPreferenceLanguageOption.find(OperatorPreferenceLanguageOption::JA)
-    staff = Operator.create!(status_id: OperatorStatus::ACTIVE)
+    operator = Operator.create!(security_mode_id: SecurityModeConfigurable::ADVANCED, status_id: OperatorStatus::ACTIVE)
 
-    pref = OperatorPreference.create!(staff: staff)
+    pref = OperatorPreference.create!(operator: operator)
     language = OperatorPreferenceLanguage.create!(
       preference: pref,
       option_id: option.id,

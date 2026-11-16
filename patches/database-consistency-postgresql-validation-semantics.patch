@@ -1,0 +1,506 @@
+diff --git a/lib/database_consistency/checkers/index_checkers/unique_index_checker.rb b/lib/database_consistency/checkers/index_checkers/unique_index_checker.rb
+index 45979c6680a2eadfe9c1b9cf4f206c9ff037c21e..9b1a06fb45bc2515798199cc14e9cffa3dab7afa 100644
+--- a/lib/database_consistency/checkers/index_checkers/unique_index_checker.rb
++++ b/lib/database_consistency/checkers/index_checkers/unique_index_checker.rb
+@@ -29,7 +29,10 @@ module DatabaseConsistency
+       def valid?
+         uniqueness_validators = model.validators.select { |validator| validator.kind == :uniqueness }
+ 
+-        uniqueness_validators.any? { |validator| validator_matches?(validator) }
++        return true if uniqueness_validators.any? { |validator| validator_matches?(validator) }
++
++        model.validators.select { |validator| validator.kind == :jsonb_text_uniqueness }
++             .any? { |validator| jsonb_text_validator_matches?(validator) }
+       end
+ 
+       def validator_matches?(validator)
+@@ -39,6 +42,12 @@ module DatabaseConsistency
+         end
+       end
+ 
++      def jsonb_text_validator_matches?(validator)
++        validator.attributes.any? do |attribute|
++          Helper.jsonb_text_uniqueness_matches_index?(model, attribute, validator, index)
++        end
++      end
++
+       def sorted_index_columns
+         @sorted_index_columns ||= Helper.extract_index_columns(index.columns).sort
+       end
+diff --git a/lib/database_consistency/checkers/validator_checkers/missing_unique_index_checker.rb b/lib/database_consistency/checkers/validator_checkers/missing_unique_index_checker.rb
+index 0fe7c764d99bf95d65a7bba15e39253184a21999..a06e2c14bac66562ba653447b86dfe87f9919f0d 100644
+--- a/lib/database_consistency/checkers/validator_checkers/missing_unique_index_checker.rb
++++ b/lib/database_consistency/checkers/validator_checkers/missing_unique_index_checker.rb
+@@ -11,6 +11,8 @@ module DatabaseConsistency
+       )
+ 
+       def column_or_attribute_name
++        return attribute.to_s if validator.kind == :jsonb_text_uniqueness
++
+         @column_or_attribute_name ||= Helper.uniqueness_validator_columns(attribute, validator, model).join('+')
+       end
+ 
+@@ -19,7 +21,7 @@ module DatabaseConsistency
+       # We skip check when:
+       #  - validator is not a uniqueness validator
+       def preconditions
+-        validator.kind == :uniqueness
++        %i[uniqueness jsonb_text_uniqueness].include?(validator.kind)
+       end
+ 
+       # Table of possible statuses
+@@ -28,7 +30,7 @@ module DatabaseConsistency
+       # | persisted    | ok     |
+       # | missing      | fail   |
+       def check
+-        if unique_index || primary_key_covers_validation?
++        if unique_index || (validator.kind == :uniqueness && primary_key_covers_validation?)
+           report_template(:ok)
+         else
+           report_template(:fail, error_slug: :missing_unique_index)
+@@ -41,7 +43,7 @@ module DatabaseConsistency
+           error_slug: error_slug,
+           error_message: nil,
+           table_name: model.table_name,
+-          columns: sorted_uniqueness_validator_columns,
++          columns: validator.kind == :jsonb_text_uniqueness ? [attribute.to_s] : sorted_uniqueness_validator_columns,
+           **report_attributes
+         )
+       end
+@@ -52,6 +54,10 @@ module DatabaseConsistency
+       end
+ 
+       def index_matches?(index)
++        if validator.kind == :jsonb_text_uniqueness
++          return Helper.jsonb_text_uniqueness_matches_index?(model, attribute, validator, index)
++        end
++
+         index.unique &&
+           Helper.extract_index_columns(index.columns).sort == sorted_uniqueness_validator_columns &&
+           Helper.conditions_match_index?(model, attribute, validator, index.where)
+diff --git a/lib/database_consistency/checkers/validators_fraction_checkers/column_presence_checker.rb b/lib/database_consistency/checkers/validators_fraction_checkers/column_presence_checker.rb
+index 48bacab276935007a0e47b0faecbc85dae1a70df..b7dbd56c34059225f4c71ea6840a8792f17ff3d9 100644
+--- a/lib/database_consistency/checkers/validators_fraction_checkers/column_presence_checker.rb
++++ b/lib/database_consistency/checkers/validators_fraction_checkers/column_presence_checker.rb
+@@ -39,12 +39,55 @@ module DatabaseConsistency
+         validators.all? do |validator|
+           result = validator.options.slice(*WEAK_OPTIONS).any?
+ 
+-          result = false if required_with_if?(validator)
++          result = false if required_with_if?(validator) || projected_attribute_guard?(validator)
+ 
+           result
+         end
+       end
+ 
++      # A projection guard skips validation only when the column was not selected. It cannot
++      # permit NULL for a loaded attribute. Recognize only the complete, literal lambda body;
++      # arbitrary conditions remain weak and ambiguous source locations fail closed.
++      def projected_attribute_guard?(validator)
++        return false unless defined?(Prism)
++        return false unless model.instance_method(:has_attribute?).owner == ActiveRecord::AttributeMethods
++        return false unless validator.options.slice(*WEAK_OPTIONS).keys == [:if]
++
++        condition = validator.options[:if]
++        return false unless condition.is_a?(Proc) && condition.lambda?
++
++        file, line = condition.source_location
++        return false unless file && File.file?(file)
++
++        projection_lambda_body(file, line)
++      end
++
++      def projection_lambda_body(file, line)
++        nodes = [Prism.parse_file(file).value]
++        candidates = []
++        until nodes.empty?
++          node = nodes.pop
++          candidates << node if node.is_a?(Prism::LambdaNode) && node.location.start_line == line
++          nodes.concat(node.compact_child_nodes)
++        end
++        return false unless candidates.one?
++
++        lambda_node = candidates.first
++        return false unless lambda_node.parameters.nil? && lambda_node.body&.body&.one?
++
++        literal_attribute_guard?(lambda_node.body.body.first)
++      end
++
++      def literal_attribute_guard?(call)
++        return false unless call.is_a?(Prism::CallNode) && call.name == :has_attribute? &&
++          call.receiver.nil? && call.block.nil?
++
++        arguments = call.arguments&.arguments
++        return false unless arguments&.one? && arguments.first.is_a?(Prism::SymbolNode)
++
++        arguments.first.unescaped == attribute.to_s
++      end
++
+       def belongs_to_required_validates_foreign_key_disabled?
+         ActiveRecord.version >= Gem::Version.new('7.1.0') &&
+           !ActiveRecord.belongs_to_required_validates_foreign_key
+diff --git a/lib/database_consistency/helper.rb b/lib/database_consistency/helper.rb
+index ac7fa946f09f2246d3dfe8c6d37b237f972c1e00..b140609c7f702286f7519f456d0c8497245d73c7 100644
+--- a/lib/database_consistency/helper.rb
++++ b/lib/database_consistency/helper.rb
+@@ -98,6 +98,32 @@ module DatabaseConsistency
+                    .map { |str| str.gsub(/'([^)]+)'::\w+/, '\1') }
+     end
+ 
++    # Compare the expression and predicate used by a JSON-text validator with
++    # the unique index. Unsupported SQL or equality semantics remain unmatched.
++    def jsonb_text_uniqueness_matches_index?(model, attribute, validator, index)
++      return false unless index.unique && index.columns.is_a?(String) && index.where.present?
++      return false if index.respond_to?(:valid?) && !index.valid?
++      return false if index.respond_to?(:nulls_not_distinct) && index.nulls_not_distinct
++      return false if index.respond_to?(:using) && index.using && index.using.to_s != 'btree'
++      return false if index.respond_to?(:opclasses) && index.opclasses.present?
++
++      return false if %i[if unless on except_on].any? { |option| validator.options.key?(option) }
++
++      keys = validator.options[:keys]
++      predicate = validator.options[:where]
++      return false unless keys.is_a?(Array) && keys.any? && predicate.is_a?(Hash) && predicate.any?
++      return false unless keys.all? { |key| key.is_a?(String) && key.match?(/\A[a-zA-Z_][a-zA-Z0-9_]*\z/) }
++      return false unless predicate.keys.all? { |key| key.to_s.match?(/\A[a-zA-Z_][a-zA-Z0-9_]*\z/) }
++      return false unless predicate.values.all? { |value| value.nil? || value.is_a?(String) || value.is_a?(Integer) || value == true || value == false }
++      return false unless attribute.to_s.match?(/\A[a-zA-Z_][a-zA-Z0-9_]*\z/)
++
++      expressions = index.columns.split(',').map { |part| normalize_condition_sql(part) }.sort
++      expected = keys.map { |key| normalize_condition_sql("#{attribute} ->> '#{key}'") }.sort
++      validator_where = conditions_where_sql(model, -> { where(predicate) })
++      expected == expressions && validator_where.present? &&
++        validator_where == normalize_condition_sql(index.where)
++    end
++
+     def sorted_uniqueness_validator_columns(attribute, validator, model)
+       uniqueness_validator_columns(attribute, validator, model).sort
+     end
+@@ -166,8 +192,9 @@ module DatabaseConsistency
+     # (e.g. database_validations) would append a duplicate or extra
+     # `attribute IS NOT NULL` clause and never match the partial index.
+     def uniqueness_validator_where_sql(model, attribute, validator)
+-      conditions_sql = conditions_where_sql(model, validator.options[:conditions])
+-      return conditions_sql.presence if conditions_sql
++      if validator.options[:conditions]
++        return conditions_where_sql(model, validator.options[:conditions]).presence
++      end
+ 
+       guard_sql = uniqueness_validator_guard_sql(model, attribute, validator)
+       normalize_condition_sql(guard_sql) if guard_sql
+@@ -183,6 +210,8 @@ module DatabaseConsistency
+       return false if validator_where.nil? || index_where.blank?
+ 
+       normalized_where = normalize_condition_sql(index_where)
++      return true if not_null_index_covers_guard?(model, attribute, validator, normalized_where)
++
+       validator_where.casecmp?(normalized_where)
+     end
+ 
+@@ -623,6 +652,14 @@ module DatabaseConsistency
+         validator.options[:conditions].nil?
+     end
+ 
++    # A scalar NOT NULL index covers every value checked by a nil/blank guard. Keep
++    # association and composite-scope NULL semantics conservative instead of guessing.
++    def not_null_index_covers_guard?(model, attribute, validator, normalized_where)
++      column = foreign_key_or_attribute(model, attribute).to_s
++      validator_guard_only?(model, attribute, validator) && validator.options[:scope].blank? &&
++        column == attribute.to_s && normalized_where.casecmp?(normalize_condition_sql("#{column} IS NOT NULL"))
++    end
++
+     # @return [String]
+     def wrapped_attribute_name(attribute, validator, model)
+       attribute = foreign_key_or_attribute(model, attribute)
+diff --git a/spec/checkers/column_presence_checker_spec.rb b/spec/checkers/column_presence_checker_spec.rb
+index a2231df0fc9af123c0e32a8300fe74bf1c1aab0a..b35474d7ada992feec23e6813920b3d3606c9125 100644
+--- a/spec/checkers/column_presence_checker_spec.rb
++++ b/spec/checkers/column_presence_checker_spec.rb
+@@ -1,5 +1,11 @@
+ # frozen_string_literal: true
+ 
++module AttributeAvailabilityOverride
++  def has_attribute?(_name)
++    false
++  end
++end
++
+ RSpec.describe DatabaseConsistency::Checkers::ColumnPresenceChecker, :sqlite, :mysql, :postgresql do
+   subject(:checker) { described_class.new(model, attribute, validators) }
+ 
+@@ -72,6 +78,58 @@ RSpec.describe DatabaseConsistency::Checkers::ColumnPresenceChecker, :sqlite, :m
+       end
+     end
+ 
++    context 'when validation only skips an unloaded projected attribute' do
++      let(:klass) do
++        define_class { |klass| klass.validates :email, presence: true, if: -> { has_attribute?(:email) } }
++      end
++
++      it 'recognizes the non-null contract without breaking projected saves' do
++        expect(checker.report.status).to eq(:ok)
++        record = klass.create!(email: 'present')
++        projected = klass.select('id').find(record.id)
++        expect(projected.save).to eq(true)
++        record.email = nil
++        expect(record.valid?).to eq(false)
++      end
++    end
++
++    context 'when the attribute guard refers to a different attribute' do
++      let(:klass) do
++        define_class { |klass| klass.validates :email, presence: true, if: -> { has_attribute?(:other) } }
++      end
++
++      specify { expect(checker.report.status).to eq(:fail) }
++    end
++
++    context 'when the attribute guard has an additional false condition' do
++      let(:klass) do
++        define_class { |klass| klass.validates :email, presence: true, if: -> { has_attribute?(:email) && false } }
++      end
++
++      specify { expect(checker.report.status).to eq(:fail) }
++    end
++
++    context 'when the model overrides the attribute availability predicate' do
++      let(:klass) do
++        define_class do |klass|
++          klass.include(AttributeAvailabilityOverride)
++          klass.validates :email, presence: true, if: -> { has_attribute?(:email) }
++        end
++      end
++
++      specify { expect(checker.report.status).to eq(:fail) }
++    end
++
++    context 'when a projection guard also allows nil' do
++      let(:klass) do
++        define_class do |klass|
++          klass.validates :email, presence: true, allow_nil: true, if: -> { has_attribute?(:email) }
++        end
++      end
++
++      specify { expect(checker.report.status).to eq(:fail) }
++    end
++
+     context 'when has both strong and weak validators' do
+       let(:klass) do
+         define_class do |klass|
+diff --git a/spec/checkers/jsonb_text_index_checker_spec.rb b/spec/checkers/jsonb_text_index_checker_spec.rb
+new file mode 100644
+index 0000000000000000000000000000000000000000..e1a4d4d222a46d56a97c136e8f37c68948e556fa
+--- /dev/null
++++ b/spec/checkers/jsonb_text_index_checker_spec.rb
+@@ -0,0 +1,85 @@
++# frozen_string_literal: true
++
++RSpec.describe DatabaseConsistency::Checkers::UniqueIndexChecker, :sqlite do
++  let(:klass) { define_class }
++  let(:keys) { %w[transaction_public_id halt_generation] }
++  let(:validator) do
++    Struct.new(:kind, :attributes, :options).new(
++      :jsonb_text_uniqueness, [:context], { keys: keys, where: { event_id: 18 } }
++    )
++  end
++  let(:columns) { "((context ->> 'transaction_public_id'::text)), ((context ->> 'halt_generation'::text))" }
++  let(:predicate) { '(event_id = 18)' }
++  let(:index) do
++    ActiveRecord::ConnectionAdapters::IndexDefinition.new(
++      'entities', 'expression_identity', true, columns, where: predicate
++    )
++  end
++
++  before do
++    define_database_with_entity do |table|
++      table.text :context
++      table.integer :event_id
++    end
++    allow(klass).to receive(:validators).and_return([validator])
++  end
++
++  def check(index, klass)
++    described_class.new(klass, index).report(catch_errors: false).status
++  end
++
++  it 'recognizes the same JSON text expressions and partial predicate' do
++    expect(check(index, klass)).to eq(:ok)
++  end
++
++  it 'rejects different keys including case changes and extra expressions' do
++    [
++      "(context ->> 'transaction_public_id'), (context ->> 'HALT_generation')",
++      "(context ->> 'transaction_public_id'), (context ->> 'halt_generation'), (context ->> 'other')",
++      "(other ->> 'transaction_public_id'), (context ->> 'halt_generation')"
++    ].each do |different_columns|
++      different = ActiveRecord::ConnectionAdapters::IndexDefinition.new(
++        'entities', 'different', true, different_columns, where: predicate
++      )
++      expect(check(different, klass)).to eq(:fail)
++    end
++  end
++
++  it 'rejects missing, different, or more restrictive partial predicates' do
++    [nil, '(event_id = 19)', '(event_id = 18 AND active = 1)'].each do |different_predicate|
++      different = ActiveRecord::ConnectionAdapters::IndexDefinition.new(
++        'entities', 'different', true, columns, where: different_predicate
++      )
++      expect(check(different, klass)).to eq(:fail)
++    end
++  end
++
++  it 'does not accept a validator with an additional conditional guard' do
++    [:if, :unless, :on, :except_on].product([:guarded, false, nil]).each do |guard, value|
++      guarded = Struct.new(:kind, :attributes, :options).new(
++        :jsonb_text_uniqueness, [:context], { keys: keys, where: { event_id: 18 }, guard => value }
++      )
++      allow(klass).to receive(:validators).and_return([guarded])
++      expect(check(index, klass)).to eq(:fail)
++    end
++  end
++
++  it 'rejects explicit expression collations or operator classes it cannot establish as equivalent' do
++    [
++      "(context ->> 'transaction_public_id') COLLATE \"C\", (context ->> 'halt_generation')",
++      "(context ->> 'transaction_public_id') text_pattern_ops, (context ->> 'halt_generation')"
++    ].each do |different_columns|
++      different = ActiveRecord::ConnectionAdapters::IndexDefinition.new(
++        'entities', 'different', true, different_columns, where: predicate
++      )
++      expect(check(different, klass)).to eq(:fail)
++    end
++  end
++
++  it 'does not treat NULLS NOT DISTINCT as equivalent to a validator that permits SQL NULL' do
++    different = ActiveRecord::ConnectionAdapters::IndexDefinition.new(
++      'entities', 'different', true, columns, where: predicate, nulls_not_distinct: true
++    )
++    expect(check(different, klass)).to eq(:fail)
++  end
++end
+diff --git a/spec/checkers/jsonb_text_missing_index_checker_spec.rb b/spec/checkers/jsonb_text_missing_index_checker_spec.rb
+new file mode 100644
+index 0000000000000000000000000000000000000000..532f9e15f49018626656fccf44d3c8189ad8d1bc
+--- /dev/null
++++ b/spec/checkers/jsonb_text_missing_index_checker_spec.rb
+@@ -0,0 +1,38 @@
++# frozen_string_literal: true
++
++RSpec.describe DatabaseConsistency::Checkers::MissingUniqueIndexChecker, :sqlite do
++  let(:klass) { define_class }
++  let(:validator) do
++    Struct.new(:kind, :attributes, :options).new(
++      :jsonb_text_uniqueness, [:context], { keys: %w[transaction_public_id halt_generation], where: { event_id: 18 } }
++    )
++  end
++  let(:checker) { described_class.new(klass, :context, validator) }
++
++  before do
++    define_database_with_entity do |table|
++      table.text :context
++      table.integer :event_id
++    end
++  end
++
++  it 'reports a missing unique index for the declared expression validation' do
++    expect(checker.report(catch_errors: false).status).to eq(:fail)
++  end
++
++  it 'accepts a matching unique expression index with the same predicate' do
++    ActiveRecord::Base.connection.execute(<<~SQL)
++      CREATE UNIQUE INDEX expression_identity ON entities
++      ((context ->> 'transaction_public_id'), (context ->> 'halt_generation')) WHERE event_id = 18
++    SQL
++    expect(checker.report(catch_errors: false).status).to eq(:ok)
++  end
++
++  it 'rejects an index with a different predicate' do
++    ActiveRecord::Base.connection.execute(<<~SQL)
++      CREATE UNIQUE INDEX expression_identity ON entities
++      ((context ->> 'transaction_public_id'), (context ->> 'halt_generation')) WHERE event_id = 19
++    SQL
++    expect(checker.report(catch_errors: false).status).to eq(:fail)
++  end
++end
+diff --git a/spec/helper_not_null_uniqueness_guard_spec.rb b/spec/helper_not_null_uniqueness_guard_spec.rb
+new file mode 100644
+index 0000000000000000000000000000000000000000..cd5ae62b50d9c8c1edf015ed955787b9bfa090c0
+--- /dev/null
++++ b/spec/helper_not_null_uniqueness_guard_spec.rb
+@@ -0,0 +1,76 @@
++# frozen_string_literal: true
++
++RSpec.describe DatabaseConsistency::Helper, :sqlite, :mysql, :postgresql do
++  describe '.conditions_match_index?' do
++    it 'accepts a NOT NULL predicate covering every nonblank scalar value checked by the validator' do
++      validator = ActiveRecord::Validations::UniquenessValidator.new(
++        attributes: [:digest], class: ActiveRecord::Base, allow_blank: true
++      )
++
++      expect(described_class.conditions_match_index?(ActiveRecord::Base, :digest, validator, '("digest" IS NOT NULL)')).to eq(true)
++    end
++
++    it 'retains exact allow_nil coverage without introducing a NULL uniqueness requirement' do
++      validator = ActiveRecord::Validations::UniquenessValidator.new(
++        attributes: [:digest], class: ActiveRecord::Base, allow_nil: true
++      )
++
++      expect(described_class.conditions_match_index?(ActiveRecord::Base, :digest, validator, 'digest IS NOT NULL')).to eq(true)
++    end
++
++    it 'does not infer scoped NULL equivalence from a stronger scalar guard' do
++      validator = ActiveRecord::Validations::UniquenessValidator.new(
++        attributes: [:digest], class: ActiveRecord::Base, scope: :owner_id, allow_blank: true
++      )
++
++      expect(described_class.conditions_match_index?(ActiveRecord::Base, :digest, validator, 'digest IS NOT NULL')).to eq(false)
++    end
++
++    it 'rejects a partial index on another nullable column' do
++      validator = ActiveRecord::Validations::UniquenessValidator.new(
++        attributes: [:digest], class: ActiveRecord::Base, allow_blank: true
++      )
++
++      expect(described_class.conditions_match_index?(ActiveRecord::Base, :digest, validator, 'other_digest IS NOT NULL')).to eq(false)
++    end
++
++    it 'rejects a partial index excluding a checked value' do
++      validator = ActiveRecord::Validations::UniquenessValidator.new(
++        attributes: [:digest], class: ActiveRecord::Base, allow_blank: true
++      )
++
++      expect(described_class.conditions_match_index?(ActiveRecord::Base, :digest, validator, "digest IS NOT NULL AND digest != 'reserved'")).to eq(false)
++    end
++
++    it 'rejects an unrelated lifecycle predicate' do
++      validator = ActiveRecord::Validations::UniquenessValidator.new(
++        attributes: [:digest], class: ActiveRecord::Base, allow_blank: true
++      )
++
++      expect(described_class.conditions_match_index?(ActiveRecord::Base, :digest, validator, 'released_at IS NULL')).to eq(false)
++    end
++
++    it 'does not replace explicit domain conditions with a scalar blank guard' do
++      validator = ActiveRecord::Validations::UniquenessValidator.new(
++        attributes: [:digest], class: ActiveRecord::Base, allow_blank: true, conditions: -> { where(active: true) }
++      )
++
++      expect(described_class.conditions_match_index?(ActiveRecord::Base, :digest, validator, 'digest IS NOT NULL')).to eq(false)
++    end
++
++    it 'does not replace an unresolved explicit predicate with an allow_nil guard' do
++      validator = ActiveRecord::Validations::UniquenessValidator.new(
++        attributes: [:digest], class: ActiveRecord::Base, allow_nil: true,
++        conditions: -> { raise ArgumentError, 'unsupported predicate' }
++      )
++
++      expect(described_class.conditions_match_index?(ActiveRecord::Base, :digest, validator, 'digest IS NOT NULL')).to eq(false)
++    end
++
++    it 'does not infer a nil guard for an unconditional validator' do
++      validator = ActiveRecord::Validations::UniquenessValidator.new(attributes: [:digest], class: ActiveRecord::Base)
++
++      expect(described_class.conditions_match_index?(ActiveRecord::Base, :digest, validator, 'digest IS NOT NULL')).to eq(false)
++    end
++  end
++end

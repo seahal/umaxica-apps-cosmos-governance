@@ -4,7 +4,7 @@
 require "test_helper"
 
 # Contract for the Rails-side Inertia protocol on the only Inertia endpoint in the application
-# (Base::App::GroupsController#index).
+# (Base::App::IdentitiesController#show).
 #
 # The pre-existing controller test asserted HTML substrings only, so it could not observe the page
 # object Inertia actually navigates on: component, props, url, version. Every assertion here reads
@@ -12,22 +12,26 @@ require "test_helper"
 class InertiaPageContractTest < ActionDispatch::IntegrationTest
   setup do
     @host = configured_host(:base_service)
-    @user = Client.create!(status_id: ClientStatus::ACTIVE, visibility_id: ClientVisibility::USER)
-    @token = ClientToken.create!(user: @user, user_token_kind_id: ClientTokenKind::BROWSER_WEB)
+    @user = Client.create!(
+      security_mode_id: SecurityModeConfigurable::NORMAL, status_id: ClientStatus::ACTIVE,
+      visibility_id: ClientVisibility::USER,
+    )
     BaseSelectorBootstrapAuthority.call(surface: :app, principal: @user)
-    BaseSelectorAuthority.prepare(surface: :app, principal: @user, session: @token)
   end
 
   test "initial response embeds the full page object, not just a component name" do
-    get(base_app_groups_url(ri: "jp", host: @host), headers: as_user_headers(@user, host: @host))
+    http_headers_12 = as_user_headers(@user, host: @host)
+    get(
+      base_app_identity_url(ri: "jp", host: @host), headers: http_headers_12,
+    )
 
     assert_response :success
 
     page = initial_page
 
-    assert_equal "base/app/groups/index", page.fetch("component")
-    assert_equal "Groups", page.dig("props", "title")
-    assert_kind_of Array, page.dig("props", "groups")
+    assert_equal "base/app/identities/show", page.fetch("component")
+    assert_equal "Identity", page.dig("props", "title")
+    assert_kind_of Array, page.dig("props", "sections")
     assert_equal ViteRuby.digest, page.fetch("version")
     assert page.fetch("encryptHistory"), "encrypt_history is configured on, so the page must carry it"
   end
@@ -36,16 +40,27 @@ class InertiaPageContractTest < ActionDispatch::IntegrationTest
   # visit and every history entry against it, so a wrong value desynchronises the SPA from the
   # address bar.
   test "initial page url is the requested path including the query string" do
-    get(base_app_groups_url(ri: "jp", host: @host), headers: as_user_headers(@user, host: @host))
+    http_headers_11 = as_user_headers(@user, host: @host)
+    get(
+      base_app_identity_url(ri: "jp", host: @host), headers: http_headers_11,
+    )
 
     assert_response :success
-    assert_equal "/groups?ri=jp", initial_page.fetch("url")
+    assert_equal "/identity?ri=jp", initial_page.fetch("url")
   end
 
   test "an Inertia visit returns the page object as JSON with the same current page url" do
+    http_headers_10 =
+      begin
+        fx0_version = ViteRuby.digest
+        begin
+          f0_headers = as_user_headers(@user, host: @host)
+          f0_headers
+        end.merge(inertia_headers(version: fx0_version))
+      end
     get(
-      base_app_groups_url(ri: "jp", host: @host),
-      headers: authenticated_inertia_headers(version: ViteRuby.digest),
+      base_app_identity_url(ri: "jp", host: @host),
+      headers: http_headers_10,
     )
 
     assert_response :success
@@ -54,48 +69,218 @@ class InertiaPageContractTest < ActionDispatch::IntegrationTest
 
     page = response.parsed_body
 
-    assert_equal "base/app/groups/index", page.fetch("component")
-    assert_equal "/groups?ri=jp", page.fetch("url")
+    assert_equal "base/app/identities/show", page.fetch("component")
+    assert_equal "/identity?ri=jp", page.fetch("url")
     assert_equal ViteRuby.digest, page.fetch("version")
   end
 
-  test "an Inertia visit carrying a stale asset version is answered with a hard location refresh" do
+  # Inertia.js 3 reads the initial page from a JSON <script> element keyed by the root element id.
+  # The older form, a `data-page` attribute on the root element, is not read by the client at all.
+  # The root element id is the inertia_rails default, and `createInertiaApp` is booted without an
+  # `id` override (gait/entrypoints/inertia.test.ts), so both sides meet on the upstream default.
+  test "initial response carries the page in a script element and leaves the root element bare" do
+    http_headers_9 = as_user_headers(@user, host: @host)
     get(
-      base_app_groups_url(ri: "jp", host: @host),
-      headers: authenticated_inertia_headers(version: "stale-asset-version"),
+      base_app_identity_url(ri: "jp", host: @host), headers: http_headers_9,
+    )
+
+    assert_response :success
+    assert_select "script[data-page='app'][type='application/json']", count: 1
+    assert_select "div#app", count: 1
+    assert_select "div[data-page]", count: 0
+  end
+
+  test "initial page script carries the response CSP nonce" do
+    http_headers_8 = as_user_headers(@user, host: @host)
+    get(
+      base_app_identity_url(ri: "jp", host: @host), headers: http_headers_8,
+    )
+
+    assert_response :success
+
+    nonce = css_select("meta[property='csp-nonce']").first["nonce"]
+
+    assert_predicate nonce, :present?
+    assert_equal nonce, css_select("script[data-page='app']").first["nonce"]
+  end
+
+  test "a page with no validation failure still carries an empty errors hash" do
+    http_headers_7 = as_user_headers(@user, host: @host)
+    get(
+      base_app_identity_url(ri: "jp", host: @host), headers: http_headers_7,
+    )
+
+    assert_response :success
+    assert_empty(initial_page.fetch("props").fetch("errors"))
+
+    http_headers_6 =
+      begin
+        fx1_version = ViteRuby.digest
+        begin
+          f1_headers = as_user_headers(@user, host: @host)
+          f1_headers
+        end.merge(inertia_headers(version: fx1_version))
+      end
+    get(
+      base_app_identity_url(ri: "jp", host: @host),
+      headers: http_headers_6,
+    )
+
+    assert_response :success
+    assert_empty(response.parsed_body.fetch("props").fetch("errors"))
+  end
+
+  test "history is encrypted and not cleared on an ordinary page, initial and Inertia alike" do
+    http_headers_5 = as_user_headers(@user, host: @host)
+    get(
+      base_app_identity_url(ri: "jp", host: @host), headers: http_headers_5,
+    )
+
+    assert_response :success
+    assert initial_page.fetch("encryptHistory")
+    # inertia_rails omits clearHistory from the page object when it is false.
+    assert_not initial_page.fetch("clearHistory", false)
+
+    http_headers_4 =
+      begin
+        fx2_version = ViteRuby.digest
+        begin
+          f2_headers = as_user_headers(@user, host: @host)
+          f2_headers
+        end.merge(inertia_headers(version: fx2_version))
+      end
+    get(
+      base_app_identity_url(ri: "jp", host: @host),
+      headers: http_headers_4,
+    )
+
+    assert_response :success
+    assert response.parsed_body.fetch("encryptHistory")
+    assert_not response.parsed_body.fetch("clearHistory", false)
+  end
+
+  # The page url is origin-relative by protocol: it never names a host, so one tenant's host cannot
+  # reach another tenant's page object through it. Partitions: several parameters, and a
+  # percent-encoded non-ASCII value, which must come back byte for byte rather than re-encoded.
+  test "page url keeps several query parameters and stays origin-relative" do
+    http_headers_3 =
+      begin
+        fx3_version = ViteRuby.digest
+        begin
+          f3_headers = as_user_headers(@user, host: @host)
+          f3_headers
+        end.merge(inertia_headers(version: fx3_version))
+      end
+    get(
+      base_app_identity_url(ri: "jp", page: "2", host: @host),
+      headers: http_headers_3,
+    )
+
+    assert_response :success
+    assert_equal "/identity?page=2&ri=jp", response.parsed_body.fetch("url")
+  end
+
+  test "page url keeps a percent-encoded non-ASCII query value unchanged" do
+    http_headers_2 =
+      begin
+        fx4_version = ViteRuby.digest
+        begin
+          f4_headers = as_user_headers(@user, host: @host)
+          f4_headers
+        end.merge(inertia_headers(version: fx4_version))
+      end
+    get(
+      "https://#{@host}/identity?ri=jp&q=%E6%9D%B1%E4%BA%AC%20a%2Bb",
+      headers: http_headers_2,
+    )
+
+    assert_response :success
+    assert_equal "/identity?ri=jp&q=%E6%9D%B1%E4%BA%AC%20a%2Bb", response.parsed_body.fetch("url")
+  end
+
+  # The version is derived from the Vite sources once per process, so a request for another
+  # tenant's host cannot make it differ.
+  test "asset version is identical for an Inertia page served on another surface host" do
+    http_headers_1 =
+      begin
+        fx5_version = ViteRuby.digest
+        begin
+          f5_headers = as_user_headers(@user, host: @host)
+          f5_headers
+        end.merge(inertia_headers(version: fx5_version))
+      end
+    get(
+      base_app_identity_url(ri: "jp", host: @host),
+      headers: http_headers_1,
+    )
+
+    assert_response :success
+
+    app_version = response.parsed_body.fetch("version")
+    com_host = configured_host(:base_corporate)
+
+    get(
+      base_com_preference_url(ri: "jp", host: com_host),
+      headers: { "Host" => com_host, "X-Inertia" => "true", "X-Inertia-Version" => app_version },
+    )
+
+    assert_response :success
+    assert_equal app_version, response.parsed_body.fetch("version")
+  end
+
+  # The stale-version refresh names the request's own origin. Sent to the com host, it must come
+  # back for the com host and never for the app host this test class otherwise uses.
+  test "a stale version refresh on another surface host names that host and keeps the query" do
+    com_host = configured_host(:base_corporate)
+
+    get(
+      base_com_preference_url(ri: "jp", host: com_host),
+      headers: { "Host" => com_host, "X-Inertia" => "true", "X-Inertia-Version" => "stale-asset-version" },
+    )
+
+    assert_response :conflict
+
+    location = URI.parse(response.headers["X-Inertia-Location"])
+
+    assert_equal com_host, location.host
+    assert_equal "/preference", location.path
+    assert_equal "ri=jp", location.query
+    assert_not_equal @host, location.host
+  end
+
+  test "an Inertia visit carrying a stale asset version is answered with a hard location refresh" do
+    http_headers_0 =
+      begin
+        fx6_version = "stale-asset-version"
+        begin
+          f6_headers = as_user_headers(@user, host: @host)
+          f6_headers
+        end.merge(inertia_headers(version: fx6_version))
+      end
+    get(
+      base_app_identity_url(ri: "jp", host: @host),
+      headers: http_headers_0,
     )
 
     assert_response :conflict
     assert_equal(
-      base_app_groups_url(ri: "jp", host: @host),
+      base_app_identity_url(ri: "jp", host: @host),
       response.headers["X-Inertia-Location"],
     )
   end
 
-  # An Inertia visit is a `fetch` call. A 302 is followed transparently by the browser, so the
-  # client receives the sign-in HTML page as the body of what it believes is an Inertia response,
-  # throws "All Inertia requests must receive a valid Inertia response", and leaves the SPA on the
-  # stale current page. The protocol's answer for leaving the Inertia application is a 409 with
-  # X-Inertia-Location, which the client turns into a full document visit.
-  test "an unauthenticated Inertia visit leaves the app with a location refresh, not a redirect" do
-    get(base_app_groups_url(ri: "jp", host: @host), headers: inertia_headers(version: ViteRuby.digest))
+  test "an unauthenticated Inertia visit redirects to neutral sign with its target" do
+    get(base_app_identity_url(ri: "jp", host: @host), headers: inertia_headers(version: ViteRuby.digest))
 
-    assert_response :conflict
-
-    location = response.headers["X-Inertia-Location"]
-
-    assert_predicate location, :present?
-
-    uri = URI.parse(location)
-
-    assert_equal @host, uri.host
-    assert_equal "/oauth/authorize", uri.path
+    assert_response :see_other
+    assert_redirected_to base_app_sign_show_path(ri: "jp", target_link_uri: "/identity")
   end
 
-  test "a plain unauthenticated browser request still redirects" do
-    get(base_app_groups_url(ri: "jp", host: @host), headers: host_headers(@host))
+  test "a plain unauthenticated browser request redirects to neutral sign with its target" do
+    get(base_app_identity_url(ri: "jp", host: @host), headers: host_headers(@host))
 
-    assert_response :redirect
+    assert_response :see_other
+    assert_redirected_to base_app_sign_show_path(ri: "jp", target_link_uri: "/identity")
   end
 
   private
@@ -111,10 +296,6 @@ class InertiaPageContractTest < ActionDispatch::IntegrationTest
     )
     headers["X-Inertia-Version"] = version if version
     headers
-  end
-
-  def authenticated_inertia_headers(version: nil)
-    as_user_headers(@user, host: @host).merge(inertia_headers(version: version))
   end
 
   def initial_page

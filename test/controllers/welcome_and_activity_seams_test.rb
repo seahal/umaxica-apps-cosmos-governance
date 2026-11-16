@@ -1,71 +1,34 @@
-# typed: false
 # frozen_string_literal: true
 
 require "test_helper"
 
-# The welcome hand-off page and the activity list are per-surface renderings of
-# shared state. The welcome page must offer the surface's own next step, and an
-# activity row must be serialised through the presenter so raw column values
-# never reach the page.
-class WelcomeAndActivitySeamsTest < ActiveSupport::TestCase
-  self.fixture_table_names = []
-
-  def harness_for(controller_class, &definition)
-    Class.new(controller_class) do
-      attr_accessor :params_hash, :rendered
-
-      def params
-        ActionController::Parameters.new(params_hash || {})
-      end
-
-      def render(*args, **kwargs)
-        self.rendered = [args, kwargs]
-      end
-
-      def invoke(name, ...) = send(name, ...)
-
-      class_eval(&definition) if definition
-    end.new.tap do |h|
-      h.params_hash = { ri: "jp" }
-      h.request = ActionDispatch::TestRequest.create
+class WelcomeAndActivitySeamsTest < ActionDispatch::IntegrationTest
+  test "ORG Welcome consistently offers its own next step without rewriting the local RP session" do
+    operator = Operator.create!(security_mode_id: SecurityModeConfigurable::ADVANCED, status_id: OperatorStatus::ACTIVE)
+    2.times do |index|
+      OperatorPasskey.create!(
+        staff: operator, webauthn_id: "welcome-fixture-#{index}", external_id: SecureRandom.uuid,
+        public_key: "welcome-fixture-key-#{index}", description: "Welcome fixture",
+        status_id: OperatorPasskeyStatus::ACTIVE,
+      )
     end
-  end
+    host = ENV.fetch("PUBLIC_BASE_STAFF_URL")
+    headers = as_staff_headers(operator, host: host)
+    session_id = Rack::Utils.parse_cookies_header(headers.fetch("Cookie")).fetch(
+      OidcRpBrowserCredentialContract::SESSION_COOKIE,
+    )
+    rp_session = RpBaseOrgSession.includes(:op_session_binding).find_by!(public_id: session_id)
+    original = rp_session.reload.attributes
+    count = RpBaseOrgSession.count
 
-  [Base::Com::WelcomesController, Base::Org::WelcomesController].each do |klass|
-    test "#{klass.name} offers its own next step on the welcome hand-off" do
-      harness = harness_for(klass)
-      harness.instance_variable_set(:@welcome_next_path, "/dashboard")
+    2.times do
+      get base_org_welcome_url(ri: "jp", host: host), headers: headers
 
-      harness.show
-
-      props = harness.rendered.last.fetch(:props)
-
-      assert_predicate props.fetch(:next_link).fetch(:href), :present?
-    end
-  end
-
-  [Base::Com::Identity::ActivitiesController, Base::Org::Identity::ActivitiesController].each do |klass|
-    test "#{klass.name} serialises an activity row through the presenter" do
-      presenter = Object.new
-      presenter.define_singleton_method(:occurred_at) { |_activity| Time.zone.local(2026, 9, 1, 12, 0, 0) }
-      presenter.define_singleton_method(:event_label) { |_activity| "Signed in" }
-      presenter.define_singleton_method(:ip_address) { |_activity| "203.0.113.5" }
-      presenter.define_singleton_method(:user_agent_summary) { |_activity| "Chrome" }
-      presenter.define_singleton_method(:login_method) { |_activity| "email" }
-      presenter.define_singleton_method(:login_method_label) { |_activity| "Email" }
-      presenter.define_singleton_method(:context_text) { |_activity| "from Tokyo" }
-
-      harness =
-        harness_for(klass) do
-          define_method(:activity_log) { presenter }
-        end
-      activity = Struct.new(:id, :event_id).new(7, 4)
-
-      row = harness.invoke(:serialize_activity, activity)
-
-      assert_equal "7", row.fetch(:id)
-      assert_equal "Signed in", row.fetch(:event_label)
-      assert_equal "203.0.113.5", row.fetch(:ip_address)
+      assert_response :success
+      assert_equal "/dashboard?ri=jp", inertia_props.fetch("next_link").fetch("href")
+      assert_equal count, RpBaseOrgSession.count
+      assert_equal original, rp_session.reload.attributes
+      assert_predicate RpBaseOrgSession.includes(:op_session_binding).find(rp_session.id), :active?
     end
   end
 end

@@ -7,18 +7,31 @@ class OrgOperatorLifecycleExecute
   def self.call(request:, actor:)
     new(request: request, actor: actor).call
   end
+  public_class_method :call
 
   def initialize(request:, actor:)
     @request = request
     @actor = actor
   end
 
+  public
   def call
     return failure("Only approved requests can be executed") unless request.approved?
     return failure("Requester cannot execute their own lifecycle request") if requested_by_actor?
 
+    if request.action.in?([OperatorLifecycleRequest::ACTION_JOIN, OperatorLifecycleRequest::ACTION_RESTORE])
+      raise AccessOpDataUnavailableError
+    end
+
     invitation = nil
+    @stop_events = []
     OrgPrincipalRecord.transaction do
+      if request.action.in?(
+        [OperatorLifecycleRequest::ACTION_WITHDRAW, OperatorLifecycleRequest::ACTION_SUSPEND,
+         OperatorLifecycleRequest::ACTION_TERMINATE,],
+      )
+        Operator.lock_availability_guard!
+      end
       invitation = execute_action!
       request.update!(
         status: OperatorLifecycleRequest::STATUS_EXECUTED,
@@ -26,6 +39,10 @@ class OrgOperatorLifecycleExecute
         executed_at: Time.current,
         invitation_id: invitation&.id,
       )
+      stop_events = @stop_events.dup.freeze
+      OrgPrincipalRecord.current_transaction.after_commit do
+        raise AccessOpDataUnavailableError if stop_events.any?
+      end
     end
 
     OrgOperatorLifecycleResult.new(success: true, request: request, error: nil, invitation: invitation)
@@ -40,7 +57,7 @@ class OrgOperatorLifecycleExecute
   def execute_action!
     case request.action
     when OperatorLifecycleRequest::ACTION_JOIN
-      create_invitation!
+      raise AccessOpDataUnavailableError
     when OperatorLifecycleRequest::ACTION_WITHDRAW
       withdraw_operator!
       nil
@@ -58,15 +75,6 @@ class OrgOperatorLifecycleExecute
     end
   end
 
-  def create_invitation!
-    result = OrgOperatorLifecycleInvitationIssuer.call(request: request, actor: actor)
-    raise ActiveRecord::RecordInvalid, request unless result.success?
-
-    result.invitation
-  end
-
-  # Leaving, with a window to change their mind: the operator is deactivated now
-  # and purged after GRACE_PERIOD unless `restore` runs first.
   def withdraw_operator!
     target = request.target_operator
     return if target.blank?
@@ -78,16 +86,16 @@ class OrgOperatorLifecycleExecute
     target.update!(
       withdrawal_started_at: target.withdrawal_started_at || now,
       deactivated_at: target.deactivated_at || now,
-      discarded_at: now,
-      purged_at: now + GRACE_PERIOD,
+      discard_at: now,
+      purge_eligible_at: now + GRACE_PERIOD,
     )
   end
 
   # Not leaving: a leave of absence or a disciplinary suspension. The person is
   # expected back, so this sets no deletion countdown at all -- only
   # `deactivated_at`, which is what `Withdrawable#suspended?` reads and what the
-  # authentication gates refuse. `withdrawal_started_at`, `discarded_at`, and
-  # `purged_at` stay untouched, so the record survives a leave of any length and
+  # authentication gates refuse. `withdrawal_started_at`, `discard_at`, and
+  # `purge_eligible_at` stay untouched, so the record survives a leave of any length and
   # `restore` brings it back.
   #
   # This used to share the withdrawal branch, which meant filing a suspension
@@ -115,8 +123,8 @@ class OrgOperatorLifecycleExecute
       withdrawal_started_at: target.withdrawal_started_at || now,
       deactivated_at: target.deactivated_at || now,
       withdrawn_at: target.withdrawn_at || now,
-      discarded_at: now,
-      purged_at: now,
+      discard_at: now,
+      purge_eligible_at: now,
     )
   end
 
@@ -133,13 +141,16 @@ class OrgOperatorLifecycleExecute
       withdrawal_started_at: nil,
       deactivated_at: nil,
       withdrawn_at: nil,
-      discarded_at: Float::INFINITY,
-      purged_at: Float::INFINITY,
+      discard_at: Float::INFINITY,
+      purge_eligible_at: Float::INFINITY,
     )
   end
 
+  # Advances the operator's authentication epoch and records the stop event in this Zenith
+  # transaction; the OP applies it after commit (R5-WU06).
   def revoke_target_sessions!(target)
-    target.staff_tokens.not_revoked.find_each(&:revoke!)
+    target.lock!
+    @stop_events << IdentityAuthenticationStopRecorder.call(actor: target, reason: "operator_#{request.action}")
   end
 
   # Logical delete: the row keeps (tid, oid), the protocol evidence, and
@@ -147,11 +158,8 @@ class OrgOperatorLifecycleExecute
   # It is deleted for real when the operator is purged
   # (RetentionCrossDatabaseChildPurge).
   #
-  # This writes to org_zenith while the surrounding transaction is on
-  # org_principal, so the two are not atomic. The order is chosen so the
-  # surviving inconsistency is the safe one: if the operator update then fails,
-  # the identity is already withdrawn and the person cannot sign in with Entra,
-  # rather than the reverse.
+  # Entra identity and actor records share the org_zenith transaction; OP delivery
+  # follows its commit on a separate connection.
   def withdraw_entra_identity!(target, status_id)
     identity = OperatorEntraIdentity.find_by(operator_id: target.id)
     return if identity.nil?
@@ -162,8 +170,7 @@ class OrgOperatorLifecycleExecute
   def ensure_not_last_active_operator!(target)
     active_count =
       Operator
-        .where(deactivated_at: nil, withdrawn_at: nil)
-        .where(Operator.arel_table[:discarded_at].gt(Time.current))
+        .capability_eligible_at(Time.current)
         .where.not(id: target.id)
         .count
     return if active_count.positive?

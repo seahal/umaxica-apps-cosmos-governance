@@ -1,4 +1,6 @@
+# frozen_string_literal: true
 # typed: false
+
 # == Schema Information
 #
 # Table name: org_preference_timezone_options
@@ -7,13 +9,11 @@
 #  id :bigint           not null, primary key
 #
 
-# frozen_string_literal: true
-
 require "test_helper"
 
 class OrgPreferenceTimezoneOptionTest < ActiveSupport::TestCase
   setup do
-    OrgPreferenceStatus.find_or_create_by!(id: OrgPreferenceStatus::NOTHING)
+    OrgPreferenceStatus.find_or_create_by!(id: OrgPreferenceStatus::ACTIVE)
   end
 
   test "ensure_defaults! creates default timezone options" do
@@ -34,7 +34,10 @@ class OrgPreferenceTimezoneOptionTest < ActiveSupport::TestCase
 
   test "has many org_preference_timezones" do
     option = OrgPreferenceTimezoneOption.create!(id: 99)
-    preference = OrgPreference.create!
+    preference = OrgPreference.create!(
+      jti: SecureRandom.uuid, last_issued_at: Time.current,
+      last_issued_expires_at: 400.days.from_now,
+    )
     timezone = OrgPreferenceTimezone.create!(preference: preference, option: option)
 
     assert_includes option.org_preference_timezones, timezone
@@ -42,7 +45,10 @@ class OrgPreferenceTimezoneOptionTest < ActiveSupport::TestCase
 
   test "restricts deletion when associated records exist" do
     option = OrgPreferenceTimezoneOption.create!(id: 99)
-    preference = OrgPreference.create!
+    preference = OrgPreference.create!(
+      jti: SecureRandom.uuid, last_issued_at: Time.current,
+      last_issued_expires_at: 400.days.from_now,
+    )
     OrgPreferenceTimezone.create!(preference: preference, option: option)
 
     assert_raises(ActiveRecord::RecordNotDestroyed) do

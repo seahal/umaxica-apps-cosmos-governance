@@ -7,6 +7,8 @@
 # `current_operator.staff_passkeys`. `index?`/`create?` gate the actor *type*; the per-record
 # rules require ownership (record.staff_id == operator.id). Mirrors ClientPasskeyPolicy.
 class OperatorPasskeyPolicy < ApplicationPolicy
+  public
+
   def index?
     user.present?
   end
@@ -39,5 +41,12 @@ class OperatorPasskeyPolicy < ApplicationPolicy
     return relation.none unless user
 
     relation.where(staff_id: user.id)
+  end
+  def management_requirement(token:)
+    raise AccessOpDataUnavailableError
+  end
+
+  def management_authorized?(token:, now:)
+    raise AccessOpDataUnavailableError
   end
 end

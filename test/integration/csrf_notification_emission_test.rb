@@ -31,11 +31,10 @@ class CsrfNotificationEmissionTest < ActionDispatch::IntegrationTest
   end
 
   test "the subscribed names match the names Rails 8.2 actually instruments" do
-    source = Rails.root.join(
-      "vendor/bundle/ruby/4.0.0/bundler/gems",
-    ).glob("rails-*/actionpack/lib/action_controller/metal/request_forgery_protection.rb").first
+    source = Pathname(Gem.loaded_specs.fetch("actionpack").full_gem_path)
+      .join("lib/action_controller/metal/request_forgery_protection.rb")
 
-    skip "Rails source is not vendored in this environment" if source.nil?
+    assert_predicate source, :file?
 
     instrumented = source.read.scan(/instrument_csrf_event\s+"([^"]+)"/).flatten.uniq
 
@@ -44,29 +43,24 @@ class CsrfNotificationEmissionTest < ActionDispatch::IntegrationTest
                  "#{SUBSCRIBED_EVENTS.inspect}. A renamed or added event would go unrecorded."
   end
 
-  test "a cross-site POST is blocked and emits csrf_request_blocked with a usable payload" do
+  test "a cross-site PATCH is blocked and emits csrf_request_blocked with a usable payload" do
+    prepare_base_preference_entry!
     events =
       capture_csrf_events do
-        with_forgery_protection do
-          post(
-            auth_app_sign_in_email_url(ri: "jp"),
-            params: { user_email: { address: "csrf-probe@example.com" } },
-            headers: { "Host" => ENV.fetch("PUBLIC_AUTH_SERVICE_URL", "auth.app.localhost"),
-                       "Sec-Fetch-Site" => "cross-site", },
-          )
-        end
+        patch_cross_site_preference
       end
 
     blocked = events.find { |event| event.name == "csrf_request_blocked.action_controller" }
 
-    assert_not_nil blocked, "A cross-site POST must emit csrf_request_blocked. Got: #{events.map(&:name).inspect}"
+    assert_not_nil blocked, "A cross-site PATCH must emit csrf_request_blocked. Got: #{events.map(&:name).inspect}"
     assert_equal "cross-site", blocked.payload[:sec_fetch_site]
     assert_predicate blocked.payload[:controller], :present?
     assert_predicate blocked.payload[:action], :present?
   end
 
   test "the subscriber records a blocked request without logging the request or message" do
-    output = capture_logs { post_cross_site_sign_in }
+    prepare_base_preference_entry!
+    output = capture_logs { patch_cross_site_preference }
 
     assert_match "security.csrf.request_blocked", output,
                  "The subscriber must turn the Rails event into an application log event."
@@ -83,10 +77,10 @@ class CsrfNotificationEmissionTest < ActionDispatch::IntegrationTest
   # config/application.rb turns that off so the redacted event is the only record;
   # config/environments/development.rb turns it back on for local diagnosis.
   FRAMEWORK_WARNING_SHAPES = [
-    /didn't match request\.base_url/,
-    /indicates a cross-site request/,
-    /Sec-Fetch-Site header is missing or invalid/,
-    /Can't verify CSRF token authenticity/,
+    /\AHTTP Origin header .*didn't match request\.base_url/,
+    /\ASec-Fetch-Site header \(cross-site\) indicates a cross-site request/,
+    /\ASec-Fetch-Site header is missing or invalid/,
+    /\ACan't verify CSRF token authenticity/,
   ].freeze
 
   # A blocked request also produces `rescue_from handled ActionController::
@@ -105,7 +99,8 @@ class CsrfNotificationEmissionTest < ActionDispatch::IntegrationTest
   RESCUE_FROM_LINE_MARKER = "rescue_from handled"
 
   test "a blocked request is recorded once, by the subscriber, with no framework CSRF warning" do
-    output = capture_logs { post_cross_site_sign_in }
+    prepare_base_preference_entry!
+    output = capture_logs { patch_cross_site_preference }
 
     assert_equal 1, output.scan("security.csrf.request_blocked").size,
                  "The blocked request must be recorded exactly once."
@@ -123,15 +118,19 @@ class CsrfNotificationEmissionTest < ActionDispatch::IntegrationTest
 
   private
 
-  def post_cross_site_sign_in
+  def patch_cross_site_preference
     with_forgery_protection do
-      post(
-        auth_app_sign_in_email_url(ri: "jp"),
-        params: { user_email: { address: "csrf-probe@example.com" } },
-        headers: { "Host" => ENV.fetch("PUBLIC_AUTH_SERVICE_URL", "auth.app.localhost"),
-                   "Sec-Fetch-Site" => "cross-site", },
+      patch(
+        "/preference/theme",
+        params: { ri: "jp" },
+        headers: { "Origin" => "https://attacker.example", "Sec-Fetch-Site" => "cross-site" },
       )
     end
+  end
+
+  def prepare_base_preference_entry!
+    host!(ENV.fetch("PUBLIC_BASE_SERVICE_URL"))
+    https!
   end
 
   # Both loggers have to be swapped: the application subscriber writes through

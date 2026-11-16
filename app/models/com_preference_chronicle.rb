@@ -1,4 +1,6 @@
+# frozen_string_literal: true
 # typed: false
+
 # == Schema Information
 #
 # Table name: com_preference_chronicles
@@ -8,11 +10,11 @@
 #  actor_type     :text             default(""), not null
 #  context        :jsonb            not null
 #  current_value  :text             default(""), not null
-#  discarded_at   :datetime         default(Infinity), not null
+#  discard_at   :datetime         default(Infinity), not null
 #  ip_address     :inet             default(#<IPAddr: IPv4:0.0.0.0/255.255.255.255>), not null
 #  occurred_at    :datetime         not null
 #  previous_value :text             default(""), not null
-#  purged_at      :datetime         not null
+#  purge_eligible_at      :datetime         not null
 #  subject_type   :text             not null
 #  created_at     :datetime         not null
 #  updated_at     :datetime         not null
@@ -29,7 +31,7 @@
 #  index_com_preference_chronicles_on_event_id                  (event_id)
 #  index_com_preference_chronicles_on_level_id                  (level_id)
 #  index_com_preference_chronicles_on_occurred_at               (occurred_at)
-#  index_com_preference_chronicles_on_purged_at                 (purged_at)
+#  index_com_preference_chronicles_on_purge_eligible_at                 (purge_eligible_at)
 #  index_com_preference_chronicles_on_subject_id                (subject_id)
 #
 # Foreign Keys
@@ -38,19 +40,29 @@
 #  fk_rails_...  (level_id => com_preference_chronicle_levels.id)
 #
 
-# frozen_string_literal: true
-
 class ComPreferenceChronicle < ChronicleRecord
-  self.belongs_to_required_by_default = false
+  # Shared writer locks and an exclusive purge lock coordinate the cross-database audit check.
+  PREFERENCE_AUDIT_LOCK_KEY = 88_038_921_016_973
 
   include Retainable
 
+  attribute :discard_at, :datetime, default: -> { Retainable::SENTINEL }
+  attribute :purge_eligible_at, :datetime, default: -> { Retainable::SENTINEL }
+  validates :discard_at, presence: true
+  validates :purge_eligible_at, presence: true
+  validate :retention_order_valid
+  validate :retention_times_not_before_created_at, on: :update
+  Retainable.register_host(self)
+
+  # Other subject types are valid; the guarded callback checks ComPreference references.
   belongs_to :com_preference,
              class_name: "ComPreference",
              foreign_key: :subject_id,
              primary_key: :id,
-             inverse_of: :com_preference_chronicles
-  belongs_to :actor, polymorphic: true
+             inverse_of: :com_preference_chronicles,
+             optional: true
+  # Audit actors may be omitted or belong to another record type.
+  belongs_to :actor, polymorphic: true, optional: true
   belongs_to :com_preference_chronicle_level, foreign_key: :level_id, inverse_of: :com_preference_chronicles
   belongs_to :com_preference_chronicle_event,
              class_name: "ComPreferenceChronicleEvent",
@@ -61,8 +73,35 @@ class ComPreferenceChronicle < ChronicleRecord
 
   validates :event_id, length: { maximum: 255 }
   validates :level_id, length: { maximum: 255 }
+  validates :subject_id, exclusion: { in: [nil] }
   before_validation :default_actor_to_preference
+  before_create :coordinate_preference_reference!
+  before_update :coordinate_preference_reference!, if: :preference_reference_changing?
+
+  def self.lock_preference_audit_writers!
+    connection_pool.with_connection do |connection|
+      unless connection.transaction_open?
+        raise ActiveRecord::TransactionIsolationError, "Chronicle transaction is required"
+      end
+
+      connection.execute("SELECT pg_advisory_xact_lock_shared(#{PREFERENCE_AUDIT_LOCK_KEY})")
+    end
+  end
+
+  def self.lock_preference_audit_for_purge!
+    connection_pool.with_connection do |connection|
+      unless connection.transaction_open?
+        raise ActiveRecord::TransactionIsolationError, "Chronicle transaction is required"
+      end
+
+      connection.execute("SELECT pg_advisory_xact_lock(#{PREFERENCE_AUDIT_LOCK_KEY})")
+    end
+  end
+
+  public_class_method :lock_preference_audit_writers!, :lock_preference_audit_for_purge!
+
   # Helper methods for compatibility
+  public
   def com_preference
     return if subject_id.blank?
 
@@ -79,5 +118,26 @@ class ComPreferenceChronicle < ChronicleRecord
     return unless subject_id.present? && subject_type == "ComPreference"
 
     self.actor = com_preference
+  end
+
+  private
+
+  def preference_reference_changing?
+    will_save_change_to_subject_id? || will_save_change_to_subject_type? ||
+      will_save_change_to_actor_id? || will_save_change_to_actor_type?
+  end
+
+  def coordinate_preference_reference!
+    return unless subject_type == "ComPreference" || actor_type == "ComPreference"
+
+    self.class.lock_preference_audit_writers!
+    ComSettingRecord.connected_to(role: :writing) do
+      if subject_type == "ComPreference" && !ComPreference.exists?(id: subject_id)
+        raise ActiveRecord::RecordNotFound, "com preference audit subject is missing"
+      end
+      if actor_type == "ComPreference" && !ComPreference.exists?(id: actor_id)
+        raise ActiveRecord::RecordNotFound, "com preference audit actor is missing"
+      end
+    end
   end
 end

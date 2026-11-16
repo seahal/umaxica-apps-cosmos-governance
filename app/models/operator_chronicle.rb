@@ -10,11 +10,11 @@
 #  actor_type     :text             default(""), not null
 #  context        :jsonb            not null
 #  current_value  :text             default(""), not null
-#  discarded_at   :datetime         default(Infinity), not null
+#  discard_at   :datetime         default(Infinity), not null
 #  ip_address     :inet             default(#<IPAddr: IPv4:0.0.0.0/255.255.255.255>), not null
 #  occurred_at    :datetime         not null
 #  previous_value :text             default(""), not null
-#  purged_at      :datetime         not null
+#  purge_eligible_at      :datetime         not null
 #  subject_type   :text             not null
 #  created_at     :datetime         not null
 #  updated_at     :datetime         not null
@@ -30,7 +30,7 @@
 #  index_operator_chronicles_on_event_id                  (event_id)
 #  index_operator_chronicles_on_level_id                  (level_id)
 #  index_operator_chronicles_on_occurred_at               (occurred_at)
-#  index_operator_chronicles_on_purged_at                 (purged_at)
+#  index_operator_chronicles_on_purge_eligible_at                 (purge_eligible_at)
 #  index_operator_chronicles_on_subject_id                (subject_id)
 #  index_staff_activities_on_actor                        (actor_type,actor_id)
 #
@@ -43,6 +43,21 @@
 class OperatorChronicle < ChronicleRecord
   include Retainable
 
+  attribute :discard_at, :datetime, default: -> { Retainable::SENTINEL }
+  attribute :purge_eligible_at, :datetime, default: -> { Retainable::SENTINEL }
+  validates :discard_at, presence: true
+  validates :purge_eligible_at, presence: true
+  validate :retention_order_valid
+  validate :retention_times_not_before_created_at, on: :update
+  Retainable.register_host(self)
+
+  attribute :level_id, default: OperatorChronicleLevel::NOTHING
+
+  # Alias for backward compatibility
+  alias_attribute :timestamp, :occurred_at
+
+  encrypts :previous_value
+
   belongs_to :staff_chronicle_event, class_name: "OperatorChronicleEvent", foreign_key: :event_id,
                                      inverse_of: :staff_chronicles
   belongs_to :actor, polymorphic: true
@@ -52,18 +67,39 @@ class OperatorChronicle < ChronicleRecord
   validates :subject_id, presence: true
   validates :subject_type, presence: true
 
-  attribute :level_id, default: OperatorChronicleLevel::NOTHING
-
-  scope :recent_activity_first, -> { order(arel_table[:occurred_at].desc, arel_table[:created_at].desc) }
-
   validates :event_id, numericality: { only_integer: true }, allow_nil: true
   validates :level_id, numericality: { only_integer: true }, allow_nil: true
   # Validate that event_id exists in staff_chronicle_events table
+  validate :halted_flow_correlation_keys
+  # These normalized expression terms and conditions match the partial unique index exactly.
+  validates_with JsonbTextUniquenessValidator,
+                 attributes: [JsonbTextUniquenessValidator::TRANSACTION_PUBLIC_ID_INDEX_COLUMN],
+                 scope: JsonbTextUniquenessValidator::HALT_GENERATION_INDEX_COLUMN,
+                 source_attribute: :context,
+                 keys: %w(transaction_public_id halt_generation),
+                 where: { event_id: OperatorChronicleEvent::SIGN_FLOW_HALTED },
+                 conditions: -> { where(event_id: OperatorChronicleEvent::SIGN_FLOW_HALTED) }
   validate :event_id_must_exist
   before_validation :default_actor_to_subject
   # Helper methods for compatibility with existing code
   before_create :set_timestamp
 
+  scope :recent_activity_first, -> { order(arel_table[:occurred_at].desc, arel_table[:created_at].desc) }
+
+  def halted_flow_correlation_keys
+    return unless event_id == OperatorChronicleEvent::SIGN_FLOW_HALTED
+
+    identity = context.is_a?(Hash) ? context.stringify_keys : {}
+    valid_identity =
+      %w(transaction_public_id halt_generation).all? do |key|
+        identity.key?(key) && !identity[key].nil?
+      end
+
+    errors.add(:context, :invalid) unless valid_identity
+  end
+  private :halted_flow_correlation_keys
+
+  public
   def set_timestamp
     self.timestamp ||= Time.current
   end
@@ -76,9 +112,6 @@ class OperatorChronicle < ChronicleRecord
     self.subject_id = staff.id.to_s
     self.subject_type = "Operator"
   end
-
-  # Alias for backward compatibility
-  alias_attribute :timestamp, :occurred_at
 
   def event_id_must_exist
     return if event_id.blank?
@@ -105,6 +138,4 @@ class OperatorChronicle < ChronicleRecord
     self.actor_id = subject_id
     self.actor_type = subject_type
   end
-
-  encrypts :previous_value
 end

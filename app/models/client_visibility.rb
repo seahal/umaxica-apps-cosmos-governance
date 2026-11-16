@@ -18,6 +18,8 @@ class ClientVisibility < AppPrincipalRecord
   BOTH = 3
   DEFAULTS = [NOTHING, USER, STAFF, BOTH].freeze
 
+  self.record_timestamps = false
+
   has_many :users, class_name: "Client",
                    foreign_key: :visibility_id,
                    dependent: :restrict_with_error,

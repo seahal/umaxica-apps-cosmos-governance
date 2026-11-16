@@ -24,13 +24,12 @@ class ActorContextTest < ActiveSupport::TestCase
     assert_not Actor.signed_up?
     assert_nil Actor.client
     assert_nil Actor.operator
-    assert_nil Actor.visitor
     assert_equal Actor::Authentication::NULL, Actor.authn
     assert_equal Actor::Configuration::NULL, Actor.configuration
   end
 
   test "setting client actor" do
-    user = Client.new(id: 123)
+    user = Client.new(security_mode_id: SecurityModeConfigurable::NORMAL, id: 123)
     Actor.actor = user
     Actor.actor_type = :client
 
@@ -45,7 +44,7 @@ class ActorContextTest < ActiveSupport::TestCase
   end
 
   test "signed_up is false for authenticated actor without persisted identity" do
-    Actor.actor = Client.new
+    Actor.actor = Client.new(security_mode_id: SecurityModeConfigurable::NORMAL)
     Actor.actor_type = :client
 
     assert_predicate Actor, :signed_in?
@@ -56,7 +55,6 @@ class ActorContextTest < ActiveSupport::TestCase
     assert_predicate Actor.authn, :null?
     assert_nil Actor.authn.login_public_id
     assert_equal [], Actor.authn.amr
-    assert_not Actor.authn.restricted?
     assert_not Actor.authn.verified?
   end
 
@@ -97,7 +95,7 @@ class ActorContextTest < ActiveSupport::TestCase
   end
 
   test "setting staff actor" do
-    staff = Operator.new(id: 456)
+    staff = Operator.new(security_mode_id: SecurityModeConfigurable::ADVANCED, id: 456)
     Actor.actor = staff
     Actor.actor_type = :operator
 
@@ -106,18 +104,6 @@ class ActorContextTest < ActiveSupport::TestCase
     assert_predicate Actor, :operator?
     assert_predicate Actor, :authenticated?
     assert_equal staff, Actor.operator
-  end
-
-  test "setting visitor actor" do
-    visitor = Visitor.new(id: 789)
-    Actor.actor = visitor
-    Actor.actor_type = :visitor
-
-    assert_equal visitor, Actor.actor
-    assert_equal :visitor, Actor.actor_type
-    assert_predicate Actor, :visitor?
-    assert_predicate Actor, :authenticated?
-    assert_equal visitor, Actor.visitor
   end
 
   test "resets preference to NULL" do

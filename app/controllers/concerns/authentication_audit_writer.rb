@@ -58,6 +58,7 @@ class AuthenticationAuditWriter
       audit
     end
   end
+  public_class_method :write!
 
   # Writes audit record with best-effort semantics.
   # Returns true on success, false on failure.
@@ -89,15 +90,17 @@ class AuthenticationAuditWriter
 
     false
   end
+  public_class_method :write
 
   # Builds audit record without saving
   def self.build_audit(audit_class, event_id, resource:, actor:, ip_address:, context: {})
-    audit = audit_class.new(
+    attributes = {
       actor: actor,
       event_id: event_id,
-      ip_address: ip_address,
       occurred_at: Time.current,
-    )
+    }
+    attributes[:ip_address] = ip_address if ip_address.present?
+    audit = audit_class.new(attributes)
     audit.context = context if context.present? && audit.respond_to?(:context=)
 
     if actor
@@ -119,6 +122,7 @@ class AuthenticationAuditWriter
 
     audit
   end
+  public_class_method :build_audit
 
   # Tier 2: persist a recovery record so the missed audit can be
   # replayed by a background job or by ops. Sanitises context before
@@ -258,6 +262,8 @@ class AuthenticationAuditWriter
         "LOGOUT" => ClientChronicleEvent::LOGOUT,
         "LOGIN_FAILED" => ClientChronicleEvent::LOGIN_FAILED,
         "TOKEN_REFRESHED" => ClientChronicleEvent::TOKEN_REFRESHED,
+        "STEP_UP_FAILED" => ClientChronicleEvent::STEP_UP_FAILED,
+        "REFRESH_TOKEN_REUSE_DETECTED" => ClientChronicleEvent::REFRESH_TOKEN_REUSE_DETECTED,
       }
     when "OperatorChronicle"
       {
@@ -266,6 +272,8 @@ class AuthenticationAuditWriter
         "LOGOUT" => OperatorChronicleEvent::LOGOUT,
         "LOGIN_FAILED" => OperatorChronicleEvent::LOGIN_FAILED,
         "TOKEN_REFRESHED" => OperatorChronicleEvent::TOKEN_REFRESHED,
+        "STEP_UP_FAILED" => OperatorChronicleEvent::STEP_UP_FAILED,
+        "REFRESH_TOKEN_REUSE_DETECTED" => OperatorChronicleEvent::REFRESH_TOKEN_REUSE_DETECTED,
       }
     when "AppPreferenceChronicle"
       {
@@ -333,6 +341,8 @@ class AuthenticationAuditWriter
 
   private_class_method :ensure_chronicle_references!
   private_class_method :normalize_event_id
+
+  private_class_method :enqueue_outbox_fallback!
 end
 
 # rubocop:enable Metrics/MethodLength

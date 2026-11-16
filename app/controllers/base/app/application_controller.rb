@@ -6,57 +6,68 @@ module Base
     class ApplicationController < ActionController::Base
       include ::FqdnAvailabilityGate
       include ::RateLimit
+      include ::DefaultNoStore
       include ::JumpRtReturnVerification
 
       include ::Session
 
       include ::PreferenceGlobal
+      include ::BasePreferenceActorProjection
 
-      include ::PreferenceAdoption
+      include ::BrowserRpAuthentication
+      include ::BrowserRpUnsafeRequestGuard
+      include ::BaseRpSignInRedirect
+      include ::AuthenticationWithdrawalGate
 
-      include ::AuthenticationClient
+      include ::BaseAdmissionBrowserBinding
       include ::SignErrorResponses
-      include ::TrustedOriginForgeryProtection
-      include ::SessionLimitGate
       include ::AuthorizationAudit
-
       include ::AuthorizationClient
-
       include ::VerificationClient
-
       include ActionPolicy::Controller
-      include ::RestrictedSessionGuard
-
-      include ::OidcSsoInitiator
-      include SurfaceRouteAliasHelper
       include ::ActorSupport
-
       include ::Finisher
 
+      PREFERENCE_WRITE_CONTEXT = {
+        surface_key: "base/app",
+        realm: "app",
+        preference_model: AppPreference,
+        issuer_id: "preference_app",
+      }.freeze
+
       AUTHENTICATION_MODE = :deny_all
+
+      prepend_before_action :enforce_fqdn_availability!
+
+      after_action :verify_private_action_authorized!
+      after_action :apply_authenticated_page_cache_policy!
+      helper_method :current_resource, :browser_rp_authenticated?,
+                    :current_browser_session_security_context, :current_session_public_id,
+                    :current_session, :logged_in?
+      prepend_before_action :guard_browser_rp_unsafe_request!
 
       layout "base/app/application"
 
       authorize :user, through: :current_policy_user
       authorize :actor, through: :current_actor
-      rescue_from AuthenticationBase::LoginCooldownError, with: :render_login_cooldown
       rescue_from ApplicationError, with: :handle_application_error
+      rescue_from BaseZenithIdentityResolver::DependencyUnavailable, with: :render_base_zenith_identity_unavailable
+      rescue_from ::Oidc::AcmeServiceOrigin::ConfigurationUnavailable, with: :render_oidc_authority_unavailable
       rescue_from ActionController::InvalidCrossOriginRequest, with: :handle_csrf_failure
       rescue_from ActionPolicy::Unauthorized, with: :handle_authorization_error
-      helper_method :current_actor, :current_account, :current_session_public_id, :current_session_restricted?,
-                    :signed_pt_param, :current_client, :logged_in?, :active_client?, :logged_in_client?,
-                    :apple_only_credential?
+      helper_method :current_actor, :current_session_public_id,
+                    :current_client, :logged_in?
 
       allow_browser versions: :modern
 
       # NOTE: Order matters (dependencies rely on this sequence)
       # Layer order: explicit RateLimit -> CurrentContext -> Preference -> AuthN ->
-      # CurrentActor -> side-effect reflection -> Verification -> AuthZ
+      # CurrentActor -> effect reflection -> Verification -> AuthZ
       # Existing jump-return handling runs before rate limiting; keep that order
       # for this extraction and review the risk in a follow-up lifecycle PR.
       before_action :verify_jump_return_rt!, if: :jump_return_rt_request?
       # Surface-wide default web request limit (defense-in-depth baseline).
-      # RateLimit stays a side-effect-free helper; the limit and its numeric
+      # RateLimit stays an effect-free helper; the limit and its numeric
       # value are declared here on the inheriting controller.
       rate_limit(
         to: 300,
@@ -74,88 +85,209 @@ module Base
       before_action :resolve_param_context
       before_action :set_region
 
-      # HTML requests may rotate refresh tokens before the Actor snapshot is finalized.
-      before_action :transparent_refresh_access_token, unless: -> { request.format.json? }
       before_action :set_current_actor
+      before_action :hydrate_base_preference_actor_state
       before_action :apply_localization_preferences
       # These side effects reflect Actor.preferences for the current request only.
       before_action :set_locale
       before_action :set_timezone
       before_action :set_color_theme
       before_action :enforce_withdrawal_gate!
-      before_action :enforce_restricted_session_guard!
-      before_action :enforce_verification_if_required
+      before_action :enforce_verification_if_required, unless: :unavailable_authenticated_rp_root_feature
       before_action :enforce_access_policy!
+      before_action :refuse_unavailable_rp_root_feature!
       before_action :set_current_observability
       prepend_around_action :with_actor_lifecycle
 
-      # Base app accepts ordinary browser POSTs only from its own Base host.
-      # Cross-surface protocol endpoints declare their trusted origins locally.
-      protect_from_forgery using: :header_or_legacy_token,
-                           trusted_origins: JitHostOriginEnv.trusted_origins(
-                             ENV.fetch("PUBLIC_BASE_SERVICE_URL"),
-                           ),
-                           with: :exception
+      # Rails validates Origin and Fetch Metadata first; require its session-bound token before surface callbacks.
+      prepend_before_action :require_authenticity_token_for_unsafe_request!
+      protect_from_forgery using: :header_or_legacy_token, with: :exception, prepend: true
+      ensure_fqdn_gate_first!
+      prepend_before_action :apply_default_no_store
 
       public
 
-      def oidc_client_id
-        # Historical name for Base's own browser/local-session RP client; Base does not own this callback.
-        "base-rails-rp"
-      end
+      def current_resource
+        state = browser_rp_access_state
+        return unless state.status == :valid
 
-      def oidc_sign_host
-        ENV.fetch("PUBLIC_AUTH_SERVICE_URL")
-      end
-
-      def oidc_base_authority_host
-        ENV.fetch("PUBLIC_BASE_SERVICE_URL")
-      end
-
-      def oidc_acme_host
-        oidc_base_authority_host
-      end
-
-      def oidc_base_host
-        ENV.fetch("PUBLIC_BASE_SERVICE_URL")
+        case state.rp_session
+        when RpBaseAppSession
+          BaseZenithIdentityResolver.call(access_state: state, surface: :app)
+        else
+          raise ActiveRecord::RecordNotFound, "Base APP identity has no recognized session binding"
+        end
       end
 
       private
 
-      def apple_only_credential?
-        AppleOnlyCredentialStatus.call(current_client)
+      def resolve_rp_cell_access(access_token)
+        state = super
+        BaseZenithIdentityResolver.call(access_state: state, surface: :app) if state.status == :valid
+        state
+      rescue BaseZenithIdentityResolver::WithdrawalRequired
+        @current_rp_authentication_payload = nil
+        withdrawal_required_browser_rp_access
+      rescue BaseZenithIdentityResolver::LoginBlocked
+        @current_rp_authentication_payload = nil
+        invalid_browser_rp_access
       end
 
-      # The Inertia props for the "add another sign-in method" prompt, or nil when the actor already
-      # has another credential. Returning nil keeps the decision on the server: a page that is not
-      # given the prop cannot show the prompt.
-      def apple_only_credential_warning_props
-        return unless apple_only_credential?
-
-        {
-          heading: t("base.app.identity.credential_warning.heading"),
-          body: t("base.app.identity.credential_warning.body"),
-          items: [
-            {
-              label: t("base.app.identity.credential_warning.passkey"),
-              href: apple_only_credential_auth_url(:new_auth_app_settings_passkey_url),
-            },
-            {
-              label: t("base.app.identity.credential_warning.google"),
-              href: apple_only_credential_auth_url(:edit_auth_app_settings_google_url),
-            },
-          ],
-        }
+      def render_oidc_authority_unavailable
+        response.set_header("Cache-Control", "no-store")
+        render plain: I18n.t("errors.messages.temporarily_unavailable"), status: :service_unavailable,
+               content_type: "text/plain"
       end
 
-      def apple_only_credential_auth_url(route_helper)
-        public_send(
-          route_helper,
-          ri: params[:ri],
-          host: ENV.fetch("PUBLIC_AUTH_SERVICE_URL"),
-          protocol: "https",
+      def refuse_unavailable_rp_root_feature!
+        feature = unavailable_authenticated_rp_root_feature
+        return unless feature
+
+        Rails.logger.info(
+          JitLogEvent.format(
+            "auth.rp_feature.refused", reason_code: "rp_root_session_unavailable", feature: feature,
+                                       surface: "base_app", request_id: request.request_id,
+          ),
         )
+        response.set_header("Cache-Control", "private, no-store")
+        render plain: t("auth.rp_feature_unavailable"), status: :service_unavailable
       end
+
+      def unavailable_authenticated_rp_root_feature
+        return @unavailable_authenticated_rp_root_feature if defined?(@unavailable_authenticated_rp_root_feature)
+
+        state = browser_rp_access_state
+        return @unavailable_authenticated_rp_root_feature = nil unless
+          state.status == :valid && state.rp_session.is_a?(RpBaseAppSession)
+
+        @unavailable_authenticated_rp_root_feature = unavailable_rp_root_feature
+      end
+
+      def unavailable_rp_root_feature
+        case controller_path
+        when "base/app/secrets", "base/app/secret_issuances", "base/app/secret_presentations"
+          "secret_management"
+        when "base/app/identity/sessions"
+          "session_management"
+        when "base/app/verifications"
+          "secret_verification" if secret_verification_request?
+        end
+      end
+
+      def secret_verification_request?
+        return true if params[:scope] == "settings_secret_credential"
+        return false unless params[:scope] == "settings_passkey"
+
+        target = params[:return_target]
+        target = resolve_step_up_pt(params[:pt]) if target.nil?
+        target.is_a?(String) && %r{\A/secret_issuances(?:/|\?|\z)}.match?(target)
+      end
+
+      def step_up_challenge_layout = "base/app/application"
+
+      def require_authenticity_token_for_unsafe_request!
+        return unless protect_against_forgery?
+        return if request.get? || request.head? || verified_query_request?
+        return if any_authenticity_token_valid?
+
+        instrument_unverified_request
+        handle_unverified_request
+      end
+
+      def current_verification_actor
+        current_client
+      end
+
+      def preference_write_actor
+        resource = preference_current_resource
+        return unless resource
+
+        raise ActiveRecord::RecordNotFound, "Base preference actor has the wrong type" unless
+          resource.instance_of?(Client)
+
+        resource
+      end
+
+      def preference_write_context = PREFERENCE_WRITE_CONTEXT
+
+      def render_base_zenith_identity_unavailable
+        response.set_header("Cache-Control", "no-store")
+        head :service_unavailable
+      end
+
+      def browser_rp_client_id
+        "base-app-ww"
+      end
+
+      def browser_rp_resource_type
+        "client"
+      end
+
+      def oidc_client_id
+        browser_rp_client_id
+      end
+
+      private
+
+      def rp_cell_issuer
+        rp_op_origin.origin
+      end
+
+      def rp_cell_jwks_client
+        OidcOpJwksClient.for_jwks_uri(rp_op_jwks_uri)
+      end
+
+      def rp_client_id = oidc_client_id
+
+      def rp_realm = rp_cell_binding.realm
+
+      def rp_resource_type = browser_rp_resource_type
+
+      def rp_log_surface = "base_app"
+
+      def rp_cell_binding = RpCellBinding.fetch("rp_base_app")
+
+      def rp_record_class = RpBaseAppRecord
+
+      def rp_session_class = RpBaseAppSession
+
+      def rp_notice_face = "app"
+
+      def rp_op_jwks_uri = rp_op_origin.jwks_uri
+
+      def rp_op_origin
+        return @rp_op_origin if defined?(@rp_op_origin)
+
+        hosts = Rails.configuration.x.boot_config.fetch(:hosts)
+        host = hosts.visa_service&.host
+        local_host = ::Oidc::AcmeServiceOrigin.host_from(host)
+        scheme = local_host&.end_with?(".localhost") ? (request.ssl? ? "https" : "http") : "https"
+        @rp_op_origin = ::Oidc::AcmeServiceOrigin.from_configured_host(host, default_scheme: scheme)
+      end
+
+      def rp_default_landing_path = base_app_dashboard_path(ri: params[:ri])
+
+      def rp_callback_path = base_app_oidc_callback_path
+
+      def rp_interruption_path = base_app_sign_interruption_path(ri: params[:ri])
+
+      def rp_sign_path(**) = base_app_sign_show_path(**)
+
+      def rp_sign_out_path(**) = base_app_sign_out_path(**)
+
+      def rp_sign_out_completion_path = base_app_sign_out_completion_path
+
+      def rp_root_path(**) = base_app_root_path(**)
+
+      def rp_sign_out_component = "base/app/sign_outs/edit"
+
+      def rp_sign_out_completed_description = t("base.app.sign_out.completed_description")
+
+      def rp_sign_out_unavailable_after_local_description = t("base.app.sign_out.unavailable_after_local_description")
+
+      def account_navigation_sign_in_path(**) = base_app_sign_show_path(**)
+
+      def account_navigation_sign_out_path(**) = new_base_app_sign_out_path(**)
 
       def actor_verification_path(**args)
         base_app_verification_path(**args)

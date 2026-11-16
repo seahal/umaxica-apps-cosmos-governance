@@ -42,6 +42,7 @@ module Security
         lib/assets/
         lib/templates/
         lib/generators/
+        lib/umaxica/
       ).freeze
 
       test "target application ruby roots do not contain nested ruby files" do

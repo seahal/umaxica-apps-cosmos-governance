@@ -28,6 +28,8 @@ class ClientStatus < AppPrincipalRecord
   DEFAULTS = [NOTHING, ACTIVE, INACTIVE, PENDING, DELETED, WITHDRAWN, PENDING_DELETION, PRE_WITHDRAWAL_CONDITION,
               WITHDRAWAL_COMPLETED, UNVERIFIED_WITH_SIGN_UP, VERIFIED_WITH_SIGN_UP, GHOST, RESERVED,].freeze
 
+  self.record_timestamps = false
+
   has_many :users, class_name: "Client",
                    foreign_key: :status_id,
                    dependent: :restrict_with_error,

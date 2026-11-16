@@ -16,6 +16,8 @@ class ClientMfaStatus < AppPrincipalRecord
   UNCONFIGURED = 5
   DEFAULTS = [NOTHING, ACTIVE, UNCONFIGURED].freeze
 
+  self.record_timestamps = false
+
   has_many :users, class_name: "Client",
                    foreign_key: :mfa_status_id,
                    dependent: :restrict_with_error,

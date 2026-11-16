@@ -14,7 +14,7 @@ class OutboundEmailSuspensionInterceptorTest < ActionMailer::TestCase
   end
 
   test "transactional mail is delivered while no channel is suspended" do
-    otp_mail.deliver_now
+    transactional_mail.deliver_now
 
     assert_equal 1, ActionMailer::Base.deliveries.size
   end
@@ -22,7 +22,7 @@ class OutboundEmailSuspensionInterceptorTest < ActionMailer::TestCase
   test "suspending the email channel stops transactional mail" do
     Flipper.enable(:outbound_email_suspended)
 
-    otp_mail.deliver_now
+    transactional_mail.deliver_now
 
     assert_empty ActionMailer::Base.deliveries
   end
@@ -38,7 +38,7 @@ class OutboundEmailSuspensionInterceptorTest < ActionMailer::TestCase
   test "suspending promotional email leaves transactional mail delivering" do
     Flipper.enable(:outbound_promotional_email_suspended)
 
-    otp_mail.deliver_now
+    transactional_mail.deliver_now
 
     assert_equal 1, ActionMailer::Base.deliveries.size
   end
@@ -53,13 +53,12 @@ class OutboundEmailSuspensionInterceptorTest < ActionMailer::TestCase
 
   private
 
-  def otp_mail
-    Email::App::OtpMailer.with(
-      encrypted_hotp_token: encrypted_otp("123456"),
+  def transactional_mail
+    Email::App::AlertMailer.with(
+      title: "Account update",
+      body: "Security setting changed",
       email_address: "user@example.com",
-      public_id: "email-public-id",
-      verification_token: "verification-token",
-    ).create
+    ).notice
   end
 
   def promotional_mail
@@ -68,9 +67,5 @@ class OutboundEmailSuspensionInterceptorTest < ActionMailer::TestCase
       body: "Body",
       email_address: "user@example.com",
     ).notice
-  end
-
-  def encrypted_otp(code)
-    OutboundSensitivePayload.encrypt_email_otp(code)
   end
 end

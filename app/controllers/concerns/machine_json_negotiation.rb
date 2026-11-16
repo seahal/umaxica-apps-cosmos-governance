@@ -23,13 +23,13 @@ module MachineJsonNegotiation
   # among them, so it is accepted by the first entry and listing the range here would be dead.
   ACCEPTABLE = %w(application/json */*).freeze
 
-  included do
-    # A machine health or revision answer is a point-in-time value; a stored copy is a stale one.
-    # Set on every response, including a 406, so nothing caches the refusal either.
-    before_action { response.set_header("Cache-Control", "no-store") }
-  end
-
   private
+
+  # A machine health or revision answer is a point-in-time value; a stored copy is a stale one.
+  # Set on every response, including a 406, so nothing caches the refusal either.
+  def disable_machine_json_response_cache
+    response.set_header("Cache-Control", "no-store")
+  end
 
   def refuse_unless_machine_json_acceptable
     head :not_acceptable unless machine_json_acceptable?

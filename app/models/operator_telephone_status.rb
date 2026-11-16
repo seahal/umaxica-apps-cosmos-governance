@@ -22,6 +22,8 @@ class OperatorTelephoneStatus < OrgPrincipalRecord
   VERIFIED = 7
   DEFAULTS = [ACTIVE, DELETED, INACTIVE, NOTHING, PENDING, UNVERIFIED, VERIFIED].freeze
 
+  self.record_timestamps = false
+
   has_many :staff_telephones, class_name: "OperatorTelephone",
                               foreign_key: :staff_identity_telephone_status_id,
                               inverse_of: :staff_telephone_status,

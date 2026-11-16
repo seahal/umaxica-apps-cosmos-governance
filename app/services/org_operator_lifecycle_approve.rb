@@ -5,12 +5,14 @@ class OrgOperatorLifecycleApprove
   def self.call(request:, actor:)
     new(request: request, actor: actor).call
   end
+  public_class_method :call
 
   def initialize(request:, actor:)
     @request = request
     @actor = actor
   end
 
+  public
   def call
     return failure("Only pending requests can be approved") unless request.pending?
     return failure("Requester cannot approve their own lifecycle request") if requested_by_actor?

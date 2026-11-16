@@ -1,39 +1,10 @@
-# typed: false
 # frozen_string_literal: true
 
+# Read-side scope and return-target parsing shared by the retained RP step-up entrypoints.
 module BaseStepUpIntent
-  extend ActiveSupport::Concern
+  include StepUpCeremonyLogging
 
   private
-
-  def redirect_to_step_up_ceremony!(surface:, actor:, token:, allowed_scopes:, sign_url_builder:)
-    scope = requested_step_up_scope(allowed_scopes)
-    return_to = requested_step_up_return_to(scope: scope, allowed_scopes: allowed_scopes)
-    methods = requested_step_up_methods(actor)
-
-    issuance = IdentityStepUpCeremonyGrantIssuer.issue!(
-      surface: surface,
-      actor_ref: actor.public_id,
-      session_ref: token.public_id,
-      required_scope: scope,
-      required_aal: verification_required_aal,
-      allowed_methods: methods,
-      return_to: return_to,
-      expires_at: self.class::STEP_UP_TTL.from_now,
-    )
-
-    redirect_to(
-      sign_url_builder.call(
-        scope: scope,
-        pt: params[:pt],
-        ri: params[:ri],
-        step_up_ceremony_grant: issuance.grant,
-        step_up_completion_csrf: form_authenticity_token,
-      ),
-      allow_other_host: cross_host_redirect_allowed?,
-      status: :see_other,
-    )
-  end
 
   def requested_step_up_scope(allowed_scopes)
     scope = params[:scope].to_s
@@ -48,12 +19,5 @@ module BaseStepUpIntent
     raise ActionController::BadRequest, "scope mismatch" unless return_to.match?(allowed_scopes.fetch(scope))
 
     return_to
-  end
-
-  def requested_step_up_methods(actor)
-    methods = available_step_up_methods(actor)
-    raise ActionController::BadRequest, "no step-up method available" if methods.blank?
-
-    methods
   end
 end

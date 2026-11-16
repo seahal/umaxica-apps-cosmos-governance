@@ -12,8 +12,7 @@ module PromotionalEmailUnsubscribeActions
   extend ActiveSupport::Concern
   include ::CloudflareTurnstile
 
-  def edit
-  end
+  public
 
   def destroy
     return unless verified_turnstile_for_destroy?
@@ -37,10 +36,6 @@ module PromotionalEmailUnsubscribeActions
       status: :see_other,
     )
     false
-  end
-
-  def verified_request?
-    super || promotional_unsubscribe_create_request?
   end
 
   def promotional_unsubscribe_create_request?

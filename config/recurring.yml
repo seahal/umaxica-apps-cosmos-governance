@@ -1,111 +1,126 @@
-# examples:
-#   periodic_cleanup:
-#     class: CleanSoftDeletedRecordsJob
-#     queue: background
-#     args: [ 1000, { batch_size: 500 } ]
-#     schedule: every hour
-#   periodic_cleanup_with_command:
-#     command: "SoftDeletedRecord.due.delete_all"
-#     priority: 2
-#     schedule: at 5am every day
+# Test intentionally has no recurring tasks. The normal test adapter never
+# starts a scheduler; development and production list the same business work
+# explicitly so a local worker does not silently exercise a different set.
 
 development:
+  contact_audit_delivery:
+    class: ContactAuditDeliveryJob
+    queue: retention
+    priority: 50
+    args:
+      - batch_size: 500
+    schedule: every 15 minutes
+  passkey_audit_delivery:
+    class: PasskeyAuditDeliveryJob
+    queue: retention
+    priority: 50
+    args:
+      - batch_size: 500
+    schedule: every 15 minutes
+  step_up_audit_delivery:
+    class: StepUpAuditDeliveryJob
+    queue: retention
+    priority: 50
+    args:
+      - batch_size: 500
+    schedule: every minute
+  step_up_dispatch_recovery:
+    class: RpStepUpDispatchRecoveryJob
+    queue: retention
+    priority: 50
+    args: []
+    schedule: every minute
   clear_solid_queue_finished_jobs:
     command: "SolidQueue::Job.clear_finished_in_batches(sleep_between_batches: 0.3)"
     schedule: every hour at minute 12
 
-  # Delete expired DPoP proof-state / nonce rows (TTL 300s, not covered by
-  # RetentionPurgeJob which keys on purged_at).
-  dpop_proof_state_purge:
-    class: DpopProofStatePurgeJob
-    schedule: every 15 minutes
-
-  # Delete expired single-use token records (logout requests and tokens, Jump RT
-  # returns, sign-out notices, OIDC client assertions). Same reason: keyed on
-  # expires_at, so RetentionPurgeJob does not reach them.
-  security_consumed_jti_purge:
-    class: SecurityConsumedJtiPurgeJob
-    schedule: every 15 minutes
-
-  # Delete expired one-time reveal rows. Each holds an encrypted secret payload that
-  # `SecurityOneTimeReveal.consume` already refuses past `expires_at`, and the table has no
-  # `purged_at` for RetentionPurgeJob to key on.
-  security_one_time_reveal_purge:
-    class: SecurityOneTimeRevealPurgeJob
-    schedule: every 15 minutes
-
-  # adr/unified-enforcement.md, Duration and expiry / Reconciliation: neither
-  # job is load-bearing for a security decision -- runtime in-force
-  # evaluation is self-sufficient without them (D8). They converge
-  # bookkeeping and emit audit.
-  enforcement_expiry:
-    class: EnforcementExpiryJob
-    schedule: every 15 minutes
-  enforcement_reconciliation:
-    class: EnforcementReconciliationJob
-    schedule: every 15 minutes
-
-production:
-  clear_solid_queue_finished_jobs:
-    command: "SolidQueue::Job.clear_finished_in_batches(sleep_between_batches: 0.3)"
-    schedule: every hour at minute 12
-
-  # Delete expired credential ceremony transaction rows. These tables key
-  # cleanup on `expires_at`, so they are not covered by RetentionPurgeJob.
-  email_ceremony_transaction_purge:
-    class: EmailCeremonyTransactionPurgeJob
-    schedule: every 15 minutes
-  passkey_ceremony_transaction_purge:
-    class: PasskeyCeremonyTransactionPurgeJob
-    schedule: every 15 minutes
-  secret_credential_ceremony_transaction_purge:
-    class: SecretCredentialCeremonyTransactionPurgeJob
-    schedule: every 15 minutes
-  social_ceremony_transaction_purge:
-    class: SocialCeremonyTransactionPurgeJob
-    schedule: every 15 minutes
-  step_up_ceremony_transaction_purge:
-    class: StepUpCeremonyTransactionPurgeJob
-    schedule: every 15 minutes
-  telephone_ceremony_transaction_purge:
-    class: TelephoneCeremonyTransactionPurgeJob
-    schedule: every 15 minutes
-  totp_ceremony_transaction_purge:
-    class: TotpCeremonyTransactionPurgeJob
-    schedule: every 15 minutes
-
-  # Clean up expired records with purgeable timestamps.
   retention_purge:
     class: RetentionPurgeJob
+    queue: retention
+    priority: 50
+    args:
+      - batch_size: 500
     schedule: every 15 minutes
-
-  # Delete expired DPoP proof-state / nonce rows (TTL 300s, not covered by
-  # RetentionPurgeJob which keys on purged_at).
-  dpop_proof_state_purge:
-    class: DpopProofStatePurgeJob
+  processor_erasure_notification_retry:
+    class: ProcessorErasureNotificationRetryJob
+    queue: retention
+    priority: 50
+    args:
+      - batch_size: 100
     schedule: every 15 minutes
-
-  # Delete expired single-use token records (logout requests and tokens, Jump RT
-  # returns, sign-out notices, OIDC client assertions). Same reason: keyed on
-  # expires_at, so RetentionPurgeJob does not reach them.
-  security_consumed_jti_purge:
-    class: SecurityConsumedJtiPurgeJob
-    schedule: every 15 minutes
-
-  # Delete expired one-time reveal rows. Each holds an encrypted secret payload that
-  # `SecurityOneTimeReveal.consume` already refuses past `expires_at`, and the table has no
-  # `purged_at` for RetentionPurgeJob to key on.
-  security_one_time_reveal_purge:
-    class: SecurityOneTimeRevealPurgeJob
-    schedule: every 15 minutes
-
-  # adr/unified-enforcement.md, Duration and expiry / Reconciliation: neither
-  # job is load-bearing for a security decision -- runtime in-force
-  # evaluation is self-sufficient without them (D8). They converge
-  # bookkeeping and emit audit.
   enforcement_expiry:
     class: EnforcementExpiryJob
+    queue: retention
+    priority: 50
+    args:
+      - batch_size: 200
     schedule: every 15 minutes
   enforcement_reconciliation:
     class: EnforcementReconciliationJob
+    queue: retention
+    priority: 50
+    args:
+      - batch_size: 200
+    schedule: every 15 minutes
+test: {}
+
+production:
+  contact_audit_delivery:
+    class: ContactAuditDeliveryJob
+    queue: retention
+    priority: 50
+    args:
+      - batch_size: 500
+    schedule: every 15 minutes
+  passkey_audit_delivery:
+    class: PasskeyAuditDeliveryJob
+    queue: retention
+    priority: 50
+    args:
+      - batch_size: 500
+    schedule: every 15 minutes
+  step_up_audit_delivery:
+    class: StepUpAuditDeliveryJob
+    queue: retention
+    priority: 50
+    args:
+      - batch_size: 500
+    schedule: every minute
+  step_up_dispatch_recovery:
+    class: RpStepUpDispatchRecoveryJob
+    queue: retention
+    priority: 50
+    args: []
+    schedule: every minute
+  clear_solid_queue_finished_jobs:
+    command: "SolidQueue::Job.clear_finished_in_batches(sleep_between_batches: 0.3)"
+    schedule: every hour at minute 12
+
+  retention_purge:
+    class: RetentionPurgeJob
+    queue: retention
+    priority: 50
+    args:
+      - batch_size: 500
+    schedule: every 15 minutes
+  processor_erasure_notification_retry:
+    class: ProcessorErasureNotificationRetryJob
+    queue: retention
+    priority: 50
+    args:
+      - batch_size: 100
+    schedule: every 15 minutes
+  enforcement_expiry:
+    class: EnforcementExpiryJob
+    queue: retention
+    priority: 50
+    args:
+      - batch_size: 200
+    schedule: every 15 minutes
+  enforcement_reconciliation:
+    class: EnforcementReconciliationJob
+    queue: retention
+    priority: 50
+    args:
+      - batch_size: 200
     schedule: every 15 minutes

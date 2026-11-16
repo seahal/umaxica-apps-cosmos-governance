@@ -32,6 +32,7 @@ class OrgPreferenceAdultContentGate < OrgSettingRecord
 
   before_validation :set_option_id
 
+  public
   def approved? = option_id == OrgPreferenceAdultContentGateOption::APPROVED
 
   def denied? = option_id == OrgPreferenceAdultContentGateOption::DENY

@@ -33,6 +33,7 @@ module AvatarBackfill
       @output_path = output_path
     end
 
+    public
     def call
       details = legacy_avatars.map { |avatar| audit_avatar(avatar) }
       summary = build_summary(details)
@@ -92,7 +93,7 @@ module AvatarBackfill
         active_bindings.size > 1
       return bucket("missing_client", "legacy client_id does not resolve to a Client", "manual review required") if
         resolved == :missing_client
-      return bucket("unresolved_subject", "legacy client_id does not resolve to a Persona", "manual review required") if
+      return bucket("unresolved_subject", "legacy client_id has no ClientPersona", "manual review required") if
         resolved.blank?
       return bucket(
         "ambiguous_subject", "legacy client_id resolves to multiple candidate Personas",
@@ -130,7 +131,7 @@ module AvatarBackfill
         subject_binding.present?
 
       bucket(
-        "safe_to_backfill", "legacy client_id resolves to one unbound active Persona",
+        "safe_to_backfill", "legacy client_id resolves to one unbound active ClientPersona",
         "create AvatarPersonaBinding",
       )
     end
@@ -145,9 +146,11 @@ module AvatarBackfill
 
       identities = ClientIdentity.where(source_record_id: client.id).to_a
       return nil if identities.empty?
-      return identities.flat_map { |identity| Persona.where(client_identity_id: identity.id).to_a } if identities.many?
+      if identities.many?
+        return identities.flat_map { |identity| ClientPersona.where(client_identity_id: identity.id).to_a }
+      end
 
-      personas = Persona.where(client_identity_id: identities.first.id).to_a
+      personas = ClientPersona.where(client_identity_id: identities.first.id).to_a
       return nil if personas.empty?
       return personas if personas.many?
 
@@ -158,29 +161,24 @@ module AvatarBackfill
       [
         AvatarPersonaBinding.active.find_by(avatar_id: avatar.id),
         AvatarAgentBinding.active.find_by(avatar_id: avatar.id),
-        AvatarIndividualBinding.active.find_by(avatar_id: avatar.id),
       ].compact
     end
 
     def active_binding_for_subject(subject)
       case subject
-      when Persona
+      when ClientPersona
         AvatarPersonaBinding.active.find_by(persona_id: subject.id)
       when Agent
         AvatarAgentBinding.active.find_by(agent_id: subject.id)
-      when Individual
-        AvatarIndividualBinding.active.find_by(individual_id: subject.id)
       end
     end
 
     def binding_matches_subject?(binding, subject)
       case [binding, subject]
-      in [AvatarPersonaBinding, Persona]
+      in [AvatarPersonaBinding, ClientPersona]
         binding.persona_id == subject.id
       in [AvatarAgentBinding, Agent]
         binding.agent_id == subject.id
-      in [AvatarIndividualBinding, Individual]
-        binding.individual_id == subject.id
       else
         false
       end

@@ -3,52 +3,52 @@
 
 require "test_helper"
 
-# When a scope demands a particular authenticator assurance level, a step-up
-# recorded at a different level must not satisfy it, and a session that carries
-# no recorded level at all must not satisfy it either -- otherwise a password
-# re-entry would clear a scope that asks for a phishing-resistant factor.
 class StepUpResolverAalTest < ActiveSupport::TestCase
   self.fixture_table_names = []
 
-  def token_with(aal:, at: Time.current, scope: "settings_email", method: "passkey")
-    token = Struct.new(
-      :last_step_up_aal, :last_step_up_at, :last_step_up_scope, :last_step_up_method,
-      :public_id, :id, keyword_init: true,
+  test "legacy AAL demands are refused rather than translated into authorization" do
+    %i(aal1 aal2 aal3).each do |level|
+      error =
+        assert_raises(StepUpRequirement::Invalid) do
+          StepUpResolver.call(token: nil, scope: "settings_email", required_aal: level)
+        end
+
+      assert_equal "legacy AAL requirements are unsupported", error.message
+    end
+  end
+
+  test "supplied legacy token proof refuses unavailable Access before reading its attributes" do
+    assert_raises(AccessOpDataUnavailableError) do
+      StepUpResolver.call(token: Object.new, scope: "settings_email")
+    end
+  end
+
+  test "anonymous absence of proof remains unsatisfied without inventing authority" do
+    result = StepUpResolver.call(
+      token: nil, scope: "settings_email", session_binding: "required-session", token_binding: "required-token",
     )
-      .new(
-        last_step_up_aal: aal,
-        last_step_up_at: at,
-        last_step_up_scope: scope,
-        last_step_up_method: method,
-        public_id: "token-public-id",
-        id: 1,
-      )
-    token.define_singleton_method(:currently_usable?) { true }
-    token
-  end
-
-  test "the demanded level is carried onto the resolved step-up state" do
-    result = StepUpResolver.call(token: token_with(aal: "aal2"), scope: "settings_email", required_aal: :aal2)
-
-    assert_equal :aal2, result.required_aal
-    assert_equal "settings_email", result.scope
-  end
-
-  test "a step-up recorded at a different level does not satisfy the requirement" do
-    result = StepUpResolver.call(token: token_with(aal: "aal1"), scope: "settings_email", required_aal: :aal2)
 
     assert_not result.satisfied
-  end
-
-  test "a session carrying no recorded level does not satisfy a requirement that demands one" do
-    result = StepUpResolver.call(token: token_with(aal: nil), scope: "settings_email", required_aal: :aal2)
-
-    assert_not result.satisfied
-  end
-
-  test "a requirement that demands no particular level records none" do
-    result = StepUpResolver.call(token: token_with(aal: nil), scope: "settings_email")
-
+    assert_not result.usable_token
     assert_nil result.required_aal
+    assert_nil result.satisfied_at
+    assert_nil result.expires_at
+    assert_nil result.method
+    assert_equal "settings_email", result.scope
+    assert_not result.session_bound
+    assert_not result.token_bound
+  end
+
+  test "an explicitly disabled requirement needs no proof but never becomes a usable token" do
+    requirement = StepUpRequirement.new(step_up_required: false)
+    result = StepUpResolver.call(token: nil, requirement:)
+
+    assert result.satisfied
+    assert_not result.usable_token
+    assert_nil result.required_aal
+    assert_nil result.satisfied_at
+    assert_nil result.expires_at
+    assert_nil result.method
+    assert_nil result.scope
   end
 end

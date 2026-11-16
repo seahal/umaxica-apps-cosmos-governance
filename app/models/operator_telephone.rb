@@ -11,9 +11,6 @@
 #  number                             :string           not null
 #  number_digest                      :string
 #  otp_attempts_count                 :integer          default(0), not null
-#  otp_counter                        :text             not null
-#  otp_expires_at                     :datetime
-#  otp_private_key                    :string           not null
 #  created_at                         :datetime         not null
 #  updated_at                         :datetime         not null
 #  staff_id                           :bigint           not null
@@ -32,12 +29,43 @@
 #
 
 class OperatorTelephone < OrgPrincipalRecord
-  alias_attribute :staff_telephone_status_id, :staff_identity_telephone_status_id
+  # Issued public IDs are also protected by operator_telephones_public_id_immutability;
+  # the scoped DB exception is owned by adr/database-trigger-usage-boundary.md.
+  include PublicId
+
+  after_initialize :initialize_telephone_otp_state
+  before_validation :generate_public_id, on: :create
+  before_validation :refresh_generated_public_id_after_collision, on: :create
+  before_validation :normalize_number_from_raw
+  before_validation :set_number_digests
+  before_create :generate_public_id
+  around_create :retry_public_id_collision
+  validate :public_id_immutable_after_create, on: :update
+  validates :public_id, presence: true, length: { is: PublicId::GENERATION_SIZE }, uniqueness: true
   include Telephone
 
-  self.filter_attributes += %w(number)
+  scope :with_number, ->(value) do
+    digest = IdentifierBlindIndex.bidx_for_telephone(value, realm: identifier_hmac_realm)
+    digest.present? ? where(number_digest: digest) : none
+  end
+  validate :validate_telephone_number
+  validates :confirm_policy, acceptance: true,
+                             unless: proc { |record| record.raw_number.blank? && record.pass_code.present? }
+  validates :confirm_using_mfa, acceptance: true,
+                                unless: proc { |record| record.raw_number.blank? && record.pass_code.present? }
+  validates :pass_code, numericality: { only_integer: true },
+                        length: { is: 6 },
+                        presence: true,
+                        unless: proc { |record| record.pass_code.blank? && record.raw_number.present? }
+  include TelephoneDeadIdentifierHistory
+
+  IDENTIFIER_REALM = "org"
 
   MAX_TELEPHONES_PER_STAFF = 4
+
+  encrypts :number, key_provider: RealmIdentifierEncryptionKeyProvider.key_provider(realm: IDENTIFIER_REALM)
+
+  alias_attribute :staff_telephone_status_id, :staff_identity_telephone_status_id
   attribute :staff_identity_telephone_status_id, default: OperatorTelephoneStatus::UNVERIFIED
 
   belongs_to :staff_telephone_status, class_name: "OperatorTelephoneStatus",
@@ -48,10 +76,13 @@ class OperatorTelephone < OrgPrincipalRecord
   # Note: :number validation is now handled by Telephone concern (E.164 normalization)
   validates :number, presence: true
   validates :otp_attempts_count, presence: true, numericality: { only_integer: true }
-  validates :otp_counter, presence: true
-  validates :otp_private_key, presence: true, length: { maximum: 255 }
   validates :staff_identity_telephone_status_id, numericality: { only_integer: true }
-  validates :number_digest, blind_index_uniqueness: { error_attribute: :number }, allow_blank: true
+  validates :number_digest, blind_index_uniqueness: { error_attribute: :number }, allow_nil: true
+
+  before_destroy :archive_dead_telephone_identifier, prepend: true
+
+  self.filter_attributes += %w(number)
+
   validates_with AssociatedRecordLimitValidator,
                  on: :create,
                  owner: :staff,
@@ -66,6 +97,8 @@ class OperatorTelephone < OrgPrincipalRecord
   end
 
   # Note: :number encryption is handled by Telephone concern
+
+  public
 
   private
 end

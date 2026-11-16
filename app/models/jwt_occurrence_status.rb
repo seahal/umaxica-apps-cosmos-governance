@@ -12,6 +12,8 @@
 class JwtOccurrenceStatus < OccurrenceRecord
   include ReferenceRecord
 
+  include OccurrenceStatus
+
   # Fixed IDs - do not modify these values
   NOTHING = 0
   LEGACY_NOTHING = 1
@@ -20,7 +22,7 @@ class JwtOccurrenceStatus < OccurrenceRecord
   DELETED = 4
   DEFAULTS = [NOTHING, LEGACY_NOTHING, ACTIVE, INACTIVE, DELETED].freeze
 
-  include OccurrenceStatus
+  self.record_timestamps = false
 
   has_many :jwt_occurrences, foreign_key: :status_id, dependent: :restrict_with_error,
                              inverse_of: :jwt_occurrence_status
@@ -28,4 +30,5 @@ class JwtOccurrenceStatus < OccurrenceRecord
   def self.ensure_defaults!
     insert_missing_fixed_ids!(DEFAULTS)
   end
+  public_class_method :ensure_defaults!
 end

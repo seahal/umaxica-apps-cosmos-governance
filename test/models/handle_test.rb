@@ -29,6 +29,7 @@
 #
 
 require "test_helper"
+require_relative "../support/avatar_test_factory"
 
 class HandleTest < ActiveSupport::TestCase
   setup do
@@ -94,13 +95,17 @@ class HandleTest < ActiveSupport::TestCase
   test "association deletion: restriction by active_avatars" do
     @handle.save!
     capability = AvatarCapability.find_or_create_by!(id: AvatarCapability::NORMAL)
-    Avatar.create!(
-      moniker: "Avatar with Handle",
+    AvatarTestFactory.create!(
+      moniker: "Handle Avatar",
       active_handle: @handle,
       capability: capability,
     )
 
     assert_not @handle.destroy
     assert @handle.errors[:base].any? { |message| message.include?("active avatars") }
+  end
+
+  test "public_id is a fixed 21-character NanoID" do
+    assert_public_id_fixed_length(::Handle)
   end
 end

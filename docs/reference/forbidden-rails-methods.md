@@ -44,23 +44,22 @@ Reason:
 If an endpoint needs different protection, place it under the correct public or private controller
 boundary and use the established lifecycle for that surface.
 
-Enforced boundary (the only sanctioned exceptions):
+Enforced boundary (the only sanctioned exception):
 
-- `AuthenticationBase` overrides `skip_before_action` / `skip_action_callback` to **hard-block**
-  skipping `:enforce_access_policy!` (raises `SkipNotAllowedError`). The authorization gate can
-  never be skipped.
-- Skipping `:enforce_verification_if_required`, `:enforce_step_up_prereqs!`, or
-  `:authenticate_client!` is permitted only for controllers in the reviewed
-  `SENSITIVE_SKIP_ALLOWLIST`, mechanically enforced by
-  `test/unit/security/forbidden_rails_patterns_test.rb`. A new file that skips one of these fails
-  that test until the boundary change is deliberately reviewed.
+- `BrowserRpAuthentication` overrides `skip_before_action` to hard-block skipping
+  `:enforce_access_policy!` (raises `SkipNotAllowedError`). The authorization gate cannot be
+  skipped.
+- No authentication or step-up filter skips are currently approved. The empty
+  `SENSITIVE_SKIP_ALLOWLIST` in `test/unit/security/forbidden_rails_patterns_test.rb` is checked by
+  equality, so a new skip fails the test until its boundary is deliberately reviewed.
 - Skipping `:set_region` is permitted only for controllers listed in `RI_SKIP_ALLOWLIST`,
   mechanically enforced by `test/unit/security/ri_routing_contract_test.rb`. The list is compared by
   equality, so both a new skip and a silently removed one fail that test. Every entry must be a
   machine-to-machine endpoint that renders no regional HTML: skipping the callback on a controller
   that renders HTML strips `ri` from every URL that controller generates, because
   `PreferenceGlobal#default_url_options` reads the request params only and has no fallback. That is
-  the auth sign-in/sign-up regression recorded in `plans/ri-preference-routing-regression-audit.md`.
+  the auth sign-in/sign-up regression recorded in
+  `research/ri-preference-routing-regression-audit.md`.
 - Skipping the remaining non-security context/preference callbacks (for example
   `:set_preferences_cookie`, `:set_color_theme`) is allowed where an endpoint legitimately does not
   participate in that context, and is not a security relaxation.
@@ -89,6 +88,10 @@ Reason:
 - It can expose browser-backed endpoints to request forgery.
 
 Use the correct API, JSON, or browser controller boundary instead of disabling protection locally.
+
+This Rails process has no provider revocation or logout routes. Browser mutations remain under the
+normal Rails CSRF boundary; service-to-service owner APIs use their explicit request authentication
+and do not gain a browser-cookie exception.
 
 ## Models
 
@@ -213,10 +216,15 @@ purge needs.
 
 Sanctioned call sites (do not "fix" these into row-by-row `destroy`):
 
+Email/Telephone Contact collection is the explicit exception to that set-based prescription:
+`adr/realm-separated-identifiers-and-dead-history.md` requires separate history-aware locked
+purgers. The exception does not extend to Avatar, generic retained records or cross-database child
+purging.
+
 - `app/jobs/retention_purge_job.rb`, `app/jobs/dpop_proof_state_purge_job.rb`
 - `app/services/retention_cross_database_child_purge.rb`
 - `app/services/identity_*_ceremony_transaction_purger.rb`
-- discard/expiry sweeps such as `acme_refresh_token_service.rb` (`update_all(discarded_at:)`)
+- discard/expiry sweeps such as `acme_refresh_token_service.rb` (`update_all(discard_at:)`)
 
 New destructive-op call sites still require explicit approval and should reference an Accepted ADR.
 

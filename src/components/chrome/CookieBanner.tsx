@@ -1,18 +1,19 @@
 // React port of the `cookie-banner` Stimulus controller.
 //
-// The consent decision itself stays on the server: this component only reports a choice to
-// /web/v0/cookie and reflects what the server answers. It never writes the consent cookie itself,
+// The consent decision itself stays on the server: this component only reports a choice to the
+// endpoint the server declared for this page and reflects what the server answers. It never writes the consent cookie itself,
 // because the verified preference JWT is minted server-side.
 import { useEffect, useRef, useState } from "react";
 
 import Button from "@/components/ui/Button";
+import ButtonLink from "@/components/ui/ButtonLink";
 import { hasRecordedCookieConsent } from "@/lib/cookies";
 import { readBoolean } from "@/lib/payload";
-import { csrfToken, preferenceQueryParameters } from "@/lib/request";
+import { csrfToken, preferenceQueryParameters, sameOriginEndpoint } from "@/lib/request";
 import type { ChromeCookieControls } from "@/types/inertia";
 
-function cookieEndpointUrl(): string {
-  const endpoint = new URL("/web/v0/cookie", window.location.origin);
+function cookieEndpointUrl(endpointUrl: string): string {
+  const endpoint = sameOriginEndpoint(endpointUrl);
   for (const [key, value] of preferenceQueryParameters()) {
     endpoint.searchParams.set(key, value);
   }
@@ -20,12 +21,54 @@ function cookieEndpointUrl(): string {
 }
 
 export default function CookieBanner({ controls }: { controls: ChromeCookieControls }) {
-  // Nothing is painted until something says the visitor has not answered. The consent buffer
-  // cookie is a projection of the same decision the endpoint below reports, and reading it through
-  // the Cookie Store API is asynchronous, so it can no longer seed the first render - starting
-  // hidden is what keeps a visitor who already answered from seeing the banner flash on every
-  // load, which is the flash that projection exists to prevent.
-  const [visible, setVisible] = useState(false);
+  if (controls.hidden) {
+    return null;
+  }
+
+  if (controls.endpoint_url === null) {
+    return (
+      <section
+        id="cookie-banner"
+        aria-labelledby="cookie-title"
+        className="border-t border-line bg-surface"
+      >
+        <div className="mx-auto flex max-w-4xl flex-wrap items-center gap-3 p-4">
+          <h2
+            id="cookie-title"
+            className="text-sm font-semibold text-fg"
+          >
+            {controls.title}
+          </h2>
+          <ButtonLink
+            variant="secondary"
+            size="sm"
+            href={controls.settings_url}
+          >
+            {controls.open_settings}
+          </ButtonLink>
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <CookieBannerPrompt
+      controls={controls}
+      endpointUrl={controls.endpoint_url}
+    />
+  );
+}
+
+function CookieBannerPrompt({
+  controls,
+  endpointUrl,
+}: {
+  controls: ChromeCookieControls;
+  endpointUrl: string;
+}) {
+  // Com has no trusted consent buffer: show its prompt until the server confirms the binding.
+  // App and org retain their existing asynchronous buffer behavior until their transport changes.
+  const [visible, setVisible] = useState(controls.scope === "com");
   const [submitting, setSubmitting] = useState(false);
   // An answer given before the read returns wins, the same way a theme choice does: the visitor is
   // more current than the in-flight request, and re-raising a banner they just dismissed is worse
@@ -35,28 +78,29 @@ export default function CookieBanner({ controls }: { controls: ChromeCookieContr
   // two reads race - one local, one over the network - and without this a slow cookie read could
   // raise a banner the server had already said to hide.
   const reconciled = useRef(false);
-
   useEffect(() => {
-    let active = true;
+    const controller = new AbortController();
+    const { signal } = controller;
 
-    // The projection only ever raises the banner. It cannot hide one, because a cookie recording
-    // consent is not itself proof the server still agrees; that is what the endpoint answers.
+    // The legacy app/org projection only raises the banner; the endpoint decides whether to hide it.
     const readConsentBuffer = async () => {
       const recorded = await hasRecordedCookieConsent();
 
-      if (active && !answered.current && !reconciled.current && !recorded) {
+      if (!signal.aborted && !answered.current && !reconciled.current && !recorded) {
         setVisible(true);
       }
     };
 
+    const url = cookieEndpointUrl(endpointUrl);
+
     const readConsent = async () => {
       try {
-        const response = await fetch(cookieEndpointUrl());
+        const response = await fetch(url, { signal });
         if (!response.ok) {
           return;
         }
         const state: unknown = await response.json();
-        if (active && !answered.current) {
+        if (!signal.aborted && !answered.current) {
           reconciled.current = true;
           // `show_banner` is the field the endpoint answers with
           // (`PreferenceWebCookieActions#show`). Reading `consented` here - a key that response
@@ -72,13 +116,15 @@ export default function CookieBanner({ controls }: { controls: ChromeCookieContr
       }
     };
 
-    void readConsentBuffer();
+    if (controls.scope !== "com") {
+      void readConsentBuffer();
+    }
     void readConsent();
 
     return () => {
-      active = false;
+      controller.abort();
     };
-  }, []);
+  }, [controls.scope, endpointUrl]);
 
   if (!visible) {
     return null;
@@ -87,7 +133,7 @@ export default function CookieBanner({ controls }: { controls: ChromeCookieContr
   const submitConsent = async (consented: boolean) => {
     setSubmitting(true);
     try {
-      const response = await fetch(cookieEndpointUrl(), {
+      const response = await fetch(cookieEndpointUrl(endpointUrl), {
         method: "PATCH",
         headers: {
           Accept: "application/json",
@@ -125,7 +171,7 @@ export default function CookieBanner({ controls }: { controls: ChromeCookieContr
     <section
       id="cookie-banner"
       aria-labelledby="cookie-title"
-      className="fixed inset-x-0 bottom-0 z-50 border-t border-line bg-surface shadow-lg"
+      className="border-t border-line bg-surface"
     >
       <div className="relative mx-auto flex max-w-4xl flex-col gap-3 p-4">
         <Button
@@ -171,7 +217,7 @@ export default function CookieBanner({ controls }: { controls: ChromeCookieContr
           {controls.title}
         </h2>
 
-        <p className="text-sm text-fg-muted">{controls.description_html}</p>
+        <p className="text-base text-fg-muted">{controls.description_html}</p>
 
         <div className="flex flex-wrap gap-2">
           <Button
@@ -183,13 +229,13 @@ export default function CookieBanner({ controls }: { controls: ChromeCookieContr
             {controls.reject_all}
           </Button>
 
-          <Button
+          <ButtonLink
             variant="secondary"
             size="sm"
-            onPress={() => window.location.assign(controls.settings_url)}
+            href={controls.settings_url}
           >
             {controls.open_settings}
-          </Button>
+          </ButtonLink>
 
           <Button
             size="sm"

@@ -39,32 +39,19 @@ class ApplicationErrorTest < ActiveSupport::TestCase
     assert_equal "Invalid user status: inactive", fallback.message
   end
 
-  test "sign and social auth error classes inherit from the expected base classes" do
+  test "sign error classes inherit from the expected base classes" do
     assert_operator Sign::WithdrawalError, :<, ApplicationError
     assert_operator Sign::InvalidWithdrawalStateError, :<, Sign::WithdrawalError
     assert_operator Sign::WithdrawalDeletionError, :<, Sign::WithdrawalError
     assert_operator Sign::WithdrawalRecoveryNotAvailableError, :<, Sign::WithdrawalError
-
-    assert_operator SocialAuth::BaseError, :<, ApplicationError
-    assert_operator SocialAuth::ConflictError, :<, SocialAuth::BaseError
-    assert_operator SocialAuth::LastIdentityError, :<, SocialAuth::BaseError
-    assert_operator SocialAuth::ProviderError, :<, SocialAuth::BaseError
-    assert_operator SocialAuth::StepUpRequiredError, :<, SocialAuth::BaseError
-    assert_operator SocialAuth::UnauthorizedError, :<, SocialAuth::BaseError
   end
 
-  test "sign and social auth errors initialize with the expected default status codes" do
+  test "sign errors initialize with the expected default status codes" do
     I18n.stub(:t, ->(key, **_) { key.to_s }) do
       assert_equal :bad_request, Sign::WithdrawalError.new("errors.messages.not_authorized").status_code
       assert_equal :unprocessable_content, Sign::InvalidWithdrawalStateError.new("suspended").status_code
       assert_equal :internal_server_error, Sign::WithdrawalDeletionError.new.status_code
       assert_equal :unprocessable_content, Sign::WithdrawalRecoveryNotAvailableError.new.status_code
-
-      assert_equal :conflict, SocialAuth::ConflictError.new.status_code
-      assert_equal :unprocessable_content, SocialAuth::LastIdentityError.new.status_code
-      assert_equal :bad_request, SocialAuth::ProviderError.new.status_code
-      assert_equal :forbidden, SocialAuth::StepUpRequiredError.new.status_code
-      assert_equal :unauthorized, SocialAuth::UnauthorizedError.new.status_code
     end
   end
 end

@@ -1,0 +1,69 @@
+import { renderToStaticMarkup } from "react-dom/server";
+import { describe, expect, it } from "vitest";
+
+import RootLanding, { type RootLandingProps } from "@/features/landing/RootLanding";
+import BaseAppRootsIndex from "@/pages/base/app/roots/index";
+import BaseComRootsIndex from "@/pages/base/com/roots/index";
+import BaseOrgRootsIndex from "@/pages/base/org/roots/index";
+
+const props: RootLandingProps = {
+  title: "Base App",
+  heading: "Base App",
+  description: "This endpoint is intentionally thin.",
+  links: [{ label: "Accounts", href: "/accounts" }],
+};
+
+describe("RootLanding", () => {
+  it("labels the landing section with the heading it renders", () => {
+    const markup = renderToStaticMarkup(<RootLanding {...props} />);
+
+    expect(markup).toContain('aria-labelledby="root-landing-title"');
+    expect(markup).toContain('<h1 id="root-landing-title"');
+    expect(markup).toContain("Base App");
+  });
+
+  it("renders the description the server translated", () => {
+    expect(renderToStaticMarkup(<RootLanding {...props} />)).toContain(
+      "This endpoint is intentionally thin.",
+    );
+  });
+
+  it("omits a description when the server has none", () => {
+    const markup = renderToStaticMarkup(
+      <RootLanding
+        {...props}
+        description={null}
+      />,
+    );
+
+    expect(markup).not.toContain("<p");
+  });
+
+  it("renders only the navigation links the server supplied", () => {
+    expect(renderToStaticMarkup(<RootLanding {...props} />)).toMatch(
+      /<a href="\/accounts"[^>]*>Accounts<\/a>/u,
+    );
+  });
+
+  it("omits navigation when the server supplied none", () => {
+    const markup = renderToStaticMarkup(
+      <RootLanding
+        {...props}
+        links={null}
+      />,
+    );
+    expect(markup).not.toContain("<a href");
+  });
+});
+
+describe("surface root pages", () => {
+  // Each surface resolves pages only from its own directory, so every surface needs its own module
+  // for the shared landing.
+  it.each([
+    ["base/app", BaseAppRootsIndex],
+    ["base/com", BaseComRootsIndex],
+    ["base/org", BaseOrgRootsIndex],
+  ])("%s renders the shared landing", (_surface, Page) => {
+    expect(Page).toBe(RootLanding);
+  });
+});

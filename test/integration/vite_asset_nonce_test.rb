@@ -14,10 +14,11 @@ require "test_helper"
 class ViteAssetNonceTest < ActionDispatch::IntegrationTest
   setup do
     @host = Rails.configuration.x.boot_config.fetch(:hosts).base_service.host
-    @user = Client.create!(status_id: ClientStatus::ACTIVE, visibility_id: ClientVisibility::USER)
-    @token = ClientToken.create!(user: @user, user_token_kind_id: ClientTokenKind::BROWSER_WEB)
+    @user = Client.create!(
+      security_mode_id: SecurityModeConfigurable::NORMAL, status_id: ClientStatus::ACTIVE,
+      visibility_id: ClientVisibility::USER,
+    )
     BaseSelectorBootstrapAuthority.call(surface: :app, principal: @user)
-    BaseSelectorAuthority.prepare(surface: :app, principal: @user, session: @token)
   end
 
   test "every Vite asset tag on an Inertia page carries the response nonce" do
@@ -26,7 +27,10 @@ class ViteAssetNonceTest < ActionDispatch::IntegrationTest
     # the built-asset path it exists to guard. Pin the probe rather than let an unrelated
     # process running on the machine decide what is verified.
     ViteRuby.instance.stub(:dev_server_running?, false) do
-      get(base_app_groups_url(ri: "jp", host: @host), headers: as_user_headers(@user, host: @host))
+      http_headers_0 = as_user_headers(@user, host: @host)
+      get(
+        base_app_identity_url(ri: "jp", host: @host), headers: http_headers_0,
+      )
     end
 
     assert_response :success

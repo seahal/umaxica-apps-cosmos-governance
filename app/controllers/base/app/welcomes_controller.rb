@@ -7,26 +7,24 @@ module Base
       include ::SurfaceInertiaPage
 
       AUTHENTICATION_MODE = :private
+
+      layout "base/app/inertia"
+      inertia_share chrome: -> { surface_chrome }
+      inertia_share clear_history: -> { session[:inertia_clear_history] == true }
+
       declare_authentication_mode! :private
 
-      before_action :authenticate_client!
-      before_action :continue_welcome_sequence_without_content!
+      public
 
       def show
+        authorize!(current_client, to: :show?)
         render inertia: true, props: {
           title: "Welcome!",
-          credential_warning: apple_only_credential_warning_props,
           next_link: {
             label: "Next",
-            href: @welcome_next_path || base_app_dashboard_path(ri: params[:ri]),
+            href: base_app_dashboard_path(ri: params[:ri]),
           },
         }
-      end
-
-      private
-
-      def after_welcome_path
-        base_app_dashboard_path(ri: params[:ri])
       end
     end
   end

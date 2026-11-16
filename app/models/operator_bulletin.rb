@@ -27,6 +27,12 @@
 class OperatorBulletin < OrgPrincipalRecord
   include PublicId
 
+  before_validation :generate_public_id, on: :create
+  before_validation :refresh_generated_public_id_after_collision, on: :create
+  before_create :generate_public_id
+  around_create :retry_public_id_collision
+  validate :public_id_immutable_after_create, on: :update
+  validates :public_id, presence: true, length: { is: PublicId::GENERATION_SIZE }, uniqueness: true
   belongs_to :staff, inverse_of: :staff_bulletins, class_name: "Operator"
 
   validates :title, presence: true
@@ -34,6 +40,7 @@ class OperatorBulletin < OrgPrincipalRecord
   scope :unread, -> { where(read_at: nil) }
   scope :oldest_first, -> { order(created_at: :asc) }
 
+  public
   def read?
     read_at.present?
   end

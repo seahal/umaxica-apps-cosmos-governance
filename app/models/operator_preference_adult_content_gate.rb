@@ -32,6 +32,7 @@ class OperatorPreferenceAdultContentGate < OrgPrincipalRecord
 
   before_validation :set_option_id
 
+  public
   def approved? = option_id == OperatorPreferenceAdultContentGateOption::APPROVED
 
   def denied? = option_id == OperatorPreferenceAdultContentGateOption::DENY

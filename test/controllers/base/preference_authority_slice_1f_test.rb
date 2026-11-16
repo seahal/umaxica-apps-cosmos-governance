@@ -5,7 +5,7 @@ require "test_helper"
 # require "helpers/global_test_support"
 
 class BasePreferenceAuthoritySlice1fTest < ActionDispatch::IntegrationTest
-  fixtures :clients, :client_preferences, :client_token_kinds
+  fixtures :clients, :client_preferences
 
   SURFACES = {
     app: {
@@ -37,8 +37,7 @@ class BasePreferenceAuthoritySlice1fTest < ActionDispatch::IntegrationTest
       # surface layout, so its presence is carried by the shared chrome prop rather than by markup.
       assert_select "script[data-page='app'][type='application/json']", count: 1
       assert_not inertia_props.dig("chrome", "theme_controls", "hidden")
-      assert_predicate cookies[PreferenceCookieName.access(surface: surface)], :present?
-      assert_predicate cookies[PreferenceCookieName.refresh(surface: surface)], :present?
+      assert_nil cookies[PreferenceCookieName.anonymous_jwt]
     end
   end
 
@@ -57,6 +56,39 @@ class BasePreferenceAuthoritySlice1fTest < ActionDispatch::IntegrationTest
       assert_equal "preference_theme", inertia_props.dig("form", "scope")
       assert_equal "option_id", inertia_props.dig("form", "field")
       assert_predicate inertia_choice_pairs, :any?
+    end
+  end
+
+  test "cookie banner settings url is the cookie preference edit for every surface" do
+    SURFACES.each do |surface, config|
+      host = ENV.fetch(config.fetch(:host_env), config.fetch(:host_default))
+      host! host
+
+      get public_send("base_#{surface}_preference_url", ri: "jp", host: host)
+
+      assert_response :success
+      uri = URI.parse(inertia_props.dig("chrome", "cookie_controls", "settings_url"))
+      query_keys = uri.query.to_s.split("&").map { |pair| pair.split("=", 2).first }
+
+      assert_equal "/preference/cookie/edit", uri.path
+      assert_equal "jp", Rack::Utils.parse_query(uri.query).fetch("ri")
+      assert_equal query_keys.uniq, query_keys
+      assert_not inertia_props.dig("chrome", "cookie_controls", "hidden")
+    end
+  end
+
+  test "base cookie preference edit hides the cookie banner for every surface" do
+    SURFACES.each do |surface, config|
+      host = ENV.fetch(config.fetch(:host_env), config.fetch(:host_default))
+      host! host
+
+      get public_send("edit_base_#{surface}_preference_cookie_url", ri: "jp", host: host)
+
+      assert_response :success
+      # The cookie screen owns consent while it is being edited, so the banner copy is
+      # suppressed through the chrome prop the same way the theme footer is on the theme screen.
+      assert inertia_props.dig("chrome", "cookie_controls", "hidden")
+      assert_equal "base/#{surface}/preference/cookie", inertia_component
     end
   end
 
@@ -106,7 +138,7 @@ class BasePreferenceAuthoritySlice1fTest < ActionDispatch::IntegrationTest
   end
 
   test "base org preference region edit posts to base host" do
-    host = ENV.fetch("PUBLIC_BASE_STAFF_URL", "base.org.localhost")
+    host = ENV.fetch("PUBLIC_BASE_STAFF_URL")
     host! host
 
     get edit_base_org_preference_region_url(ri: "jp", host: host)
@@ -135,13 +167,44 @@ class BasePreferenceAuthoritySlice1fTest < ActionDispatch::IntegrationTest
 
       assert_response :success
       assert_select "html[lang='en']"
-      assert_equal "Region & Language Settings", inertia_props.fetch("title")
+      # The region screen is not the language settings UI -- language has its own
+      # page -- so its heading names only the region.
+      assert_equal "Region Settings", inertia_props.fetch("title")
       assert_equal ["Japan - 日本", "United States - USA"], inertia_choice_labels.sort
     end
   end
 
+  test "base preference region edit disables the region already stored for every surface" do
+    https!
+    SURFACES.each do |surface, config|
+      host = ENV.fetch(config.fetch(:host_env))
+      host! host
+      region_option_class = PreferenceClassRegistry.option_class(surface.to_s.camelize, :region)
+
+      patch public_send("base_#{surface}_preference_region_path", ri: "us"),
+            params: { preference_region: { option_id: region_option_class::US } }
+
+      assert_response :redirect
+
+      get public_send("edit_base_#{surface}_preference_region_url", ri: "us", host: host)
+
+      assert_response :success
+
+      prefix = surface.to_s.camelize
+      us_id = PreferenceClassRegistry.option_class(prefix, :region)::US
+      jp_id = PreferenceClassRegistry.option_class(prefix, :region)::JP
+      choices = inertia_props.fetch("form").fetch("choices")
+      stored = choices.find { |choice| choice.fetch("value") == us_id }
+      other = choices.find { |choice| choice.fetch("value") == jp_id }
+
+      assert stored.fetch("disabled")
+      assert_not other.fetch("disabled")
+      assert_equal us_id, inertia_props.fetch("form").fetch("value")
+    end
+  end
+
   test "base org preference timezone edit posts to base host" do
-    host = ENV.fetch("PUBLIC_BASE_STAFF_URL", "base.org.localhost")
+    host = ENV.fetch("PUBLIC_BASE_STAFF_URL")
     host! host
 
     get edit_base_org_preference_timezone_url(ri: "jp", host: host)
@@ -153,7 +216,7 @@ class BasePreferenceAuthoritySlice1fTest < ActionDispatch::IntegrationTest
   end
 
   test "base app preference timezone edit renders localized timezone option labels" do
-    host = ENV.fetch("PUBLIC_BASE_SERVICE_URL", "base.app.localhost")
+    host = ENV.fetch("PUBLIC_BASE_SERVICE_URL")
     host! host
 
     get edit_base_app_preference_timezone_url(ri: "us", lx: "ja", host: host)
@@ -175,83 +238,124 @@ class BasePreferenceAuthoritySlice1fTest < ActionDispatch::IntegrationTest
     assert_includes inertia_choice_labels, "Japan Standard Time (Asia/Tokyo)"
   end
 
-  test "base preference write updates app user preference" do
-    host = ENV.fetch("PUBLIC_BASE_SERVICE_URL", "base.app.localhost")
+  test "base preference timezone choices are ordered by ascending UTC offset" do
+    host = ENV.fetch("PUBLIC_BASE_SERVICE_URL")
     host! host
-    user = clients(:one)
-    token = ClientToken.create!(user: user, user_token_kind_id: ClientTokenKind::BROWSER_WEB)
 
-    patch base_app_preference_theme_url(host: host),
-          params: { preference_theme: { option_id: "dr" } },
-          headers: session_headers(host, token, user),
-          as: :json
+    get edit_base_app_preference_timezone_url(ri: "jp", host: host)
 
-    assert_response :ok
-    assert_equal "dr", response.parsed_body.dig("preference", "ct")
-    assert_equal "dr", user.user_preference.reload.theme
+    assert_response :success
+
+    # Option row ids: 1 Etc/UTC, 2 Asia/Tokyo, 3 New_York, 4 Chicago, 5 Denver, 6 Los_Angeles,
+    # 7 Anchorage, 8 Honolulu. Standard offsets ascending run Honolulu (UTC-10) -> ... -> New_York
+    # (UTC-05) -> UTC (UTC+00) -> Tokyo (UTC+09), which is deliberately not the id order.
+    assert_equal(
+      [8, 7, 6, 5, 4, 3, 1, 2],
+      inertia_choice_pairs.map(&:last),
+    )
+  end
+
+  test "base preference write updates app client preference" do
+    as_rp_cell("base-app-ww") do
+      host = ENV.fetch("PUBLIC_BASE_SERVICE_URL")
+      host! host
+      user = clients(:one)
+
+      patch base_app_preference_theme_url(host: host),
+            params: { preference_theme: { option_id: ClientPreferenceThemeOption::DARK.to_s } },
+            headers: as_user_headers(user, host: host),
+            as: :json
+
+      assert_response :ok
+      assert_equal "dr", response.parsed_body.dig("preference", "ct")
+      actor_preference = user.client_preference
+
+      assert_equal ClientPreferenceThemeOption::DARK, actor_preference.client_preference_theme.option_id
+    end
   end
 
   test "base preference GET overlay does not overwrite signed in app preference" do
-    host = ENV.fetch("PUBLIC_BASE_SERVICE_URL", "base.app.localhost")
-    host! host
-    user = clients(:one)
-    token = ClientToken.create!(user: user, user_token_kind_id: ClientTokenKind::BROWSER_WEB)
-    user.user_preference.update!(language: "ja", timezone: "Asia/Tokyo", theme: "li")
+    as_rp_cell("base-app-ww") do
+      host = ENV.fetch("PUBLIC_BASE_SERVICE_URL")
+      host! host
+      user = clients(:one)
+      set_client_preference_option!(user, :language, "ja")
+      set_client_preference_option!(user, :timezone, "Asia/Tokyo")
+      set_client_preference_option!(user, :theme, "light")
 
-    get base_app_preference_url(host: host, ri: "jp", lx: "en", tz: "utc", ct: "dr"),
-        headers: session_headers(host, token, user)
+      get base_app_preference_url(host: host, ri: "jp", lx: "en", tz: "utc", ct: "dr"),
+          headers: as_user_headers(user, host: host)
 
-    assert_response :success
-    user.user_preference.reload
+      assert_response :success
+      user.client_preference.reload
 
-    assert_equal "ja", user.user_preference.language
-    assert_equal "Asia/Tokyo", user.user_preference.timezone
-    assert_equal "li", user.user_preference.theme
+      assert_equal ClientPreferenceLanguageOption::JA,
+                   user.client_preference.client_preference_language.option_id
+      assert_equal ClientPreferenceTimezoneOption::ASIA_TOKYO,
+                   user.client_preference.client_preference_timezone.option_id
+      assert_equal ClientPreferenceThemeOption::LIGHT,
+                   user.client_preference.client_preference_theme.option_id
+    end
   end
 
   test "base preference ignores JS readable theme cookie as canonical input" do
-    host = ENV.fetch("PUBLIC_BASE_SERVICE_URL", "base.app.localhost")
-    host! host
-    user = clients(:one)
-    token = ClientToken.create!(user: user, user_token_kind_id: ClientTokenKind::BROWSER_WEB)
-    user.user_preference.update!(theme: "li")
-    cookies[PreferenceBase::THEME_COOKIE_KEY] = "dr"
+    as_rp_cell("base-app-ww") do
+      host = ENV.fetch("PUBLIC_BASE_SERVICE_URL")
+      host! host
+      user = clients(:one)
+      set_client_preference_option!(user, :theme, "light")
+      cookies[PreferenceCookieName.anonymous_experience] = "{\"theme\":\"dark\"}"
 
-    get base_app_preference_url(host: host, ri: "jp"),
-        headers: session_headers(host, token, user)
+      get base_app_preference_url(host: host, ri: "jp"),
+          headers: as_user_headers(user, host: host)
 
-    assert_response :success
-    assert_equal "li", user.user_preference.reload.theme
+      assert_response :success
+      assert_equal ClientPreferenceThemeOption::LIGHT,
+                   user.client_preference.reload.client_preference_theme.option_id
+    end
   end
 
   test "base preference reset remains destructive and removes app user preference" do
-    host = ENV.fetch("PUBLIC_BASE_SERVICE_URL", "base.app.localhost")
-    host! host
-    user = clients(:one)
-    token = ClientToken.create!(user: user, user_token_kind_id: ClientTokenKind::BROWSER_WEB)
-    user.user_preference.update!(theme: "dr")
+    as_rp_cell("base-app-ww") do
+      host = ENV.fetch("PUBLIC_BASE_SERVICE_URL")
+      host! host
+      user = clients(:one)
+      set_client_preference_option!(user, :theme, "dark")
 
-    delete base_app_preference_customization_url(host: host),
-           params: { confirm_reset: "1" },
-           headers: session_headers(host, token, user)
+      delete base_app_preference_customization_url(host: host),
+             params: { confirm_reset: "1" },
+             headers: as_user_headers(user, host: host)
 
-    assert_redirected_to base_app_preference_url(host: host)
-    assert_nil user.reload.user_preference
+      assert_redirected_to base_app_preference_url(host: host)
+      assert_equal ClientPreferenceStatus::RETIRED,
+                   ClientPreference.find_by!(client_id: user.id).status_id
+    end
   end
 
   private
+
+  def set_client_preference_option!(client, field, option_name)
+    preference =
+      ClientPreference.find_or_create_by!(
+        client_id: client.id,
+        status_id: ClientPreferenceStatus::ACTIVE,
+      ) do |record|
+        record.explicit_fields = []
+      end
+    option_class = PreferenceClassRegistry.option_class("Client", field)
+    option = option_class.all.find { |candidate| candidate.name == option_name }
+    raise ActiveRecord::RecordNotFound, "preference option is unavailable" unless option
+
+    record_class = PreferenceClassRegistry.record_class("Client", field)
+    record = record_class.find_or_initialize_by(preference_id: preference.id)
+    record.update!(option_id: option.id)
+    preference.update!(explicit_fields: (preference.explicit_field_names + [field.to_s]).uniq)
+  end
 
   # The screen forms live in the Inertia page object, so the action a screen posts to is a prop
   # rather than a form element attribute.
   def preference_form_action_path
     URI.parse(inertia_props.fetch("form").fetch("action")).path
-  end
-
-  def session_headers(host, token, user)
-    bearer_headers(
-      jwt_access_token_for(user, host: host, session_public_id: token.public_id, resource_type: "client"),
-      host: host,
-    )
   end
 
   def host_headers(host = nil)
@@ -262,13 +366,6 @@ class BasePreferenceAuthoritySlice1fTest < ActionDispatch::IntegrationTest
     host_headers(host).merge(headers).merge("Authorization" => "Bearer #{token}")
   end
 
-  def jwt_access_token_for(resource, host: nil, session_public_id: nil, resource_type: nil)
-    AuthenticationToken.encode(
-      resource, host: host, session_public_id: session_public_id, resource_type: resource_type,
-                jwt_issuer_id: jwt_issuer_id_for_test_host(host, resource_type),
-    )
-  end
-
   # Base shares its production origin with Acme (both `https://www.umaxica.<tld>`), so the
   # issuer namespace cannot be inferred from a host substring like "base". Match against the
   # actual configured Base hosts first; fall back to substring heuristics for surfaces whose
@@ -276,18 +373,17 @@ class BasePreferenceAuthoritySlice1fTest < ActionDispatch::IntegrationTest
   def jwt_issuer_id_for_test_host(host, resource_type)
     normalized = host.to_s
     base_hosts = {
-      "APP" => ENV.fetch("PUBLIC_BASE_SERVICE_URL", "base.app.localhost"),
-      "ORG" => ENV.fetch("PUBLIC_BASE_STAFF_URL", "base.org.localhost"),
-      "COM" => ENV.fetch("PUBLIC_BASE_CORPORATE_URL", "base.com.localhost"),
+      "APP" => ENV.fetch("PUBLIC_BASE_SERVICE_URL"),
+      "ORG" => ENV.fetch("PUBLIC_BASE_STAFF_URL"),
+      "COM" => ENV.fetch("PUBLIC_BASE_CORPORATE_URL"),
     }
     return "surface:BASE_#{base_hosts.key(normalized)}" if base_hosts.value?(normalized)
 
-    service = normalized.include?("acme") ? "ACME" : (normalized.include?("core") ? "CORE" : "SIGN")
+    service = normalized.include?("acme") ? "ACME" : (normalized.include?("core") ? "CORE" : "AUTH")
     surface =
-      if service == "SIGN"
+      if service == "AUTH"
         case resource_type
         when "operator" then "ORG"
-        when "visitor" then "COM"
         else "APP"
         end
       elsif normalized.include?(".org") || normalized.include?("org.")

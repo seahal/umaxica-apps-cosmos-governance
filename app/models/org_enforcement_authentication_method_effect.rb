@@ -13,6 +13,9 @@ class OrgEnforcementAuthenticationMethodEffect < OrgPrincipalRecord
                                 inverse_of: :authentication_method_effects
 
   validates :principal_public_id, presence: true
+  validates :principal_public_id,
+            uniqueness: { scope: :authentication_method, conditions: -> { where(ended_at: nil) } },
+            if: -> { ended_at.nil? }
   validates :authentication_method, presence: true, inclusion: { in: METHODS }
   validates :effect, presence: true, inclusion: { in: EFFECTS }
   validates :effective_at, presence: true

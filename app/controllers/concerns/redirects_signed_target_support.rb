@@ -55,6 +55,8 @@ module RedirectsSignedTargetSupport
     expected_session_nonce = session_nonce.to_s
     return true if expected_session_nonce.blank?
 
+    # NOTICE: Session nonce compared with `==` after the signed target is verified, so a forged
+    # target cannot reach it. Move to secure_compare (docs/backlog/2026-11-10-core-security-review-followups.md, item 3).
     payload["session_nonce"].to_s == expected_session_nonce
   end
 
@@ -79,27 +81,6 @@ module RedirectsSignedTargetSupport
     uri.query.present? ? "#{path}?#{uri.query}" : path
   rescue URI::InvalidURIError
     nil
-  end
-
-  def log_signed_target_rejection(event_name, reason, payload: nil)
-    Rails.logger.info(
-      JitLogEvent.format(
-        event_name,
-        reason: reason,
-        flow: payload&.dig("flow"),
-        surface: payload&.dig("surface"),
-        request_host: signed_target_request_attribute(:host),
-        request_path: signed_target_request_attribute(:fullpath),
-        request_id: signed_target_request_attribute(:request_id),
-      ),
-    )
-  end
-
-  def signed_target_request_attribute(name)
-    return nil unless respond_to?(:request, true)
-    return nil unless request.respond_to?(name)
-
-    request.public_send(name)
   end
 
   def signed_target_verifier(salt)

@@ -9,12 +9,14 @@
 class EnforcementExpiryJob < ApplicationJob
   queue_as :retention
 
-  CASE_CLASSES = [AppEnforcementCase, ComEnforcementCase, OrgEnforcementCase].freeze
+  CASE_CLASSES = [AppEnforcementCase, OrgEnforcementCase].freeze
 
+  public
   def perform(batch_size: 200)
     now = Time.current
     CASE_CLASSES.each do |case_class|
-      case_class.where(state: "active", ended_at: nil).where(expires_at: ..now).in_batches(of: batch_size) do |batch|
+      case_class.includes(:principal_effect)
+        .where(state: "active", ended_at: nil).where(expires_at: ..now).in_batches(of: batch_size) do |batch|
         batch.find_each { |enforcement_case| expire!(enforcement_case) }
       end
     end

@@ -2,6 +2,7 @@
 # frozen_string_literal: true
 
 require "test_helper"
+require_relative "../support/avatar_test_factory"
 # require "helpers/global_test_support"
 
 class AvatarFollowPolicyTest < ActiveSupport::TestCase
@@ -43,15 +44,6 @@ class AvatarFollowPolicyTest < ActiveSupport::TestCase
     assert_not AvatarFollowPolicy.new(record, user: actor).create?
   end
 
-  test "block precedence wins over follow" do
-    actor = create_avatar("Actor")
-    target = create_avatar("Target")
-    target.outgoing_blocks.create!(blocked_avatar: actor)
-    record = AvatarFollow.new(follower_avatar: actor, followed_avatar: target)
-
-    assert_not AvatarFollowPolicy.new(record, user: actor).create?
-  end
-
   test "destroy allows follower owner" do
     actor = create_avatar("Actor")
     target = create_avatar("Target")
@@ -72,6 +64,6 @@ class AvatarFollowPolicyTest < ActiveSupport::TestCase
   private
 
   def create_avatar(moniker)
-    Avatar.create!(capability: @capability, active_handle: @handle, moniker: moniker)
+    AvatarTestFactory.create!(moniker: moniker, capability: @capability, active_handle: @handle)
   end
 end

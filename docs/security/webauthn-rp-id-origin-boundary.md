@@ -1,37 +1,24 @@
-# WebAuthn RP ID And Origin Boundary
+# WebAuthn RP ID and origin boundary
 
-## Boundary
+> **Superseded for Governance runtime (2026-11-13):** Access owns browser WebAuthn ceremony
+> execution and its RP ID/origin verification. Governance has no local browser assertion, passkey
+> registration, signed-result consumption, or RP configuration path. The rules below preserve the
+> security rationale for the service that owns ceremony execution; they are not implemented by this
+> Governance application.
 
-WebAuthn and passkey ceremonies run in `sign/id` because browser origin, RP ID, provider callback,
-and challenge handling require stable credential ceremony URLs.
+WebAuthn credentials are scoped to a relying party and a browser origin. The ceremony owner must
+bind the RP ID and origin to an explicit surface, require the configured HTTPS origin in production,
+and compare scheme, host, and effective port. Request host data and redirect parameters are not
+verification evidence. A browser assertion is accepted only after the owner validates the signed
+WebAuthn response and its actor, session, and transaction binding.
 
-The WebAuthn ceremony result is evidence. `acme/www` consumes the signed result and commits any
-session, account, credential-enrollment, authorization, or freshness effect that belongs to acme.
-
-## Sign/ID Responsibilities
-
-`sign/id` may own:
-
-- WebAuthn RP ID and origin ceremony validation;
-- challenge generation and short-lived challenge state;
-- credential inventory needed for assertion or registration;
-- attestation and assertion verification;
-- ceremony audit records.
-
-## Acme/WWW Responsibilities
-
-`acme/www` owns:
-
-- account lifecycle decisions;
-- session creation and freshness updates;
-- authorization decisions;
-- preference/settings/dashboard state;
-- downstream token issuance.
-
-Physical credential tables may remain sign-side during this implementation phase. That placement
-does not authorize sign-side sessions, account lifecycle, preference writes, or freshness storage.
+Governance retains Client and Operator credential records and maps them to their owning app or org
+surface through `Webauthn::Surface`. That data ownership mapping is not an RP configuration object.
+Governance also retains RP-local step-up state and the Access handoff; neither establishes that a
+local WebAuthn assertion was verified.
 
 ## Related
 
-- `docs/security/credential-gateway.md`
-- `docs/security/ceremony-grant-result.md`
+- [Passkey lifecycle and audit](passkey-lifecycle-and-audit.md)
+- [WebAuthn security invariants](webauthn-security-invariants.md)
+- [Redirects versus authentication evidence](redirect-vs-ceremony-result.md)

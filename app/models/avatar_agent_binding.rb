@@ -26,11 +26,15 @@
 #
 class AvatarAgentBinding < AvatarRecord
   include PublicId
-  include AvatarPersonaBindingRevocation
 
+  before_validation :generate_public_id, on: :create
+  before_validation :refresh_generated_public_id_after_collision, on: :create
   before_validation :default_assigned_at, on: :create
-
-  scope :active, -> { where(revoked_at: nil) }
+  before_create :generate_public_id
+  around_create :retry_public_id_collision
+  validate :public_id_immutable_after_create, on: :update
+  validates :public_id, presence: true, length: { is: PublicId::GENERATION_SIZE }, uniqueness: true
+  include AvatarPersonaBindingRevocation
 
   belongs_to :avatar, inverse_of: :avatar_agent_binding
   belongs_to :agent, inverse_of: :avatar_agent_binding
@@ -41,6 +45,8 @@ class AvatarAgentBinding < AvatarRecord
             if: -> { assigned_at.present? && revoked_at.present? }
   validates :avatar_id, uniqueness: { conditions: -> { active } }, if: :active?
   validates :agent_id, uniqueness: { conditions: -> { active } }, if: :active?
+
+  scope :active, -> { where(revoked_at: nil) }
 
   private
 

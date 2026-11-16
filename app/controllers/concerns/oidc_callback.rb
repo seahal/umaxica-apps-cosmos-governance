@@ -6,291 +6,209 @@ require "digest"
 module OidcCallback
   extend ActiveSupport::Concern
 
-  InvalidCallbackState = Class.new(StandardError)
-  OIDC_PENDING_FLOWS_SESSION_KEY = "oidc_pending_flows"
-  OIDC_PENDING_FLOW_TTL = 10.minutes
+  include OidcRpRoutePath
+
+  # Required private hooks: rp_client_id, rp_realm, rp_log_surface, rp_op_origin, rp_op_jwks_uri,
+  # rp_default_landing_path, rp_callback_path, rp_interruption_path, rp_sign_path, rp_cell_binding,
+  # and rp_record_class. The including controller owns realm-specific values and route helpers.
+
+  InvalidCallbackState =
+    Class.new(StandardError) do
+      attr_reader :reason
+
+      def initialize(reason)
+        @reason = reason
+        super("OIDC callback state is invalid")
+      end
+    end
+  OIDC_PENDING_FLOWS_SESSION_KEY = OidcSsoInitiator::OIDC_PENDING_FLOWS_SESSION_KEY
+  SESSION_TTL = 1.hour
+  SESSION_RENEWAL_COOKIE_GRACE = 5.minutes
+
+  public
 
   def show
     response.set_header("Cache-Control", "no-store")
-    validate_state!
-    token_result = exchange_code!
-    return render_callback_failure(token_result.error) unless token_result.success?
+    response.set_header("Referrer-Policy", "no-referrer")
+    flow = consume_validated_flow!
+    return unless flow
 
-    id_token_result = verify_id_token!(token_result.token_response[:id_token])
-    return render_callback_failure(id_token_result.error) unless id_token_result.success?
+    return callback_failure!("mixed_response") if mixed_response?
+    return callback_failure!("callback_url_too_long") unless callback_url_within_jump_limit?
+    return handle_op_error! if params[:error].present?
+    return callback_failure!("id_token_missing") if params[:id_token].blank?
 
-    resource = provision_rp_account_from_id_token!(id_token_result)
-    login_result =
-      ActiveRecord::Base.connected_to(role: :writing) do
-        log_in(
-          resource, token_kind_id: "BROWSER_WEB", require_totp_check: false,
-                    audit_context: { oidc_client_id: oidc_client_id },
-                    skip_login_cooldown: true,
-        )
-      end
-    return render_oidc_session_limit_hard_reject(login_result) if login_result[:status] == :session_limit_hard_reject
-
-    if login_result[:session_management_required]
-      bind_oidc_rp_logout_session!(id_token_result.payload)
-      return redirect_to(oidc_session_management_path, allow_other_host: false)
-    end
-
-    return render_callback_failure("login_failed") unless login_result[:status] == :success
-
-    bind_oidc_rp_logout_session!(id_token_result.payload)
-
-    redirect_to(consume_oidc_pt, allow_other_host: false)
-  rescue InvalidCallbackState => e
-    log_invalid_callback_state!(e.message)
-    clear_oidc_session_state!(pending_flows: e.message == "OIDC state mismatch")
-    render plain: I18n.t("errors.messages.login_required"), status: :unprocessable_content
+    process_id_token(flow)
+  rescue ActiveRecord::ActiveRecordError, OidcOpJwksClient::FetchError => e
+    callback_failure!("dependency_unavailable", detail: e.class.name)
+  rescue ::Oidc::AcmeServiceOrigin::ConfigurationUnavailable
+    callback_failure!("dependency_unavailable", detail: "op_host_unconfigured")
+  rescue ArgumentError, KeyError, TypeError
+    callback_failure!("callback_invalid")
   end
 
   private
 
-  def validate_state!
-    actual = params[:state].to_s
-    @current_oidc_flow, @current_oidc_flow_expired = consume_oidc_pending_flow(actual)
-    raise InvalidCallbackState, "OIDC state expired" if @current_oidc_flow_expired
-
-    clear_legacy_oidc_flow_if_current!(actual) if @current_oidc_flow.present?
-    expected = @current_oidc_flow.present? ? actual : session.delete(:oidc_state).to_s
-    @oidc_invalid_state_context = oidc_invalid_state_context(expected: expected, actual: actual)
-    unless expected.present? && actual.present? && expected.bytesize == actual.bytesize &&
-        ActiveSupport::SecurityUtils.secure_compare(expected, actual)
-      raise InvalidCallbackState, "OIDC state mismatch"
-    end
-
-    @oidc_invalid_state_context = nil
+  def mixed_response?
+    params[:code].present? || params[:access_token].present? || params[:refresh_token].present?
   end
 
-  def exchange_code!
-    code_verifier = oidc_flow_value("code_verifier") || session.delete(:oidc_code_verifier)
-    raise InvalidCallbackState, "OIDC PKCE verifier missing" if code_verifier.blank?
-
-    OidcRpTokenClient.call(
-      token_url: oidc_token_url,
-      client_id: oidc_client_id,
-      client_secret: oidc_client_secret,
-      code: params[:code],
-      redirect_uri: oidc_callback_url,
-      code_verifier: code_verifier,
-    )
-  end
-
-  def verify_id_token!(id_token)
-    OidcIdTokenVerifier.call(
-      id_token: id_token,
-      client_id: oidc_client_id,
-      resource_type: oidc_resource_type,
-      expected_nonce: oidc_flow_value("nonce") || session.delete(:oidc_nonce),
-      issuer: OidcIssuer.for_resource_type(oidc_resource_type),
-      jwt_issuer_id: OidcIssuer.jwt_issuer_id_for_resource_type(oidc_resource_type),
-    )
-  end
-
-  def oidc_client_secret
-    oidc_client&.client_secret
-  end
-
-  def consume_oidc_pt
-    pending_pt = oidc_flow_value("pt").presence
-    legacy_pt = session.delete(:oidc_pt).presence
-    pt = pending_pt || legacy_pt || "/"
-    log_oidc_callback_return_to(
-      pt: pt,
-      source: pending_pt.present? ? "pending_flow" : legacy_pt.present? ? "legacy" : "default",
-    )
-    pt
-  end
-
-  def session_limit_gate_pt
-    oidc_flow_value("pt").presence || session[:oidc_pt].presence ||
-      (defined?(super) ? super : request&.fullpath.presence || request&.path.presence || "/")
-  rescue StandardError
-    "/"
-  end
-
-  def render_oidc_session_limit_hard_reject(login_result)
-    if respond_to?(:render_session_limit_hard_reject, true)
-      return render_session_limit_hard_reject(
-        message: login_result[:message],
-        http_status: login_result[:http_status],
+  def process_id_token(flow)
+    verification = verify_id_token(params[:id_token].to_s, flow.fetch("nonce"))
+    unless verification.success?
+      return callback_failure!(
+        (verification.error == "key_unavailable") ? "dependency_unavailable" : "id_token_invalid",
+        detail: verification.detail,
       )
     end
 
-    render plain: login_result[:message].presence || I18n.t("session_limit.login_limit_exceeded"),
-           status: login_result[:http_status].presence || :forbidden
-  end
+    result = commit_callback(verification.payload, flow)
+    unless result.session
+      return callback_failure!((result.outcome == :replayed) ? "id_token_replayed" : "identity_resolution_failed")
+    end
 
-  def oidc_session_management_path
-    return session_management_path if respond_to?(:session_management_path, true)
-    return sign_app_sign_in_session_path if respond_to?(:sign_app_sign_in_session_path, true)
-    return sign_org_sign_in_session_path if respond_to?(:sign_org_sign_in_session_path, true)
-    return sign_com_sign_in_session_path if respond_to?(:sign_com_sign_in_session_path, true)
-
-    "/sign/in/session"
-  end
-
-  def render_callback_failure(error)
-    Rails.logger.info(
-      JitLogEvent.format(
-        "oidc.rp.callback.failed",
-        error: error,
-        client_id: oidc_client_id,
-        host: request.host,
-      ),
-    )
-    clear_oidc_session_state!
-    redirect_to(sign_in_url_with_pt(nil), allow_other_host: true)
-  end
-
-  def log_invalid_callback_state!(reason)
-    Rails.logger.info(
-      JitLogEvent.format(
-        "oidc.rp.callback.invalid_state",
-        reason: reason,
-        client_id: oidc_client_id,
-        host: request.host,
-        grant_present: params[:code].present?,
-        csrf_present: params[:state].present?,
-        **(@oidc_invalid_state_context || {}),
-      ),
+    install_authenticated_session!(result.session)
+    redirect_to(
+      RpTargetLinkUri.normalize(verification_target) || rp_default_landing_path,
+      allow_other_host: false, status: :see_other,
     )
   end
 
-  def oidc_invalid_state_context(expected:, actual:)
-    {
-      expected_state_present: expected.present?,
-      actual_state_present: actual.present?,
-      expected_state_digest12: oidc_state_digest12(expected),
-      actual_state_digest12: oidc_state_digest12(actual),
-      code_verifier_present: oidc_flow_value("code_verifier").present? || session[:oidc_code_verifier].present?,
-      nonce_present: oidc_flow_value("nonce").present? || session[:oidc_nonce].present?,
-      pt_present: oidc_flow_value("pt").present? || session[:oidc_pt].present?,
-    }
-  end
-
-  def oidc_state_digest12(value)
-    return nil if value.blank?
-
-    Digest::SHA256.hexdigest(value.to_s).first(12)
-  end
-
-  def log_oidc_callback_return_to(pt:, source:)
-    Rails.logger.info(
-      JitLogEvent.format(
-        "oidc.rp.callback.return_to",
-        client_id: oidc_client_id,
-        host: request.host,
-        source: source,
-        pt_digest12: oidc_state_digest12(pt),
-        pt_is_root: pt == "/",
-        pending_flow_present: @current_oidc_flow.present?,
-      ),
-    )
-  end
-
-  def clear_oidc_session_state!(pending_flows: false)
-    session.delete(:oidc_code_verifier)
-    session.delete(:oidc_state)
-    session.delete(:oidc_nonce)
-    session.delete(:oidc_pt)
-    session.delete(OIDC_PENDING_FLOWS_SESSION_KEY) if pending_flows
-  end
-
-  def consume_oidc_pending_flow(state)
-    return nil if state.blank?
+  def consume_validated_flow!
+    state = OidcStateJwt.verify(client_id: rp_client_id, token: params[:state].to_s)
+    raise InvalidCallbackState.new("state_token_invalid") unless state.valid?
 
     flows = session[OIDC_PENDING_FLOWS_SESSION_KEY]
-    return nil unless flows.is_a?(Hash)
+    flow = flows[state.jti] if flows.is_a?(Hash)
+    raise InvalidCallbackState.new("pending_flow_missing") unless flow.is_a?(Hash)
 
-    flow = flows[state]
-    return [nil, false] unless flow.is_a?(Hash)
-
-    created_at = Time.at(flow["created_at"].to_i).utc
-    if created_at.blank? || created_at + OIDC_PENDING_FLOW_TTL < Time.current.utc
-      flows.delete(state)
-      store_oidc_pending_flows!(flows)
-      return [nil, true]
+    raw_created_at = flow.fetch("created_at")
+    created_at = raw_created_at.is_a?(Integer) ? raw_created_at : Integer(raw_created_at, 10)
+    if Time.current.to_i >= created_at + OidcStateJwt::TTL.to_i
+      consume_pending_flows!
+      raise InvalidCallbackState.new("pending_flow_expired")
+    end
+    nonce = flow.fetch("nonce")
+    unless nonce.is_a?(String) && nonce.present?
+      consume_pending_flows!
+      raise InvalidCallbackState.new("pending_flow_invalid")
     end
 
-    flows.delete(state)
-    store_oidc_pending_flows!(flows)
-    [flow, false]
+    @verified_oidc_target_link_uri = RpTargetLinkUri.normalize(state.target_link_uri)
+    consume_pending_flows!
+    verify_authorization_response_issuer!
+    flow
+  rescue InvalidCallbackState => e
+    log_callback_failure(e.reason)
+    consume_pending_flows!
+    redirect_to(rp_interruption_path, allow_other_host: false, status: :see_other)
+    nil
+  rescue ArgumentError, KeyError, TypeError
+    log_callback_failure("state_invalid")
+    consume_pending_flows!
+    redirect_to(rp_interruption_path, allow_other_host: false, status: :see_other)
+    nil
   end
 
-  def store_oidc_pending_flows!(flows)
-    if flows.empty?
-      session.delete(OIDC_PENDING_FLOWS_SESSION_KEY)
-    else
-      session[OIDC_PENDING_FLOWS_SESSION_KEY] = flows
+  def verify_authorization_response_issuer!
+    actual = params[:iss].to_s
+    expected = rp_op_origin.origin
+    valid = actual.present? && actual.bytesize == expected.bytesize &&
+      ActiveSupport::SecurityUtils.secure_compare(actual, expected)
+    raise InvalidCallbackState.new("issuer_invalid") unless valid
+  end
+
+  def callback_url_within_jump_limit?
+    url = request.original_url
+    return false unless url.valid_encoding?
+
+    url.encode(Encoding::UTF_16LE).bytesize / 2 <= JumpRtIssuer::MAX_URL_LENGTH
+  rescue EncodingError
+    false
+  end
+
+  def verify_id_token(id_token, nonce)
+    OidcOpIdTokenVerifier.new(
+      id_token:, client_id: rp_client_id, realm: rp_realm, issuer: rp_op_origin.origin,
+      expected_nonce: nonce, jwks_client: OidcOpJwksClient.for_jwks_uri(rp_op_jwks_uri),
+    ).call
+  rescue ArgumentError
+    OidcOpIdTokenVerifier::Result.new(success: false, payload: nil, error: "invalid_id_token", detail: "configuration")
+  end
+
+  def commit_callback(payload, flow)
+    absolute_expires_at = Time.current + SESSION_TTL
+    rp_record_class.connected_to(role: :writing) do
+      RpCallbackCommitter.call(
+        cell: rp_cell_binding, issuer: payload.fetch("iss"), subject: payload.fetch("sub"),
+        sid: payload.fetch("sid"), absolute_expires_at:,
+        id_token_jti_digest: Digest::SHA256.hexdigest(payload.fetch("jti")),
+        id_token_expires_at: Time.at(payload.fetch("exp")).utc + OidcOpIdTokenVerifier::CLOCK_SKEW_LEEWAY_SECONDS,
+        authentication_evidence: payload.slice("acr", "amr", "auth_time").merge(
+          "id_token_jti_digest" => Digest::SHA256.hexdigest(payload.fetch("jti")),
+        ),
+        renewal_session_id: flow["renewal_session_id"],
+      )
     end
   end
 
-  def oidc_flow_value(key)
-    @current_oidc_flow&.[](key)
+  def install_authenticated_session!(rp_session)
+    reset_session
+    session[:inertia_clear_history] = true
+    cookies[OidcRpBrowserCredentialContract::SESSION_COOKIE] =
+      OidcRpBrowserCredentialContract.session_cookie_options(
+        expires_at: rp_session.absolute_expires_at + SESSION_RENEWAL_COOKIE_GRACE,
+      ).merge(value: rp_session.public_id)
+    delete_browser_access_cookies!
   end
 
-  def clear_legacy_oidc_flow_if_current!(state)
-    return unless session[:oidc_state].to_s == state
-
-    session.delete(:oidc_code_verifier)
-    session.delete(:oidc_state)
-    session.delete(:oidc_nonce)
-    session.delete(:oidc_pt)
-  end
-
-  def bind_oidc_rp_logout_session!(payload)
-    sid = payload["sid"].to_s
-    return unless oidc_callback_uuid_identifier?(sid)
-
-    token_record = @current_session
-    return unless token_record&.respond_to?(:update_columns)
-
-    updates = {}
-    updates[:oidc_sid] = sid if token_record.has_attribute?(:oidc_sid)
-    updates[:oidc_client_id] = oidc_client_id if token_record.has_attribute?(:oidc_client_id)
-    return if updates.blank?
-
-    token_record_connection_owner(token_record.class).connected_to(role: :writing) do
-      token_record.update!(**updates)
-    end
-  end
-
-  def oidc_resource_type
-    return rp_actor_resource_type if respond_to?(:rp_actor_resource_type, true)
-
-    OidcIssuer.resource_type_for_client(oidc_client)
-  end
-
-  def oidc_callback_uuid_identifier?(value)
-    /\A[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\z/i.match?(
-      value.to_s,
+  def delete_browser_access_cookies!
+    cookies.delete(
+      OidcRpBrowserCredentialContract::ACCESS_COOKIE,
+      OidcRpBrowserCredentialContract.access_cookie_deletion_options,
+    )
+    cookies.delete(
+      OidcRpBrowserCredentialContract::REFRESH_COOKIE,
+      OidcRpBrowserCredentialContract.refresh_cookie_deletion_options,
     )
   end
 
-  def oidc_client
-    @oidc_client ||= OidcClientRegistry.find!(oidc_client_id)
+  def handle_op_error!
+    if params[:error].to_s == "login_required"
+      log_callback_failure("login_required")
+      redirect_to(
+        rp_sign_path(
+          ri: RequestContextContract.normalize_region(params[:ri]),
+          target_link_uri: verification_target,
+        ),
+        allow_other_host: false, status: :see_other,
+      )
+    else
+      callback_failure!("authorization_error")
+    end
   end
 
-  def oidc_client_id
-    raise NotImplementedError, "controller must define oidc_client_id"
+  def callback_failure!(reason, detail: nil)
+    log_callback_failure(reason, detail:)
+    consume_pending_flows!
+    redirect_to(rp_interruption_path, allow_other_host: false, status: :see_other)
   end
 
-  def provision_rp_account_from_id_token!(verification_result)
-    payload = verification_result.respond_to?(:payload) ? verification_result.payload : verification_result
-    canonical_audience =
-      if verification_result.respond_to?(:canonical_audience)
-        verification_result.canonical_audience
-      else
-        oidc_client_id
-      end
-
-    provision_rp_account_from_id_token_payload!(payload, canonical_audience)
+  def consume_pending_flows!
+    session.delete(OIDC_PENDING_FLOWS_SESSION_KEY)
   end
 
-  def provision_rp_account_from_id_token_payload!(_payload, _canonical_audience)
-    raise NotImplementedError, "controller must provision RP account"
+  def log_callback_failure(reason, detail: nil)
+    Rails.logger.info(
+      JitLogEvent.format(
+        "oidc.rp.callback.failed", surface: rp_log_surface, client_id: rp_client_id,
+                                   request_id: request.request_id, status: Rack::Utils.status_code(:see_other),
+                                   reason:, detail:,
+      ),
+    )
+  end
+
+  def verification_target
+    @verified_oidc_target_link_uri
   end
 end

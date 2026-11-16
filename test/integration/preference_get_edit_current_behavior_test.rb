@@ -38,4 +38,26 @@ class PreferenceGetEditCurrentBehaviorTest < ActionDispatch::IntegrationTest
     assert_response :success
     assert_nil AppPreferenceTheme.find_by(preference_id: preference.id)
   end
+
+  test "PATCH selectable app preference updates through the screen action boundary" do
+    host = ENV.fetch("PUBLIC_BASE_SERVICE_URL")
+    host! host
+    https!
+
+    patch base_app_preference_region_path(ri: "jp"),
+          params: { preference_region: { option_id: AppPreferenceRegionOption::JP.to_s } }
+
+    assert_response :redirect
+
+    patch base_app_preference_currency_path(ri: "jp"),
+          params: { preference_currency: { option_id: AppPreferenceCurrencyOption::USD.to_s } }
+
+    assert_response :redirect
+
+    claims = PreferenceToken.decode(cookies[PreferenceCookieName.anonymous_jwt], host:, jwt_issuer_id: "preference_app")
+    preference = AppPreference.find_by!(public_id: claims.fetch("sub"))
+
+    assert_equal AppPreferenceCurrencyOption::USD,
+                 AppPreferenceCurrency.find_by!(preference_id: preference.id).option_id
+  end
 end

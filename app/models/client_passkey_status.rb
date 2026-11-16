@@ -18,6 +18,8 @@ class ClientPasskeyStatus < AppPrincipalRecord
   NOTHING = 5
   DEFAULTS = [ACTIVE, DISABLED, REVOKED, DELETED, NOTHING].freeze
 
+  self.record_timestamps = false
+
   has_many :client_passkeys,
            foreign_key: :status_id,
            inverse_of: :status,

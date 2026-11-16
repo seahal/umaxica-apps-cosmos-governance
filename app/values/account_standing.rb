@@ -18,6 +18,7 @@ class AccountStanding
       },
     )
   end
+  public_class_method :from_cases
 
   def initialize(level:, decisions:)
     raise ArgumentError, "unsupported standing level: #{level.inspect}" unless LEVELS.include?(level.to_sym)

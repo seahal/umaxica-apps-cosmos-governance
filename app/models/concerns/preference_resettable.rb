@@ -4,12 +4,7 @@
 module PreferenceResettable
   extend ActiveSupport::Concern
 
-  included do
-    attr_accessor :confirm_reset
-
-    validate :confirm_reset_accepted, on: :reset
-  end
-
+  public
   def require_reset_confirmation(value)
     self.confirm_reset = value
     self

@@ -20,13 +20,11 @@
 module HealthCheckRendering
   extend ActiveSupport::Concern
 
-  included do
-    before_action :disable_health_response_cache
-  end
-
   # Probe endpoints (liveness/readiness/startup): text/plain, no redirect, no layout, no
   # negotiation. `result.ok?` already folds the probe-specific rule that liveness tolerates a
   # "starting" process while startup and readiness do not.
+  public
+
   def render_probe(result)
     if result.ok?
       render plain: "ok\n"
@@ -97,7 +95,7 @@ module HealthCheckRendering
   end
 
   # The routed surface that answered, as "<realm>/<surface>". `controller_path` is the path Rails
-  # resolved for the request (for example "core/app/health/livenesses"), so this follows whichever
+  # resolved for the request (for example "base/app/health/livenesses"), so this follows whichever
   # `constraints(host:)` block matched instead of restating it.
   def health_namespace
     segments = controller_path.split("/")

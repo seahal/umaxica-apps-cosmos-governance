@@ -12,6 +12,7 @@ class JitSecurityTurnstileConfig
   }.freeze
 
   class << self
+    public
     def visible_site_key
       fetch(:CLOUDFLARE_TURNSTILE_VISIBLE_SITE_KEY)
     end
@@ -36,4 +37,6 @@ class JitSecurityTurnstileConfig
       Rails.app.creds.option(key)
     end
   end
+
+  private_class_method :visible_site_key
 end

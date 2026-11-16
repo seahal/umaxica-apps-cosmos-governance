@@ -43,7 +43,9 @@ class AccountAccessEvent < ChronicleRecord
     EVENT_TYPE_SESSION_PURGE,
   ].freeze
 
-  ACCOUNT_TYPES = %w(Client Visitor Operator).freeze
+  ACCOUNT_TYPES = %w(Client Operator).freeze
+
+  encrypts :reason_note
 
   validates :account_type, presence: true, inclusion: { in: ACCOUNT_TYPES }
   validates :account_id, presence: true, numericality: { only_integer: true }

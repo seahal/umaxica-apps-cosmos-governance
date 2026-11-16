@@ -5,19 +5,18 @@ class SignRiskEngine
   WINDOW = 5.minutes
 
   # Returns integer score 0..100
-  def self.score(user_id: nil, staff_id: nil, visitor_id: nil)
-    return 0 unless user_id || staff_id || visitor_id
+  def self.score(user_id: nil, staff_id: nil)
+    return 0 unless user_id || staff_id
 
     window_start = WINDOW.ago
 
     if staff_id
       score_for_staff(staff_id, window_start)
-    elsif visitor_id
-      score_for_visitor(visitor_id, window_start)
     else
       score_for_user(user_id, window_start)
     end
   end
+  public_class_method :score
 
   def self.score_for_user(user_id, window_start)
     scope = ClientOccurrence
@@ -37,15 +36,6 @@ class SignRiskEngine
     evaluate_rules(scope)
   end
 
-  def self.score_for_visitor(visitor_id, window_start)
-    scope = VisitorOccurrence
-      .where("event_type LIKE ?", "risk.%")
-      .where("context @> ?", { visitor_id: visitor_id }.to_json)
-      .where(created_at: window_start..)
-
-    evaluate_rules(scope)
-  end
-
   # IP/ASN-anomaly hard revocation is feature-flagged for staged rollout
   # (see adr/ip-anomaly-session-revocation.md). Default OFF everywhere; opt in
   # explicitly via IP_ANOMALY_REVOKE_ENABLED or config.x.ip_anomaly_revoke.enabled
@@ -56,6 +46,7 @@ class SignRiskEngine
     ENV.fetch("IP_ANOMALY_REVOKE_ENABLED", "false") == "true" ||
       !!Rails.configuration.try(:x).try(:ip_anomaly_revoke).try(:enabled)
   end
+  public_class_method :ip_anomaly_revoke_enabled?
 
   def self.evaluate_rules(scope)
     # Rule 1: Refresh Token Reuse Detected -> 100
@@ -82,5 +73,5 @@ class SignRiskEngine
     0
   end
 
-  private_class_method :score_for_user, :score_for_staff, :score_for_visitor, :evaluate_rules
+  private_class_method :score_for_user, :score_for_staff, :evaluate_rules
 end

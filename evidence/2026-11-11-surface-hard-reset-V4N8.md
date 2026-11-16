@@ -1,0 +1,3660 @@
+# Surface Hard Reset Evidence
+
+Date: 2026-11-11
+Source revision (`git rev-parse HEAD`): `43db4906742db2fb13b238c9ccde378e4e1583b4`
+Worktree: uncommitted changes were present and affected every result; no commit was created. No environment values or secrets are recorded.
+
+## Scope and decision
+
+Kept Base app, com and org; Tech org; and operator tools. The owner approved removing Auth/Visa outbound URL configuration even though Base/Tech OIDC sign-in and related sign-out flows become unavailable. Base/Tech RP callback, sign-out, Back-Channel Logout, and OIDC step-up callback routes were removed because they require those provider endpoints or keys. External registrations were not changed. No database was dropped and no model or migration file was deleted.
+
+Acceptance disposition: AC-1, AC-3, AC-4 and AC-6 are complete. AC-2 remains incomplete for read-only Compose/CI mounts. Zeitwerk, routes, RuboCop and ERB lint pass. AC-5 remains incomplete because the full Rails test suite is red and failure attribution is partial.
+
+Base com has 61 intentionally retained routes, so only `PRIVATE_BASE_CORPORATE_URL` and `PUBLIC_BASE_CORPORATE_URL` corporate URL settings remain in editable runtime/config files. All other corporate and non-Base `.com` handling was removed from editable files. The mounted compose and CI files listed below still contain stale foreign entries because they are read-only in this workspace.
+
+## Route inventory
+
+The route groups below use the logical host-constraint names from route configuration. Literal host values are omitted. Every baseline route is marked by whether its exact route signature remains; the second inventory lists every current route as OWN.
+
+### Baseline routes: current OWN routes and removed FOREIGN/RETIRED routes
+
+Baseline inventory: 1483 routes.
+
+#### Auth app — 145 baseline routes
+- **FOREIGN/RETIRED** `auth_app_root` `GET` `/` `auth/app/roots#index`
+- **FOREIGN/RETIRED** `auth_app_well_known_jwks` `GET` `/.well-known/jwks.json` `auth/app/well_known/jwks#show`
+- **FOREIGN/RETIRED** `auth_app_revision` `GET` `/revision` `auth/app/revisions#show`
+- **FOREIGN/RETIRED** `auth_app_health` `GET` `/health` `auth/app/healths#show`
+- **FOREIGN/RETIRED** `auth_app_health_liveness` `GET` `/health/liveness` `auth/app/health/livenesses#show`
+- **FOREIGN/RETIRED** `auth_app_health_readiness` `GET` `/health/readiness` `auth/app/health/readinesses#show`
+- **FOREIGN/RETIRED** `auth_app_health_startup` `GET` `/health/startup` `auth/app/health/startups#show`
+- **FOREIGN/RETIRED** `auth_app_api_v0_health` `GET` `/api/v0/health.json` `auth/app/api/v0/healths#show`
+- **FOREIGN/RETIRED** `auth_app_api_v0_revision` `GET` `/api/v0/revision.json` `auth/app/api/v0/revisions#show`
+- **FOREIGN/RETIRED** `auth_app_robots` `GET` `/robots.txt(.:format)` `auth/app/robots#index`
+- **FOREIGN/RETIRED** `auth_app_sitemap` `GET` `/sitemap.xml(.:format)` `auth/app/sitemaps#show`
+- **FOREIGN/RETIRED** `auth_app_csp_violation_report` `POST` `/csp-violation-report(.:format)` `auth/app/csp_violation_reports#create`
+- **FOREIGN/RETIRED** `auth_app_ceremony_bindings` `GET` `/ceremony_bindings(.:format)` `auth/app/ceremony_bindings#show`
+- **FOREIGN/RETIRED** `auth_app_pwa_service_worker` `GET` `/service-worker(.:format)` `auth/app/service_worker_retirements#show`
+- **FOREIGN/RETIRED** `auth_app_apple_notifications` `POST` `/apple/notifications(.:format)` `auth/app/apple/notifications#create`
+- **FOREIGN/RETIRED** `auth_app_sign_up` `GET` `/sign/up(.:format)` `auth/app/sign/ups#show`
+- **FOREIGN/RETIRED** `auth_app_sign_in` `GET` `/sign/in(.:format)` `auth/app/sign/ins#show`
+- **FOREIGN/RETIRED** `auth_app_sign_oidc_handoff` `GET` `/sign/oidc/handoff(.:format)` `auth/app/sign/oidc_handoffs#show`
+- **FOREIGN/RETIRED** `new_auth_app_sign_out` `GET` `/sign/out/new(.:format)` `auth/app/sign/outs#new`
+- **FOREIGN/RETIRED** `edit_auth_app_sign_out` `GET` `/sign/out/edit(.:format)` `auth/app/sign/outs#edit`
+- **FOREIGN/RETIRED** `auth_app_sign_out` `GET` `/sign/out(.:format)` `auth/app/sign/outs#show`
+- **FOREIGN/RETIRED** `(unnamed)` `DELETE` `/sign/out(.:format)` `auth/app/sign/outs#destroy`
+- **FOREIGN/RETIRED** `(unnamed)` `POST` `/sign/out(.:format)` `auth/app/sign/outs#create`
+- **FOREIGN/RETIRED** `auth_app_sign_cancellation` `POST` `/sign/cancellation(.:format)` `auth/app/sign/cancellations#create`
+- **FOREIGN/RETIRED** `auth_app_sign_switch` `POST` `/sign/switch(.:format)` `auth/app/sign/switches#create`
+- **FOREIGN/RETIRED** `auth_app_sign_in_sentry` `GET` `/sign/in/sentry(.:format)` `auth/app/sign/in/sentries#show`
+- **FOREIGN/RETIRED** `auth_app_sign_up_sentry` `GET` `/sign/up/sentry(.:format)` `auth/app/sign/up/sentries#show`
+- **FOREIGN/RETIRED** `auth_app_web_v0_in_email_otp` `POST` `/web/v0/in/email/otp(.:format)` `auth/app/web/v0/in/email/otps#create`
+- **FOREIGN/RETIRED** `auth_app_api_v0_preferences_cookie` `GET` `/api/v0/preferences/cookie(.:format)` `auth/app/api/v0/preferences/cookies#show`
+- **FOREIGN/RETIRED** `(unnamed)` `PATCH` `/api/v0/preferences/cookie(.:format)` `auth/app/api/v0/preferences/cookies#update`
+- **FOREIGN/RETIRED** `auth_app_api_v0_preferences_theme` `GET` `/api/v0/preferences/theme(.:format)` `auth/app/api/v0/preferences/themes#show`
+- **FOREIGN/RETIRED** `(unnamed)` `PATCH` `/api/v0/preferences/theme(.:format)` `auth/app/api/v0/preferences/themes#update`
+- **FOREIGN/RETIRED** `new_auth_app_sign_up_email` `GET` `/sign/up/email/new(.:format)` `auth/app/sign/up/emails#new`
+- **FOREIGN/RETIRED** `auth_app_sign_up_email` `POST` `/sign/up/email(.:format)` `auth/app/sign/up/emails#create`
+- **FOREIGN/RETIRED** `new_auth_app_sign_up_telephone` `GET` `/sign/up/telephone/new(.:format)` `auth/app/sign/up/telephones#new`
+- **FOREIGN/RETIRED** `auth_app_sign_up_telephone` `POST` `/sign/up/telephone(.:format)` `auth/app/sign/up/telephones#create`
+- **FOREIGN/RETIRED** `auth_app_sign_up_guard_apple` `GET` `/sign/up/guard/apple(.:format)` `auth/app/sign/up/guard/apples#show`
+- **FOREIGN/RETIRED** `auth_app_sign_up_guard_google` `GET` `/sign/up/guard/google(.:format)` `auth/app/sign/up/guard/googles#show`
+- **FOREIGN/RETIRED** `auth_app_sign_up_guard_email` `GET` `/sign/up/guard/email(.:format)` `auth/app/sign/up/guard/emails#show`
+- **FOREIGN/RETIRED** `auth_app_sign_up_guard_telephone` `GET` `/sign/up/guard/telephone(.:format)` `auth/app/sign/up/guard/telephones#show`
+- **FOREIGN/RETIRED** `auth_app_sign_up_check_apple_confirmation` `GET` `/sign/up/check/apple/confirmation(.:format)` `auth/app/sign/up/check/apple/confirmations#show`
+- **FOREIGN/RETIRED** `(unnamed)` `PATCH` `/sign/up/check/apple/confirmation(.:format)` `auth/app/sign/up/check/apple/confirmations#update`
+- **FOREIGN/RETIRED** `(unnamed)` `PUT` `/sign/up/check/apple/confirmation(.:format)` `auth/app/sign/up/check/apple/confirmations#update`
+- **FOREIGN/RETIRED** `(unnamed)` `DELETE` `/sign/up/check/apple/confirmation(.:format)` `auth/app/sign/up/check/apple/confirmations#destroy`
+- **FOREIGN/RETIRED** `auth_app_sign_up_check_apple_birthdate` `GET` `/sign/up/check/apple/birthdate(.:format)` `auth/app/sign/up/check/apple/birthdates#show`
+- **FOREIGN/RETIRED** `(unnamed)` `PATCH` `/sign/up/check/apple/birthdate(.:format)` `auth/app/sign/up/check/apple/birthdates#update`
+- **FOREIGN/RETIRED** `(unnamed)` `PUT` `/sign/up/check/apple/birthdate(.:format)` `auth/app/sign/up/check/apple/birthdates#update`
+- **FOREIGN/RETIRED** `(unnamed)` `DELETE` `/sign/up/check/apple/birthdate(.:format)` `auth/app/sign/up/check/apple/birthdates#destroy`
+- **FOREIGN/RETIRED** `auth_app_sign_up_check_google_confirmation` `GET` `/sign/up/check/google/confirmation(.:format)` `auth/app/sign/up/check/google/confirmations#show`
+- **FOREIGN/RETIRED** `(unnamed)` `PATCH` `/sign/up/check/google/confirmation(.:format)` `auth/app/sign/up/check/google/confirmations#update`
+- **FOREIGN/RETIRED** `(unnamed)` `PUT` `/sign/up/check/google/confirmation(.:format)` `auth/app/sign/up/check/google/confirmations#update`
+- **FOREIGN/RETIRED** `(unnamed)` `DELETE` `/sign/up/check/google/confirmation(.:format)` `auth/app/sign/up/check/google/confirmations#destroy`
+- **FOREIGN/RETIRED** `auth_app_sign_up_check_google_birthdate` `GET` `/sign/up/check/google/birthdate(.:format)` `auth/app/sign/up/check/google/birthdates#show`
+- **FOREIGN/RETIRED** `(unnamed)` `PATCH` `/sign/up/check/google/birthdate(.:format)` `auth/app/sign/up/check/google/birthdates#update`
+- **FOREIGN/RETIRED** `(unnamed)` `PUT` `/sign/up/check/google/birthdate(.:format)` `auth/app/sign/up/check/google/birthdates#update`
+- **FOREIGN/RETIRED** `(unnamed)` `DELETE` `/sign/up/check/google/birthdate(.:format)` `auth/app/sign/up/check/google/birthdates#destroy`
+- **FOREIGN/RETIRED** `auth_app_sign_up_check_email_otp` `GET` `/sign/up/check/email/otp(.:format)` `auth/app/sign/up/check/email/otps#show`
+- **FOREIGN/RETIRED** `(unnamed)` `PATCH` `/sign/up/check/email/otp(.:format)` `auth/app/sign/up/check/email/otps#update`
+- **FOREIGN/RETIRED** `(unnamed)` `PUT` `/sign/up/check/email/otp(.:format)` `auth/app/sign/up/check/email/otps#update`
+- **FOREIGN/RETIRED** `(unnamed)` `DELETE` `/sign/up/check/email/otp(.:format)` `auth/app/sign/up/check/email/otps#destroy`
+- **FOREIGN/RETIRED** `(unnamed)` `POST` `/sign/up/check/email/otp(.:format)` `auth/app/sign/up/check/email/otps#create`
+- **FOREIGN/RETIRED** `auth_app_sign_up_check_email_birthdate` `GET` `/sign/up/check/email/birthdate(.:format)` `auth/app/sign/up/check/email/birthdates#show`
+- **FOREIGN/RETIRED** `(unnamed)` `PATCH` `/sign/up/check/email/birthdate(.:format)` `auth/app/sign/up/check/email/birthdates#update`
+- **FOREIGN/RETIRED** `(unnamed)` `PUT` `/sign/up/check/email/birthdate(.:format)` `auth/app/sign/up/check/email/birthdates#update`
+- **FOREIGN/RETIRED** `(unnamed)` `DELETE` `/sign/up/check/email/birthdate(.:format)` `auth/app/sign/up/check/email/birthdates#destroy`
+- **FOREIGN/RETIRED** `auth_app_sign_up_check_telephone_otp` `GET` `/sign/up/check/telephone/otp(.:format)` `auth/app/sign/up/check/telephone/otps#show`
+- **FOREIGN/RETIRED** `(unnamed)` `PATCH` `/sign/up/check/telephone/otp(.:format)` `auth/app/sign/up/check/telephone/otps#update`
+- **FOREIGN/RETIRED** `(unnamed)` `PUT` `/sign/up/check/telephone/otp(.:format)` `auth/app/sign/up/check/telephone/otps#update`
+- **FOREIGN/RETIRED** `(unnamed)` `DELETE` `/sign/up/check/telephone/otp(.:format)` `auth/app/sign/up/check/telephone/otps#destroy`
+- **FOREIGN/RETIRED** `(unnamed)` `POST` `/sign/up/check/telephone/otp(.:format)` `auth/app/sign/up/check/telephone/otps#create`
+- **FOREIGN/RETIRED** `auth_app_sign_up_check_telephone_passkey` `GET` `/sign/up/check/telephone/passkey(.:format)` `auth/app/sign/up/check/telephone/passkeys#show`
+- **FOREIGN/RETIRED** `(unnamed)` `PATCH` `/sign/up/check/telephone/passkey(.:format)` `auth/app/sign/up/check/telephone/passkeys#update`
+- **FOREIGN/RETIRED** `(unnamed)` `PUT` `/sign/up/check/telephone/passkey(.:format)` `auth/app/sign/up/check/telephone/passkeys#update`
+- **FOREIGN/RETIRED** `(unnamed)` `DELETE` `/sign/up/check/telephone/passkey(.:format)` `auth/app/sign/up/check/telephone/passkeys#destroy`
+- **FOREIGN/RETIRED** `(unnamed)` `POST` `/sign/up/check/telephone/passkey(.:format)` `auth/app/sign/up/check/telephone/passkeys#create`
+- **FOREIGN/RETIRED** `reattempt_auth_app_sign_up_check_telephone_secret` `POST` `/sign/up/check/telephone/secret/reattempt(.:format)` `auth/app/sign/up/check/telephone/secrets#reattempt`
+- **FOREIGN/RETIRED** `auth_app_sign_up_check_telephone_secret` `GET` `/sign/up/check/telephone/secret(.:format)` `auth/app/sign/up/check/telephone/secrets#show`
+- **FOREIGN/RETIRED** `(unnamed)` `PATCH` `/sign/up/check/telephone/secret(.:format)` `auth/app/sign/up/check/telephone/secrets#update`
+- **FOREIGN/RETIRED** `(unnamed)` `PUT` `/sign/up/check/telephone/secret(.:format)` `auth/app/sign/up/check/telephone/secrets#update`
+- **FOREIGN/RETIRED** `(unnamed)` `DELETE` `/sign/up/check/telephone/secret(.:format)` `auth/app/sign/up/check/telephone/secrets#destroy`
+- **FOREIGN/RETIRED** `(unnamed)` `POST` `/sign/up/check/telephone/secret(.:format)` `auth/app/sign/up/check/telephone/secrets#create`
+- **FOREIGN/RETIRED** `auth_app_sign_up_check_telephone_birthdate` `GET` `/sign/up/check/telephone/birthdate(.:format)` `auth/app/sign/up/check/telephone/birthdates#show`
+- **FOREIGN/RETIRED** `(unnamed)` `PATCH` `/sign/up/check/telephone/birthdate(.:format)` `auth/app/sign/up/check/telephone/birthdates#update`
+- **FOREIGN/RETIRED** `(unnamed)` `PUT` `/sign/up/check/telephone/birthdate(.:format)` `auth/app/sign/up/check/telephone/birthdates#update`
+- **FOREIGN/RETIRED** `(unnamed)` `DELETE` `/sign/up/check/telephone/birthdate(.:format)` `auth/app/sign/up/check/telephone/birthdates#destroy`
+- **FOREIGN/RETIRED** `new_auth_app_sign_in_email` `GET` `/sign/in/email/new(.:format)` `auth/app/sign/in/emails#new`
+- **FOREIGN/RETIRED** `edit_auth_app_sign_in_email` `GET` `/sign/in/email/edit(.:format)` `auth/app/sign/in/emails#edit`
+- **FOREIGN/RETIRED** `auth_app_sign_in_email` `PATCH` `/sign/in/email(.:format)` `auth/app/sign/in/emails#update`
+- **FOREIGN/RETIRED** `(unnamed)` `PUT` `/sign/in/email(.:format)` `auth/app/sign/in/emails#update`
+- **FOREIGN/RETIRED** `(unnamed)` `DELETE` `/sign/in/email(.:format)` `auth/app/sign/in/emails#destroy`
+- **FOREIGN/RETIRED** `(unnamed)` `POST` `/sign/in/email(.:format)` `auth/app/sign/in/emails#create`
+- **FOREIGN/RETIRED** `new_auth_app_sign_in_passkey` `GET` `/sign/in/passkey/new(.:format)` `auth/app/sign/in/passkeys#new`
+- **FOREIGN/RETIRED** `new_auth_app_sign_in_secret` `GET` `/sign/in/secret/new(.:format)` `auth/app/sign/in/secrets#new`
+- **FOREIGN/RETIRED** `auth_app_sign_in_secret` `POST` `/sign/in/secret(.:format)` `auth/app/sign/in/secrets#create`
+- **FOREIGN/RETIRED** `auth_app_sign_in_passkey_options` `POST` `/sign/in/passkey/options(.:format)` `auth/app/sign/in/passkey/options#create`
+- **FOREIGN/RETIRED** `auth_app_sign_in_passkey_verification` `POST` `/sign/in/passkey/verification(.:format)` `auth/app/sign/in/passkey/verifications#create`
+- **FOREIGN/RETIRED** `auth_app_sign_in_check` `GET` `/sign/in/check(.:format)` `auth/app/sign/in/checks#show`
+- **FOREIGN/RETIRED** `auth_app_sign_in_challenge` `GET` `/sign/in/challenge(.:format)` `auth/app/sign/in/challenges#show`
+- **FOREIGN/RETIRED** `(unnamed)` `DELETE` `/sign/in/challenge(.:format)` `auth/app/sign/in/challenges#destroy`
+- **FOREIGN/RETIRED** `new_auth_app_sign_in_challenge_passkey` `GET` `/sign/in/challenge/passkey/new(.:format)` `auth/app/sign/in/challenge/passkeys#new`
+- **FOREIGN/RETIRED** `auth_app_sign_in_challenge_passkey` `POST` `/sign/in/challenge/passkey(.:format)` `auth/app/sign/in/challenge/passkeys#create`
+- **FOREIGN/RETIRED** `auth_app_social_link_completion` `POST` `/social/link_completion(.:format)` `auth/app/social/link_completions#create`
+- **FOREIGN/RETIRED** `auth_app_social_google_callback` `GET` `/social/google/callback(.:format)` `auth/app/omniauth/omniauth_callbacks#omniauth {provider: "google"}`
+- **FOREIGN/RETIRED** `auth_app_social_apple_callback` `GET` `/social/apple/callback(.:format)` `auth/app/omniauth/omniauth_callbacks#omniauth {provider: "apple"}`
+- **FOREIGN/RETIRED** `auth_app_social_failure` `GET` `/social/failure(.:format)` `auth/app/omniauth/omniauth_callbacks#failure`
+- **FOREIGN/RETIRED** `auth_app_social_google_session` `POST` `/social/google/session(.:format)` `auth/app/social/sessions#create {provider: "google", intent: "login"}`
+- **FOREIGN/RETIRED** `auth_app_social_google_registration` `POST` `/social/google/registration(.:format)` `auth/app/social/registrations#create {provider: "google", intent: "login", entry: "auth_up"}`
+- **FOREIGN/RETIRED** `auth_app_social_apple_session` `POST` `/social/apple/session(.:format)` `auth/app/social/sessions#create {provider: "apple", intent: "login"}`
+- **FOREIGN/RETIRED** `auth_app_social_apple_registration` `POST` `/social/apple/registration(.:format)` `auth/app/social/registrations#create {provider: "apple", intent: "login", entry: "auth_up"}`
+- **FOREIGN/RETIRED** `auth_app_verification` `GET` `/verification(.:format)` `auth/app/verifications#show`
+- **FOREIGN/RETIRED** `auth_app_verification_cancellation` `POST` `/verification/cancellation(.:format)` `auth/app/verification/cancellations#create`
+- **FOREIGN/RETIRED** `new_auth_app_verification_setup` `GET` `/verification/setup/new(.:format)` `auth/app/verification/setups#new`
+- **FOREIGN/RETIRED** `auth_app_verification_handoff` `GET` `/verification/handoff(.:format)` `auth/app/verification/handoffs#show`
+- **FOREIGN/RETIRED** `(unnamed)` `POST` `/verification/handoff(.:format)` `auth/app/verification/handoffs#create`
+- **FOREIGN/RETIRED** `auth_app_verification_passkey_options` `POST` `/verification/passkey/options(.:format)` `auth/app/verification/passkeys#options`
+- **FOREIGN/RETIRED** `new_auth_app_verification_passkey` `GET` `/verification/passkey/new(.:format)` `auth/app/verification/passkeys#new`
+- **FOREIGN/RETIRED** `auth_app_verification_passkey` `POST` `/verification/passkey(.:format)` `auth/app/verification/passkeys#create`
+- **FOREIGN/RETIRED** `new_auth_app_verification_totp` `GET` `/verification/totp/new(.:format)` `auth/app/verification/totps#new`
+- **FOREIGN/RETIRED** `auth_app_verification_totp` `POST` `/verification/totp(.:format)` `auth/app/verification/totps#create`
+- **FOREIGN/RETIRED** `auth_app_verification_registration_passkey_options` `POST` `/verification/registration/passkey/options(.:format)` `auth/app/verification/registration/passkeys#options`
+- **FOREIGN/RETIRED** `new_auth_app_verification_registration_passkey` `GET` `/verification/registration/passkey/new(.:format)` `auth/app/verification/registration/passkeys#new`
+- **FOREIGN/RETIRED** `auth_app_verification_registration_passkey` `POST` `/verification/registration/passkey(.:format)` `auth/app/verification/registration/passkeys#create`
+- **FOREIGN/RETIRED** `auth_app_verification_registration_handoff` `GET` `/verification/registration/handoff(.:format)` `auth/app/verification/registration/handoffs#show`
+- **FOREIGN/RETIRED** `(unnamed)` `POST` `/verification/registration/handoff(.:format)` `auth/app/verification/registration/handoffs#create`
+- **FOREIGN/RETIRED** `auth_app_verification_email_redelivery` `POST` `/verification/emails/:email_id/redelivery(.:format)` `auth/app/verification/redeliveries#create`
+- **FOREIGN/RETIRED** `auth_app_verification_emails` `POST` `/verification/emails(.:format)` `auth/app/verification/emails#create`
+- **FOREIGN/RETIRED** `new_auth_app_verification_email` `GET` `/verification/emails/new(.:format)` `auth/app/verification/emails#new`
+- **FOREIGN/RETIRED** `edit_auth_app_verification_email` `GET` `/verification/emails/:id/edit(.:format)` `auth/app/verification/emails#edit`
+- **FOREIGN/RETIRED** `auth_app_verification_email` `PATCH` `/verification/emails/:id(.:format)` `auth/app/verification/emails#update`
+- **FOREIGN/RETIRED** `(unnamed)` `PUT` `/verification/emails/:id(.:format)` `auth/app/verification/emails#update`
+- **FOREIGN/RETIRED** `auth_app_settings` `GET` `/settings(.:format)` `auth/app/settings#show`
+- **FOREIGN/RETIRED** `auth_app_settings_totps_enrollment` `DELETE` `/settings/totps/enrollment(.:format)` `auth/app/settings/totps/enrollments#destroy`
+- **FOREIGN/RETIRED** `(unnamed)` `POST` `/settings/totps/enrollment(.:format)` `auth/app/settings/totps/enrollments#create`
+- **FOREIGN/RETIRED** `auth_app_settings_totps_handoff` `GET` `/settings/totps/handoff(.:format)` `auth/app/settings/totps/handoffs#show`
+- **FOREIGN/RETIRED** `(unnamed)` `POST` `/settings/totps/handoff(.:format)` `auth/app/settings/totps/handoffs#create`
+- **FOREIGN/RETIRED** `auth_app_settings_totps` `POST` `/settings/totps(.:format)` `auth/app/settings/totps#create`
+- **FOREIGN/RETIRED** `new_auth_app_settings_totp` `GET` `/settings/totps/new(.:format)` `auth/app/settings/totps#new`
+- **FOREIGN/RETIRED** `edit_auth_app_settings_apple` `GET` `/settings/apple/edit(.:format)` `auth/app/settings/apples#edit`
+- **FOREIGN/RETIRED** `auth_app_settings_apple` `GET` `/settings/apple(.:format)` `auth/app/settings/apples#show`
+- **FOREIGN/RETIRED** `(unnamed)` `DELETE` `/settings/apple(.:format)` `auth/app/settings/apples#destroy`
+- **FOREIGN/RETIRED** `(unnamed)` `POST` `/settings/apple(.:format)` `auth/app/settings/apples#create`
+- **FOREIGN/RETIRED** `edit_auth_app_settings_google` `GET` `/settings/google/edit(.:format)` `auth/app/settings/googles#edit`
+- **FOREIGN/RETIRED** `auth_app_settings_google` `GET` `/settings/google(.:format)` `auth/app/settings/googles#show`
+- **FOREIGN/RETIRED** `(unnamed)` `DELETE` `/settings/google(.:format)` `auth/app/settings/googles#destroy`
+- **FOREIGN/RETIRED** `(unnamed)` `POST` `/settings/google(.:format)` `auth/app/settings/googles#create`
+
+#### Auth org — 53 baseline routes
+- **FOREIGN/RETIRED** `auth_org_root` `GET` `/` `auth/org/roots#index`
+- **FOREIGN/RETIRED** `auth_org_well_known_jwks` `GET` `/.well-known/jwks.json` `auth/org/well_known/jwks#show`
+- **FOREIGN/RETIRED** `auth_org_revision` `GET` `/revision` `auth/org/revisions#show`
+- **FOREIGN/RETIRED** `auth_org_health` `GET` `/health` `auth/org/healths#show`
+- **FOREIGN/RETIRED** `auth_org_health_liveness` `GET` `/health/liveness` `auth/org/health/livenesses#show`
+- **FOREIGN/RETIRED** `auth_org_health_readiness` `GET` `/health/readiness` `auth/org/health/readinesses#show`
+- **FOREIGN/RETIRED** `auth_org_health_startup` `GET` `/health/startup` `auth/org/health/startups#show`
+- **FOREIGN/RETIRED** `auth_org_api_v0_health` `GET` `/api/v0/health.json` `auth/org/api/v0/healths#show`
+- **FOREIGN/RETIRED** `auth_org_api_v0_revision` `GET` `/api/v0/revision.json` `auth/org/api/v0/revisions#show`
+- **FOREIGN/RETIRED** `auth_org_robots` `GET` `/robots.txt(.:format)` `auth/org/robots#index`
+- **FOREIGN/RETIRED** `auth_org_sitemap` `GET` `/sitemap.xml(.:format)` `auth/org/sitemaps#show`
+- **FOREIGN/RETIRED** `auth_org_csp_violation_report` `POST` `/csp-violation-report(.:format)` `auth/org/csp_violation_reports#create`
+- **FOREIGN/RETIRED** `auth_org_ceremony_bindings` `GET` `/ceremony_bindings(.:format)` `auth/org/ceremony_bindings#show`
+- **FOREIGN/RETIRED** `auth_org_pwa_service_worker` `GET` `/service-worker(.:format)` `auth/org/service_worker_retirements#show`
+- **FOREIGN/RETIRED** `auth_org_sign_up` `GET` `/sign/up(.:format)` `auth/org/sign/ups#show`
+- **FOREIGN/RETIRED** `auth_org_sign_in` `GET` `/sign/in(.:format)` `auth/org/sign/ins#show`
+- **FOREIGN/RETIRED** `auth_org_sign_oidc_handoff` `GET` `/sign/oidc/handoff(.:format)` `auth/org/sign/oidc_handoffs#show`
+- **FOREIGN/RETIRED** `new_auth_org_sign_out` `GET` `/sign/out/new(.:format)` `auth/org/sign/outs#new`
+- **FOREIGN/RETIRED** `edit_auth_org_sign_out` `GET` `/sign/out/edit(.:format)` `auth/org/sign/outs#edit`
+- **FOREIGN/RETIRED** `auth_org_sign_out` `GET` `/sign/out(.:format)` `auth/org/sign/outs#show`
+- **FOREIGN/RETIRED** `(unnamed)` `DELETE` `/sign/out(.:format)` `auth/org/sign/outs#destroy`
+- **FOREIGN/RETIRED** `(unnamed)` `POST` `/sign/out(.:format)` `auth/org/sign/outs#create`
+- **FOREIGN/RETIRED** `auth_org_sign_cancellation` `POST` `/sign/cancellation(.:format)` `auth/org/sign/cancellations#create`
+- **FOREIGN/RETIRED** `auth_org_sign_in_sentry` `GET` `/sign/in/sentry(.:format)` `auth/org/sign/in/sentries#show`
+- **FOREIGN/RETIRED** `auth_org_sign_up_sentry` `GET` `/sign/up/sentry(.:format)` `auth/org/sign/up/sentries#show`
+- **FOREIGN/RETIRED** `auth_org_api_v0_preferences_cookie` `GET` `/api/v0/preferences/cookie(.:format)` `auth/org/api/v0/preferences/cookies#show`
+- **FOREIGN/RETIRED** `(unnamed)` `PATCH` `/api/v0/preferences/cookie(.:format)` `auth/org/api/v0/preferences/cookies#update`
+- **FOREIGN/RETIRED** `auth_org_api_v0_preferences_theme` `GET` `/api/v0/preferences/theme(.:format)` `auth/org/api/v0/preferences/themes#show`
+- **FOREIGN/RETIRED** `(unnamed)` `PATCH` `/api/v0/preferences/theme(.:format)` `auth/org/api/v0/preferences/themes#update`
+- **FOREIGN/RETIRED** `new_auth_org_sign_in_passkey` `GET` `/sign/in/passkey/new(.:format)` `auth/org/sign/in/passkeys#new`
+- **FOREIGN/RETIRED** `auth_org_sign_in_passkey_options` `POST` `/sign/in/passkey/options(.:format)` `auth/org/sign/in/passkey/options#create`
+- **FOREIGN/RETIRED** `auth_org_sign_in_passkey_verification` `POST` `/sign/in/passkey/verification(.:format)` `auth/org/sign/in/passkey/verifications#create`
+- **FOREIGN/RETIRED** `new_auth_org_sign_in_emergency_passkey` `GET` `/sign/in/emergency/passkey/new(.:format)` `auth/org/sign/in/emergency/passkeys#new`
+- **FOREIGN/RETIRED** `auth_org_sign_in_emergency_passkey_options` `POST` `/sign/in/emergency/passkey/options(.:format)` `auth/org/sign/in/emergency/passkey/options#create`
+- **FOREIGN/RETIRED** `auth_org_sign_in_emergency_passkey_verification` `POST` `/sign/in/emergency/passkey/verification(.:format)` `auth/org/sign/in/emergency/passkey/verifications#create`
+- **FOREIGN/RETIRED** `auth_org_sign_in_check` `GET` `/sign/in/check(.:format)` `auth/org/sign/in/checks#show`
+- **FOREIGN/RETIRED** `new_auth_org_social_entra_session` `GET` `/social/entra/session/new(.:format)` `auth/org/social/sessions#new {provider: "entra"}`
+- **FOREIGN/RETIRED** `auth_org_social_entra_session` `POST` `/social/entra/session(.:format)` `auth/org/social/sessions#create {provider: "entra"}`
+- **FOREIGN/RETIRED** `auth_org_social_entra_callback` `GET` `/social/entra/callback(.:format)` `auth/org/omniauth/omniauth_callbacks#omniauth {provider: "entra"}`
+- **FOREIGN/RETIRED** `auth_org_social_entra_failure` `GET` `/social/entra/failure(.:format)` `auth/org/omniauth/omniauth_callbacks#failure`
+- **FOREIGN/RETIRED** `auth_org_verification` `GET` `/verification(.:format)` `auth/org/verifications#show`
+- **FOREIGN/RETIRED** `auth_org_verification_cancellation` `POST` `/verification/cancellation(.:format)` `auth/org/verification/cancellations#create`
+- **FOREIGN/RETIRED** `new_auth_org_verification_setup` `GET` `/verification/setup/new(.:format)` `auth/org/verification/setups#new`
+- **FOREIGN/RETIRED** `auth_org_verification_handoff` `GET` `/verification/handoff(.:format)` `auth/org/verification/handoffs#show`
+- **FOREIGN/RETIRED** `(unnamed)` `POST` `/verification/handoff(.:format)` `auth/org/verification/handoffs#create`
+- **FOREIGN/RETIRED** `auth_org_verification_passkey_options` `POST` `/verification/passkey/options(.:format)` `auth/org/verification/passkeys#options`
+- **FOREIGN/RETIRED** `new_auth_org_verification_passkey` `GET` `/verification/passkey/new(.:format)` `auth/org/verification/passkeys#new`
+- **FOREIGN/RETIRED** `auth_org_verification_passkey` `POST` `/verification/passkey(.:format)` `auth/org/verification/passkeys#create`
+- **FOREIGN/RETIRED** `auth_org_verification_registration_passkey_options` `POST` `/verification/registration/passkey/options(.:format)` `auth/org/verification/registration/passkeys#options`
+- **FOREIGN/RETIRED** `new_auth_org_verification_registration_passkey` `GET` `/verification/registration/passkey/new(.:format)` `auth/org/verification/registration/passkeys#new`
+- **FOREIGN/RETIRED** `auth_org_verification_registration_passkey` `POST` `/verification/registration/passkey(.:format)` `auth/org/verification/registration/passkeys#create`
+- **FOREIGN/RETIRED** `auth_org_verification_registration_handoff` `GET` `/verification/registration/handoff(.:format)` `auth/org/verification/registration/handoffs#show`
+- **FOREIGN/RETIRED** `(unnamed)` `POST` `/verification/registration/handoff(.:format)` `auth/org/verification/registration/handoffs#create`
+
+#### Base app — 256 baseline routes
+- **OWN** `base_app_root` `GET` `/` `base/app/roots#index`
+- **RETIRED** `base_app_sign_show` `GET` `/sign(.:format)` `base/app/sign/entries#show`
+- **RETIRED** `base_app_sign_create` `POST` `/sign(.:format)` `base/app/sign/entries#create`
+- **RETIRED** `base_app_sign_interruption` `GET` `/sign/interruption(.:format)` `base/app/sign/interruptions#show`
+- **RETIRED** `base_app_ceremony_binding_confirmation` `GET` `/ceremony_bindings/:binding_ref/confirmation(.:format)` `base/app/ceremony_binding_confirmations#show`
+- **RETIRED** `base_app` `POST` `/ceremony_bindings/:binding_ref/confirmation(.:format)` `base/app/ceremony_binding_confirmations#create`
+- **OWN** `base_app_welcome` `GET` `/welcome(.:format)` `base/app/welcomes#show`
+- **OWN** `base_app_dashboard_avatar_image` `GET` `/dashboard/avatar_image(.:format)` `base/app/dashboard_avatar_images#show`
+- **OWN** `base_app_dashboard` `GET` `/dashboard(.:format)` `base/app/roots#show`
+- **OWN** `base_app_selector` `GET` `/selector(.:format)` `base/app/selectors#show`
+- **OWN** `(unnamed)` `PATCH` `/selector(.:format)` `base/app/selectors#update`
+- **OWN** `(unnamed)` `PUT` `/selector(.:format)` `base/app/selectors#update`
+- **OWN** `base_app_switcher` `GET` `/switcher(.:format)` `base/app/switchers#show`
+- **OWN** `(unnamed)` `PATCH` `/switcher(.:format)` `base/app/switchers#update`
+- **OWN** `(unnamed)` `PUT` `/switcher(.:format)` `base/app/switchers#update`
+- **OWN** `base_app_billings` `GET` `/billings(.:format)` `base/app/billings#index`
+- **OWN** `base_app_secrets` `GET` `/secrets(.:format)` `base/app/secrets#index`
+- **OWN** `(unnamed)` `POST` `/secrets(.:format)` `base/app/secrets#create`
+- **OWN** `new_base_app_secret` `GET` `/secrets/new(.:format)` `base/app/secrets#new`
+- **OWN** `edit_base_app_secret` `GET` `/secrets/:id/edit(.:format)` `base/app/secrets#edit`
+- **OWN** `base_app_secret` `GET` `/secrets/:id(.:format)` `base/app/secrets#show`
+- **OWN** `(unnamed)` `PATCH` `/secrets/:id(.:format)` `base/app/secrets#update`
+- **OWN** `(unnamed)` `PUT` `/secrets/:id(.:format)` `base/app/secrets#update`
+- **OWN** `(unnamed)` `DELETE` `/secrets/:id(.:format)` `base/app/secrets#destroy`
+- **OWN** `reattempt_base_app_secret_issuance` `POST` `/secret_issuances/:id/reattempt(.:format)` `base/app/secret_issuances#reattempt`
+- **OWN** `base_app_secret_issuance_presentation` `POST` `/secret_issuances/:secret_issuance_id/presentation(.:format)` `base/app/secret_presentations#create`
+- **OWN** `base_app_secret_issuance` `GET` `/secret_issuances/:id(.:format)` `base/app/secret_issuances#show`
+- **OWN** `(unnamed)` `PATCH` `/secret_issuances/:id(.:format)` `base/app/secret_issuances#update`
+- **OWN** `(unnamed)` `PUT` `/secret_issuances/:id(.:format)` `base/app/secret_issuances#update`
+- **OWN** `(unnamed)` `DELETE` `/secret_issuances/:id(.:format)` `base/app/secret_issuances#destroy`
+- **OWN** `base_app_group_avatar_memberships` `POST` `/groups/:group_id/avatar_memberships(.:format)` `base/app/group_avatar_memberships#create`
+- **OWN** `base_app_group_avatar_membership` `PATCH` `/groups/:group_id/avatar_memberships/:id(.:format)` `base/app/group_avatar_memberships#update`
+- **OWN** `(unnamed)` `PUT` `/groups/:group_id/avatar_memberships/:id(.:format)` `base/app/group_avatar_memberships#update`
+- **OWN** `(unnamed)` `DELETE` `/groups/:group_id/avatar_memberships/:id(.:format)` `base/app/group_avatar_memberships#destroy`
+- **OWN** `base_app_groups` `GET` `/groups(.:format)` `base/app/groups#index`
+- **OWN** `(unnamed)` `POST` `/groups(.:format)` `base/app/groups#create`
+- **OWN** `base_app_group` `GET` `/groups/:id(.:format)` `base/app/groups#show`
+- **OWN** `(unnamed)` `PATCH` `/groups/:id(.:format)` `base/app/groups#update`
+- **OWN** `(unnamed)` `PUT` `/groups/:id(.:format)` `base/app/groups#update`
+- **OWN** `(unnamed)` `DELETE` `/groups/:id(.:format)` `base/app/groups#destroy`
+- **OWN** `base_app_accounts` `GET` `/accounts(.:format)` `base/app/accounts#index`
+- **OWN** `base_app_account` `GET` `/accounts/:id(.:format)` `base/app/accounts#show`
+- **OWN** `base_app_organization_memberships` `GET` `/organizations/:organization_id/memberships(.:format)` `base/app/organizations/memberships#index`
+- **OWN** `(unnamed)` `POST` `/organizations/:organization_id/memberships(.:format)` `base/app/organizations/memberships#create`
+- **OWN** `new_base_app_organization_membership` `GET` `/organizations/:organization_id/memberships/new(.:format)` `base/app/organizations/memberships#new`
+- **OWN** `edit_base_app_organization_membership` `GET` `/organizations/:organization_id/memberships/:id/edit(.:format)` `base/app/organizations/memberships#edit`
+- **OWN** `base_app_organization_membership` `GET` `/organizations/:organization_id/memberships/:id(.:format)` `base/app/organizations/memberships#show`
+- **OWN** `(unnamed)` `PATCH` `/organizations/:organization_id/memberships/:id(.:format)` `base/app/organizations/memberships#update`
+- **OWN** `(unnamed)` `PUT` `/organizations/:organization_id/memberships/:id(.:format)` `base/app/organizations/memberships#update`
+- **OWN** `(unnamed)` `DELETE` `/organizations/:organization_id/memberships/:id(.:format)` `base/app/organizations/memberships#destroy`
+- **OWN** `base_app_organizations` `GET` `/organizations(.:format)` `base/app/organizations#index`
+- **OWN** `base_app_organization` `GET` `/organizations/:id(.:format)` `base/app/organizations#show`
+- **OWN** `base_app_preference` `GET` `/preference(.:format)` `base/app/preferences#show`
+- **OWN** `edit_base_app_preference_calendar` `GET` `/preference/calendar/edit(.:format)` `base/app/preference/calendars#edit`
+- **OWN** `base_app_preference_calendar` `PATCH` `/preference/calendar(.:format)` `base/app/preference/calendars#update`
+- **OWN** `(unnamed)` `PUT` `/preference/calendar(.:format)` `base/app/preference/calendars#update`
+- **OWN** `edit_base_app_preference_clock` `GET` `/preference/clock/edit(.:format)` `base/app/preference/clocks#edit`
+- **OWN** `base_app_preference_clock` `PATCH` `/preference/clock(.:format)` `base/app/preference/clocks#update`
+- **OWN** `(unnamed)` `PUT` `/preference/clock(.:format)` `base/app/preference/clocks#update`
+- **OWN** `edit_base_app_preference_cookie` `GET` `/preference/cookie/edit(.:format)` `base/app/preference/cookies#edit`
+- **OWN** `base_app_preference_cookie` `PATCH` `/preference/cookie(.:format)` `base/app/preference/cookies#update`
+- **OWN** `(unnamed)` `PUT` `/preference/cookie(.:format)` `base/app/preference/cookies#update`
+- **OWN** `edit_base_app_preference_currency` `GET` `/preference/currency/edit(.:format)` `base/app/preference/currencies#edit`
+- **OWN** `base_app_preference_currency` `PATCH` `/preference/currency(.:format)` `base/app/preference/currencies#update`
+- **OWN** `(unnamed)` `PUT` `/preference/currency(.:format)` `base/app/preference/currencies#update`
+- **OWN** `edit_base_app_preference_density` `GET` `/preference/density/edit(.:format)` `base/app/preference/densities#edit`
+- **OWN** `base_app_preference_density` `PATCH` `/preference/density(.:format)` `base/app/preference/densities#update`
+- **OWN** `(unnamed)` `PUT` `/preference/density(.:format)` `base/app/preference/densities#update`
+- **OWN** `edit_base_app_preference_email` `GET` `/preference/emails/:id/edit(.:format)` `base/app/preference/emails#edit`
+- **OWN** `base_app_preference_email` `DELETE` `/preference/emails/:id(.:format)` `base/app/preference/emails#destroy`
+- **OWN** `(unnamed)` `POST` `/preference/emails/:id(.:format)` `base/app/preference/emails#create`
+- **OWN** `edit_base_app_preference_language` `GET` `/preference/language/edit(.:format)` `base/app/preference/languages#edit`
+- **OWN** `base_app_preference_language` `PATCH` `/preference/language(.:format)` `base/app/preference/languages#update`
+- **OWN** `(unnamed)` `PUT` `/preference/language(.:format)` `base/app/preference/languages#update`
+- **OWN** `edit_base_app_preference_motion` `GET` `/preference/motion/edit(.:format)` `base/app/preference/motions#edit`
+- **OWN** `base_app_preference_motion` `PATCH` `/preference/motion(.:format)` `base/app/preference/motions#update`
+- **OWN** `(unnamed)` `PUT` `/preference/motion(.:format)` `base/app/preference/motions#update`
+- **OWN** `edit_base_app_preference_notification` `GET` `/preference/notification/edit(.:format)` `base/app/preference/notifications#edit`
+- **OWN** `base_app_preference_notification` `PATCH` `/preference/notification(.:format)` `base/app/preference/notifications#update`
+- **OWN** `(unnamed)` `PUT` `/preference/notification(.:format)` `base/app/preference/notifications#update`
+- **OWN** `edit_base_app_preference_pagination` `GET` `/preference/pagination/edit(.:format)` `base/app/preference/paginations#edit`
+- **OWN** `base_app_preference_pagination` `PATCH` `/preference/pagination(.:format)` `base/app/preference/paginations#update`
+- **OWN** `(unnamed)` `PUT` `/preference/pagination(.:format)` `base/app/preference/paginations#update`
+- **OWN** `edit_base_app_preference_region` `GET` `/preference/region/edit(.:format)` `base/app/preference/regions#edit`
+- **OWN** `base_app_preference_region` `PATCH` `/preference/region(.:format)` `base/app/preference/regions#update`
+- **OWN** `(unnamed)` `PUT` `/preference/region(.:format)` `base/app/preference/regions#update`
+- **OWN** `edit_base_app_preference_customization` `GET` `/preference/customization/edit(.:format)` `base/app/preference/customizations#edit`
+- **OWN** `base_app_preference_customization` `DELETE` `/preference/customization(.:format)` `base/app/preference/customizations#destroy`
+- **OWN** `edit_base_app_preference_screen` `GET` `/preference/screen/edit(.:format)` `base/app/preference/screens#edit`
+- **OWN** `base_app_preference_screen` `PATCH` `/preference/screen(.:format)` `base/app/preference/screens#update`
+- **OWN** `(unnamed)` `PUT` `/preference/screen(.:format)` `base/app/preference/screens#update`
+- **OWN** `edit_base_app_preference_theme` `GET` `/preference/theme/edit(.:format)` `base/app/preference/themes#edit`
+- **OWN** `base_app_preference_theme` `PATCH` `/preference/theme(.:format)` `base/app/preference/themes#update`
+- **OWN** `(unnamed)` `PUT` `/preference/theme(.:format)` `base/app/preference/themes#update`
+- **OWN** `edit_base_app_preference_timezone` `GET` `/preference/timezone/edit(.:format)` `base/app/preference/timezones#edit`
+- **OWN** `base_app_preference_timezone` `PATCH` `/preference/timezone(.:format)` `base/app/preference/timezones#update`
+- **OWN** `(unnamed)` `PUT` `/preference/timezone(.:format)` `base/app/preference/timezones#update`
+- **OWN** `base_app_well_known_jwks` `GET` `/.well-known/jwks.json` `base/app/well_known/jwks#show`
+- **OWN** `base_app_revision` `GET` `/revision` `base/app/revisions#show`
+- **OWN** `base_app_health` `GET` `/health` `base/app/healths#show`
+- **OWN** `base_app_health_liveness` `GET` `/health/liveness` `base/app/health/livenesses#show`
+- **OWN** `base_app_health_readiness` `GET` `/health/readiness` `base/app/health/readinesses#show`
+- **OWN** `base_app_health_startup` `GET` `/health/startup` `base/app/health/startups#show`
+- **OWN** `base_app_api_v0_health` `GET` `/api/v0/health.json` `base/app/api/v0/healths#show`
+- **OWN** `base_app_api_v0_revision` `GET` `/api/v0/revision.json` `base/app/api/v0/revisions#show`
+- **OWN** `base_app_api_v0_identity_standing` `GET` `/api/v0/identity/standing(.:format)` `base/app/api/v0/identity/standings#show`
+- **OWN** `base_app_api_v0_identity_selection` `GET` `/api/v0/identity/selection(.:format)` `base/app/api/v0/identity/selections#show`
+- **OWN** `base_app_api_v0_membership_accounts` `GET` `/api/v0/membership/app/accounts(.:format)` `base/app/api/v0/membership/directory#accounts`
+- **OWN** `base_app_api_v0_membership_account` `GET` `/api/v0/membership/app/accounts/:ref(.:format)` `base/app/api/v0/membership/directory#account`
+- **OWN** `base_app_api_v0_membership_organizations` `GET` `/api/v0/membership/app/organizations(.:format)` `base/app/api/v0/membership/directory#organizations`
+- **OWN** `base_app_api_v0_membership_organization` `GET` `/api/v0/membership/app/organizations/:ref(.:format)` `base/app/api/v0/membership/directory#organization`
+- **OWN** `base_app_api_v0_membership_memberships` `GET` `/api/v0/membership/app/organizations/:organization_ref/memberships(.:format)` `base/app/api/v0/membership/directory#memberships`
+- **OWN** `base_app_api_v0_membership_membership` `GET` `/api/v0/membership/app/organizations/:organization_ref/memberships/:id(.:format)` `base/app/api/v0/membership/directory#membership`
+- **OWN** `base_app_api_v0_membership_membership_authorization` `POST` `/api/v0/membership/app/organizations/:organization_ref/memberships/authorization(.:format)` `base/app/api/v0/membership/directory#authorization`
+- **OWN** `base_app_api_v0_avatar_switcher` `GET` `/api/v0/avatar/app/switcher(.:format)` `base/app/api/v0/avatar/switchers#show`
+- **OWN** `(unnamed)` `PUT` `/api/v0/avatar/app/switcher(.:format)` `base/app/api/v0/avatar/switchers#update`
+- **OWN** `base_app_api_v0_avatar_dashboard_identity` `GET` `/api/v0/avatar/app/dashboard-identity(.:format)` `base/app/api/v0/avatar/dashboard_identities#show`
+- **OWN** `base_app_api_v0_avatar_selected_image` `GET` `/api/v0/avatar/app/selected-image(.:format)` `base/app/api/v0/avatar/selected_images#show`
+- **OWN** `base_app_api_v0_avatar_avatars` `GET` `/api/v0/avatar/app/avatars(.:format)` `base/app/api/v0/avatar/avatars#index`
+- **OWN** `(unnamed)` `POST` `/api/v0/avatar/app/avatars(.:format)` `base/app/api/v0/avatar/avatars#create`
+- **OWN** `base_app_api_v0_avatar_avatar` `GET` `/api/v0/avatar/app/avatars/:avatar_ref(.:format)` `base/app/api/v0/avatar/avatars#show`
+- **OWN** `(unnamed)` `PATCH` `/api/v0/avatar/app/avatars/:avatar_ref(.:format)` `base/app/api/v0/avatar/avatars#update`
+- **OWN** `(unnamed)` `PUT` `/api/v0/avatar/app/avatars/:avatar_ref(.:format)` `base/app/api/v0/avatar/avatars#update`
+- **OWN** `base_app_api_v0_avatar_avatar_social_edge` `POST` `/api/v0/avatar/app/avatars/:avatar_ref/:kind(.:format)` `base/app/api/v0/avatar/social_edges#create {kind: /follows|blocks|mutes/}`
+- **OWN** `base_app_api_v0_avatar` `DELETE` `/api/v0/avatar/app/avatars/:avatar_ref/:kind(.:format)` `base/app/api/v0/avatar/social_edges#destroy {kind: /follows|blocks|mutes/}`
+- **OWN** `base_app_api_v0_avatar_ownership_transfers` `POST` `/api/v0/avatar/app/ownership-transfers(.:format)` `base/app/api/v0/avatar/avatar_ownership_transfers#create`
+- **OWN** `base_app_api_v0_avatar_accept_ownership_transfer` `POST` `/api/v0/avatar/app/ownership-transfers/:ref/accept(.:format)` `base/app/api/v0/avatar/avatar_ownership_transfers#accept`
+- **OWN** `base_app_api_v0_avatar_cancel_ownership_transfer` `POST` `/api/v0/avatar/app/ownership-transfers/:ref/cancel(.:format)` `base/app/api/v0/avatar/avatar_ownership_transfers#cancel`
+- **OWN** `base_app_api_v0_avatar_group_avatar_memberships` `POST` `/api/v0/avatar/app/groups/:group_ref/avatar-memberships(.:format)` `base/app/api/v0/avatar/group_avatar_memberships#create`
+- **OWN** `base_app_api_v0_avatar_group_avatar_membership` `PATCH` `/api/v0/avatar/app/groups/:group_ref/avatar-memberships/:ref(.:format)` `base/app/api/v0/avatar/group_avatar_memberships#update`
+- **OWN** `(unnamed)` `PUT` `/api/v0/avatar/app/groups/:group_ref/avatar-memberships/:ref(.:format)` `base/app/api/v0/avatar/group_avatar_memberships#update`
+- **OWN** `(unnamed)` `DELETE` `/api/v0/avatar/app/groups/:group_ref/avatar-memberships/:ref(.:format)` `base/app/api/v0/avatar/group_avatar_memberships#destroy`
+- **OWN** `base_app_api_v0_avatar_groups` `GET` `/api/v0/avatar/app/groups(.:format)` `base/app/api/v0/avatar/groups#index`
+- **OWN** `(unnamed)` `POST` `/api/v0/avatar/app/groups(.:format)` `base/app/api/v0/avatar/groups#create`
+- **OWN** `base_app_api_v0_avatar_group` `GET` `/api/v0/avatar/app/groups/:ref(.:format)` `base/app/api/v0/avatar/groups#show`
+- **OWN** `(unnamed)` `PATCH` `/api/v0/avatar/app/groups/:ref(.:format)` `base/app/api/v0/avatar/groups#update`
+- **OWN** `(unnamed)` `PUT` `/api/v0/avatar/app/groups/:ref(.:format)` `base/app/api/v0/avatar/groups#update`
+- **OWN** `(unnamed)` `DELETE` `/api/v0/avatar/app/groups/:ref(.:format)` `base/app/api/v0/avatar/groups#destroy`
+- **OWN** `base_app_robots` `GET` `/robots.txt(.:format)` `base/app/robots#index`
+- **OWN** `base_app_sitemap` `GET` `/sitemap.xml(.:format)` `base/app/sitemaps#show`
+- **OWN** `base_app_csp_violation_report` `POST` `/csp-violation-report(.:format)` `base/app/csp_violation_reports#create`
+- **OWN** `base_app_pwa_service_worker` `GET` `/service-worker(.:format)` `rails/pwa#service_worker`
+- **OWN** `base_app_pwa_offline` `GET` `/offline(.:format)` `rails/pwa#offline`
+- **RETIRED** `new_base_app_sign_out` `GET` `/sign/out/new(.:format)` `base/app/sign_outs#new`
+- **RETIRED** `edit_base_app_sign_out` `GET` `/sign/out/edit(.:format)` `base/app/sign_outs#edit`
+- **RETIRED** `base_app_sign_out` `GET` `/sign/out(.:format)` `base/app/sign_outs#show`
+- **RETIRED** `(unnamed)` `POST` `/sign/out(.:format)` `base/app/sign_outs#create`
+- **RETIRED** `base_app_sign_out_completion` `GET` `/sign/out/completion(.:format)` `base/app/sign_outs#show`
+- **RETIRED** `base_app_oidc_callback` `GET` `/oidc/callback(.:format)` `base/app/oidc/callbacks#show`
+- **RETIRED** `base_app_oidc_closures` `POST` `/oidc/closures(.:format)` `base/app/oidc/closures#create`
+- **OWN** `base_app_api_v0_preferences_cookie` `GET` `/api/v0/preferences/cookie(.:format)` `base/app/api/v0/preferences/cookies#show`
+- **OWN** `(unnamed)` `PATCH` `/api/v0/preferences/cookie(.:format)` `base/app/api/v0/preferences/cookies#update`
+- **OWN** `base_app_api_v0_preferences_theme` `GET` `/api/v0/preferences/theme(.:format)` `base/app/api/v0/preferences/themes#show`
+- **OWN** `(unnamed)` `PATCH` `/api/v0/preferences/theme(.:format)` `base/app/api/v0/preferences/themes#update`
+- **OWN** `base_app_api_v0_preferences_web_push` `GET` `/api/v0/preferences/web_push(.:format)` `base/app/api/v0/preferences/web_pushes#show`
+- **OWN** `(unnamed)` `PATCH` `/api/v0/preferences/web_push(.:format)` `base/app/api/v0/preferences/web_pushes#update`
+- **RETIRED** `base_app_social_authentication_continuation` `POST` `/social/authentication/continuation(.:format)` `base/app/social/authentication/continuations#create`
+- **RETIRED** `base_app_social_google_callback` `GET` `/social/google/callback(.:format)` `auth/app/omniauth/omniauth_callbacks#omniauth {provider: "google"}`
+- **RETIRED** `base_app_social_apple_callback` `GET` `/social/apple/callback(.:format)` `auth/app/omniauth/omniauth_callbacks#omniauth {provider: "apple"}`
+- **RETIRED** `base_app_social_failure` `GET` `/social/failure(.:format)` `auth/app/omniauth/omniauth_callbacks#failure`
+- **OWN** `base_app_verification` `GET` `/verification(.:format)` `base/app/verifications#show`
+- **OWN** `(unnamed)` `POST` `/verification(.:format)` `base/app/verifications#create`
+- **RETIRED** `base_app_verification_oidc_callback` `GET` `/verification/oidc/callback(.:format)` `base/app/verification/oidc/callbacks#show`
+- **OWN** `base_app_verification_cancellation` `GET` `/verification/cancellation(.:format)` `base/app/verification/cancellations#show`
+- **OWN** `(unnamed)` `POST` `/verification/cancellation(.:format)` `base/app/verification/cancellations#create`
+- **OWN** `base_app_verification_completion` `GET` `/verification/completion(.:format)` `base/app/verification/completions#show`
+- **OWN** `(unnamed)` `POST` `/verification/completion(.:format)` `base/app/verification/completions#create`
+- **OWN** `base_app_verification_setup` `GET` `/verification/setup(.:format)` `base/app/verification/setups#show`
+- **OWN** `(unnamed)` `POST` `/verification/setup(.:format)` `base/app/verification/setups#create`
+- **OWN** `base_app_identity` `GET` `/identity(.:format)` `base/app/identities#show`
+- **RETIRED** `base_app_other_sessions` `DELETE` `/sessions/other(.:format)` `base/app/identity/revocations/others#destroy`
+- **OWN** `base_app_sessions` `GET` `/sessions(.:format)` `base/app/identity/sessions#index`
+- **OWN** `base_app_session` `GET` `/sessions/:id(.:format)` `base/app/identity/sessions#show`
+- **RETIRED** `(unnamed)` `DELETE` `/sessions/:id(.:format)` `base/app/identity/sessions#destroy`
+- **RETIRED** `base_app_avatar_follow` `DELETE` `/avatars/:avatar_id/follow(.:format)` `base/app/avatars/follows#destroy`
+- **RETIRED** `(unnamed)` `POST` `/avatars/:avatar_id/follow(.:format)` `base/app/avatars/follows#create`
+- **RETIRED** `base_app_avatar_block` `DELETE` `/avatars/:avatar_id/block(.:format)` `base/app/avatars/blocks#destroy`
+- **RETIRED** `(unnamed)` `POST` `/avatars/:avatar_id/block(.:format)` `base/app/avatars/blocks#create`
+- **RETIRED** `base_app_avatar_mute` `DELETE` `/avatars/:avatar_id/mute(.:format)` `base/app/avatars/mutes#destroy`
+- **RETIRED** `(unnamed)` `POST` `/avatars/:avatar_id/mute(.:format)` `base/app/avatars/mutes#create`
+- **RETIRED** `base_app_avatars` `GET` `/avatars(.:format)` `base/app/avatars#index`
+- **RETIRED** `(unnamed)` `POST` `/avatars(.:format)` `base/app/avatars#create`
+- **RETIRED** `new_base_app_avatar` `GET` `/avatars/new(.:format)` `base/app/avatars#new`
+- **RETIRED** `edit_base_app_avatar` `GET` `/avatars/:id/edit(.:format)` `base/app/avatars#edit`
+- **RETIRED** `base_app_avatar` `GET` `/avatars/:id(.:format)` `base/app/avatars#show`
+- **RETIRED** `(unnamed)` `PATCH` `/avatars/:id(.:format)` `base/app/avatars#update`
+- **RETIRED** `(unnamed)` `PUT` `/avatars/:id(.:format)` `base/app/avatars#update`
+- **RETIRED** `base_app_avatar_ownership_transfers` `POST` `/avatar_ownership_transfers(.:format)` `base/app/avatar_ownership_transfers#create`
+- **RETIRED** `base_app_accept_avatar_ownership_transfer` `POST` `/avatar_ownership_transfers/:id/accept(.:format)` `base/app/avatar_ownership_transfers#accept`
+- **RETIRED** `base_app_cancel_avatar_ownership_transfer` `POST` `/avatar_ownership_transfers/:id/cancel(.:format)` `base/app/avatar_ownership_transfers#cancel`
+- **RETIRED** `base_app_identity_social_identities` `GET` `/identity/social_identities(.:format)` `base/app/identity/social_identities#index`
+- **RETIRED** `base_app_identity_sensitive_admission_confirmation` `GET` `/identity/sensitive_admissions/:admission_ref/confirmation(.:format)` `base/app/identity/sensitive_admission_confirmations#show`
+- **RETIRED** `(unnamed)` `POST` `/identity/sensitive_admissions/:admission_ref/confirmation(.:format)` `base/app/identity/sensitive_admission_confirmations#create`
+- **OWN** `base_app_identity_standing` `GET` `/identity/standing(.:format)` `base/app/identity/standings#show`
+- **OWN** `base_app_identity_passkeys` `GET` `/identity/passkeys(.:format)` `base/app/identity/passkeys#index`
+- **RETIRED** `(unnamed)` `POST` `/identity/passkeys(.:format)` `base/app/identity/passkeys#create`
+- **RETIRED** `new_base_app_identity_passkey` `GET` `/identity/passkeys/new(.:format)` `base/app/identity/passkeys#new`
+- **OWN** `base_app_identity_passkey` `GET` `/identity/passkeys/:id(.:format)` `base/app/identity/passkeys#show`
+- **RETIRED** `(unnamed)` `PATCH` `/identity/passkeys/:id(.:format)` `base/app/identity/passkeys#update`
+- **RETIRED** `(unnamed)` `PUT` `/identity/passkeys/:id(.:format)` `base/app/identity/passkeys#update`
+- **RETIRED** `(unnamed)` `DELETE` `/identity/passkeys/:id(.:format)` `base/app/identity/passkeys#destroy`
+- **OWN** `base_app_identity_totps` `GET` `/identity/totps(.:format)` `base/app/identity/totps#index`
+- **RETIRED** `(unnamed)` `POST` `/identity/totps(.:format)` `base/app/identity/totps#create`
+- **RETIRED** `new_base_app_identity_totp` `GET` `/identity/totps/new(.:format)` `base/app/identity/totps#new`
+- **OWN** `base_app_identity_totp` `GET` `/identity/totps/:id(.:format)` `base/app/identity/totps#show`
+- **RETIRED** `(unnamed)` `PATCH` `/identity/totps/:id(.:format)` `base/app/identity/totps#update`
+- **RETIRED** `(unnamed)` `PUT` `/identity/totps/:id(.:format)` `base/app/identity/totps#update`
+- **RETIRED** `(unnamed)` `DELETE` `/identity/totps/:id(.:format)` `base/app/identity/totps#destroy`
+- **RETIRED** `base_app_identity_recovery_completion` `POST` `/identity/recovery/completion(.:format)` `base/app/identity/recovery/completions#create`
+- **RETIRED** `base_app_identity_recovery` `GET` `/identity/recovery(.:format)` `base/app/identity/recoveries#show`
+- **RETIRED** `new_base_app_identity_recovery_session` `GET` `/identity/recovery/session/new(.:format)` `base/app/identity/recovery/sessions#new`
+- **RETIRED** `base_app_identity_recovery_session` `POST` `/identity/recovery/session(.:format)` `base/app/identity/recovery/sessions#create`
+- **RETIRED** `base_app_identity_recovery_appeals` `POST` `/identity/recovery/appeals(.:format)` `base/app/identity/recovery/appeals#create`
+- **RETIRED** `base_app_identity_mfa_reset` `GET` `/identity/mfa/reset(.:format)` `base/app/identity/mfa/resets#show`
+- **RETIRED** `base_app_identity_mfa_challenge` `GET` `/identity/mfa/challenge(.:format)` `base/app/identity/mfa/challenges#show`
+- **RETIRED** `(unnamed)` `PATCH` `/identity/mfa/challenge(.:format)` `base/app/identity/mfa/challenges#update`
+- **RETIRED** `(unnamed)` `PUT` `/identity/mfa/challenge(.:format)` `base/app/identity/mfa/challenges#update`
+- **RETIRED** `base_app_identity_emails_registration_redelivery` `POST` `/identity/emails/registration/redelivery(.:format)` `base/app/identity/emails/redeliveries#create`
+- **RETIRED** `new_base_app_identity_emails_registration` `GET` `/identity/emails/registration/new(.:format)` `base/app/identity/emails/registrations#new`
+- **RETIRED** `edit_base_app_identity_emails_registration` `GET` `/identity/emails/registration/edit(.:format)` `base/app/identity/emails/registrations#edit`
+- **RETIRED** `base_app_identity_emails_registration` `PATCH` `/identity/emails/registration(.:format)` `base/app/identity/emails/registrations#update`
+- **RETIRED** `(unnamed)` `PUT` `/identity/emails/registration(.:format)` `base/app/identity/emails/registrations#update`
+- **RETIRED** `(unnamed)` `POST` `/identity/emails/registration(.:format)` `base/app/identity/emails/registrations#create`
+- **OWN** `base_app_identity_emails` `GET` `/identity/emails(.:format)` `base/app/identity/emails#index`
+- **RETIRED** `edit_base_app_identity_email` `GET` `/identity/emails/:id/edit(.:format)` `base/app/identity/emails#edit`
+- **RETIRED** `base_app_identity_email` `PATCH` `/identity/emails/:id(.:format)` `base/app/identity/emails#update`
+- **RETIRED** `(unnamed)` `PUT` `/identity/emails/:id(.:format)` `base/app/identity/emails#update`
+- **RETIRED** `(unnamed)` `DELETE` `/identity/emails/:id(.:format)` `base/app/identity/emails#destroy`
+- **RETIRED** `new_base_app_identity_telephones_registration` `GET` `/identity/telephones/registration/new(.:format)` `base/app/identity/telephones/registrations#new`
+- **RETIRED** `edit_base_app_identity_telephones_registration` `GET` `/identity/telephones/registration/edit(.:format)` `base/app/identity/telephones/registrations#edit`
+- **RETIRED** `base_app_identity_telephones_registration` `PATCH` `/identity/telephones/registration(.:format)` `base/app/identity/telephones/registrations#update`
+- **RETIRED** `(unnamed)` `PUT` `/identity/telephones/registration(.:format)` `base/app/identity/telephones/registrations#update`
+- **RETIRED** `(unnamed)` `POST` `/identity/telephones/registration(.:format)` `base/app/identity/telephones/registrations#create`
+- **OWN** `base_app_identity_telephones` `GET` `/identity/telephones(.:format)` `base/app/identity/telephones#index`
+- **RETIRED** `(unnamed)` `POST` `/identity/telephones(.:format)` `base/app/identity/telephones#create`
+- **RETIRED** `new_base_app_identity_telephone` `GET` `/identity/telephones/new(.:format)` `base/app/identity/telephones#new`
+- **RETIRED** `edit_base_app_identity_telephone` `GET` `/identity/telephones/:id/edit(.:format)` `base/app/identity/telephones#edit`
+- **RETIRED** `base_app_identity_telephone` `DELETE` `/identity/telephones/:id(.:format)` `base/app/identity/telephones#destroy`
+- **OWN** `base_app_identity_birthdate` `GET` `/identity/birthdate(.:format)` `base/app/identity/birthdates#show`
+- **OWN** `base_app_identity_sessions` `GET` `/identity/sessions(.:format)` `base/app/identity/sessions#index`
+- **OWN** `base_app_identity_session` `GET` `/identity/sessions/:id(.:format)` `base/app/identity/sessions#show`
+- **RETIRED** `(unnamed)` `DELETE` `/identity/sessions/:id(.:format)` `base/app/identity/sessions#destroy`
+- **RETIRED** `base_app_identity_other_sessions` `DELETE` `/identity/other_sessions(.:format)` `base/app/identity/revocations/others#destroy`
+- **OWN** `base_app_identity_activities` `GET` `/identity/activities(.:format)` `base/app/identity/activities#index`
+- **OWN** `new_base_app_identity_withdrawal` `GET` `/identity/withdrawal/new(.:format)` `base/app/identity/withdrawals#new`
+- **OWN** `edit_base_app_identity_withdrawal` `GET` `/identity/withdrawal/edit(.:format)` `base/app/identity/withdrawals#edit`
+- **OWN** `base_app_identity_withdrawal` `PATCH` `/identity/withdrawal(.:format)` `base/app/identity/withdrawals#update`
+- **OWN** `(unnamed)` `PUT` `/identity/withdrawal(.:format)` `base/app/identity/withdrawals#update`
+- **OWN** `(unnamed)` `DELETE` `/identity/withdrawal(.:format)` `base/app/identity/withdrawals#destroy`
+- **OWN** `(unnamed)` `POST` `/identity/withdrawal(.:format)` `base/app/identity/withdrawals#create`
+- **OWN** `new_base_app_identity_withdrawal_session` `GET` `/identity/withdrawal/session/new(.:format)` `base/app/identity/withdrawal/sessions#new`
+- **OWN** `base_app_identity_withdrawal_session` `DELETE` `/identity/withdrawal/session(.:format)` `base/app/identity/withdrawal/sessions#destroy`
+- **OWN** `(unnamed)` `POST` `/identity/withdrawal/session(.:format)` `base/app/identity/withdrawal/sessions#create`
+- **OWN** `new_base_app_identity_privacy_erasure` `GET` `/identity/privacy/erasure/new(.:format)` `base/app/identity/privacy/erasures#new`
+- **OWN** `base_app_identity_privacy_erasure` `POST` `/identity/privacy/erasure(.:format)` `base/app/identity/privacy/erasures#create`
+- **OWN** `base_app_identity_privacy_erasure_status` `GET` `/identity/privacy/erasure/status(.:format)` `base/app/identity/privacy/erasure/statuses#show`
+
+#### Base com — 61 baseline routes
+- **OWN** `base_com_root` `GET` `/` `base/com/roots#index`
+- **OWN** `base_com_preference` `GET` `/preference(.:format)` `base/com/preferences#show`
+- **OWN** `edit_base_com_preference_calendar` `GET` `/preference/calendar/edit(.:format)` `base/com/preference/calendars#edit`
+- **OWN** `base_com_preference_calendar` `PATCH` `/preference/calendar(.:format)` `base/com/preference/calendars#update`
+- **OWN** `(unnamed)` `PUT` `/preference/calendar(.:format)` `base/com/preference/calendars#update`
+- **OWN** `edit_base_com_preference_clock` `GET` `/preference/clock/edit(.:format)` `base/com/preference/clocks#edit`
+- **OWN** `base_com_preference_clock` `PATCH` `/preference/clock(.:format)` `base/com/preference/clocks#update`
+- **OWN** `(unnamed)` `PUT` `/preference/clock(.:format)` `base/com/preference/clocks#update`
+- **OWN** `edit_base_com_preference_cookie` `GET` `/preference/cookie/edit(.:format)` `base/com/preference/cookies#edit`
+- **OWN** `base_com_preference_cookie` `PATCH` `/preference/cookie(.:format)` `base/com/preference/cookies#update`
+- **OWN** `(unnamed)` `PUT` `/preference/cookie(.:format)` `base/com/preference/cookies#update`
+- **OWN** `edit_base_com_preference_currency` `GET` `/preference/currency/edit(.:format)` `base/com/preference/currencies#edit`
+- **OWN** `base_com_preference_currency` `PATCH` `/preference/currency(.:format)` `base/com/preference/currencies#update`
+- **OWN** `(unnamed)` `PUT` `/preference/currency(.:format)` `base/com/preference/currencies#update`
+- **OWN** `edit_base_com_preference_density` `GET` `/preference/density/edit(.:format)` `base/com/preference/densities#edit`
+- **OWN** `base_com_preference_density` `PATCH` `/preference/density(.:format)` `base/com/preference/densities#update`
+- **OWN** `(unnamed)` `PUT` `/preference/density(.:format)` `base/com/preference/densities#update`
+- **OWN** `edit_base_com_preference_language` `GET` `/preference/language/edit(.:format)` `base/com/preference/languages#edit`
+- **OWN** `base_com_preference_language` `PATCH` `/preference/language(.:format)` `base/com/preference/languages#update`
+- **OWN** `(unnamed)` `PUT` `/preference/language(.:format)` `base/com/preference/languages#update`
+- **OWN** `edit_base_com_preference_motion` `GET` `/preference/motion/edit(.:format)` `base/com/preference/motions#edit`
+- **OWN** `base_com_preference_motion` `PATCH` `/preference/motion(.:format)` `base/com/preference/motions#update`
+- **OWN** `(unnamed)` `PUT` `/preference/motion(.:format)` `base/com/preference/motions#update`
+- **OWN** `edit_base_com_preference_notification` `GET` `/preference/notification/edit(.:format)` `base/com/preference/notifications#edit`
+- **OWN** `base_com_preference_notification` `PATCH` `/preference/notification(.:format)` `base/com/preference/notifications#update`
+- **OWN** `(unnamed)` `PUT` `/preference/notification(.:format)` `base/com/preference/notifications#update`
+- **OWN** `edit_base_com_preference_pagination` `GET` `/preference/pagination/edit(.:format)` `base/com/preference/paginations#edit`
+- **OWN** `base_com_preference_pagination` `PATCH` `/preference/pagination(.:format)` `base/com/preference/paginations#update`
+- **OWN** `(unnamed)` `PUT` `/preference/pagination(.:format)` `base/com/preference/paginations#update`
+- **OWN** `edit_base_com_preference_region` `GET` `/preference/region/edit(.:format)` `base/com/preference/regions#edit`
+- **OWN** `base_com_preference_region` `PATCH` `/preference/region(.:format)` `base/com/preference/regions#update`
+- **OWN** `(unnamed)` `PUT` `/preference/region(.:format)` `base/com/preference/regions#update`
+- **OWN** `edit_base_com_preference_customization` `GET` `/preference/customization/edit(.:format)` `base/com/preference/customizations#edit`
+- **OWN** `base_com_preference_customization` `DELETE` `/preference/customization(.:format)` `base/com/preference/customizations#destroy`
+- **OWN** `edit_base_com_preference_screen` `GET` `/preference/screen/edit(.:format)` `base/com/preference/screens#edit`
+- **OWN** `base_com_preference_screen` `PATCH` `/preference/screen(.:format)` `base/com/preference/screens#update`
+- **OWN** `(unnamed)` `PUT` `/preference/screen(.:format)` `base/com/preference/screens#update`
+- **OWN** `edit_base_com_preference_theme` `GET` `/preference/theme/edit(.:format)` `base/com/preference/themes#edit`
+- **OWN** `base_com_preference_theme` `PATCH` `/preference/theme(.:format)` `base/com/preference/themes#update`
+- **OWN** `(unnamed)` `PUT` `/preference/theme(.:format)` `base/com/preference/themes#update`
+- **OWN** `edit_base_com_preference_timezone` `GET` `/preference/timezone/edit(.:format)` `base/com/preference/timezones#edit`
+- **OWN** `base_com_preference_timezone` `PATCH` `/preference/timezone(.:format)` `base/com/preference/timezones#update`
+- **OWN** `(unnamed)` `PUT` `/preference/timezone(.:format)` `base/com/preference/timezones#update`
+- **OWN** `base_com_revision` `GET` `/revision` `base/com/revisions#show`
+- **OWN** `base_com_health` `GET` `/health` `base/com/healths#show`
+- **OWN** `base_com_health_liveness` `GET` `/health/liveness` `base/com/health/livenesses#show`
+- **OWN** `base_com_health_readiness` `GET` `/health/readiness` `base/com/health/readinesses#show`
+- **OWN** `base_com_health_startup` `GET` `/health/startup` `base/com/health/startups#show`
+- **OWN** `base_com_api_v0_health` `GET` `/api/v0/health.json` `base/com/api/v0/healths#show`
+- **OWN** `base_com_api_v0_revision` `GET` `/api/v0/revision.json` `base/com/api/v0/revisions#show`
+- **OWN** `base_com_api_v0_preferences_cookie` `GET` `/api/v0/preferences/cookie(.:format)` `base/com/api/v0/preferences/cookies#show`
+- **OWN** `(unnamed)` `PATCH` `/api/v0/preferences/cookie(.:format)` `base/com/api/v0/preferences/cookies#update`
+- **OWN** `base_com_api_v0_preferences_theme` `GET` `/api/v0/preferences/theme(.:format)` `base/com/api/v0/preferences/themes#show`
+- **OWN** `(unnamed)` `PATCH` `/api/v0/preferences/theme(.:format)` `base/com/api/v0/preferences/themes#update`
+- **OWN** `base_com_api_v0_preferences_web_push` `GET` `/api/v0/preferences/web_push(.:format)` `base/com/api/v0/preferences/web_pushes#show`
+- **OWN** `(unnamed)` `PATCH` `/api/v0/preferences/web_push(.:format)` `base/com/api/v0/preferences/web_pushes#update`
+- **OWN** `base_com_robots` `GET` `/robots.txt(.:format)` `base/com/robots#index`
+- **OWN** `base_com_sitemap` `GET` `/sitemap.xml(.:format)` `base/com/sitemaps#show`
+- **OWN** `base_com_csp_violation_report` `POST` `/csp-violation-report(.:format)` `base/com/csp_violation_reports#create`
+- **OWN** `base_com_pwa_service_worker` `GET` `/service-worker(.:format)` `rails/pwa#service_worker`
+- **OWN** `base_com_pwa_offline` `GET` `/offline(.:format)` `rails/pwa#offline`
+
+#### Base dev — 9 baseline routes
+- **FOREIGN/RETIRED** `base_developer_root` `GET` `/` `base/dev/roots#index`
+- **FOREIGN/RETIRED** `base_developer_revision` `GET` `/revision` `base/dev/revisions#show`
+- **FOREIGN/RETIRED** `base_developer_health` `GET` `/health` `base/dev/healths#show`
+- **FOREIGN/RETIRED** `base_developer_health_liveness` `GET` `/health/liveness` `base/dev/health/livenesses#show`
+- **FOREIGN/RETIRED** `base_developer_health_readiness` `GET` `/health/readiness` `base/dev/health/readinesses#show`
+- **FOREIGN/RETIRED** `base_developer_health_startup` `GET` `/health/startup` `base/dev/health/startups#show`
+- **FOREIGN/RETIRED** `base_developer_api_v0_health` `GET` `/api/v0/health.json` `base/dev/api/v0/healths#show`
+- **FOREIGN/RETIRED** `base_developer_api_v0_revision` `GET` `/api/v0/revision.json` `base/dev/api/v0/revisions#show`
+- **FOREIGN/RETIRED** `base_developer_csp_violation_report` `POST` `/csp-violation-report(.:format)` `base/dev/csp_violation_reports#create`
+
+#### Base net — 9 baseline routes
+- **FOREIGN/RETIRED** `base_network_root` `GET` `/` `base/net/roots#index`
+- **FOREIGN/RETIRED** `base_network_revision` `GET` `/revision` `base/net/revisions#show`
+- **FOREIGN/RETIRED** `base_network_health` `GET` `/health` `base/net/healths#show`
+- **FOREIGN/RETIRED** `base_network_health_liveness` `GET` `/health/liveness` `base/net/health/livenesses#show`
+- **FOREIGN/RETIRED** `base_network_health_readiness` `GET` `/health/readiness` `base/net/health/readinesses#show`
+- **FOREIGN/RETIRED** `base_network_health_startup` `GET` `/health/startup` `base/net/health/startups#show`
+- **FOREIGN/RETIRED** `base_network_api_v0_health` `GET` `/api/v0/health.json` `base/net/api/v0/healths#show`
+- **FOREIGN/RETIRED** `base_network_api_v0_revision` `GET` `/api/v0/revision.json` `base/net/api/v0/revisions#show`
+- **FOREIGN/RETIRED** `base_network_csp_violation_report` `POST` `/csp-violation-report(.:format)` `base/net/csp_violation_reports#create`
+
+#### Base org — 248 baseline routes
+- **OWN** `base_org_root` `GET` `/` `base/org/roots#index`
+- **RETIRED** `base_org_sign_show` `GET` `/sign(.:format)` `base/org/sign/entries#show`
+- **RETIRED** `base_org_sign_create` `POST` `/sign(.:format)` `base/org/sign/entries#create`
+- **RETIRED** `base_org_sign_interruption` `GET` `/sign/interruption(.:format)` `base/org/sign/interruptions#show`
+- **RETIRED** `base_org_ceremony_binding_confirmation` `GET` `/ceremony_bindings/:binding_ref/confirmation(.:format)` `base/org/ceremony_binding_confirmations#show`
+- **RETIRED** `base_org` `POST` `/ceremony_bindings/:binding_ref/confirmation(.:format)` `base/org/ceremony_binding_confirmations#create`
+- **OWN** `base_org_welcome` `GET` `/welcome(.:format)` `base/org/welcomes#show`
+- **OWN** `base_org_dashboard_avatar_image` `GET` `/dashboard/avatar_image(.:format)` `base/org/dashboard_avatar_images#show`
+- **OWN** `base_org_dashboard` `GET` `/dashboard(.:format)` `base/org/roots#show`
+- **OWN** `base_org_selector` `GET` `/selector(.:format)` `base/org/selectors#show`
+- **OWN** `(unnamed)` `PATCH` `/selector(.:format)` `base/org/selectors#update`
+- **OWN** `(unnamed)` `PUT` `/selector(.:format)` `base/org/selectors#update`
+- **OWN** `base_org_switcher` `GET` `/switcher(.:format)` `base/org/switchers#show`
+- **OWN** `(unnamed)` `PATCH` `/switcher(.:format)` `base/org/switchers#update`
+- **OWN** `(unnamed)` `PUT` `/switcher(.:format)` `base/org/switchers#update`
+- **OWN** `base_org_preference` `GET` `/preference(.:format)` `base/org/preferences#show`
+- **RETIRED** `edit_base_org_avatar` `GET` `/avatar/edit(.:format)` `base/org/avatars#edit`
+- **RETIRED** `base_org_avatar` `GET` `/avatar(.:format)` `base/org/avatars#show`
+- **RETIRED** `(unnamed)` `PATCH` `/avatar(.:format)` `base/org/avatars#update`
+- **RETIRED** `(unnamed)` `PUT` `/avatar(.:format)` `base/org/avatars#update`
+- **RETIRED** `(unnamed)` `DELETE` `/avatar(.:format)` `base/org/avatars#destroy`
+- **RETIRED** `base_org_avatar_ownership_transfers` `POST` `/avatar_ownership_transfers(.:format)` `base/org/avatar_ownership_transfers#create`
+- **RETIRED** `base_org_accept_avatar_ownership_transfer` `POST` `/avatar_ownership_transfers/:id/accept(.:format)` `base/org/avatar_ownership_transfers#accept`
+- **RETIRED** `base_org_cancel_avatar_ownership_transfer` `POST` `/avatar_ownership_transfers/:id/cancel(.:format)` `base/org/avatar_ownership_transfers#cancel`
+- **OWN** `base_org_organization_memberships` `GET` `/organizations/:organization_id/memberships(.:format)` `base/org/organizations/memberships#index`
+- **OWN** `base_org_organization_membership` `GET` `/organizations/:organization_id/memberships/:id(.:format)` `base/org/organizations/memberships#show`
+- **OWN** `base_org_organizations` `GET` `/organizations(.:format)` `base/org/organizations#index`
+- **OWN** `base_org_organization` `GET` `/organizations/:id(.:format)` `base/org/organizations#show`
+- **OWN** `edit_base_org_preference_calendar` `GET` `/preference/calendar/edit(.:format)` `base/org/preference/calendars#edit`
+- **OWN** `base_org_preference_calendar` `PATCH` `/preference/calendar(.:format)` `base/org/preference/calendars#update`
+- **OWN** `(unnamed)` `PUT` `/preference/calendar(.:format)` `base/org/preference/calendars#update`
+- **OWN** `edit_base_org_preference_clock` `GET` `/preference/clock/edit(.:format)` `base/org/preference/clocks#edit`
+- **OWN** `base_org_preference_clock` `PATCH` `/preference/clock(.:format)` `base/org/preference/clocks#update`
+- **OWN** `(unnamed)` `PUT` `/preference/clock(.:format)` `base/org/preference/clocks#update`
+- **OWN** `edit_base_org_preference_cookie` `GET` `/preference/cookie/edit(.:format)` `base/org/preference/cookies#edit`
+- **OWN** `base_org_preference_cookie` `PATCH` `/preference/cookie(.:format)` `base/org/preference/cookies#update`
+- **OWN** `(unnamed)` `PUT` `/preference/cookie(.:format)` `base/org/preference/cookies#update`
+- **OWN** `edit_base_org_preference_currency` `GET` `/preference/currency/edit(.:format)` `base/org/preference/currencies#edit`
+- **OWN** `base_org_preference_currency` `PATCH` `/preference/currency(.:format)` `base/org/preference/currencies#update`
+- **OWN** `(unnamed)` `PUT` `/preference/currency(.:format)` `base/org/preference/currencies#update`
+- **OWN** `edit_base_org_preference_density` `GET` `/preference/density/edit(.:format)` `base/org/preference/densities#edit`
+- **OWN** `base_org_preference_density` `PATCH` `/preference/density(.:format)` `base/org/preference/densities#update`
+- **OWN** `(unnamed)` `PUT` `/preference/density(.:format)` `base/org/preference/densities#update`
+- **OWN** `edit_base_org_preference_email` `GET` `/preference/emails/:id/edit(.:format)` `base/org/preference/emails#edit`
+- **OWN** `base_org_preference_email` `DELETE` `/preference/emails/:id(.:format)` `base/org/preference/emails#destroy`
+- **OWN** `(unnamed)` `POST` `/preference/emails/:id(.:format)` `base/org/preference/emails#create`
+- **OWN** `edit_base_org_preference_language` `GET` `/preference/language/edit(.:format)` `base/org/preference/languages#edit`
+- **OWN** `base_org_preference_language` `PATCH` `/preference/language(.:format)` `base/org/preference/languages#update`
+- **OWN** `(unnamed)` `PUT` `/preference/language(.:format)` `base/org/preference/languages#update`
+- **OWN** `edit_base_org_preference_motion` `GET` `/preference/motion/edit(.:format)` `base/org/preference/motions#edit`
+- **OWN** `base_org_preference_motion` `PATCH` `/preference/motion(.:format)` `base/org/preference/motions#update`
+- **OWN** `(unnamed)` `PUT` `/preference/motion(.:format)` `base/org/preference/motions#update`
+- **OWN** `edit_base_org_preference_notification` `GET` `/preference/notification/edit(.:format)` `base/org/preference/notifications#edit`
+- **OWN** `base_org_preference_notification` `PATCH` `/preference/notification(.:format)` `base/org/preference/notifications#update`
+- **OWN** `(unnamed)` `PUT` `/preference/notification(.:format)` `base/org/preference/notifications#update`
+- **OWN** `edit_base_org_preference_pagination` `GET` `/preference/pagination/edit(.:format)` `base/org/preference/paginations#edit`
+- **OWN** `base_org_preference_pagination` `PATCH` `/preference/pagination(.:format)` `base/org/preference/paginations#update`
+- **OWN** `(unnamed)` `PUT` `/preference/pagination(.:format)` `base/org/preference/paginations#update`
+- **OWN** `edit_base_org_preference_region` `GET` `/preference/region/edit(.:format)` `base/org/preference/regions#edit`
+- **OWN** `base_org_preference_region` `PATCH` `/preference/region(.:format)` `base/org/preference/regions#update`
+- **OWN** `(unnamed)` `PUT` `/preference/region(.:format)` `base/org/preference/regions#update`
+- **OWN** `edit_base_org_preference_customization` `GET` `/preference/customization/edit(.:format)` `base/org/preference/customizations#edit`
+- **OWN** `base_org_preference_customization` `DELETE` `/preference/customization(.:format)` `base/org/preference/customizations#destroy`
+- **OWN** `edit_base_org_preference_screen` `GET` `/preference/screen/edit(.:format)` `base/org/preference/screens#edit`
+- **OWN** `base_org_preference_screen` `PATCH` `/preference/screen(.:format)` `base/org/preference/screens#update`
+- **OWN** `(unnamed)` `PUT` `/preference/screen(.:format)` `base/org/preference/screens#update`
+- **OWN** `edit_base_org_preference_theme` `GET` `/preference/theme/edit(.:format)` `base/org/preference/themes#edit`
+- **OWN** `base_org_preference_theme` `PATCH` `/preference/theme(.:format)` `base/org/preference/themes#update`
+- **OWN** `(unnamed)` `PUT` `/preference/theme(.:format)` `base/org/preference/themes#update`
+- **OWN** `edit_base_org_preference_timezone` `GET` `/preference/timezone/edit(.:format)` `base/org/preference/timezones#edit`
+- **OWN** `base_org_preference_timezone` `PATCH` `/preference/timezone(.:format)` `base/org/preference/timezones#update`
+- **OWN** `(unnamed)` `PUT` `/preference/timezone(.:format)` `base/org/preference/timezones#update`
+- **OWN** `base_org_well_known_jwks` `GET` `/.well-known/jwks.json` `base/org/well_known/jwks#show`
+- **OWN** `base_org_revision` `GET` `/revision` `base/org/revisions#show`
+- **OWN** `base_org_health` `GET` `/health` `base/org/healths#show`
+- **OWN** `base_org_health_liveness` `GET` `/health/liveness` `base/org/health/livenesses#show`
+- **OWN** `base_org_health_readiness` `GET` `/health/readiness` `base/org/health/readinesses#show`
+- **OWN** `base_org_health_startup` `GET` `/health/startup` `base/org/health/startups#show`
+- **OWN** `base_org_api_v0_health` `GET` `/api/v0/health.json` `base/org/api/v0/healths#show`
+- **OWN** `base_org_api_v0_revision` `GET` `/api/v0/revision.json` `base/org/api/v0/revisions#show`
+- **OWN** `base_org_api_v0_identity_standing` `GET` `/api/v0/identity/standing(.:format)` `base/org/api/v0/identity/standings#show`
+- **OWN** `base_org_api_v0_identity_selection` `GET` `/api/v0/identity/selection(.:format)` `base/org/api/v0/identity/selections#show`
+- **OWN** `base_org_api_v0_membership_accounts` `GET` `/api/v0/membership/org/accounts(.:format)` `base/org/api/v0/membership/directory#accounts`
+- **OWN** `base_org_api_v0_membership_account` `GET` `/api/v0/membership/org/accounts/:ref(.:format)` `base/org/api/v0/membership/directory#account`
+- **OWN** `base_org_api_v0_membership_organizations` `GET` `/api/v0/membership/org/organizations(.:format)` `base/org/api/v0/membership/directory#organizations`
+- **OWN** `base_org_api_v0_membership_organization` `GET` `/api/v0/membership/org/organizations/:ref(.:format)` `base/org/api/v0/membership/directory#organization`
+- **OWN** `base_org_api_v0_membership_memberships` `GET` `/api/v0/membership/org/organizations/:organization_ref/memberships(.:format)` `base/org/api/v0/membership/directory#memberships`
+- **OWN** `base_org_api_v0_membership_membership` `GET` `/api/v0/membership/org/organizations/:organization_ref/memberships/:id(.:format)` `base/org/api/v0/membership/directory#membership`
+- **OWN** `base_org_api_v0_membership_membership_authorization` `POST` `/api/v0/membership/org/organizations/:organization_ref/memberships/authorization(.:format)` `base/org/api/v0/membership/directory#authorization`
+- **OWN** `base_org_api_v0_support_areas` `GET` `/api/v0/support(.:format)` `base/org/api/v0/support/areas#index`
+- **OWN** `base_org_api_v0_support_accounts` `GET` `/api/v0/support/:realm/accounts(.:format)` `base/org/api/v0/support/accounts#index {realm: /app/}`
+- **OWN** `base_org_api_v0_support_account` `GET` `/api/v0/support/:realm/accounts/:ref(.:format)` `base/org/api/v0/support/accounts#show {realm: /app/}`
+- **OWN** `base_org_api_v0_support_revocation_screen` `GET` `/api/v0/support/:realm/accounts/:ref/revocation-screen(.:format)` `base/org/api/v0/support/accounts#revocation_screen {realm: /app/}`
+- **OWN** `base_org_api_v0_support_revocations` `POST` `/api/v0/support/:realm/accounts/:ref/revocations(.:format)` `base/org/api/v0/support/accounts#revoke {realm: /app/}`
+- **OWN** `base_org_api_v0_support_revocation` `GET` `/api/v0/support/:realm/accounts/:ref/revocations/:event_uuid(.:format)` `base/org/api/v0/support/accounts#revocation {realm: /app/}`
+- **OWN** `new_base_org_api_v0_support_enforcement_enforcement_case_approval` `GET` `/api/v0/support/:realm/enforcement_cases/:enforcement_case_id/approval/new(.:format)` `base/org/api/v0/support/enforcement_cases/approvals#new {realm: /app|org/}`
+- **OWN** `base_org_api_v0_support_enforcement_enforcement_case_approval` `POST` `/api/v0/support/:realm/enforcement_cases/:enforcement_case_id/approval(.:format)` `base/org/api/v0/support/enforcement_cases/approvals#create {realm: /app|org/}`
+- **OWN** `new_base_org_api_v0_support_enforcement_enforcement_case_release` `GET` `/api/v0/support/:realm/enforcement_cases/:enforcement_case_id/release/new(.:format)` `base/org/api/v0/support/enforcement_cases/releases#new {realm: /app|org/}`
+- **OWN** `base_org_api_v0_support_enforcement_enforcement_case_release` `POST` `/api/v0/support/:realm/enforcement_cases/:enforcement_case_id/release(.:format)` `base/org/api/v0/support/enforcement_cases/releases#create {realm: /app|org/}`
+- **OWN** `new_base_org_api_v0_support_enforcement_enforcement_case_appeal_review` `GET` `/api/v0/support/:realm/enforcement_cases/:enforcement_case_id/appeal_review/new(.:format)` `base/org/api/v0/support/enforcement_cases/appeal_reviews#new {realm: /app|org/}`
+- **OWN** `base_org_api_v0_support_enforcement_enforcement_case_appeal_review` `POST` `/api/v0/support/:realm/enforcement_cases/:enforcement_case_id/appeal_review(.:format)` `base/org/api/v0/support/enforcement_cases/appeal_reviews#create {realm: /app|org/}`
+- **OWN** `base_org_api_v0_support_enforcement_enforcement_cases` `GET` `/api/v0/support/:realm/enforcement_cases(.:format)` `base/org/api/v0/support/enforcement_cases#index {realm: /app|org/}`
+- **OWN** `(unnamed)` `POST` `/api/v0/support/:realm/enforcement_cases(.:format)` `base/org/api/v0/support/enforcement_cases#create {realm: /app|org/}`
+- **OWN** `new_base_org_api_v0_support_enforcement_enforcement_case` `GET` `/api/v0/support/:realm/enforcement_cases/new(.:format)` `base/org/api/v0/support/enforcement_cases#new {realm: /app|org/}`
+- **OWN** `base_org_api_v0_support_enforcement_enforcement_case` `GET` `/api/v0/support/:realm/enforcement_cases/:id(.:format)` `base/org/api/v0/support/enforcement_cases#show {realm: /app|org/}`
+- **OWN** `base_org_api_v0_iam_grants` `GET` `/api/v0/iam/grants(.:format)` `base/org/api/v0/iam/grants#index`
+- **OWN** `base_org_api_v0_iam_grant_screen` `GET` `/api/v0/iam/grant-screen(.:format)` `base/org/api/v0/iam/grants#screen`
+- **OWN** `(unnamed)` `POST` `/api/v0/iam/grants(.:format)` `base/org/api/v0/iam/grants#create`
+- **OWN** `base_org_api_v0_iam_grant` `GET` `/api/v0/iam/grants/:ref(.:format)` `base/org/api/v0/iam/grants#show`
+- **OWN** `base_org_api_v0_iam_grant_revocation` `POST` `/api/v0/iam/grants/:ref/revocation(.:format)` `base/org/api/v0/iam/grants#revoke`
+- **OWN** `base_org_api_v0_avatar_dashboard_identity` `GET` `/api/v0/avatar/org/dashboard-identity(.:format)` `base/org/api/v0/avatar/dashboard_identities#show`
+- **OWN** `base_org_api_v0_avatar_switcher` `GET` `/api/v0/avatar/org/switcher(.:format)` `base/org/api/v0/avatar/switchers#show`
+- **OWN** `(unnamed)` `PUT` `/api/v0/avatar/org/switcher(.:format)` `base/org/api/v0/avatar/switchers#update`
+- **OWN** `base_org_api_v0_avatar_selected_avatar` `GET` `/api/v0/avatar/org/selected-avatar(.:format)` `base/org/api/v0/avatar/selected_avatars#show`
+- **OWN** `(unnamed)` `PATCH` `/api/v0/avatar/org/selected-avatar(.:format)` `base/org/api/v0/avatar/selected_avatars#update`
+- **OWN** `(unnamed)` `DELETE` `/api/v0/avatar/org/selected-avatar(.:format)` `base/org/api/v0/avatar/selected_avatars#destroy`
+- **OWN** `base_org_api_v0_avatar_selected_image` `GET` `/api/v0/avatar/org/selected-image(.:format)` `base/org/api/v0/avatar/selected_images#show`
+- **OWN** `base_org_api_v0_avatar_ownership_transfers` `POST` `/api/v0/avatar/org/ownership-transfers(.:format)` `base/org/api/v0/avatar/avatar_ownership_transfers#create`
+- **OWN** `base_org_api_v0_avatar_accept_ownership_transfer` `POST` `/api/v0/avatar/org/ownership-transfers/:ref/accept(.:format)` `base/org/api/v0/avatar/avatar_ownership_transfers#accept`
+- **OWN** `base_org_api_v0_avatar_cancel_ownership_transfer` `POST` `/api/v0/avatar/org/ownership-transfers/:ref/cancel(.:format)` `base/org/api/v0/avatar/avatar_ownership_transfers#cancel`
+- **OWN** `base_org_api_v0_tech_capability_check` `POST` `/api/v0/tech-capability-checks(.:format)` `base/org/api/v0/tech_capability_checks#create`
+- **RETIRED** `base_org_api_v0_publishing_entry_publications` `POST` `/api/v0/publishing/:surface/:audience/entries/:entry_entry_ref/publications(.:format)` `base/org/api/v0/publishing/publications#create {surface: /docs|help|info|news/, audience: /app|com|org/}`
+- **RETIRED** `base_org_api_v0_publishing_entry_publication` `DELETE` `/api/v0/publishing/:surface/:audience/entries/:entry_entry_ref/publications/:publication_ref(.:format)` `base/org/api/v0/publishing/publications#destroy {surface: /docs|help|info|news/, audience: /app|com|org/}`
+- **RETIRED** `base_org_api_v0_publishing_entry_archive` `DELETE` `/api/v0/publishing/:surface/:audience/entries/:entry_entry_ref/archive(.:format)` `base/org/api/v0/publishing/archives#destroy {surface: /docs|help|info|news/, audience: /app|com|org/}`
+- **RETIRED** `(unnamed)` `POST` `/api/v0/publishing/:surface/:audience/entries/:entry_entry_ref/archive(.:format)` `base/org/api/v0/publishing/archives#create {surface: /docs|help|info|news/, audience: /app|com|org/}`
+- **RETIRED** `base_org_api_v0_publishing_entries` `GET` `/api/v0/publishing/:surface/:audience/entries(.:format)` `base/org/api/v0/publishing/entries#index {surface: /docs|help|info|news/, audience: /app|com|org/}`
+- **RETIRED** `(unnamed)` `POST` `/api/v0/publishing/:surface/:audience/entries(.:format)` `base/org/api/v0/publishing/entries#create {surface: /docs|help|info|news/, audience: /app|com|org/}`
+- **RETIRED** `base_org_api_v0_publishing_entry` `GET` `/api/v0/publishing/:surface/:audience/entries/:entry_ref(.:format)` `base/org/api/v0/publishing/entries#show {surface: /docs|help|info|news/, audience: /app|com|org/}`
+- **RETIRED** `(unnamed)` `PATCH` `/api/v0/publishing/:surface/:audience/entries/:entry_ref(.:format)` `base/org/api/v0/publishing/entries#update {surface: /docs|help|info|news/, audience: /app|com|org/}`
+- **RETIRED** `(unnamed)` `PUT` `/api/v0/publishing/:surface/:audience/entries/:entry_ref(.:format)` `base/org/api/v0/publishing/entries#update {surface: /docs|help|info|news/, audience: /app|com|org/}`
+- **OWN** `base_org_robots` `GET` `/robots.txt(.:format)` `base/org/robots#index`
+- **OWN** `base_org_sitemap` `GET` `/sitemap.xml(.:format)` `base/org/sitemaps#show`
+- **OWN** `base_org_csp_violation_report` `POST` `/csp-violation-report(.:format)` `base/org/csp_violation_reports#create`
+- **OWN** `base_org_pwa_service_worker` `GET` `/service-worker(.:format)` `rails/pwa#service_worker`
+- **OWN** `base_org_pwa_offline` `GET` `/offline(.:format)` `rails/pwa#offline`
+- **OWN** `base_org_settings` `GET` `/settings(.:format)` `base/org/settings#show`
+- **OWN** `base_org_accounts` `GET` `/accounts(.:format)` `base/org/accounts#index`
+- **OWN** `base_org_account` `GET` `/accounts/:id(.:format)` `base/org/accounts#show`
+- **OWN** `base_org_iam_index` `GET` `/iam(.:format)` `base/org/iam#index`
+- **OWN** `new_base_org_iam_grant_revocation` `GET` `/iam/grants/:grant_id/revocation/new(.:format)` `base/org/iam/grants/revocations#new`
+- **OWN** `base_org_iam_grant_revocation` `POST` `/iam/grants/:grant_id/revocation(.:format)` `base/org/iam/grants/revocations#create`
+- **OWN** `base_org_iam_grants` `GET` `/iam/grants(.:format)` `base/org/iam/grants#index`
+- **OWN** `(unnamed)` `POST` `/iam/grants(.:format)` `base/org/iam/grants#create`
+- **OWN** `new_base_org_iam_grant` `GET` `/iam/grants/new(.:format)` `base/org/iam/grants#new`
+- **OWN** `base_org_iam_grant` `GET` `/iam/grants/:id(.:format)` `base/org/iam/grants#show`
+- **OWN** `base_org_system_index` `GET` `/system(.:format)` `base/org/system#index`
+- **OWN** `base_org_audit_index` `GET` `/audit(.:format)` `base/org/audit#index`
+- **OWN** `base_org_support_index` `GET` `/support(.:format)` `base/org/support#index`
+- **OWN** `base_org_support_client_revocations` `POST` `/support/clients/:client_id/revocations(.:format)` `base/org/support/clients/revocations#create`
+- **OWN** `new_base_org_support_client_revocation` `GET` `/support/clients/:client_id/revocations/new(.:format)` `base/org/support/clients/revocations#new`
+- **OWN** `base_org_support_client_revocation` `GET` `/support/clients/:client_id/revocations/:id(.:format)` `base/org/support/clients/revocations#show`
+- **OWN** `base_org_support_clients` `GET` `/support/clients(.:format)` `base/org/support/clients#index`
+- **OWN** `base_org_support_client` `GET` `/support/clients/:id(.:format)` `base/org/support/clients#show`
+- **OWN** `new_base_org_support_app_enforcement_case_approval` `GET` `/support/app/enforcement_cases/:enforcement_case_id/approval/new(.:format)` `base/org/support/enforcement_cases/approvals#new {realm: :app}`
+- **OWN** `base_org_support_app_enforcement_case_approval` `POST` `/support/app/enforcement_cases/:enforcement_case_id/approval(.:format)` `base/org/support/enforcement_cases/approvals#create {realm: :app}`
+- **OWN** `new_base_org_support_app_enforcement_case_release` `GET` `/support/app/enforcement_cases/:enforcement_case_id/release/new(.:format)` `base/org/support/enforcement_cases/releases#new {realm: :app}`
+- **OWN** `base_org_support_app_enforcement_case_release` `POST` `/support/app/enforcement_cases/:enforcement_case_id/release(.:format)` `base/org/support/enforcement_cases/releases#create {realm: :app}`
+- **OWN** `new_base_org_support_app_enforcement_case_appeal_review` `GET` `/support/app/enforcement_cases/:enforcement_case_id/appeal_review/new(.:format)` `base/org/support/enforcement_cases/appeal_reviews#new {realm: :app}`
+- **OWN** `base_org_support_app_enforcement_case_appeal_review` `POST` `/support/app/enforcement_cases/:enforcement_case_id/appeal_review(.:format)` `base/org/support/enforcement_cases/appeal_reviews#create {realm: :app}`
+- **OWN** `base_org_support_app_enforcement_cases` `GET` `/support/app/enforcement_cases(.:format)` `base/org/support/enforcement_cases#index {realm: :app}`
+- **OWN** `(unnamed)` `POST` `/support/app/enforcement_cases(.:format)` `base/org/support/enforcement_cases#create {realm: :app}`
+- **OWN** `new_base_org_support_app_enforcement_case` `GET` `/support/app/enforcement_cases/new(.:format)` `base/org/support/enforcement_cases#new {realm: :app}`
+- **OWN** `base_org_support_app_enforcement_case` `GET` `/support/app/enforcement_cases/:id(.:format)` `base/org/support/enforcement_cases#show {realm: :app}`
+- **OWN** `new_base_org_support_org_enforcement_case_approval` `GET` `/support/org/enforcement_cases/:enforcement_case_id/approval/new(.:format)` `base/org/support/enforcement_cases/approvals#new {realm: :org}`
+- **OWN** `base_org_support_org_enforcement_case_approval` `POST` `/support/org/enforcement_cases/:enforcement_case_id/approval(.:format)` `base/org/support/enforcement_cases/approvals#create {realm: :org}`
+- **OWN** `new_base_org_support_org_enforcement_case_release` `GET` `/support/org/enforcement_cases/:enforcement_case_id/release/new(.:format)` `base/org/support/enforcement_cases/releases#new {realm: :org}`
+- **OWN** `base_org_support_org_enforcement_case_release` `POST` `/support/org/enforcement_cases/:enforcement_case_id/release(.:format)` `base/org/support/enforcement_cases/releases#create {realm: :org}`
+- **OWN** `new_base_org_support_org_enforcement_case_appeal_review` `GET` `/support/org/enforcement_cases/:enforcement_case_id/appeal_review/new(.:format)` `base/org/support/enforcement_cases/appeal_reviews#new {realm: :org}`
+- **OWN** `base_org_support_org_enforcement_case_appeal_review` `POST` `/support/org/enforcement_cases/:enforcement_case_id/appeal_review(.:format)` `base/org/support/enforcement_cases/appeal_reviews#create {realm: :org}`
+- **OWN** `base_org_support_org_enforcement_cases` `GET` `/support/org/enforcement_cases(.:format)` `base/org/support/enforcement_cases#index {realm: :org}`
+- **OWN** `(unnamed)` `POST` `/support/org/enforcement_cases(.:format)` `base/org/support/enforcement_cases#create {realm: :org}`
+- **OWN** `new_base_org_support_org_enforcement_case` `GET` `/support/org/enforcement_cases/new(.:format)` `base/org/support/enforcement_cases#new {realm: :org}`
+- **OWN** `base_org_support_org_enforcement_case` `GET` `/support/org/enforcement_cases/:id(.:format)` `base/org/support/enforcement_cases#show {realm: :org}`
+- **OWN** `base_org_billing_index` `GET` `/billing(.:format)` `base/org/billing#index`
+- **RETIRED** `new_base_org_sign_out` `GET` `/sign/out/new(.:format)` `base/org/sign_outs#new`
+- **RETIRED** `edit_base_org_sign_out` `GET` `/sign/out/edit(.:format)` `base/org/sign_outs#edit`
+- **RETIRED** `base_org_sign_out` `GET` `/sign/out(.:format)` `base/org/sign_outs#show`
+- **RETIRED** `(unnamed)` `POST` `/sign/out(.:format)` `base/org/sign_outs#create`
+- **RETIRED** `base_org_sign_out_completion` `GET` `/sign/out/completion(.:format)` `base/org/sign_outs#show`
+- **RETIRED** `base_org_oidc_callback` `GET` `/oidc/callback(.:format)` `base/org/oidc/callbacks#show`
+- **RETIRED** `base_org_oidc_closures` `POST` `/oidc/closures(.:format)` `base/org/oidc/closures#create`
+- **OWN** `base_org_api_v0_preferences_cookie` `GET` `/api/v0/preferences/cookie(.:format)` `base/org/api/v0/preferences/cookies#show`
+- **OWN** `(unnamed)` `PATCH` `/api/v0/preferences/cookie(.:format)` `base/org/api/v0/preferences/cookies#update`
+- **OWN** `base_org_api_v0_preferences_theme` `GET` `/api/v0/preferences/theme(.:format)` `base/org/api/v0/preferences/themes#show`
+- **OWN** `(unnamed)` `PATCH` `/api/v0/preferences/theme(.:format)` `base/org/api/v0/preferences/themes#update`
+- **OWN** `base_org_api_v0_preferences_web_push` `GET` `/api/v0/preferences/web_push(.:format)` `base/org/api/v0/preferences/web_pushes#show`
+- **OWN** `(unnamed)` `PATCH` `/api/v0/preferences/web_push(.:format)` `base/org/api/v0/preferences/web_pushes#update`
+- **OWN** `base_org_verification` `GET` `/verification(.:format)` `base/org/verifications#show`
+- **OWN** `(unnamed)` `POST` `/verification(.:format)` `base/org/verifications#create`
+- **RETIRED** `base_org_verification_oidc_callback` `GET` `/verification/oidc/callback(.:format)` `base/org/verification/oidc/callbacks#show`
+- **OWN** `base_org_verification_cancellation` `GET` `/verification/cancellation(.:format)` `base/org/verification/cancellations#show`
+- **OWN** `(unnamed)` `POST` `/verification/cancellation(.:format)` `base/org/verification/cancellations#create`
+- **OWN** `base_org_verification_completion` `GET` `/verification/completion(.:format)` `base/org/verification/completions#show`
+- **OWN** `(unnamed)` `POST` `/verification/completion(.:format)` `base/org/verification/completions#create`
+- **OWN** `base_org_verification_setup` `GET` `/verification/setup(.:format)` `base/org/verification/setups#show`
+- **OWN** `(unnamed)` `POST` `/verification/setup(.:format)` `base/org/verification/setups#create`
+- **OWN** `base_org_identity` `GET` `/identity(.:format)` `base/org/identities#show`
+- **RETIRED** `base_org_other_sessions` `DELETE` `/sessions/other(.:format)` `base/org/identity/revocations/others#destroy`
+- **OWN** `base_org_sessions` `GET` `/sessions(.:format)` `base/org/identity/sessions#index`
+- **OWN** `base_org_session` `GET` `/sessions/:id(.:format)` `base/org/identity/sessions#show`
+- **RETIRED** `(unnamed)` `DELETE` `/sessions/:id(.:format)` `base/org/identity/sessions#destroy`
+- **RETIRED** `base_org_identity_social_identities` `GET` `/identity/social_identities(.:format)` `base/org/identity/social_identities#index`
+- **OWN** `base_org_identity_standing` `GET` `/identity/standing(.:format)` `base/org/identity/standings#show`
+- **OWN** `base_org_identity_passkeys` `GET` `/identity/passkeys(.:format)` `base/org/identity/passkeys#index`
+- **RETIRED** `(unnamed)` `POST` `/identity/passkeys(.:format)` `base/org/identity/passkeys#create`
+- **RETIRED** `new_base_org_identity_passkey` `GET` `/identity/passkeys/new(.:format)` `base/org/identity/passkeys#new`
+- **OWN** `base_org_identity_passkey` `GET` `/identity/passkeys/:id(.:format)` `base/org/identity/passkeys#show`
+- **RETIRED** `(unnamed)` `PATCH` `/identity/passkeys/:id(.:format)` `base/org/identity/passkeys#update`
+- **RETIRED** `(unnamed)` `PUT` `/identity/passkeys/:id(.:format)` `base/org/identity/passkeys#update`
+- **RETIRED** `(unnamed)` `DELETE` `/identity/passkeys/:id(.:format)` `base/org/identity/passkeys#destroy`
+- **RETIRED** `base_org_identity_mfa_reset` `GET` `/identity/mfa/reset(.:format)` `base/org/identity/mfa/resets#show`
+- **RETIRED** `new_base_org_identity_emails_registration` `GET` `/identity/emails/registration/new(.:format)` `base/org/identity/emails/registrations#new`
+- **RETIRED** `edit_base_org_identity_emails_registration` `GET` `/identity/emails/registration/edit(.:format)` `base/org/identity/emails/registrations#edit`
+- **RETIRED** `base_org_identity_emails_registration` `PATCH` `/identity/emails/registration(.:format)` `base/org/identity/emails/registrations#update`
+- **RETIRED** `(unnamed)` `PUT` `/identity/emails/registration(.:format)` `base/org/identity/emails/registrations#update`
+- **RETIRED** `(unnamed)` `POST` `/identity/emails/registration(.:format)` `base/org/identity/emails/registrations#create`
+- **OWN** `base_org_identity_emails` `GET` `/identity/emails(.:format)` `base/org/identity/emails#index`
+- **RETIRED** `edit_base_org_identity_email` `GET` `/identity/emails/:id/edit(.:format)` `base/org/identity/emails#edit`
+- **RETIRED** `base_org_identity_email` `PATCH` `/identity/emails/:id(.:format)` `base/org/identity/emails#update`
+- **RETIRED** `(unnamed)` `PUT` `/identity/emails/:id(.:format)` `base/org/identity/emails#update`
+- **RETIRED** `(unnamed)` `DELETE` `/identity/emails/:id(.:format)` `base/org/identity/emails#destroy`
+- **RETIRED** `new_base_org_identity_telephones_registration` `GET` `/identity/telephones/registration/new(.:format)` `base/org/identity/telephones/registrations#new`
+- **RETIRED** `edit_base_org_identity_telephones_registration` `GET` `/identity/telephones/registration/edit(.:format)` `base/org/identity/telephones/registrations#edit`
+- **RETIRED** `base_org_identity_telephones_registration` `PATCH` `/identity/telephones/registration(.:format)` `base/org/identity/telephones/registrations#update`
+- **RETIRED** `(unnamed)` `PUT` `/identity/telephones/registration(.:format)` `base/org/identity/telephones/registrations#update`
+- **RETIRED** `(unnamed)` `POST` `/identity/telephones/registration(.:format)` `base/org/identity/telephones/registrations#create`
+- **OWN** `base_org_identity_telephones` `GET` `/identity/telephones(.:format)` `base/org/identity/telephones#index`
+- **RETIRED** `(unnamed)` `POST` `/identity/telephones(.:format)` `base/org/identity/telephones#create`
+- **RETIRED** `new_base_org_identity_telephone` `GET` `/identity/telephones/new(.:format)` `base/org/identity/telephones#new`
+- **RETIRED** `edit_base_org_identity_telephone` `GET` `/identity/telephones/:id/edit(.:format)` `base/org/identity/telephones#edit`
+- **RETIRED** `base_org_identity_telephone` `DELETE` `/identity/telephones/:id(.:format)` `base/org/identity/telephones#destroy`
+- **OWN** `base_org_identity_birthdate` `GET` `/identity/birthdate(.:format)` `base/org/identity/birthdates#show`
+- **OWN** `base_org_identity_secret_rotation` `POST` `/identity/secrets/:secret_id/rotation(.:format)` `base/org/identity/rotations#create`
+- **OWN** `base_org_identity_secret_removal` `POST` `/identity/secrets/:secret_id/removal(.:format)` `base/org/identity/removals#create`
+- **OWN** `base_org_identity_secrets` `GET` `/identity/secrets(.:format)` `base/org/identity/secret_credentials#index`
+- **OWN** `(unnamed)` `POST` `/identity/secrets(.:format)` `base/org/identity/secret_credentials#create`
+- **OWN** `new_base_org_identity_secret` `GET` `/identity/secrets/new(.:format)` `base/org/identity/secret_credentials#new`
+- **OWN** `edit_base_org_identity_secret` `GET` `/identity/secrets/:id/edit(.:format)` `base/org/identity/secret_credentials#edit`
+- **OWN** `base_org_identity_secret` `GET` `/identity/secrets/:id(.:format)` `base/org/identity/secret_credentials#show`
+- **OWN** `(unnamed)` `PATCH` `/identity/secrets/:id(.:format)` `base/org/identity/secret_credentials#update`
+- **OWN** `(unnamed)` `PUT` `/identity/secrets/:id(.:format)` `base/org/identity/secret_credentials#update`
+- **OWN** `(unnamed)` `DELETE` `/identity/secrets/:id(.:format)` `base/org/identity/secret_credentials#destroy`
+- **OWN** `base_org_identity_sessions` `GET` `/identity/sessions(.:format)` `base/org/identity/sessions#index`
+- **OWN** `base_org_identity_session` `GET` `/identity/sessions/:id(.:format)` `base/org/identity/sessions#show`
+- **RETIRED** `(unnamed)` `DELETE` `/identity/sessions/:id(.:format)` `base/org/identity/sessions#destroy`
+- **RETIRED** `base_org_identity_other_sessions` `DELETE` `/identity/other_sessions(.:format)` `base/org/identity/revocations/others#destroy`
+- **OWN** `base_org_identity_activities` `GET` `/identity/activities(.:format)` `base/org/identity/activities#index`
+- **OWN** `base_org_identity_withdrawal` `GET` `/identity/withdrawal(.:format)` `base/org/identity/withdrawals#show`
+
+#### Blazer — 32 baseline routes
+- **OWN** `blazer` `MOUNT` `/` `[mounted app]`
+- **OWN** `run_queries` `POST` `/queries/run(.:format)` `blazer/queries#run`
+- **OWN** `cancel_queries` `POST` `/queries/cancel(.:format)` `blazer/queries#cancel`
+- **OWN** `refresh_query` `POST` `/queries/:id/refresh(.:format)` `blazer/queries#refresh`
+- **OWN** `tables_queries` `GET` `/queries/tables(.:format)` `blazer/queries#tables`
+- **OWN** `schema_queries` `GET` `/queries/schema(.:format)` `blazer/queries#schema`
+- **OWN** `docs_queries` `GET` `/queries/docs(.:format)` `blazer/queries#docs`
+- **OWN** `queries` `GET` `/queries(.:format)` `blazer/queries#index`
+- **OWN** `(unnamed)` `POST` `/queries(.:format)` `blazer/queries#create`
+- **OWN** `new_query` `GET` `/queries/new(.:format)` `blazer/queries#new`
+- **OWN** `edit_query` `GET` `/queries/:id/edit(.:format)` `blazer/queries#edit`
+- **OWN** `query` `GET` `/queries/:id(.:format)` `blazer/queries#show`
+- **OWN** `(unnamed)` `PATCH` `/queries/:id(.:format)` `blazer/queries#update`
+- **OWN** `(unnamed)` `PUT` `/queries/:id(.:format)` `blazer/queries#update`
+- **OWN** `(unnamed)` `DELETE` `/queries/:id(.:format)` `blazer/queries#destroy`
+- **OWN** `run_check` `GET` `/checks/:id/run(.:format)` `blazer/checks#run`
+- **OWN** `checks` `GET` `/checks(.:format)` `blazer/checks#index`
+- **OWN** `(unnamed)` `POST` `/checks(.:format)` `blazer/checks#create`
+- **OWN** `new_check` `GET` `/checks/new(.:format)` `blazer/checks#new`
+- **OWN** `edit_check` `GET` `/checks/:id/edit(.:format)` `blazer/checks#edit`
+- **OWN** `check` `PATCH` `/checks/:id(.:format)` `blazer/checks#update`
+- **OWN** `(unnamed)` `PUT` `/checks/:id(.:format)` `blazer/checks#update`
+- **OWN** `(unnamed)` `DELETE` `/checks/:id(.:format)` `blazer/checks#destroy`
+- **OWN** `refresh_dashboard` `POST` `/dashboards/:id/refresh(.:format)` `blazer/dashboards#refresh`
+- **OWN** `dashboards` `POST` `/dashboards(.:format)` `blazer/dashboards#create`
+- **OWN** `new_dashboard` `GET` `/dashboards/new(.:format)` `blazer/dashboards#new`
+- **OWN** `edit_dashboard` `GET` `/dashboards/:id/edit(.:format)` `blazer/dashboards#edit`
+- **OWN** `dashboard` `GET` `/dashboards/:id(.:format)` `blazer/dashboards#show`
+- **OWN** `(unnamed)` `PATCH` `/dashboards/:id(.:format)` `blazer/dashboards#update`
+- **OWN** `(unnamed)` `PUT` `/dashboards/:id(.:format)` `blazer/dashboards#update`
+- **OWN** `(unnamed)` `DELETE` `/dashboards/:id(.:format)` `blazer/dashboards#destroy`
+- **OWN** `root` `GET` `/` `blazer/queries#home`
+
+#### Core app — 26 baseline routes
+- **FOREIGN/RETIRED** `core_app_root` `GET` `/` `core/app/roots#index`
+- **FOREIGN/RETIRED** `core_app_well_known_jwks` `GET` `/.well-known/jwks.json` `core/app/well_known/jwks#show`
+- **FOREIGN/RETIRED** `core_app_revision` `GET` `/revision` `core/app/revisions#show`
+- **FOREIGN/RETIRED** `core_app_health` `GET` `/health` `core/app/healths#show`
+- **FOREIGN/RETIRED** `core_app_health_liveness` `GET` `/health/liveness` `core/app/health/livenesses#show`
+- **FOREIGN/RETIRED** `core_app_health_readiness` `GET` `/health/readiness` `core/app/health/readinesses#show`
+- **FOREIGN/RETIRED** `core_app_health_startup` `GET` `/health/startup` `core/app/health/startups#show`
+- **FOREIGN/RETIRED** `core_app_csp_violation_report` `POST` `/csp-violation-report(.:format)` `core/app/csp_violation_reports#create`
+- **FOREIGN/RETIRED** `core_app_api_v0_preferences_cookie` `GET` `/api/v0/preferences/cookie(.:format)` `core/app/api/v0/preferences/cookies#show`
+- **FOREIGN/RETIRED** `(unnamed)` `PATCH` `/api/v0/preferences/cookie(.:format)` `core/app/api/v0/preferences/cookies#update`
+- **FOREIGN/RETIRED** `core_app_api_v0_preferences_theme` `GET` `/api/v0/preferences/theme(.:format)` `core/app/api/v0/preferences/themes#show`
+- **FOREIGN/RETIRED** `(unnamed)` `PATCH` `/api/v0/preferences/theme(.:format)` `core/app/api/v0/preferences/themes#update`
+- **FOREIGN/RETIRED** `core_app_api_v0_health` `GET` `/api/v0/health.json` `core/app/api/v0/healths#show`
+- **FOREIGN/RETIRED** `core_app_api_v0_revision` `GET` `/api/v0/revision.json` `core/app/api/v0/revisions#show`
+- **FOREIGN/RETIRED** `core_app_api_v0_session` `GET` `/api/v0/session(.:format)` `core/app/api/v0/sessions#show`
+- **FOREIGN/RETIRED** `core_app_api_v0_token_refresh` `POST` `/api/v0/token/refresh(.:format)` `core/app/api/v0/token/refreshes#create`
+- **FOREIGN/RETIRED** `core_app_oidc_callback` `GET` `/oidc/callback(.:format)` `core/app/oidc/callbacks#show`
+- **FOREIGN/RETIRED** `core_app_oidc_closures` `POST` `/oidc/closures(.:format)` `core/app/oidc/closures#create`
+- **FOREIGN/RETIRED** `core_app_sign_show` `GET` `/sign(.:format)` `core/app/sign/entries#show`
+- **FOREIGN/RETIRED** `core_app_sign_create` `POST` `/sign(.:format)` `core/app/sign/entries#create`
+- **FOREIGN/RETIRED** `core_app_sign_interruption` `GET` `/sign/interruption(.:format)` `core/app/sign/interruptions#show`
+- **FOREIGN/RETIRED** `new_core_app_sign_out` `GET` `/sign/out/new(.:format)` `core/app/sign/outs#new`
+- **FOREIGN/RETIRED** `edit_core_app_sign_out` `GET` `/sign/out/edit(.:format)` `core/app/sign/outs#edit`
+- **FOREIGN/RETIRED** `core_app_sign_out` `GET` `/sign/out(.:format)` `core/app/sign/outs#show`
+- **FOREIGN/RETIRED** `(unnamed)` `POST` `/sign/out(.:format)` `core/app/sign/outs#create`
+- **FOREIGN/RETIRED** `core_app_sign_out_completion` `GET` `/sign/out/completion(.:format)` `core/app/sign/outs#show`
+
+#### Core dev — 9 baseline routes
+- **FOREIGN/RETIRED** `core_developer_root` `GET` `/` `core/dev/roots#index`
+- **FOREIGN/RETIRED** `core_developer_revision` `GET` `/revision` `core/dev/revisions#show`
+- **FOREIGN/RETIRED** `core_developer_health` `GET` `/health` `core/dev/healths#show`
+- **FOREIGN/RETIRED** `core_developer_health_liveness` `GET` `/health/liveness` `core/dev/health/livenesses#show`
+- **FOREIGN/RETIRED** `core_developer_health_readiness` `GET` `/health/readiness` `core/dev/health/readinesses#show`
+- **FOREIGN/RETIRED** `core_developer_health_startup` `GET` `/health/startup` `core/dev/health/startups#show`
+- **FOREIGN/RETIRED** `core_developer_api_v0_health` `GET` `/api/v0/health.json` `core/dev/api/v0/healths#show`
+- **FOREIGN/RETIRED** `core_developer_api_v0_revision` `GET` `/api/v0/revision.json` `core/dev/api/v0/revisions#show`
+- **FOREIGN/RETIRED** `core_developer_csp_violation_report` `POST` `/csp-violation-report(.:format)` `core/dev/csp_violation_reports#create`
+
+#### Core net — 9 baseline routes
+- **FOREIGN/RETIRED** `core_network_root` `GET` `/` `core/net/roots#index`
+- **FOREIGN/RETIRED** `core_network_revision` `GET` `/revision` `core/net/revisions#show`
+- **FOREIGN/RETIRED** `core_network_health` `GET` `/health` `core/net/healths#show`
+- **FOREIGN/RETIRED** `core_network_health_liveness` `GET` `/health/liveness` `core/net/health/livenesses#show`
+- **FOREIGN/RETIRED** `core_network_health_readiness` `GET` `/health/readiness` `core/net/health/readinesses#show`
+- **FOREIGN/RETIRED** `core_network_health_startup` `GET` `/health/startup` `core/net/health/startups#show`
+- **FOREIGN/RETIRED** `core_network_api_v0_health` `GET` `/api/v0/health.json` `core/net/api/v0/healths#show`
+- **FOREIGN/RETIRED** `core_network_api_v0_revision` `GET` `/api/v0/revision.json` `core/net/api/v0/revisions#show`
+- **FOREIGN/RETIRED** `core_network_csp_violation_report` `POST` `/csp-violation-report(.:format)` `core/net/csp_violation_reports#create`
+
+#### Core org — 26 baseline routes
+- **FOREIGN/RETIRED** `core_org_root` `GET` `/` `core/org/roots#index`
+- **FOREIGN/RETIRED** `core_org_well_known_jwks` `GET` `/.well-known/jwks.json` `core/org/well_known/jwks#show`
+- **FOREIGN/RETIRED** `core_org_revision` `GET` `/revision` `core/org/revisions#show`
+- **FOREIGN/RETIRED** `core_org_health` `GET` `/health` `core/org/healths#show`
+- **FOREIGN/RETIRED** `core_org_health_liveness` `GET` `/health/liveness` `core/org/health/livenesses#show`
+- **FOREIGN/RETIRED** `core_org_health_readiness` `GET` `/health/readiness` `core/org/health/readinesses#show`
+- **FOREIGN/RETIRED** `core_org_health_startup` `GET` `/health/startup` `core/org/health/startups#show`
+- **FOREIGN/RETIRED** `core_org_csp_violation_report` `POST` `/csp-violation-report(.:format)` `core/org/csp_violation_reports#create`
+- **FOREIGN/RETIRED** `core_org_api_v0_preferences_cookie` `GET` `/api/v0/preferences/cookie(.:format)` `core/org/api/v0/preferences/cookies#show`
+- **FOREIGN/RETIRED** `(unnamed)` `PATCH` `/api/v0/preferences/cookie(.:format)` `core/org/api/v0/preferences/cookies#update`
+- **FOREIGN/RETIRED** `core_org_api_v0_preferences_theme` `GET` `/api/v0/preferences/theme(.:format)` `core/org/api/v0/preferences/themes#show`
+- **FOREIGN/RETIRED** `(unnamed)` `PATCH` `/api/v0/preferences/theme(.:format)` `core/org/api/v0/preferences/themes#update`
+- **FOREIGN/RETIRED** `core_org_api_v0_health` `GET` `/api/v0/health.json` `core/org/api/v0/healths#show`
+- **FOREIGN/RETIRED** `core_org_api_v0_revision` `GET` `/api/v0/revision.json` `core/org/api/v0/revisions#show`
+- **FOREIGN/RETIRED** `core_org_api_v0_session` `GET` `/api/v0/session(.:format)` `core/org/api/v0/sessions#show`
+- **FOREIGN/RETIRED** `core_org_api_v0_token_refresh` `POST` `/api/v0/token/refresh(.:format)` `core/org/api/v0/token/refreshes#create`
+- **FOREIGN/RETIRED** `core_org_oidc_callback` `GET` `/oidc/callback(.:format)` `core/org/oidc/callbacks#show`
+- **FOREIGN/RETIRED** `core_org_oidc_closures` `POST` `/oidc/closures(.:format)` `core/org/oidc/closures#create`
+- **FOREIGN/RETIRED** `core_org_sign_show` `GET` `/sign(.:format)` `core/org/sign/entries#show`
+- **FOREIGN/RETIRED** `core_org_sign_create` `POST` `/sign(.:format)` `core/org/sign/entries#create`
+- **FOREIGN/RETIRED** `core_org_sign_interruption` `GET` `/sign/interruption(.:format)` `core/org/sign/interruptions#show`
+- **FOREIGN/RETIRED** `new_core_org_sign_out` `GET` `/sign/out/new(.:format)` `core/org/sign/outs#new`
+- **FOREIGN/RETIRED** `edit_core_org_sign_out` `GET` `/sign/out/edit(.:format)` `core/org/sign/outs#edit`
+- **FOREIGN/RETIRED** `core_org_sign_out` `GET` `/sign/out(.:format)` `core/org/sign/outs#show`
+- **FOREIGN/RETIRED** `(unnamed)` `POST` `/sign/out(.:format)` `core/org/sign/outs#create`
+- **FOREIGN/RETIRED** `core_org_sign_out_completion` `GET` `/sign/out/completion(.:format)` `core/org/sign/outs#show`
+
+#### Docs app — 11 baseline routes
+- **FOREIGN/RETIRED** `docs_app_root` `GET` `/` `docs/app/roots#index`
+- **FOREIGN/RETIRED** `docs_app_revision` `GET` `/revision` `docs/app/revisions#show`
+- **FOREIGN/RETIRED** `docs_app_health` `GET` `/health` `docs/app/healths#show`
+- **FOREIGN/RETIRED** `docs_app_health_liveness` `GET` `/health/liveness` `docs/app/health/livenesses#show`
+- **FOREIGN/RETIRED** `docs_app_health_readiness` `GET` `/health/readiness` `docs/app/health/readinesses#show`
+- **FOREIGN/RETIRED** `docs_app_health_startup` `GET` `/health/startup` `docs/app/health/startups#show`
+- **FOREIGN/RETIRED** `docs_app_csp_violation_report` `POST` `/csp-violation-report(.:format)` `docs/app/csp_violation_reports#create`
+- **FOREIGN/RETIRED** `docs_app_api_v0_entries` `GET` `/api/v0/entries(.:format)` `docs/app/api/v0/entries#index`
+- **FOREIGN/RETIRED** `docs_app_api_v0_entry` `GET` `/api/v0/entries/:public_id(.:format)` `docs/app/api/v0/entries#show`
+- **FOREIGN/RETIRED** `docs_app_api_v0_health` `GET` `/api/v0/health.json` `docs/app/api/v0/healths#show`
+- **FOREIGN/RETIRED** `docs_app_api_v0_revision` `GET` `/api/v0/revision.json` `docs/app/api/v0/revisions#show`
+
+#### Docs com — 11 baseline routes
+- **FOREIGN/RETIRED** `docs_com_root` `GET` `/` `docs/com/roots#index`
+- **FOREIGN/RETIRED** `docs_com_revision` `GET` `/revision` `docs/com/revisions#show`
+- **FOREIGN/RETIRED** `docs_com_health` `GET` `/health` `docs/com/healths#show`
+- **FOREIGN/RETIRED** `docs_com_health_liveness` `GET` `/health/liveness` `docs/com/health/livenesses#show`
+- **FOREIGN/RETIRED** `docs_com_health_readiness` `GET` `/health/readiness` `docs/com/health/readinesses#show`
+- **FOREIGN/RETIRED** `docs_com_health_startup` `GET` `/health/startup` `docs/com/health/startups#show`
+- **FOREIGN/RETIRED** `docs_com_csp_violation_report` `POST` `/csp-violation-report(.:format)` `docs/com/csp_violation_reports#create`
+- **FOREIGN/RETIRED** `docs_com_api_v0_entries` `GET` `/api/v0/entries(.:format)` `docs/com/api/v0/entries#index`
+- **FOREIGN/RETIRED** `docs_com_api_v0_entry` `GET` `/api/v0/entries/:public_id(.:format)` `docs/com/api/v0/entries#show`
+- **FOREIGN/RETIRED** `docs_com_api_v0_health` `GET` `/api/v0/health.json` `docs/com/api/v0/healths#show`
+- **FOREIGN/RETIRED** `docs_com_api_v0_revision` `GET` `/api/v0/revision.json` `docs/com/api/v0/revisions#show`
+
+#### Docs org — 11 baseline routes
+- **FOREIGN/RETIRED** `docs_org_root` `GET` `/` `docs/org/roots#index`
+- **FOREIGN/RETIRED** `docs_org_revision` `GET` `/revision` `docs/org/revisions#show`
+- **FOREIGN/RETIRED** `docs_org_health` `GET` `/health` `docs/org/healths#show`
+- **FOREIGN/RETIRED** `docs_org_health_liveness` `GET` `/health/liveness` `docs/org/health/livenesses#show`
+- **FOREIGN/RETIRED** `docs_org_health_readiness` `GET` `/health/readiness` `docs/org/health/readinesses#show`
+- **FOREIGN/RETIRED** `docs_org_health_startup` `GET` `/health/startup` `docs/org/health/startups#show`
+- **FOREIGN/RETIRED** `docs_org_csp_violation_report` `POST` `/csp-violation-report(.:format)` `docs/org/csp_violation_reports#create`
+- **FOREIGN/RETIRED** `docs_org_api_v0_entries` `GET` `/api/v0/entries(.:format)` `docs/org/api/v0/entries#index`
+- **FOREIGN/RETIRED** `docs_org_api_v0_entry` `GET` `/api/v0/entries/:public_id(.:format)` `docs/org/api/v0/entries#show`
+- **FOREIGN/RETIRED** `docs_org_api_v0_health` `GET` `/api/v0/health.json` `docs/org/api/v0/healths#show`
+- **FOREIGN/RETIRED** `docs_org_api_v0_revision` `GET` `/api/v0/revision.json` `docs/org/api/v0/revisions#show`
+
+#### Edit org — 152 baseline routes
+- **FOREIGN/RETIRED** `edit_org_root` `GET` `/` `edit/org/roots#index`
+- **FOREIGN/RETIRED** `edit_org_dashboard` `GET` `/dashboard(.:format)` `edit/org/dashboards#show`
+- **FOREIGN/RETIRED** `edit_org_revision` `GET` `/revision` `edit/org/revisions#show`
+- **FOREIGN/RETIRED** `edit_org_health` `GET` `/health` `edit/org/healths#show`
+- **FOREIGN/RETIRED** `edit_org_health_liveness` `GET` `/health/liveness` `edit/org/health/livenesses#show`
+- **FOREIGN/RETIRED** `edit_org_health_readiness` `GET` `/health/readiness` `edit/org/health/readinesses#show`
+- **FOREIGN/RETIRED** `edit_org_health_startup` `GET` `/health/startup` `edit/org/health/startups#show`
+- **FOREIGN/RETIRED** `edit_org_csp_violation_report` `POST` `/csp-violation-report(.:format)` `edit/org/csp_violation_reports#create`
+- **FOREIGN/RETIRED** `edit_org_api_v0_health` `GET` `/api/v0/health.json` `edit/org/api/v0/healths#show`
+- **FOREIGN/RETIRED** `edit_org_api_v0_revision` `GET` `/api/v0/revision.json` `edit/org/api/v0/revisions#show`
+- **FOREIGN/RETIRED** `edit_org_oidc_callback` `GET` `/oidc/callback(.:format)` `edit/org/oidc/callbacks#show`
+- **FOREIGN/RETIRED** `edit_org_oidc_closures` `POST` `/oidc/closures(.:format)` `edit/org/oidc/closures#create`
+- **FOREIGN/RETIRED** `edit_org_sign_show` `GET` `/sign(.:format)` `edit/org/sign/entries#show`
+- **FOREIGN/RETIRED** `edit_org_sign_create` `POST` `/sign(.:format)` `edit/org/sign/entries#create`
+- **FOREIGN/RETIRED** `edit_org_sign_interruption` `GET` `/sign/interruption(.:format)` `edit/org/sign/interruptions#show`
+- **FOREIGN/RETIRED** `new_edit_org_sign_out` `GET` `/sign/out/new(.:format)` `edit/org/sign/outs#new`
+- **FOREIGN/RETIRED** `edit_edit_org_sign_out` `GET` `/sign/out/edit(.:format)` `edit/org/sign/outs#edit`
+- **FOREIGN/RETIRED** `edit_org_sign_out` `GET` `/sign/out(.:format)` `edit/org/sign/outs#show`
+- **FOREIGN/RETIRED** `(unnamed)` `POST` `/sign/out(.:format)` `edit/org/sign/outs#create`
+- **FOREIGN/RETIRED** `edit_org_sign_out_completion` `GET` `/sign/out/completion(.:format)` `edit/org/sign/outs#show`
+- **FOREIGN/RETIRED** `edit_org_publishing_info_app_entry_publications` `POST` `/publishing/info/app/entries/:entry_id/publications(.:format)` `edit/org/publishing/info/app/entries/publications#create`
+- **FOREIGN/RETIRED** `edit_org_publishing_info_app_entry_publication` `DELETE` `/publishing/info/app/entries/:entry_id/publications/:id(.:format)` `edit/org/publishing/info/app/entries/publications#destroy`
+- **FOREIGN/RETIRED** `edit_org_publishing_info_app_entry_archive` `DELETE` `/publishing/info/app/entries/:entry_id/archive(.:format)` `edit/org/publishing/info/app/entries/archives#destroy`
+- **FOREIGN/RETIRED** `(unnamed)` `POST` `/publishing/info/app/entries/:entry_id/archive(.:format)` `edit/org/publishing/info/app/entries/archives#create`
+- **FOREIGN/RETIRED** `edit_org_publishing_info_app_entries` `GET` `/publishing/info/app/entries(.:format)` `edit/org/publishing/info/app/entries#index`
+- **FOREIGN/RETIRED** `(unnamed)` `POST` `/publishing/info/app/entries(.:format)` `edit/org/publishing/info/app/entries#create`
+- **FOREIGN/RETIRED** `new_edit_org_publishing_info_app_entry` `GET` `/publishing/info/app/entries/new(.:format)` `edit/org/publishing/info/app/entries#new`
+- **FOREIGN/RETIRED** `edit_edit_org_publishing_info_app_entry` `GET` `/publishing/info/app/entries/:id/edit(.:format)` `edit/org/publishing/info/app/entries#edit`
+- **FOREIGN/RETIRED** `edit_org_publishing_info_app_entry` `GET` `/publishing/info/app/entries/:id(.:format)` `edit/org/publishing/info/app/entries#show`
+- **FOREIGN/RETIRED** `(unnamed)` `PATCH` `/publishing/info/app/entries/:id(.:format)` `edit/org/publishing/info/app/entries#update`
+- **FOREIGN/RETIRED** `(unnamed)` `PUT` `/publishing/info/app/entries/:id(.:format)` `edit/org/publishing/info/app/entries#update`
+- **FOREIGN/RETIRED** `edit_org_publishing_info_com_entry_publications` `POST` `/publishing/info/com/entries/:entry_id/publications(.:format)` `edit/org/publishing/info/com/entries/publications#create`
+- **FOREIGN/RETIRED** `edit_org_publishing_info_com_entry_publication` `DELETE` `/publishing/info/com/entries/:entry_id/publications/:id(.:format)` `edit/org/publishing/info/com/entries/publications#destroy`
+- **FOREIGN/RETIRED** `edit_org_publishing_info_com_entry_archive` `DELETE` `/publishing/info/com/entries/:entry_id/archive(.:format)` `edit/org/publishing/info/com/entries/archives#destroy`
+- **FOREIGN/RETIRED** `(unnamed)` `POST` `/publishing/info/com/entries/:entry_id/archive(.:format)` `edit/org/publishing/info/com/entries/archives#create`
+- **FOREIGN/RETIRED** `edit_org_publishing_info_com_entries` `GET` `/publishing/info/com/entries(.:format)` `edit/org/publishing/info/com/entries#index`
+- **FOREIGN/RETIRED** `(unnamed)` `POST` `/publishing/info/com/entries(.:format)` `edit/org/publishing/info/com/entries#create`
+- **FOREIGN/RETIRED** `new_edit_org_publishing_info_com_entry` `GET` `/publishing/info/com/entries/new(.:format)` `edit/org/publishing/info/com/entries#new`
+- **FOREIGN/RETIRED** `edit_edit_org_publishing_info_com_entry` `GET` `/publishing/info/com/entries/:id/edit(.:format)` `edit/org/publishing/info/com/entries#edit`
+- **FOREIGN/RETIRED** `edit_org_publishing_info_com_entry` `GET` `/publishing/info/com/entries/:id(.:format)` `edit/org/publishing/info/com/entries#show`
+- **FOREIGN/RETIRED** `(unnamed)` `PATCH` `/publishing/info/com/entries/:id(.:format)` `edit/org/publishing/info/com/entries#update`
+- **FOREIGN/RETIRED** `(unnamed)` `PUT` `/publishing/info/com/entries/:id(.:format)` `edit/org/publishing/info/com/entries#update`
+- **FOREIGN/RETIRED** `edit_org_publishing_info_org_entry_publications` `POST` `/publishing/info/org/entries/:entry_id/publications(.:format)` `edit/org/publishing/info/org/entries/publications#create`
+- **FOREIGN/RETIRED** `edit_org_publishing_info_org_entry_publication` `DELETE` `/publishing/info/org/entries/:entry_id/publications/:id(.:format)` `edit/org/publishing/info/org/entries/publications#destroy`
+- **FOREIGN/RETIRED** `edit_org_publishing_info_org_entry_archive` `DELETE` `/publishing/info/org/entries/:entry_id/archive(.:format)` `edit/org/publishing/info/org/entries/archives#destroy`
+- **FOREIGN/RETIRED** `(unnamed)` `POST` `/publishing/info/org/entries/:entry_id/archive(.:format)` `edit/org/publishing/info/org/entries/archives#create`
+- **FOREIGN/RETIRED** `edit_org_publishing_info_org_entries` `GET` `/publishing/info/org/entries(.:format)` `edit/org/publishing/info/org/entries#index`
+- **FOREIGN/RETIRED** `(unnamed)` `POST` `/publishing/info/org/entries(.:format)` `edit/org/publishing/info/org/entries#create`
+- **FOREIGN/RETIRED** `new_edit_org_publishing_info_org_entry` `GET` `/publishing/info/org/entries/new(.:format)` `edit/org/publishing/info/org/entries#new`
+- **FOREIGN/RETIRED** `edit_edit_org_publishing_info_org_entry` `GET` `/publishing/info/org/entries/:id/edit(.:format)` `edit/org/publishing/info/org/entries#edit`
+- **FOREIGN/RETIRED** `edit_org_publishing_info_org_entry` `GET` `/publishing/info/org/entries/:id(.:format)` `edit/org/publishing/info/org/entries#show`
+- **FOREIGN/RETIRED** `(unnamed)` `PATCH` `/publishing/info/org/entries/:id(.:format)` `edit/org/publishing/info/org/entries#update`
+- **FOREIGN/RETIRED** `(unnamed)` `PUT` `/publishing/info/org/entries/:id(.:format)` `edit/org/publishing/info/org/entries#update`
+- **FOREIGN/RETIRED** `edit_org_publishing_docs_app_entry_publications` `POST` `/publishing/docs/app/entries/:entry_id/publications(.:format)` `edit/org/publishing/docs/app/entries/publications#create`
+- **FOREIGN/RETIRED** `edit_org_publishing_docs_app_entry_publication` `DELETE` `/publishing/docs/app/entries/:entry_id/publications/:id(.:format)` `edit/org/publishing/docs/app/entries/publications#destroy`
+- **FOREIGN/RETIRED** `edit_org_publishing_docs_app_entry_archive` `DELETE` `/publishing/docs/app/entries/:entry_id/archive(.:format)` `edit/org/publishing/docs/app/entries/archives#destroy`
+- **FOREIGN/RETIRED** `(unnamed)` `POST` `/publishing/docs/app/entries/:entry_id/archive(.:format)` `edit/org/publishing/docs/app/entries/archives#create`
+- **FOREIGN/RETIRED** `edit_org_publishing_docs_app_entries` `GET` `/publishing/docs/app/entries(.:format)` `edit/org/publishing/docs/app/entries#index`
+- **FOREIGN/RETIRED** `(unnamed)` `POST` `/publishing/docs/app/entries(.:format)` `edit/org/publishing/docs/app/entries#create`
+- **FOREIGN/RETIRED** `new_edit_org_publishing_docs_app_entry` `GET` `/publishing/docs/app/entries/new(.:format)` `edit/org/publishing/docs/app/entries#new`
+- **FOREIGN/RETIRED** `edit_edit_org_publishing_docs_app_entry` `GET` `/publishing/docs/app/entries/:id/edit(.:format)` `edit/org/publishing/docs/app/entries#edit`
+- **FOREIGN/RETIRED** `edit_org_publishing_docs_app_entry` `GET` `/publishing/docs/app/entries/:id(.:format)` `edit/org/publishing/docs/app/entries#show`
+- **FOREIGN/RETIRED** `(unnamed)` `PATCH` `/publishing/docs/app/entries/:id(.:format)` `edit/org/publishing/docs/app/entries#update`
+- **FOREIGN/RETIRED** `(unnamed)` `PUT` `/publishing/docs/app/entries/:id(.:format)` `edit/org/publishing/docs/app/entries#update`
+- **FOREIGN/RETIRED** `edit_org_publishing_docs_com_entry_publications` `POST` `/publishing/docs/com/entries/:entry_id/publications(.:format)` `edit/org/publishing/docs/com/entries/publications#create`
+- **FOREIGN/RETIRED** `edit_org_publishing_docs_com_entry_publication` `DELETE` `/publishing/docs/com/entries/:entry_id/publications/:id(.:format)` `edit/org/publishing/docs/com/entries/publications#destroy`
+- **FOREIGN/RETIRED** `edit_org_publishing_docs_com_entry_archive` `DELETE` `/publishing/docs/com/entries/:entry_id/archive(.:format)` `edit/org/publishing/docs/com/entries/archives#destroy`
+- **FOREIGN/RETIRED** `(unnamed)` `POST` `/publishing/docs/com/entries/:entry_id/archive(.:format)` `edit/org/publishing/docs/com/entries/archives#create`
+- **FOREIGN/RETIRED** `edit_org_publishing_docs_com_entries` `GET` `/publishing/docs/com/entries(.:format)` `edit/org/publishing/docs/com/entries#index`
+- **FOREIGN/RETIRED** `(unnamed)` `POST` `/publishing/docs/com/entries(.:format)` `edit/org/publishing/docs/com/entries#create`
+- **FOREIGN/RETIRED** `new_edit_org_publishing_docs_com_entry` `GET` `/publishing/docs/com/entries/new(.:format)` `edit/org/publishing/docs/com/entries#new`
+- **FOREIGN/RETIRED** `edit_edit_org_publishing_docs_com_entry` `GET` `/publishing/docs/com/entries/:id/edit(.:format)` `edit/org/publishing/docs/com/entries#edit`
+- **FOREIGN/RETIRED** `edit_org_publishing_docs_com_entry` `GET` `/publishing/docs/com/entries/:id(.:format)` `edit/org/publishing/docs/com/entries#show`
+- **FOREIGN/RETIRED** `(unnamed)` `PATCH` `/publishing/docs/com/entries/:id(.:format)` `edit/org/publishing/docs/com/entries#update`
+- **FOREIGN/RETIRED** `(unnamed)` `PUT` `/publishing/docs/com/entries/:id(.:format)` `edit/org/publishing/docs/com/entries#update`
+- **FOREIGN/RETIRED** `edit_org_publishing_docs_org_entry_publications` `POST` `/publishing/docs/org/entries/:entry_id/publications(.:format)` `edit/org/publishing/docs/org/entries/publications#create`
+- **FOREIGN/RETIRED** `edit_org_publishing_docs_org_entry_publication` `DELETE` `/publishing/docs/org/entries/:entry_id/publications/:id(.:format)` `edit/org/publishing/docs/org/entries/publications#destroy`
+- **FOREIGN/RETIRED** `edit_org_publishing_docs_org_entry_archive` `DELETE` `/publishing/docs/org/entries/:entry_id/archive(.:format)` `edit/org/publishing/docs/org/entries/archives#destroy`
+- **FOREIGN/RETIRED** `(unnamed)` `POST` `/publishing/docs/org/entries/:entry_id/archive(.:format)` `edit/org/publishing/docs/org/entries/archives#create`
+- **FOREIGN/RETIRED** `edit_org_publishing_docs_org_entries` `GET` `/publishing/docs/org/entries(.:format)` `edit/org/publishing/docs/org/entries#index`
+- **FOREIGN/RETIRED** `(unnamed)` `POST` `/publishing/docs/org/entries(.:format)` `edit/org/publishing/docs/org/entries#create`
+- **FOREIGN/RETIRED** `new_edit_org_publishing_docs_org_entry` `GET` `/publishing/docs/org/entries/new(.:format)` `edit/org/publishing/docs/org/entries#new`
+- **FOREIGN/RETIRED** `edit_edit_org_publishing_docs_org_entry` `GET` `/publishing/docs/org/entries/:id/edit(.:format)` `edit/org/publishing/docs/org/entries#edit`
+- **FOREIGN/RETIRED** `edit_org_publishing_docs_org_entry` `GET` `/publishing/docs/org/entries/:id(.:format)` `edit/org/publishing/docs/org/entries#show`
+- **FOREIGN/RETIRED** `(unnamed)` `PATCH` `/publishing/docs/org/entries/:id(.:format)` `edit/org/publishing/docs/org/entries#update`
+- **FOREIGN/RETIRED** `(unnamed)` `PUT` `/publishing/docs/org/entries/:id(.:format)` `edit/org/publishing/docs/org/entries#update`
+- **FOREIGN/RETIRED** `edit_org_publishing_news_app_entry_publications` `POST` `/publishing/news/app/entries/:entry_id/publications(.:format)` `edit/org/publishing/news/app/entries/publications#create`
+- **FOREIGN/RETIRED** `edit_org_publishing_news_app_entry_publication` `DELETE` `/publishing/news/app/entries/:entry_id/publications/:id(.:format)` `edit/org/publishing/news/app/entries/publications#destroy`
+- **FOREIGN/RETIRED** `edit_org_publishing_news_app_entry_archive` `DELETE` `/publishing/news/app/entries/:entry_id/archive(.:format)` `edit/org/publishing/news/app/entries/archives#destroy`
+- **FOREIGN/RETIRED** `(unnamed)` `POST` `/publishing/news/app/entries/:entry_id/archive(.:format)` `edit/org/publishing/news/app/entries/archives#create`
+- **FOREIGN/RETIRED** `edit_org_publishing_news_app_entries` `GET` `/publishing/news/app/entries(.:format)` `edit/org/publishing/news/app/entries#index`
+- **FOREIGN/RETIRED** `(unnamed)` `POST` `/publishing/news/app/entries(.:format)` `edit/org/publishing/news/app/entries#create`
+- **FOREIGN/RETIRED** `new_edit_org_publishing_news_app_entry` `GET` `/publishing/news/app/entries/new(.:format)` `edit/org/publishing/news/app/entries#new`
+- **FOREIGN/RETIRED** `edit_edit_org_publishing_news_app_entry` `GET` `/publishing/news/app/entries/:id/edit(.:format)` `edit/org/publishing/news/app/entries#edit`
+- **FOREIGN/RETIRED** `edit_org_publishing_news_app_entry` `GET` `/publishing/news/app/entries/:id(.:format)` `edit/org/publishing/news/app/entries#show`
+- **FOREIGN/RETIRED** `(unnamed)` `PATCH` `/publishing/news/app/entries/:id(.:format)` `edit/org/publishing/news/app/entries#update`
+- **FOREIGN/RETIRED** `(unnamed)` `PUT` `/publishing/news/app/entries/:id(.:format)` `edit/org/publishing/news/app/entries#update`
+- **FOREIGN/RETIRED** `edit_org_publishing_news_com_entry_publications` `POST` `/publishing/news/com/entries/:entry_id/publications(.:format)` `edit/org/publishing/news/com/entries/publications#create`
+- **FOREIGN/RETIRED** `edit_org_publishing_news_com_entry_publication` `DELETE` `/publishing/news/com/entries/:entry_id/publications/:id(.:format)` `edit/org/publishing/news/com/entries/publications#destroy`
+- **FOREIGN/RETIRED** `edit_org_publishing_news_com_entry_archive` `DELETE` `/publishing/news/com/entries/:entry_id/archive(.:format)` `edit/org/publishing/news/com/entries/archives#destroy`
+- **FOREIGN/RETIRED** `(unnamed)` `POST` `/publishing/news/com/entries/:entry_id/archive(.:format)` `edit/org/publishing/news/com/entries/archives#create`
+- **FOREIGN/RETIRED** `edit_org_publishing_news_com_entries` `GET` `/publishing/news/com/entries(.:format)` `edit/org/publishing/news/com/entries#index`
+- **FOREIGN/RETIRED** `(unnamed)` `POST` `/publishing/news/com/entries(.:format)` `edit/org/publishing/news/com/entries#create`
+- **FOREIGN/RETIRED** `new_edit_org_publishing_news_com_entry` `GET` `/publishing/news/com/entries/new(.:format)` `edit/org/publishing/news/com/entries#new`
+- **FOREIGN/RETIRED** `edit_edit_org_publishing_news_com_entry` `GET` `/publishing/news/com/entries/:id/edit(.:format)` `edit/org/publishing/news/com/entries#edit`
+- **FOREIGN/RETIRED** `edit_org_publishing_news_com_entry` `GET` `/publishing/news/com/entries/:id(.:format)` `edit/org/publishing/news/com/entries#show`
+- **FOREIGN/RETIRED** `(unnamed)` `PATCH` `/publishing/news/com/entries/:id(.:format)` `edit/org/publishing/news/com/entries#update`
+- **FOREIGN/RETIRED** `(unnamed)` `PUT` `/publishing/news/com/entries/:id(.:format)` `edit/org/publishing/news/com/entries#update`
+- **FOREIGN/RETIRED** `edit_org_publishing_news_org_entry_publications` `POST` `/publishing/news/org/entries/:entry_id/publications(.:format)` `edit/org/publishing/news/org/entries/publications#create`
+- **FOREIGN/RETIRED** `edit_org_publishing_news_org_entry_publication` `DELETE` `/publishing/news/org/entries/:entry_id/publications/:id(.:format)` `edit/org/publishing/news/org/entries/publications#destroy`
+- **FOREIGN/RETIRED** `edit_org_publishing_news_org_entry_archive` `DELETE` `/publishing/news/org/entries/:entry_id/archive(.:format)` `edit/org/publishing/news/org/entries/archives#destroy`
+- **FOREIGN/RETIRED** `(unnamed)` `POST` `/publishing/news/org/entries/:entry_id/archive(.:format)` `edit/org/publishing/news/org/entries/archives#create`
+- **FOREIGN/RETIRED** `edit_org_publishing_news_org_entries` `GET` `/publishing/news/org/entries(.:format)` `edit/org/publishing/news/org/entries#index`
+- **FOREIGN/RETIRED** `(unnamed)` `POST` `/publishing/news/org/entries(.:format)` `edit/org/publishing/news/org/entries#create`
+- **FOREIGN/RETIRED** `new_edit_org_publishing_news_org_entry` `GET` `/publishing/news/org/entries/new(.:format)` `edit/org/publishing/news/org/entries#new`
+- **FOREIGN/RETIRED** `edit_edit_org_publishing_news_org_entry` `GET` `/publishing/news/org/entries/:id/edit(.:format)` `edit/org/publishing/news/org/entries#edit`
+- **FOREIGN/RETIRED** `edit_org_publishing_news_org_entry` `GET` `/publishing/news/org/entries/:id(.:format)` `edit/org/publishing/news/org/entries#show`
+- **FOREIGN/RETIRED** `(unnamed)` `PATCH` `/publishing/news/org/entries/:id(.:format)` `edit/org/publishing/news/org/entries#update`
+- **FOREIGN/RETIRED** `(unnamed)` `PUT` `/publishing/news/org/entries/:id(.:format)` `edit/org/publishing/news/org/entries#update`
+- **FOREIGN/RETIRED** `edit_org_publishing_help_app_entry_publications` `POST` `/publishing/help/app/entries/:entry_id/publications(.:format)` `edit/org/publishing/help/app/entries/publications#create`
+- **FOREIGN/RETIRED** `edit_org_publishing_help_app_entry_publication` `DELETE` `/publishing/help/app/entries/:entry_id/publications/:id(.:format)` `edit/org/publishing/help/app/entries/publications#destroy`
+- **FOREIGN/RETIRED** `edit_org_publishing_help_app_entry_archive` `DELETE` `/publishing/help/app/entries/:entry_id/archive(.:format)` `edit/org/publishing/help/app/entries/archives#destroy`
+- **FOREIGN/RETIRED** `(unnamed)` `POST` `/publishing/help/app/entries/:entry_id/archive(.:format)` `edit/org/publishing/help/app/entries/archives#create`
+- **FOREIGN/RETIRED** `edit_org_publishing_help_app_entries` `GET` `/publishing/help/app/entries(.:format)` `edit/org/publishing/help/app/entries#index`
+- **FOREIGN/RETIRED** `(unnamed)` `POST` `/publishing/help/app/entries(.:format)` `edit/org/publishing/help/app/entries#create`
+- **FOREIGN/RETIRED** `new_edit_org_publishing_help_app_entry` `GET` `/publishing/help/app/entries/new(.:format)` `edit/org/publishing/help/app/entries#new`
+- **FOREIGN/RETIRED** `edit_edit_org_publishing_help_app_entry` `GET` `/publishing/help/app/entries/:id/edit(.:format)` `edit/org/publishing/help/app/entries#edit`
+- **FOREIGN/RETIRED** `edit_org_publishing_help_app_entry` `GET` `/publishing/help/app/entries/:id(.:format)` `edit/org/publishing/help/app/entries#show`
+- **FOREIGN/RETIRED** `(unnamed)` `PATCH` `/publishing/help/app/entries/:id(.:format)` `edit/org/publishing/help/app/entries#update`
+- **FOREIGN/RETIRED** `(unnamed)` `PUT` `/publishing/help/app/entries/:id(.:format)` `edit/org/publishing/help/app/entries#update`
+- **FOREIGN/RETIRED** `edit_org_publishing_help_com_entry_publications` `POST` `/publishing/help/com/entries/:entry_id/publications(.:format)` `edit/org/publishing/help/com/entries/publications#create`
+- **FOREIGN/RETIRED** `edit_org_publishing_help_com_entry_publication` `DELETE` `/publishing/help/com/entries/:entry_id/publications/:id(.:format)` `edit/org/publishing/help/com/entries/publications#destroy`
+- **FOREIGN/RETIRED** `edit_org_publishing_help_com_entry_archive` `DELETE` `/publishing/help/com/entries/:entry_id/archive(.:format)` `edit/org/publishing/help/com/entries/archives#destroy`
+- **FOREIGN/RETIRED** `(unnamed)` `POST` `/publishing/help/com/entries/:entry_id/archive(.:format)` `edit/org/publishing/help/com/entries/archives#create`
+- **FOREIGN/RETIRED** `edit_org_publishing_help_com_entries` `GET` `/publishing/help/com/entries(.:format)` `edit/org/publishing/help/com/entries#index`
+- **FOREIGN/RETIRED** `(unnamed)` `POST` `/publishing/help/com/entries(.:format)` `edit/org/publishing/help/com/entries#create`
+- **FOREIGN/RETIRED** `new_edit_org_publishing_help_com_entry` `GET` `/publishing/help/com/entries/new(.:format)` `edit/org/publishing/help/com/entries#new`
+- **FOREIGN/RETIRED** `edit_edit_org_publishing_help_com_entry` `GET` `/publishing/help/com/entries/:id/edit(.:format)` `edit/org/publishing/help/com/entries#edit`
+- **FOREIGN/RETIRED** `edit_org_publishing_help_com_entry` `GET` `/publishing/help/com/entries/:id(.:format)` `edit/org/publishing/help/com/entries#show`
+- **FOREIGN/RETIRED** `(unnamed)` `PATCH` `/publishing/help/com/entries/:id(.:format)` `edit/org/publishing/help/com/entries#update`
+- **FOREIGN/RETIRED** `(unnamed)` `PUT` `/publishing/help/com/entries/:id(.:format)` `edit/org/publishing/help/com/entries#update`
+- **FOREIGN/RETIRED** `edit_org_publishing_help_org_entry_publications` `POST` `/publishing/help/org/entries/:entry_id/publications(.:format)` `edit/org/publishing/help/org/entries/publications#create`
+- **FOREIGN/RETIRED** `edit_org_publishing_help_org_entry_publication` `DELETE` `/publishing/help/org/entries/:entry_id/publications/:id(.:format)` `edit/org/publishing/help/org/entries/publications#destroy`
+- **FOREIGN/RETIRED** `edit_org_publishing_help_org_entry_archive` `DELETE` `/publishing/help/org/entries/:entry_id/archive(.:format)` `edit/org/publishing/help/org/entries/archives#destroy`
+- **FOREIGN/RETIRED** `(unnamed)` `POST` `/publishing/help/org/entries/:entry_id/archive(.:format)` `edit/org/publishing/help/org/entries/archives#create`
+- **FOREIGN/RETIRED** `edit_org_publishing_help_org_entries` `GET` `/publishing/help/org/entries(.:format)` `edit/org/publishing/help/org/entries#index`
+- **FOREIGN/RETIRED** `(unnamed)` `POST` `/publishing/help/org/entries(.:format)` `edit/org/publishing/help/org/entries#create`
+- **FOREIGN/RETIRED** `new_edit_org_publishing_help_org_entry` `GET` `/publishing/help/org/entries/new(.:format)` `edit/org/publishing/help/org/entries#new`
+- **FOREIGN/RETIRED** `edit_edit_org_publishing_help_org_entry` `GET` `/publishing/help/org/entries/:id/edit(.:format)` `edit/org/publishing/help/org/entries#edit`
+- **FOREIGN/RETIRED** `edit_org_publishing_help_org_entry` `GET` `/publishing/help/org/entries/:id(.:format)` `edit/org/publishing/help/org/entries#show`
+- **FOREIGN/RETIRED** `(unnamed)` `PATCH` `/publishing/help/org/entries/:id(.:format)` `edit/org/publishing/help/org/entries#update`
+- **FOREIGN/RETIRED** `(unnamed)` `PUT` `/publishing/help/org/entries/:id(.:format)` `edit/org/publishing/help/org/entries#update`
+
+#### Flipper — 1 baseline routes
+- **OWN** `flipper` `MOUNT` `/` `[mounted app]`
+
+#### Framework/unscoped — 26 baseline routes
+- **FOREIGN/RETIRED** `turbo_recede_historical_location` `GET` `/recede_historical_location(.:format)` `turbo/native/navigation#recede`
+- **FOREIGN/RETIRED** `turbo_resume_historical_location` `GET` `/resume_historical_location(.:format)` `turbo/native/navigation#resume`
+- **FOREIGN/RETIRED** `turbo_refresh_historical_location` `GET` `/refresh_historical_location(.:format)` `turbo/native/navigation#refresh`
+- **FOREIGN/RETIRED** `rails_postmark_inbound_emails` `POST` `/rails/action_mailbox/postmark/inbound_emails(.:format)` `action_mailbox/ingresses/postmark/inbound_emails#create`
+- **FOREIGN/RETIRED** `rails_relay_inbound_emails` `POST` `/rails/action_mailbox/relay/inbound_emails(.:format)` `action_mailbox/ingresses/relay/inbound_emails#create`
+- **FOREIGN/RETIRED** `rails_sendgrid_inbound_emails` `POST` `/rails/action_mailbox/sendgrid/inbound_emails(.:format)` `action_mailbox/ingresses/sendgrid/inbound_emails#create`
+- **FOREIGN/RETIRED** `rails_mandrill_inbound_health_check` `GET` `/rails/action_mailbox/mandrill/inbound_emails(.:format)` `action_mailbox/ingresses/mandrill/inbound_emails#health_check`
+- **FOREIGN/RETIRED** `rails_mandrill_inbound_emails` `POST` `/rails/action_mailbox/mandrill/inbound_emails(.:format)` `action_mailbox/ingresses/mandrill/inbound_emails#create`
+- **FOREIGN/RETIRED** `rails_mailgun_inbound_emails` `POST` `/rails/action_mailbox/mailgun/inbound_emails/mime(.:format)` `action_mailbox/ingresses/mailgun/inbound_emails#create`
+- **FOREIGN/RETIRED** `rails_conductor_inbound_emails` `GET` `/rails/conductor/action_mailbox/inbound_emails(.:format)` `rails/conductor/action_mailbox/inbound_emails#index`
+- **FOREIGN/RETIRED** `(unnamed)` `POST` `/rails/conductor/action_mailbox/inbound_emails(.:format)` `rails/conductor/action_mailbox/inbound_emails#create`
+- **FOREIGN/RETIRED** `new_rails_conductor_inbound_email` `GET` `/rails/conductor/action_mailbox/inbound_emails/new(.:format)` `rails/conductor/action_mailbox/inbound_emails#new`
+- **FOREIGN/RETIRED** `rails_conductor_inbound_email` `GET` `/rails/conductor/action_mailbox/inbound_emails/:id(.:format)` `rails/conductor/action_mailbox/inbound_emails#show`
+- **FOREIGN/RETIRED** `new_rails_conductor_inbound_email_source` `GET` `/rails/conductor/action_mailbox/inbound_emails/sources/new(.:format)` `rails/conductor/action_mailbox/inbound_emails/sources#new`
+- **FOREIGN/RETIRED** `rails_conductor_inbound_email_sources` `POST` `/rails/conductor/action_mailbox/inbound_emails/sources(.:format)` `rails/conductor/action_mailbox/inbound_emails/sources#create`
+- **FOREIGN/RETIRED** `rails_conductor_inbound_email_reroute` `POST` `/rails/conductor/action_mailbox/:inbound_email_id/reroute(.:format)` `rails/conductor/action_mailbox/reroutes#create`
+- **FOREIGN/RETIRED** `rails_conductor_inbound_email_incinerate` `POST` `/rails/conductor/action_mailbox/:inbound_email_id/incinerate(.:format)` `rails/conductor/action_mailbox/incinerates#create`
+- **FOREIGN/RETIRED** `rails_service_blob` `GET` `/rails/active_storage/blobs/redirect/:signed_id/*filename(.:format)` `active_storage/blobs/redirect#show`
+- **FOREIGN/RETIRED** `rails_service_blob_proxy` `GET` `/rails/active_storage/blobs/proxy/:signed_id/*filename(.:format)` `active_storage/blobs/proxy#show`
+- **FOREIGN/RETIRED** `(unnamed)` `GET` `/rails/active_storage/blobs/:signed_id/*filename(.:format)` `active_storage/blobs/redirect#show`
+- **FOREIGN/RETIRED** `rails_blob_representation` `GET` `/rails/active_storage/representations/redirect/:signed_blob_id/:variation_key/*filename(.:format)` `active_storage/representations/redirect#show`
+- **FOREIGN/RETIRED** `rails_blob_representation_proxy` `GET` `/rails/active_storage/representations/proxy/:signed_blob_id/:variation_key/*filename(.:format)` `active_storage/representations/proxy#show`
+- **FOREIGN/RETIRED** `(unnamed)` `GET` `/rails/active_storage/representations/:signed_blob_id/:variation_key/*filename(.:format)` `active_storage/representations/redirect#show`
+- **FOREIGN/RETIRED** `rails_disk_service` `GET` `/rails/active_storage/disk/:encoded_key/*filename(.:format)` `active_storage/disk#show`
+- **FOREIGN/RETIRED** `update_rails_disk_service` `PUT` `/rails/active_storage/disk/:encoded_token(.:format)` `active_storage/disk#update`
+- **FOREIGN/RETIRED** `rails_direct_uploads` `POST` `/rails/active_storage/direct_uploads(.:format)` `active_storage/direct_uploads#create`
+
+#### Guid net — 10 baseline routes
+- **FOREIGN/RETIRED** `guid_net_root` `GET` `/` `guid/net/roots#index`
+- **FOREIGN/RETIRED** `guid_net_revision` `GET` `/revision` `guid/net/revisions#show`
+- **FOREIGN/RETIRED** `guid_net_health` `GET` `/health` `guid/net/healths#show`
+- **FOREIGN/RETIRED** `guid_net_health_liveness` `GET` `/health/liveness` `guid/net/health/livenesses#show`
+- **FOREIGN/RETIRED** `guid_net_health_readiness` `GET` `/health/readiness` `guid/net/health/readinesses#show`
+- **FOREIGN/RETIRED** `guid_net_health_startup` `GET` `/health/startup` `guid/net/health/startups#show`
+- **FOREIGN/RETIRED** `guid_net_csp_violation_report` `POST` `/csp-violation-report(.:format)` `guid/net/csp_violation_reports#create`
+- **FOREIGN/RETIRED** `guid_net_api_v0_resource` `GET` `/api/v0/resources/:guid(.:format)` `guid/net/api/v0/resources#show`
+- **FOREIGN/RETIRED** `guid_net_api_v0_health` `GET` `/api/v0/health.json` `guid/net/api/v0/healths#show`
+- **FOREIGN/RETIRED** `guid_net_api_v0_revision` `GET` `/api/v0/revision.json` `guid/net/api/v0/revisions#show`
+
+#### Help app — 11 baseline routes
+- **FOREIGN/RETIRED** `help_app_root` `GET` `/` `help/app/roots#index`
+- **FOREIGN/RETIRED** `help_app_revision` `GET` `/revision` `help/app/revisions#show`
+- **FOREIGN/RETIRED** `help_app_health` `GET` `/health` `help/app/healths#show`
+- **FOREIGN/RETIRED** `help_app_health_liveness` `GET` `/health/liveness` `help/app/health/livenesses#show`
+- **FOREIGN/RETIRED** `help_app_health_readiness` `GET` `/health/readiness` `help/app/health/readinesses#show`
+- **FOREIGN/RETIRED** `help_app_health_startup` `GET` `/health/startup` `help/app/health/startups#show`
+- **FOREIGN/RETIRED** `help_app_csp_violation_report` `POST` `/csp-violation-report(.:format)` `help/app/csp_violation_reports#create`
+- **FOREIGN/RETIRED** `help_app_api_v0_entries` `GET` `/api/v0/entries(.:format)` `help/app/api/v0/entries#index`
+- **FOREIGN/RETIRED** `help_app_api_v0_entry` `GET` `/api/v0/entries/:public_id(.:format)` `help/app/api/v0/entries#show`
+- **FOREIGN/RETIRED** `help_app_api_v0_health` `GET` `/api/v0/health.json` `help/app/api/v0/healths#show`
+- **FOREIGN/RETIRED** `help_app_api_v0_revision` `GET` `/api/v0/revision.json` `help/app/api/v0/revisions#show`
+
+#### Help com — 11 baseline routes
+- **FOREIGN/RETIRED** `help_com_root` `GET` `/` `help/com/roots#index`
+- **FOREIGN/RETIRED** `help_com_revision` `GET` `/revision` `help/com/revisions#show`
+- **FOREIGN/RETIRED** `help_com_health` `GET` `/health` `help/com/healths#show`
+- **FOREIGN/RETIRED** `help_com_health_liveness` `GET` `/health/liveness` `help/com/health/livenesses#show`
+- **FOREIGN/RETIRED** `help_com_health_readiness` `GET` `/health/readiness` `help/com/health/readinesses#show`
+- **FOREIGN/RETIRED** `help_com_health_startup` `GET` `/health/startup` `help/com/health/startups#show`
+- **FOREIGN/RETIRED** `help_com_csp_violation_report` `POST` `/csp-violation-report(.:format)` `help/com/csp_violation_reports#create`
+- **FOREIGN/RETIRED** `help_com_api_v0_entries` `GET` `/api/v0/entries(.:format)` `help/com/api/v0/entries#index`
+- **FOREIGN/RETIRED** `help_com_api_v0_entry` `GET` `/api/v0/entries/:public_id(.:format)` `help/com/api/v0/entries#show`
+- **FOREIGN/RETIRED** `help_com_api_v0_health` `GET` `/api/v0/health.json` `help/com/api/v0/healths#show`
+- **FOREIGN/RETIRED** `help_com_api_v0_revision` `GET` `/api/v0/revision.json` `help/com/api/v0/revisions#show`
+
+#### Help org — 11 baseline routes
+- **FOREIGN/RETIRED** `help_org_root` `GET` `/` `help/org/roots#index`
+- **FOREIGN/RETIRED** `help_org_revision` `GET` `/revision` `help/org/revisions#show`
+- **FOREIGN/RETIRED** `help_org_health` `GET` `/health` `help/org/healths#show`
+- **FOREIGN/RETIRED** `help_org_health_liveness` `GET` `/health/liveness` `help/org/health/livenesses#show`
+- **FOREIGN/RETIRED** `help_org_health_readiness` `GET` `/health/readiness` `help/org/health/readinesses#show`
+- **FOREIGN/RETIRED** `help_org_health_startup` `GET` `/health/startup` `help/org/health/startups#show`
+- **FOREIGN/RETIRED** `help_org_csp_violation_report` `POST` `/csp-violation-report(.:format)` `help/org/csp_violation_reports#create`
+- **FOREIGN/RETIRED** `help_org_api_v0_entries` `GET` `/api/v0/entries(.:format)` `help/org/api/v0/entries#index`
+- **FOREIGN/RETIRED** `help_org_api_v0_entry` `GET` `/api/v0/entries/:public_id(.:format)` `help/org/api/v0/entries#show`
+- **FOREIGN/RETIRED** `help_org_api_v0_health` `GET` `/api/v0/health.json` `help/org/api/v0/healths#show`
+- **FOREIGN/RETIRED** `help_org_api_v0_revision` `GET` `/api/v0/revision.json` `help/org/api/v0/revisions#show`
+
+#### Info app — 11 baseline routes
+- **FOREIGN/RETIRED** `info_app_root` `GET` `/` `info/app/roots#index`
+- **FOREIGN/RETIRED** `info_app_revision` `GET` `/revision` `info/app/revisions#show`
+- **FOREIGN/RETIRED** `info_app_health` `GET` `/health` `info/app/healths#show`
+- **FOREIGN/RETIRED** `info_app_health_liveness` `GET` `/health/liveness` `info/app/health/livenesses#show`
+- **FOREIGN/RETIRED** `info_app_health_readiness` `GET` `/health/readiness` `info/app/health/readinesses#show`
+- **FOREIGN/RETIRED** `info_app_health_startup` `GET` `/health/startup` `info/app/health/startups#show`
+- **FOREIGN/RETIRED** `info_app_csp_violation_report` `POST` `/csp-violation-report(.:format)` `info/app/csp_violation_reports#create`
+- **FOREIGN/RETIRED** `info_app_api_v0_entries` `GET` `/api/v0/entries(.:format)` `info/app/api/v0/entries#index`
+- **FOREIGN/RETIRED** `info_app_api_v0_entry` `GET` `/api/v0/entries/:public_id(.:format)` `info/app/api/v0/entries#show`
+- **FOREIGN/RETIRED** `info_app_api_v0_health` `GET` `/api/v0/health.json` `info/app/api/v0/healths#show`
+- **FOREIGN/RETIRED** `info_app_api_v0_revision` `GET` `/api/v0/revision.json` `info/app/api/v0/revisions#show`
+
+#### Info com — 11 baseline routes
+- **FOREIGN/RETIRED** `info_com_root` `GET` `/` `info/com/roots#index`
+- **FOREIGN/RETIRED** `info_com_revision` `GET` `/revision` `info/com/revisions#show`
+- **FOREIGN/RETIRED** `info_com_health` `GET` `/health` `info/com/healths#show`
+- **FOREIGN/RETIRED** `info_com_health_liveness` `GET` `/health/liveness` `info/com/health/livenesses#show`
+- **FOREIGN/RETIRED** `info_com_health_readiness` `GET` `/health/readiness` `info/com/health/readinesses#show`
+- **FOREIGN/RETIRED** `info_com_health_startup` `GET` `/health/startup` `info/com/health/startups#show`
+- **FOREIGN/RETIRED** `info_com_csp_violation_report` `POST` `/csp-violation-report(.:format)` `info/com/csp_violation_reports#create`
+- **FOREIGN/RETIRED** `info_com_api_v0_entries` `GET` `/api/v0/entries(.:format)` `info/com/api/v0/entries#index`
+- **FOREIGN/RETIRED** `info_com_api_v0_entry` `GET` `/api/v0/entries/:public_id(.:format)` `info/com/api/v0/entries#show`
+- **FOREIGN/RETIRED** `info_com_api_v0_health` `GET` `/api/v0/health.json` `info/com/api/v0/healths#show`
+- **FOREIGN/RETIRED** `info_com_api_v0_revision` `GET` `/api/v0/revision.json` `info/com/api/v0/revisions#show`
+
+#### Info org — 11 baseline routes
+- **FOREIGN/RETIRED** `info_org_root` `GET` `/` `info/org/roots#index`
+- **FOREIGN/RETIRED** `info_org_revision` `GET` `/revision` `info/org/revisions#show`
+- **FOREIGN/RETIRED** `info_org_health` `GET` `/health` `info/org/healths#show`
+- **FOREIGN/RETIRED** `info_org_health_liveness` `GET` `/health/liveness` `info/org/health/livenesses#show`
+- **FOREIGN/RETIRED** `info_org_health_readiness` `GET` `/health/readiness` `info/org/health/readinesses#show`
+- **FOREIGN/RETIRED** `info_org_health_startup` `GET` `/health/startup` `info/org/health/startups#show`
+- **FOREIGN/RETIRED** `info_org_csp_violation_report` `POST` `/csp-violation-report(.:format)` `info/org/csp_violation_reports#create`
+- **FOREIGN/RETIRED** `info_org_api_v0_entries` `GET` `/api/v0/entries(.:format)` `info/org/api/v0/entries#index`
+- **FOREIGN/RETIRED** `info_org_api_v0_entry` `GET` `/api/v0/entries/:public_id(.:format)` `info/org/api/v0/entries#show`
+- **FOREIGN/RETIRED** `info_org_api_v0_health` `GET` `/api/v0/health.json` `info/org/api/v0/healths#show`
+- **FOREIGN/RETIRED** `info_org_api_v0_revision` `GET` `/api/v0/revision.json` `info/org/api/v0/revisions#show`
+
+#### Mission Control Jobs — 25 baseline routes
+- **OWN** `mission_control_jobs` `MOUNT` `/` `[mounted app]`
+- **OWN** `application_queue_pause` `DELETE` `/applications/:application_id/queues/:queue_id/pause(.:format)` `mission_control/jobs/queues/pauses#destroy`
+- **OWN** `(unnamed)` `POST` `/applications/:application_id/queues/:queue_id/pause(.:format)` `mission_control/jobs/queues/pauses#create`
+- **OWN** `application_queues` `GET` `/applications/:application_id/queues(.:format)` `mission_control/jobs/queues#index`
+- **OWN** `application_queue` `GET` `/applications/:application_id/queues/:id(.:format)` `mission_control/jobs/queues#show`
+- **OWN** `application_job_retry` `POST` `/applications/:application_id/jobs/:job_id/retry(.:format)` `mission_control/jobs/retries#create`
+- **OWN** `application_job_discard` `POST` `/applications/:application_id/jobs/:job_id/discard(.:format)` `mission_control/jobs/discards#create`
+- **OWN** `application_job_dispatch` `POST` `/applications/:application_id/jobs/:job_id/dispatch(.:format)` `mission_control/jobs/dispatches#create`
+- **OWN** `application_bulk_retries` `POST` `/applications/:application_id/jobs/bulk_retries(.:format)` `mission_control/jobs/bulk_retries#create`
+- **OWN** `application_bulk_discards` `POST` `/applications/:application_id/jobs/bulk_discards(.:format)` `mission_control/jobs/bulk_discards#create`
+- **OWN** `application_job` `GET` `/applications/:application_id/jobs/:id(.:format)` `mission_control/jobs/jobs#show`
+- **OWN** `application_jobs` `GET` `/applications/:application_id/:status/jobs(.:format)` `mission_control/jobs/jobs#index`
+- **OWN** `application_workers` `GET` `/applications/:application_id/workers(.:format)` `mission_control/jobs/workers#index`
+- **OWN** `application_worker` `GET` `/applications/:application_id/workers/:id(.:format)` `mission_control/jobs/workers#show`
+- **OWN** `application_recurring_tasks` `GET` `/applications/:application_id/recurring_tasks(.:format)` `mission_control/jobs/recurring_tasks#index`
+- **OWN** `application_recurring_task` `GET` `/applications/:application_id/recurring_tasks/:id(.:format)` `mission_control/jobs/recurring_tasks#show`
+- **OWN** `(unnamed)` `PATCH` `/applications/:application_id/recurring_tasks/:id(.:format)` `mission_control/jobs/recurring_tasks#update`
+- **OWN** `(unnamed)` `PUT` `/applications/:application_id/recurring_tasks/:id(.:format)` `mission_control/jobs/recurring_tasks#update`
+- **OWN** `application_batches` `GET` `/applications/:application_id/batches(.:format)` `mission_control/jobs/batches#index`
+- **OWN** `application_batch` `GET` `/applications/:application_id/batches/:id(.:format)` `mission_control/jobs/batches#show`
+- **OWN** `queues` `GET` `/queues(.:format)` `mission_control/jobs/queues#index`
+- **OWN** `queue` `GET` `/queues/:id(.:format)` `mission_control/jobs/queues#show`
+- **OWN** `job` `GET` `/jobs/:id(.:format)` `mission_control/jobs/jobs#show`
+- **OWN** `jobs` `GET` `/:status/jobs(.:format)` `mission_control/jobs/jobs#index`
+- **OWN** `root` `GET` `/` `mission_control/jobs/queues#index`
+
+#### News app — 11 baseline routes
+- **FOREIGN/RETIRED** `news_app_root` `GET` `/` `news/app/roots#index`
+- **FOREIGN/RETIRED** `news_app_revision` `GET` `/revision` `news/app/revisions#show`
+- **FOREIGN/RETIRED** `news_app_health` `GET` `/health` `news/app/healths#show`
+- **FOREIGN/RETIRED** `news_app_health_liveness` `GET` `/health/liveness` `news/app/health/livenesses#show`
+- **FOREIGN/RETIRED** `news_app_health_readiness` `GET` `/health/readiness` `news/app/health/readinesses#show`
+- **FOREIGN/RETIRED** `news_app_health_startup` `GET` `/health/startup` `news/app/health/startups#show`
+- **FOREIGN/RETIRED** `news_app_csp_violation_report` `POST` `/csp-violation-report(.:format)` `news/app/csp_violation_reports#create`
+- **FOREIGN/RETIRED** `news_app_api_v0_entries` `GET` `/api/v0/entries(.:format)` `news/app/api/v0/entries#index`
+- **FOREIGN/RETIRED** `news_app_api_v0_entry` `GET` `/api/v0/entries/:public_id(.:format)` `news/app/api/v0/entries#show`
+- **FOREIGN/RETIRED** `news_app_api_v0_health` `GET` `/api/v0/health.json` `news/app/api/v0/healths#show`
+- **FOREIGN/RETIRED** `news_app_api_v0_revision` `GET` `/api/v0/revision.json` `news/app/api/v0/revisions#show`
+
+#### News com — 11 baseline routes
+- **FOREIGN/RETIRED** `news_com_root` `GET` `/` `news/com/roots#index`
+- **FOREIGN/RETIRED** `news_com_revision` `GET` `/revision` `news/com/revisions#show`
+- **FOREIGN/RETIRED** `news_com_health` `GET` `/health` `news/com/healths#show`
+- **FOREIGN/RETIRED** `news_com_health_liveness` `GET` `/health/liveness` `news/com/health/livenesses#show`
+- **FOREIGN/RETIRED** `news_com_health_readiness` `GET` `/health/readiness` `news/com/health/readinesses#show`
+- **FOREIGN/RETIRED** `news_com_health_startup` `GET` `/health/startup` `news/com/health/startups#show`
+- **FOREIGN/RETIRED** `news_com_csp_violation_report` `POST` `/csp-violation-report(.:format)` `news/com/csp_violation_reports#create`
+- **FOREIGN/RETIRED** `news_com_api_v0_entries` `GET` `/api/v0/entries(.:format)` `news/com/api/v0/entries#index`
+- **FOREIGN/RETIRED** `news_com_api_v0_entry` `GET` `/api/v0/entries/:public_id(.:format)` `news/com/api/v0/entries#show`
+- **FOREIGN/RETIRED** `news_com_api_v0_health` `GET` `/api/v0/health.json` `news/com/api/v0/healths#show`
+- **FOREIGN/RETIRED** `news_com_api_v0_revision` `GET` `/api/v0/revision.json` `news/com/api/v0/revisions#show`
+
+#### News org — 11 baseline routes
+- **FOREIGN/RETIRED** `news_org_root` `GET` `/` `news/org/roots#index`
+- **FOREIGN/RETIRED** `news_org_revision` `GET` `/revision` `news/org/revisions#show`
+- **FOREIGN/RETIRED** `news_org_health` `GET` `/health` `news/org/healths#show`
+- **FOREIGN/RETIRED** `news_org_health_liveness` `GET` `/health/liveness` `news/org/health/livenesses#show`
+- **FOREIGN/RETIRED** `news_org_health_readiness` `GET` `/health/readiness` `news/org/health/readinesses#show`
+- **FOREIGN/RETIRED** `news_org_health_startup` `GET` `/health/startup` `news/org/health/startups#show`
+- **FOREIGN/RETIRED** `news_org_csp_violation_report` `POST` `/csp-violation-report(.:format)` `news/org/csp_violation_reports#create`
+- **FOREIGN/RETIRED** `news_org_api_v0_entries` `GET` `/api/v0/entries(.:format)` `news/org/api/v0/entries#index`
+- **FOREIGN/RETIRED** `news_org_api_v0_entry` `GET` `/api/v0/entries/:public_id(.:format)` `news/org/api/v0/entries#show`
+- **FOREIGN/RETIRED** `news_org_api_v0_health` `GET` `/api/v0/health.json` `news/org/api/v0/healths#show`
+- **FOREIGN/RETIRED** `news_org_api_v0_revision` `GET` `/api/v0/revision.json` `news/org/api/v0/revisions#show`
+
+#### Palm app — 25 baseline routes
+- **FOREIGN/RETIRED** `palm_app_root` `GET` `/` `palm/app/roots#index`
+- **FOREIGN/RETIRED** `palm_app_dashboard` `GET` `/dashboard(.:format)` `palm/app/dashboards#show`
+- **FOREIGN/RETIRED** `palm_app_revision` `GET` `/revision` `palm/app/revisions#show`
+- **FOREIGN/RETIRED** `palm_app_health` `GET` `/health` `palm/app/healths#show`
+- **FOREIGN/RETIRED** `palm_app_health_liveness` `GET` `/health/liveness` `palm/app/health/livenesses#show`
+- **FOREIGN/RETIRED** `palm_app_health_readiness` `GET` `/health/readiness` `palm/app/health/readinesses#show`
+- **FOREIGN/RETIRED** `palm_app_health_startup` `GET` `/health/startup` `palm/app/health/startups#show`
+- **FOREIGN/RETIRED** `palm_app_robots` `GET` `/robots.txt(.:format)` `palm/app/robots#index`
+- **FOREIGN/RETIRED** `palm_app_sitemap` `GET` `/sitemap.xml(.:format)` `palm/app/sitemaps#show`
+- **FOREIGN/RETIRED** `palm_app_well_known_jwks` `GET` `/.well-known/jwks.json` `palm/app/well_known/jwks#show`
+- **FOREIGN/RETIRED** `palm_app_oidc_callback` `GET` `/oidc/callback(.:format)` `palm/app/oidc/callbacks#show`
+- **FOREIGN/RETIRED** `palm_app_oidc_closures` `POST` `/oidc/closures(.:format)` `palm/app/oidc/closures#create`
+- **FOREIGN/RETIRED** `palm_app_sign_show` `GET` `/sign(.:format)` `palm/app/sign/entries#show`
+- **FOREIGN/RETIRED** `palm_app_sign_create` `POST` `/sign(.:format)` `palm/app/sign/entries#create`
+- **FOREIGN/RETIRED** `palm_app_sign_interruption` `GET` `/sign/interruption(.:format)` `palm/app/sign/interruptions#show`
+- **FOREIGN/RETIRED** `new_palm_app_sign_out` `GET` `/sign/out/new(.:format)` `palm/app/sign/outs#new`
+- **FOREIGN/RETIRED** `edit_palm_app_sign_out` `GET` `/sign/out/edit(.:format)` `palm/app/sign/outs#edit`
+- **FOREIGN/RETIRED** `palm_app_sign_out` `GET` `/sign/out(.:format)` `palm/app/sign/outs#show`
+- **FOREIGN/RETIRED** `(unnamed)` `POST` `/sign/out(.:format)` `palm/app/sign/outs#create`
+- **FOREIGN/RETIRED** `palm_app_sign_out_completion` `GET` `/sign/out/completion(.:format)` `palm/app/sign/out/completions#show`
+- **FOREIGN/RETIRED** `palm_app_csp_violation_report` `POST` `/csp-violation-report(.:format)` `palm/app/csp_violation_reports#create`
+- **FOREIGN/RETIRED** `palm_app_pwa_service_worker` `GET` `/service-worker(.:format)` `rails/pwa#service_worker`
+- **FOREIGN/RETIRED** `palm_app_pwa_offline` `GET` `/offline(.:format)` `rails/pwa#offline`
+- **FOREIGN/RETIRED** `palm_app_api_v0_health` `GET` `/api/v0/health.json` `palm/app/api/v0/healths#show`
+- **FOREIGN/RETIRED** `palm_app_api_v0_revision` `GET` `/api/v0/revision.json` `palm/app/api/v0/revisions#show`
+
+#### Performance — 15 baseline routes
+- **FOREIGN/RETIRED** `rails_performance` `MOUNT` `/` `[mounted app]`
+- **FOREIGN/RETIRED** `engine_asset` `GET` `/assets/*file(.:format)` `Inline handler (Proc/Lambda)`
+- **FOREIGN/RETIRED** `rails_performance` `GET` `/` `rails_performance/rails_performance#index`
+- **FOREIGN/RETIRED** `rails_performance_requests` `GET` `/requests(.:format)` `rails_performance/rails_performance#requests`
+- **FOREIGN/RETIRED** `rails_performance_crashes` `GET` `/crashes(.:format)` `rails_performance/rails_performance#crashes`
+- **FOREIGN/RETIRED** `rails_performance_recent` `GET` `/recent(.:format)` `rails_performance/rails_performance#recent`
+- **FOREIGN/RETIRED** `rails_performance_slow` `GET` `/slow(.:format)` `rails_performance/rails_performance#slow`
+- **FOREIGN/RETIRED** `rails_performance_trace` `GET` `/trace/:id(.:format)` `rails_performance/rails_performance#trace`
+- **FOREIGN/RETIRED** `rails_performance_summary` `GET` `/summary(.:format)` `rails_performance/rails_performance#summary`
+- **FOREIGN/RETIRED** `rails_performance_sidekiq` `GET` `/sidekiq(.:format)` `rails_performance/rails_performance#sidekiq`
+- **FOREIGN/RETIRED** `rails_performance_delayed_job` `GET` `/delayed_job(.:format)` `rails_performance/rails_performance#delayed_job`
+- **FOREIGN/RETIRED** `rails_performance_grape` `GET` `/grape(.:format)` `rails_performance/rails_performance#grape`
+- **FOREIGN/RETIRED** `rails_performance_rake` `GET` `/rake(.:format)` `rails_performance/rails_performance#rake`
+- **FOREIGN/RETIRED** `rails_performance_custom` `GET` `/custom(.:format)` `rails_performance/rails_performance#custom`
+- **FOREIGN/RETIRED** `rails_performance_resources` `GET` `/resources(.:format)` `rails_performance/rails_performance#resources`
+
+#### PgHero — 26 baseline routes
+- **OWN** `pghero` `MOUNT` `/` `[mounted app]`
+- **OWN** `space` `GET` `(/:database)/space(.:format)` `pg_hero/home#space`
+- **OWN** `relation_space` `GET` `(/:database)/space/:relation(.:format)` `pg_hero/home#relation_space`
+- **OWN** `index_bloat` `GET` `(/:database)/index_bloat(.:format)` `pg_hero/home#index_bloat`
+- **OWN** `live_queries` `GET` `(/:database)/live_queries(.:format)` `pg_hero/home#live_queries`
+- **OWN** `queries` `GET` `(/:database)/queries(.:format)` `pg_hero/home#queries`
+- **OWN** `show_query` `GET` `(/:database)/queries/:query_hash(.:format)` `pg_hero/home#show_query`
+- **OWN** `system` `GET` `(/:database)/system(.:format)` `pg_hero/home#system`
+- **OWN** `cpu_usage` `GET` `(/:database)/cpu_usage(.:format)` `pg_hero/home#cpu_usage`
+- **OWN** `connection_stats` `GET` `(/:database)/connection_stats(.:format)` `pg_hero/home#connection_stats`
+- **OWN** `replication_lag_stats` `GET` `(/:database)/replication_lag_stats(.:format)` `pg_hero/home#replication_lag_stats`
+- **OWN** `load_stats` `GET` `(/:database)/load_stats(.:format)` `pg_hero/home#load_stats`
+- **OWN** `free_space_stats` `GET` `(/:database)/free_space_stats(.:format)` `pg_hero/home#free_space_stats`
+- **OWN** `explain` `GET` `(/:database)/explain(.:format)` `pg_hero/home#explain`
+- **OWN** `tune` `GET` `(/:database)/tune(.:format)` `pg_hero/home#tune`
+- **OWN** `connections` `GET` `(/:database)/connections(.:format)` `pg_hero/home#connections`
+- **OWN** `maintenance` `GET` `(/:database)/maintenance(.:format)` `pg_hero/home#maintenance`
+- **OWN** `kill` `POST` `(/:database)/kill(.:format)` `pg_hero/home#kill`
+- **OWN** `kill_long_running_queries` `POST` `(/:database)/kill_long_running_queries(.:format)` `pg_hero/home#kill_long_running_queries`
+- **OWN** `kill_all` `POST` `(/:database)/kill_all(.:format)` `pg_hero/home#kill_all`
+- **OWN** `enable_query_stats` `POST` `(/:database)/enable_query_stats(.:format)` `pg_hero/home#enable_query_stats`
+- **OWN** `(unnamed)` `POST` `(/:database)/explain(.:format)` `pg_hero/home#explain`
+- **OWN** `reset_query_stats` `POST` `(/:database)/reset_query_stats(.:format)` `pg_hero/home#reset_query_stats`
+- **OWN** `system_stats` `GET` `(/:database)/system_stats(.:format)` `redirect(301, system)`
+- **OWN** `query_stats` `GET` `(/:database)/query_stats(.:format)` `redirect(301, queries)`
+- **OWN** `root` `GET` `/(:database)(.:format)` `pg_hero/home#index`
+
+#### Rails DB (unscoped) — 21 baseline routes
+- **FOREIGN/RETIRED** `rails_db` `MOUNT` `/rails/db` `[mounted app]`
+- **FOREIGN/RETIRED** `root` `GET` `/` `rails_db/dashboard#index`
+- **FOREIGN/RETIRED** `table_data` `GET` `/tables/:table_id/data(.:format)` `rails_db/tables#data`
+- **FOREIGN/RETIRED** `table_csv` `GET` `/tables/:table_id/csv(.:format)` `rails_db/tables#csv`
+- **FOREIGN/RETIRED** `table_truncate` `GET` `/tables/:table_id/truncate(.:format)` `rails_db/tables#truncate`
+- **FOREIGN/RETIRED** `table_destroy` `GET` `/tables/:table_id/destroy(.:format)` `rails_db/tables#destroy`
+- **FOREIGN/RETIRED** `table_edit` `GET` `/tables/:table_id/edit(.:format)` `rails_db/tables#edit`
+- **FOREIGN/RETIRED** `table_update` `PUT` `/tables/:table_id/update(.:format)` `rails_db/tables#update`
+- **FOREIGN/RETIRED** `table_xlsx` `GET` `/tables/:table_id/xlsx(.:format)` `rails_db/tables#xlsx`
+- **FOREIGN/RETIRED** `table_new` `GET` `/tables/:table_id/new(.:format)` `rails_db/tables#new`
+- **FOREIGN/RETIRED** `table_create` `POST` `/tables/:table_id/create(.:format)` `rails_db/tables#create`
+- **FOREIGN/RETIRED** `tables` `GET` `/tables(.:format)` `rails_db/tables#index`
+- **FOREIGN/RETIRED** `table` `GET` `/tables/:id(.:format)` `rails_db/tables#show`
+- **FOREIGN/RETIRED** `sql` `GET` `/sql(.:format)` `rails_db/sql#index`
+- **FOREIGN/RETIRED** `sql_import` `GET` `/import(.:format)` `rails_db/sql#import`
+- **FOREIGN/RETIRED** `sql_execute` `POST` `/execute(.:format)` `rails_db/sql#execute`
+- **FOREIGN/RETIRED** `sql_csv` `POST` `/sql-csv(.:format)` `rails_db/sql#csv`
+- **FOREIGN/RETIRED** `sql_xls` `POST` `/sql-xls(.:format)` `rails_db/sql#xls`
+- **FOREIGN/RETIRED** `sql_start_import` `POST` `/import-start(.:format)` `rails_db/sql#import_start`
+- **FOREIGN/RETIRED** `data_table` `GET` `/data-table(.:format)` `rails_db/dashboard#data_table`
+- **FOREIGN/RETIRED** `standalone` `GET` `/standalone(.:format)` `rails_db/dashboard#standalone`
+
+#### Swagger — 2 baseline routes
+- **OWN** `rswag_api` `MOUNT` `/openapi` `[mounted app]`
+- **OWN** `rswag_ui` `MOUNT` `/` `[mounted app]`
+
+#### Tech org — 18 baseline routes
+- **OWN** `tech_org_root` `GET` `/` `tech/org/roots#index`
+- **OWN** `tech_org_dashboard` `GET` `/dashboard(.:format)` `tech/org/dashboards#show`
+- **OWN** `tech_org_revision` `GET` `/revision` `tech/org/revisions#show`
+- **OWN** `tech_org_health` `GET` `/health` `tech/org/healths#show`
+- **OWN** `tech_org_health_liveness` `GET` `/health/liveness` `tech/org/health/livenesses#show`
+- **OWN** `tech_org_health_readiness` `GET` `/health/readiness` `tech/org/health/readinesses#show`
+- **OWN** `tech_org_health_startup` `GET` `/health/startup` `tech/org/health/startups#show`
+- **OWN** `tech_org_csp_violation_report` `POST` `/csp-violation-report(.:format)` `tech/org/csp_violation_reports#create`
+- **OWN** `tech_org_api_v0_health` `GET` `/api/v0/health.json` `tech/org/api/v0/healths#show`
+- **OWN** `tech_org_api_v0_revision` `GET` `/api/v0/revision.json` `tech/org/api/v0/revisions#show`
+- **RETIRED** `tech_org_oidc_callback` `GET` `/oidc/callback(.:format)` `tech/org/oidc/callbacks#show`
+- **RETIRED** `tech_org_oidc_closures` `POST` `/oidc/closures(.:format)` `tech/org/oidc/closures#create`
+- **RETIRED** `tech_org_sign_show` `GET` `/sign(.:format)` `tech/org/sign/entries#show`
+- **RETIRED** `tech_org_sign_create` `POST` `/sign(.:format)` `tech/org/sign/entries#create`
+- **RETIRED** `tech_org_sign_interruption` `GET` `/sign/interruption(.:format)` `tech/org/sign/interruptions#show`
+- **RETIRED** `tech_org_sign_out` `GET` `/sign/out(.:format)` `tech/org/sign/outs#show`
+- **RETIRED** `(unnamed)` `POST` `/sign/out(.:format)` `tech/org/sign/outs#create`
+- **RETIRED** `tech_org_sign_out_completion` `GET` `/sign/out/completion(.:format)` `tech/org/sign/out/completions#show`
+
+#### Unknown-host fallback — 1 baseline routes
+- **OWN** `(unnamed)` `GET` `/` `unknown_hosts#show`
+
+#### Visa app — 37 baseline routes
+- **FOREIGN/RETIRED** `visa_app_ceremony_binding_confirmation` `GET` `/ceremony_bindings/:binding_ref/confirmation(.:format)` `visa/app/ceremony_binding_confirmations#show`
+- **FOREIGN/RETIRED** `visa_app_well_known_openid_configuration` `GET` `/.well-known/openid-configuration` `visa/app/well_known/discoveries#show`
+- **FOREIGN/RETIRED** `visa_app_well_known_jwks` `GET` `/.well-known/jwks.json` `visa/app/well_known/jwks#show`
+- **FOREIGN/RETIRED** `visa_app_health` `GET` `/health` `visa/app/healths#show`
+- **FOREIGN/RETIRED** `visa_app_health_liveness` `GET` `/health/liveness` `visa/app/health/livenesses#show`
+- **FOREIGN/RETIRED** `visa_app_health_readiness` `GET` `/health/readiness` `visa/app/health/readinesses#show`
+- **FOREIGN/RETIRED** `visa_app_health_startup` `GET` `/health/startup` `visa/app/health/startups#show`
+- **FOREIGN/RETIRED** `visa_app_api_v0_health` `GET` `/api/v0/health.json` `visa/app/api/v0/healths#show`
+- **FOREIGN/RETIRED** `visa_app_api_v0_revision` `GET` `/api/v0/revision.json` `visa/app/api/v0/revisions#show`
+- **FOREIGN/RETIRED** `visa_app_api_v0_sensitive_admissions` `POST` `/api/v0/sensitive_admissions(.:format)` `visa/app/api/v0/sensitive_admissions#create`
+- **FOREIGN/RETIRED** `visa_app_api_v0_sensitive_admission_session` `PATCH` `/api/v0/sensitive_admission_session(.:format)` `visa/app/api/v0/sensitive_admission_sessions#update`
+- **FOREIGN/RETIRED** `(unnamed)` `PUT` `/api/v0/sensitive_admission_session(.:format)` `visa/app/api/v0/sensitive_admission_sessions#update`
+- **FOREIGN/RETIRED** `visa_app_api_v0_sensitive_admission_confirmation` `POST` `/api/v0/sensitive_admission_confirmation(.:format)` `visa/app/api/v0/sensitive_admission_sessions#create`
+- **FOREIGN/RETIRED** `visa_app_revision` `GET` `/revision` `visa/app/revisions#show`
+- **FOREIGN/RETIRED** `visa_app_robots` `GET` `/robots.txt(.:format)` `visa/app/robots#index`
+- **FOREIGN/RETIRED** `visa_app_csp_violation_report` `POST` `/csp-violation-report(.:format)` `visa/app/csp_violation_reports#create`
+- **FOREIGN/RETIRED** `visa_app_oauth_authorization` `GET` `/oauth/authorize(.:format)` `visa/app/oauth/authorizations#show`
+- **FOREIGN/RETIRED** `(unnamed)` `POST` `/oauth/authorize(.:format)` `visa/app/oauth/authorizations#create`
+- **FOREIGN/RETIRED** `visa_app_oauth_token` `POST` `/oauth/token(.:format)` `visa/app/oauth/tokens#create`
+- **FOREIGN/RETIRED** `visa_app_oauth_userinfo` `GET` `/oauth/userinfo(.:format)` `visa/app/oauth/userinfos#show`
+- **FOREIGN/RETIRED** `(unnamed)` `POST` `/oauth/userinfo(.:format)` `visa/app/oauth/userinfos#create`
+- **FOREIGN/RETIRED** `visa_app_oauth_revocation` `POST` `/oauth/revoke(.:format)` `visa/app/oauth/revocations#create`
+- **FOREIGN/RETIRED** `visa_app_oidc_logout` `GET` `/oidc/logout(.:format)` `visa/app/oidc/logouts#show`
+- **FOREIGN/RETIRED** `(unnamed)` `POST` `/oidc/logout(.:format)` `visa/app/oidc/logouts#create`
+- **FOREIGN/RETIRED** `visa_app_oidc_logout_confirmation` `POST` `/oidc/logout/confirmation(.:format)` `visa/app/oidc/logouts/confirmations#create`
+- **FOREIGN/RETIRED** `visa_app_oidc_logout_completion` `GET` `/oidc/logout/completion(.:format)` `visa/app/oidc/logouts/completions#show`
+- **FOREIGN/RETIRED** `visa_app_oidc_result` `GET` `/oidc/result(.:format)` `visa/app/oidc/results#show`
+- **FOREIGN/RETIRED** `visa_app_oidc_cancellation` `GET` `/oidc/cancellation(.:format)` `visa/app/oidc/cancellations#show`
+- **FOREIGN/RETIRED** `visa_app_oidc_switch` `GET` `/oidc/switch(.:format)` `visa/app/oidc/switches#show`
+- **FOREIGN/RETIRED** `visa_app_sign_in_limitation` `GET` `/sign/in/limitation(.:format)` `visa/app/sign/in/limitations#show`
+- **FOREIGN/RETIRED** `(unnamed)` `PATCH` `/sign/in/limitation(.:format)` `visa/app/sign/in/limitations#update`
+- **FOREIGN/RETIRED** `(unnamed)` `PUT` `/sign/in/limitation(.:format)` `visa/app/sign/in/limitations#update`
+- **FOREIGN/RETIRED** `(unnamed)` `DELETE` `/sign/in/limitation(.:format)` `visa/app/sign/in/limitations#destroy`
+- **FOREIGN/RETIRED** `visa_app_sign_in_limitation_continue` `POST` `/sign/in/limitation(.:format)` `visa/app/sign/in/limitations#update`
+- **FOREIGN/RETIRED** `visa_app_edge_v0_token_check` `GET` `/edge/v0/token/check(.:format)` `visa/app/edge/v0/token/checks#show`
+- **FOREIGN/RETIRED** `visa_app_edge_v0_token_dbsc` `POST` `/edge/v0/token/dbsc(.:format)` `visa/app/edge/v0/token/dbsc#create`
+- **FOREIGN/RETIRED** `visa_app_edge_v0_token_refresh` `POST` `/edge/v0/token/refresh(.:format)` `visa/app/edge/v0/token/refreshes#create`
+
+#### Visa org — 36 baseline routes
+- **FOREIGN/RETIRED** `visa_org_ceremony_binding_confirmation` `GET` `/ceremony_bindings/:binding_ref/confirmation(.:format)` `visa/org/ceremony_binding_confirmations#show`
+- **FOREIGN/RETIRED** `visa_org_well_known_openid_configuration` `GET` `/.well-known/openid-configuration` `visa/org/well_known/discoveries#show`
+- **FOREIGN/RETIRED** `visa_org_well_known_jwks` `GET` `/.well-known/jwks.json` `visa/org/well_known/jwks#show`
+- **FOREIGN/RETIRED** `visa_org_health` `GET` `/health` `visa/org/healths#show`
+- **FOREIGN/RETIRED** `visa_org_health_liveness` `GET` `/health/liveness` `visa/org/health/livenesses#show`
+- **FOREIGN/RETIRED** `visa_org_health_readiness` `GET` `/health/readiness` `visa/org/health/readinesses#show`
+- **FOREIGN/RETIRED** `visa_org_health_startup` `GET` `/health/startup` `visa/org/health/startups#show`
+- **FOREIGN/RETIRED** `visa_org_api_v0_health` `GET` `/api/v0/health.json` `visa/org/api/v0/healths#show`
+- **FOREIGN/RETIRED** `visa_org_api_v0_revision` `GET` `/api/v0/revision.json` `visa/org/api/v0/revisions#show`
+- **FOREIGN/RETIRED** `visa_org_api_v0_sensitive_admissions` `POST` `/api/v0/sensitive_admissions(.:format)` `visa/org/api/v0/sensitive_admissions#create`
+- **FOREIGN/RETIRED** `visa_org_api_v0_sensitive_admission_session` `PATCH` `/api/v0/sensitive_admission_session(.:format)` `visa/org/api/v0/sensitive_admission_sessions#update`
+- **FOREIGN/RETIRED** `(unnamed)` `PUT` `/api/v0/sensitive_admission_session(.:format)` `visa/org/api/v0/sensitive_admission_sessions#update`
+- **FOREIGN/RETIRED** `visa_org_api_v0_sensitive_admission_confirmation` `POST` `/api/v0/sensitive_admission_confirmation(.:format)` `visa/org/api/v0/sensitive_admission_sessions#create`
+- **FOREIGN/RETIRED** `visa_org_revision` `GET` `/revision` `visa/org/revisions#show`
+- **FOREIGN/RETIRED** `visa_org_robots` `GET` `/robots.txt(.:format)` `visa/org/robots#index`
+- **FOREIGN/RETIRED** `visa_org_csp_violation_report` `POST` `/csp-violation-report(.:format)` `visa/org/csp_violation_reports#create`
+- **FOREIGN/RETIRED** `visa_org_oauth_authorization` `GET` `/oauth/authorize(.:format)` `visa/org/oauth/authorizations#show`
+- **FOREIGN/RETIRED** `(unnamed)` `POST` `/oauth/authorize(.:format)` `visa/org/oauth/authorizations#create`
+- **FOREIGN/RETIRED** `visa_org_oauth_token` `POST` `/oauth/token(.:format)` `visa/org/oauth/tokens#create`
+- **FOREIGN/RETIRED** `visa_org_oauth_userinfo` `GET` `/oauth/userinfo(.:format)` `visa/org/oauth/userinfos#show`
+- **FOREIGN/RETIRED** `(unnamed)` `POST` `/oauth/userinfo(.:format)` `visa/org/oauth/userinfos#create`
+- **FOREIGN/RETIRED** `visa_org_oauth_revocation` `POST` `/oauth/revoke(.:format)` `visa/org/oauth/revocations#create`
+- **FOREIGN/RETIRED** `visa_org_oidc_logout` `GET` `/oidc/logout(.:format)` `visa/org/oidc/logouts#show`
+- **FOREIGN/RETIRED** `(unnamed)` `POST` `/oidc/logout(.:format)` `visa/org/oidc/logouts#create`
+- **FOREIGN/RETIRED** `visa_org_oidc_logout_confirmation` `POST` `/oidc/logout/confirmation(.:format)` `visa/org/oidc/logouts/confirmations#create`
+- **FOREIGN/RETIRED** `visa_org_oidc_logout_completion` `GET` `/oidc/logout/completion(.:format)` `visa/org/oidc/logouts/completions#show`
+- **FOREIGN/RETIRED** `visa_org_oidc_result` `GET` `/oidc/result(.:format)` `visa/org/oidc/results#show`
+- **FOREIGN/RETIRED** `visa_org_oidc_cancellation` `GET` `/oidc/cancellation(.:format)` `visa/org/oidc/cancellations#show`
+- **FOREIGN/RETIRED** `visa_org_sign_in_limitation` `GET` `/sign/in/limitation(.:format)` `visa/org/sign/in/limitations#show`
+- **FOREIGN/RETIRED** `(unnamed)` `PATCH` `/sign/in/limitation(.:format)` `visa/org/sign/in/limitations#update`
+- **FOREIGN/RETIRED** `(unnamed)` `PUT` `/sign/in/limitation(.:format)` `visa/org/sign/in/limitations#update`
+- **FOREIGN/RETIRED** `(unnamed)` `DELETE` `/sign/in/limitation(.:format)` `visa/org/sign/in/limitations#destroy`
+- **FOREIGN/RETIRED** `visa_org_sign_in_limitation_continue` `POST` `/sign/in/limitation(.:format)` `visa/org/sign/in/limitations#update`
+- **FOREIGN/RETIRED** `visa_org_edge_v0_token_check` `GET` `/edge/v0/token/check(.:format)` `visa/org/edge/v0/token/checks#show`
+- **FOREIGN/RETIRED** `visa_org_edge_v0_token_dbsc` `POST` `/edge/v0/token/dbsc(.:format)` `visa/org/edge/v0/token/dbsc#create`
+- **FOREIGN/RETIRED** `visa_org_edge_v0_token_refresh` `POST` `/edge/v0/token/refresh(.:format)` `visa/org/edge/v0/token/refreshes#create`
+
+#### Warp app — 30 baseline routes
+- **FOREIGN/RETIRED** `warp_app_root` `GET` `/` `warp/app/roots#index`
+- **FOREIGN/RETIRED** `warp_app_well_known_jwks` `GET` `/.well-known/jwks.json` `warp/app/well_known/jwks#show`
+- **FOREIGN/RETIRED** `warp_app_revision` `GET` `/revision` `warp/app/revisions#show`
+- **FOREIGN/RETIRED** `warp_app_health` `GET` `/health` `warp/app/healths#show`
+- **FOREIGN/RETIRED** `warp_app_health_liveness` `GET` `/health/liveness` `warp/app/health/livenesses#show`
+- **FOREIGN/RETIRED** `warp_app_health_readiness` `GET` `/health/readiness` `warp/app/health/readinesses#show`
+- **FOREIGN/RETIRED** `warp_app_health_startup` `GET` `/health/startup` `warp/app/health/startups#show`
+- **FOREIGN/RETIRED** `warp_app_api_v0_health` `GET` `/api/v0/health.json` `warp/app/api/v0/healths#show`
+- **FOREIGN/RETIRED** `warp_app_api_v0_revision` `GET` `/api/v0/revision.json` `warp/app/api/v0/revisions#show`
+- **FOREIGN/RETIRED** `warp_app_robots` `GET` `/robots.txt(.:format)` `warp/app/robots#index`
+- **FOREIGN/RETIRED** `warp_app_sitemap` `GET` `/sitemap.xml(.:format)` `warp/app/sitemaps#show`
+- **FOREIGN/RETIRED** `warp_app_settings` `GET` `/settings(.:format)` `warp/app/settings#show`
+- **FOREIGN/RETIRED** `warp_app_api_v0_preferences_cookie` `GET` `/api/v0/preferences/cookie(.:format)` `warp/app/api/v0/preferences/cookies#show`
+- **FOREIGN/RETIRED** `(unnamed)` `PATCH` `/api/v0/preferences/cookie(.:format)` `warp/app/api/v0/preferences/cookies#update`
+- **FOREIGN/RETIRED** `warp_app_api_v0_preferences_theme` `GET` `/api/v0/preferences/theme(.:format)` `warp/app/api/v0/preferences/themes#show`
+- **FOREIGN/RETIRED** `(unnamed)` `PATCH` `/api/v0/preferences/theme(.:format)` `warp/app/api/v0/preferences/themes#update`
+- **FOREIGN/RETIRED** `warp_app_dashboard` `GET` `/dashboard(.:format)` `warp/app/dashboards#show`
+- **FOREIGN/RETIRED** `warp_app_sign_show` `GET` `/sign(.:format)` `warp/app/sign/entries#show`
+- **FOREIGN/RETIRED** `warp_app_sign_create` `POST` `/sign(.:format)` `warp/app/sign/entries#create`
+- **FOREIGN/RETIRED** `warp_app_sign_interruption` `GET` `/sign/interruption(.:format)` `warp/app/sign/interruptions#show`
+- **FOREIGN/RETIRED** `warp_app_oidc_callback` `GET` `/oidc/callback(.:format)` `warp/app/oidc/callbacks#show`
+- **FOREIGN/RETIRED** `warp_app_oidc_closures` `POST` `/oidc/closures(.:format)` `warp/app/oidc/closures#create`
+- **FOREIGN/RETIRED** `new_warp_app_sign_out` `GET` `/sign/out/new(.:format)` `warp/app/sign/outs#new`
+- **FOREIGN/RETIRED** `edit_warp_app_sign_out` `GET` `/sign/out/edit(.:format)` `warp/app/sign/outs#edit`
+- **FOREIGN/RETIRED** `warp_app_sign_out` `GET` `/sign/out(.:format)` `warp/app/sign/outs#show`
+- **FOREIGN/RETIRED** `(unnamed)` `POST` `/sign/out(.:format)` `warp/app/sign/outs#create`
+- **FOREIGN/RETIRED** `warp_app_sign_out_completion` `GET` `/sign/out/completion(.:format)` `warp/app/sign/outs#show`
+- **FOREIGN/RETIRED** `warp_app_csp_violation_report` `POST` `/csp-violation-report(.:format)` `warp/app/csp_violation_reports#create`
+- **FOREIGN/RETIRED** `warp_app_pwa_service_worker` `GET` `/service-worker(.:format)` `rails/pwa#service_worker`
+- **FOREIGN/RETIRED** `warp_app_pwa_offline` `GET` `/offline(.:format)` `rails/pwa#offline`
+
+#### Warp com — 13 baseline routes
+- **FOREIGN/RETIRED** `warp_com_root` `GET` `/` `warp/com/roots#index`
+- **FOREIGN/RETIRED** `warp_com_revision` `GET` `/revision` `warp/com/revisions#show`
+- **FOREIGN/RETIRED** `warp_com_health` `GET` `/health` `warp/com/healths#show`
+- **FOREIGN/RETIRED** `warp_com_health_liveness` `GET` `/health/liveness` `warp/com/health/livenesses#show`
+- **FOREIGN/RETIRED** `warp_com_health_readiness` `GET` `/health/readiness` `warp/com/health/readinesses#show`
+- **FOREIGN/RETIRED** `warp_com_health_startup` `GET` `/health/startup` `warp/com/health/startups#show`
+- **FOREIGN/RETIRED** `warp_com_api_v0_health` `GET` `/api/v0/health.json` `warp/com/api/v0/healths#show`
+- **FOREIGN/RETIRED** `warp_com_api_v0_revision` `GET` `/api/v0/revision.json` `warp/com/api/v0/revisions#show`
+- **FOREIGN/RETIRED** `warp_com_robots` `GET` `/robots.txt(.:format)` `warp/com/robots#index`
+- **FOREIGN/RETIRED** `warp_com_sitemap` `GET` `/sitemap.xml(.:format)` `warp/com/sitemaps#show`
+- **FOREIGN/RETIRED** `warp_com_csp_violation_report` `POST` `/csp-violation-report(.:format)` `warp/com/csp_violation_reports#create`
+- **FOREIGN/RETIRED** `warp_com_pwa_service_worker` `GET` `/service-worker(.:format)` `rails/pwa#service_worker`
+- **FOREIGN/RETIRED** `warp_com_pwa_offline` `GET` `/offline(.:format)` `rails/pwa#offline`
+
+#### Warp org — 30 baseline routes
+- **FOREIGN/RETIRED** `warp_org_root` `GET` `/` `warp/org/roots#index`
+- **FOREIGN/RETIRED** `warp_org_well_known_jwks` `GET` `/.well-known/jwks.json` `warp/org/well_known/jwks#show`
+- **FOREIGN/RETIRED** `warp_org_revision` `GET` `/revision` `warp/org/revisions#show`
+- **FOREIGN/RETIRED** `warp_org_health` `GET` `/health` `warp/org/healths#show`
+- **FOREIGN/RETIRED** `warp_org_health_liveness` `GET` `/health/liveness` `warp/org/health/livenesses#show`
+- **FOREIGN/RETIRED** `warp_org_health_readiness` `GET` `/health/readiness` `warp/org/health/readinesses#show`
+- **FOREIGN/RETIRED** `warp_org_health_startup` `GET` `/health/startup` `warp/org/health/startups#show`
+- **FOREIGN/RETIRED** `warp_org_api_v0_health` `GET` `/api/v0/health.json` `warp/org/api/v0/healths#show`
+- **FOREIGN/RETIRED** `warp_org_api_v0_revision` `GET` `/api/v0/revision.json` `warp/org/api/v0/revisions#show`
+- **FOREIGN/RETIRED** `warp_org_robots` `GET` `/robots.txt(.:format)` `warp/org/robots#index`
+- **FOREIGN/RETIRED** `warp_org_sitemap` `GET` `/sitemap.xml(.:format)` `warp/org/sitemaps#show`
+- **FOREIGN/RETIRED** `warp_org_settings` `GET` `/settings(.:format)` `warp/org/settings#show`
+- **FOREIGN/RETIRED** `warp_org_api_v0_preferences_cookie` `GET` `/api/v0/preferences/cookie(.:format)` `warp/org/api/v0/preferences/cookies#show`
+- **FOREIGN/RETIRED** `(unnamed)` `PATCH` `/api/v0/preferences/cookie(.:format)` `warp/org/api/v0/preferences/cookies#update`
+- **FOREIGN/RETIRED** `warp_org_api_v0_preferences_theme` `GET` `/api/v0/preferences/theme(.:format)` `warp/org/api/v0/preferences/themes#show`
+- **FOREIGN/RETIRED** `(unnamed)` `PATCH` `/api/v0/preferences/theme(.:format)` `warp/org/api/v0/preferences/themes#update`
+- **FOREIGN/RETIRED** `warp_org_dashboard` `GET` `/dashboard(.:format)` `warp/org/dashboards#show`
+- **FOREIGN/RETIRED** `warp_org_sign_show` `GET` `/sign(.:format)` `warp/org/sign/entries#show`
+- **FOREIGN/RETIRED** `warp_org_sign_create` `POST` `/sign(.:format)` `warp/org/sign/entries#create`
+- **FOREIGN/RETIRED** `warp_org_sign_interruption` `GET` `/sign/interruption(.:format)` `warp/org/sign/interruptions#show`
+- **FOREIGN/RETIRED** `warp_org_oidc_callback` `GET` `/oidc/callback(.:format)` `warp/org/oidc/callbacks#show`
+- **FOREIGN/RETIRED** `warp_org_oidc_closures` `POST` `/oidc/closures(.:format)` `warp/org/oidc/closures#create`
+- **FOREIGN/RETIRED** `new_warp_org_sign_out` `GET` `/sign/out/new(.:format)` `warp/org/sign/outs#new`
+- **FOREIGN/RETIRED** `edit_warp_org_sign_out` `GET` `/sign/out/edit(.:format)` `warp/org/sign/outs#edit`
+- **FOREIGN/RETIRED** `warp_org_sign_out` `GET` `/sign/out(.:format)` `warp/org/sign/outs#show`
+- **FOREIGN/RETIRED** `(unnamed)` `POST` `/sign/out(.:format)` `warp/org/sign/outs#create`
+- **FOREIGN/RETIRED** `warp_org_sign_out_completion` `GET` `/sign/out/completion(.:format)` `warp/org/sign/outs#show`
+- **FOREIGN/RETIRED** `warp_org_csp_violation_report` `POST` `/csp-violation-report(.:format)` `warp/org/csp_violation_reports#create`
+- **FOREIGN/RETIRED** `warp_org_pwa_service_worker` `GET` `/service-worker(.:format)` `rails/pwa#service_worker`
+- **FOREIGN/RETIRED** `warp_org_pwa_offline` `GET` `/offline(.:format)` `rails/pwa#offline`
+
+### Current routes — OWN
+
+Current inventory: 525 routes. Coverband remains configured as an operator tool and contributes 0 Rails routes.
+
+#### Base app — 178 routes
+- **OWN** `base_app_root` `GET` `/` `base/app/roots#index`
+- **OWN** `base_app_welcome` `GET` `/welcome(.:format)` `base/app/welcomes#show`
+- **OWN** `base_app_dashboard_avatar_image` `GET` `/dashboard/avatar_image(.:format)` `base/app/dashboard_avatar_images#show`
+- **OWN** `base_app_dashboard` `GET` `/dashboard(.:format)` `base/app/roots#show`
+- **OWN** `base_app_selector` `GET` `/selector(.:format)` `base/app/selectors#show`
+- **OWN** `(unnamed)` `PATCH` `/selector(.:format)` `base/app/selectors#update`
+- **OWN** `(unnamed)` `PUT` `/selector(.:format)` `base/app/selectors#update`
+- **OWN** `base_app_switcher` `GET` `/switcher(.:format)` `base/app/switchers#show`
+- **OWN** `(unnamed)` `PATCH` `/switcher(.:format)` `base/app/switchers#update`
+- **OWN** `(unnamed)` `PUT` `/switcher(.:format)` `base/app/switchers#update`
+- **OWN** `base_app_billings` `GET` `/billings(.:format)` `base/app/billings#index`
+- **OWN** `base_app_secrets` `GET` `/secrets(.:format)` `base/app/secrets#index`
+- **OWN** `(unnamed)` `POST` `/secrets(.:format)` `base/app/secrets#create`
+- **OWN** `new_base_app_secret` `GET` `/secrets/new(.:format)` `base/app/secrets#new`
+- **OWN** `edit_base_app_secret` `GET` `/secrets/:id/edit(.:format)` `base/app/secrets#edit`
+- **OWN** `base_app_secret` `GET` `/secrets/:id(.:format)` `base/app/secrets#show`
+- **OWN** `(unnamed)` `PATCH` `/secrets/:id(.:format)` `base/app/secrets#update`
+- **OWN** `(unnamed)` `PUT` `/secrets/:id(.:format)` `base/app/secrets#update`
+- **OWN** `(unnamed)` `DELETE` `/secrets/:id(.:format)` `base/app/secrets#destroy`
+- **OWN** `reattempt_base_app_secret_issuance` `POST` `/secret_issuances/:id/reattempt(.:format)` `base/app/secret_issuances#reattempt`
+- **OWN** `base_app_secret_issuance_presentation` `POST` `/secret_issuances/:secret_issuance_id/presentation(.:format)` `base/app/secret_presentations#create`
+- **OWN** `base_app_secret_issuance` `GET` `/secret_issuances/:id(.:format)` `base/app/secret_issuances#show`
+- **OWN** `(unnamed)` `PATCH` `/secret_issuances/:id(.:format)` `base/app/secret_issuances#update`
+- **OWN** `(unnamed)` `PUT` `/secret_issuances/:id(.:format)` `base/app/secret_issuances#update`
+- **OWN** `(unnamed)` `DELETE` `/secret_issuances/:id(.:format)` `base/app/secret_issuances#destroy`
+- **OWN** `base_app_group_avatar_memberships` `POST` `/groups/:group_id/avatar_memberships(.:format)` `base/app/group_avatar_memberships#create`
+- **OWN** `base_app_group_avatar_membership` `PATCH` `/groups/:group_id/avatar_memberships/:id(.:format)` `base/app/group_avatar_memberships#update`
+- **OWN** `(unnamed)` `PUT` `/groups/:group_id/avatar_memberships/:id(.:format)` `base/app/group_avatar_memberships#update`
+- **OWN** `(unnamed)` `DELETE` `/groups/:group_id/avatar_memberships/:id(.:format)` `base/app/group_avatar_memberships#destroy`
+- **OWN** `base_app_groups` `GET` `/groups(.:format)` `base/app/groups#index`
+- **OWN** `(unnamed)` `POST` `/groups(.:format)` `base/app/groups#create`
+- **OWN** `base_app_group` `GET` `/groups/:id(.:format)` `base/app/groups#show`
+- **OWN** `(unnamed)` `PATCH` `/groups/:id(.:format)` `base/app/groups#update`
+- **OWN** `(unnamed)` `PUT` `/groups/:id(.:format)` `base/app/groups#update`
+- **OWN** `(unnamed)` `DELETE` `/groups/:id(.:format)` `base/app/groups#destroy`
+- **OWN** `base_app_accounts` `GET` `/accounts(.:format)` `base/app/accounts#index`
+- **OWN** `base_app_account` `GET` `/accounts/:id(.:format)` `base/app/accounts#show`
+- **OWN** `base_app_organization_memberships` `GET` `/organizations/:organization_id/memberships(.:format)` `base/app/organizations/memberships#index`
+- **OWN** `(unnamed)` `POST` `/organizations/:organization_id/memberships(.:format)` `base/app/organizations/memberships#create`
+- **OWN** `new_base_app_organization_membership` `GET` `/organizations/:organization_id/memberships/new(.:format)` `base/app/organizations/memberships#new`
+- **OWN** `edit_base_app_organization_membership` `GET` `/organizations/:organization_id/memberships/:id/edit(.:format)` `base/app/organizations/memberships#edit`
+- **OWN** `base_app_organization_membership` `GET` `/organizations/:organization_id/memberships/:id(.:format)` `base/app/organizations/memberships#show`
+- **OWN** `(unnamed)` `PATCH` `/organizations/:organization_id/memberships/:id(.:format)` `base/app/organizations/memberships#update`
+- **OWN** `(unnamed)` `PUT` `/organizations/:organization_id/memberships/:id(.:format)` `base/app/organizations/memberships#update`
+- **OWN** `(unnamed)` `DELETE` `/organizations/:organization_id/memberships/:id(.:format)` `base/app/organizations/memberships#destroy`
+- **OWN** `base_app_organizations` `GET` `/organizations(.:format)` `base/app/organizations#index`
+- **OWN** `base_app_organization` `GET` `/organizations/:id(.:format)` `base/app/organizations#show`
+- **OWN** `base_app_preference` `GET` `/preference(.:format)` `base/app/preferences#show`
+- **OWN** `edit_base_app_preference_calendar` `GET` `/preference/calendar/edit(.:format)` `base/app/preference/calendars#edit`
+- **OWN** `base_app_preference_calendar` `PATCH` `/preference/calendar(.:format)` `base/app/preference/calendars#update`
+- **OWN** `(unnamed)` `PUT` `/preference/calendar(.:format)` `base/app/preference/calendars#update`
+- **OWN** `edit_base_app_preference_clock` `GET` `/preference/clock/edit(.:format)` `base/app/preference/clocks#edit`
+- **OWN** `base_app_preference_clock` `PATCH` `/preference/clock(.:format)` `base/app/preference/clocks#update`
+- **OWN** `(unnamed)` `PUT` `/preference/clock(.:format)` `base/app/preference/clocks#update`
+- **OWN** `edit_base_app_preference_cookie` `GET` `/preference/cookie/edit(.:format)` `base/app/preference/cookies#edit`
+- **OWN** `base_app_preference_cookie` `PATCH` `/preference/cookie(.:format)` `base/app/preference/cookies#update`
+- **OWN** `(unnamed)` `PUT` `/preference/cookie(.:format)` `base/app/preference/cookies#update`
+- **OWN** `edit_base_app_preference_currency` `GET` `/preference/currency/edit(.:format)` `base/app/preference/currencies#edit`
+- **OWN** `base_app_preference_currency` `PATCH` `/preference/currency(.:format)` `base/app/preference/currencies#update`
+- **OWN** `(unnamed)` `PUT` `/preference/currency(.:format)` `base/app/preference/currencies#update`
+- **OWN** `edit_base_app_preference_density` `GET` `/preference/density/edit(.:format)` `base/app/preference/densities#edit`
+- **OWN** `base_app_preference_density` `PATCH` `/preference/density(.:format)` `base/app/preference/densities#update`
+- **OWN** `(unnamed)` `PUT` `/preference/density(.:format)` `base/app/preference/densities#update`
+- **OWN** `edit_base_app_preference_email` `GET` `/preference/emails/:id/edit(.:format)` `base/app/preference/emails#edit`
+- **OWN** `base_app_preference_email` `DELETE` `/preference/emails/:id(.:format)` `base/app/preference/emails#destroy`
+- **OWN** `(unnamed)` `POST` `/preference/emails/:id(.:format)` `base/app/preference/emails#create`
+- **OWN** `edit_base_app_preference_language` `GET` `/preference/language/edit(.:format)` `base/app/preference/languages#edit`
+- **OWN** `base_app_preference_language` `PATCH` `/preference/language(.:format)` `base/app/preference/languages#update`
+- **OWN** `(unnamed)` `PUT` `/preference/language(.:format)` `base/app/preference/languages#update`
+- **OWN** `edit_base_app_preference_motion` `GET` `/preference/motion/edit(.:format)` `base/app/preference/motions#edit`
+- **OWN** `base_app_preference_motion` `PATCH` `/preference/motion(.:format)` `base/app/preference/motions#update`
+- **OWN** `(unnamed)` `PUT` `/preference/motion(.:format)` `base/app/preference/motions#update`
+- **OWN** `edit_base_app_preference_notification` `GET` `/preference/notification/edit(.:format)` `base/app/preference/notifications#edit`
+- **OWN** `base_app_preference_notification` `PATCH` `/preference/notification(.:format)` `base/app/preference/notifications#update`
+- **OWN** `(unnamed)` `PUT` `/preference/notification(.:format)` `base/app/preference/notifications#update`
+- **OWN** `edit_base_app_preference_pagination` `GET` `/preference/pagination/edit(.:format)` `base/app/preference/paginations#edit`
+- **OWN** `base_app_preference_pagination` `PATCH` `/preference/pagination(.:format)` `base/app/preference/paginations#update`
+- **OWN** `(unnamed)` `PUT` `/preference/pagination(.:format)` `base/app/preference/paginations#update`
+- **OWN** `edit_base_app_preference_region` `GET` `/preference/region/edit(.:format)` `base/app/preference/regions#edit`
+- **OWN** `base_app_preference_region` `PATCH` `/preference/region(.:format)` `base/app/preference/regions#update`
+- **OWN** `(unnamed)` `PUT` `/preference/region(.:format)` `base/app/preference/regions#update`
+- **OWN** `edit_base_app_preference_customization` `GET` `/preference/customization/edit(.:format)` `base/app/preference/customizations#edit`
+- **OWN** `base_app_preference_customization` `DELETE` `/preference/customization(.:format)` `base/app/preference/customizations#destroy`
+- **OWN** `edit_base_app_preference_screen` `GET` `/preference/screen/edit(.:format)` `base/app/preference/screens#edit`
+- **OWN** `base_app_preference_screen` `PATCH` `/preference/screen(.:format)` `base/app/preference/screens#update`
+- **OWN** `(unnamed)` `PUT` `/preference/screen(.:format)` `base/app/preference/screens#update`
+- **OWN** `edit_base_app_preference_theme` `GET` `/preference/theme/edit(.:format)` `base/app/preference/themes#edit`
+- **OWN** `base_app_preference_theme` `PATCH` `/preference/theme(.:format)` `base/app/preference/themes#update`
+- **OWN** `(unnamed)` `PUT` `/preference/theme(.:format)` `base/app/preference/themes#update`
+- **OWN** `edit_base_app_preference_timezone` `GET` `/preference/timezone/edit(.:format)` `base/app/preference/timezones#edit`
+- **OWN** `base_app_preference_timezone` `PATCH` `/preference/timezone(.:format)` `base/app/preference/timezones#update`
+- **OWN** `(unnamed)` `PUT` `/preference/timezone(.:format)` `base/app/preference/timezones#update`
+- **OWN** `base_app_well_known_jwks` `GET` `/.well-known/jwks.json` `base/app/well_known/jwks#show`
+- **OWN** `base_app_revision` `GET` `/revision` `base/app/revisions#show`
+- **OWN** `base_app_health` `GET` `/health` `base/app/healths#show`
+- **OWN** `base_app_health_liveness` `GET` `/health/liveness` `base/app/health/livenesses#show`
+- **OWN** `base_app_health_readiness` `GET` `/health/readiness` `base/app/health/readinesses#show`
+- **OWN** `base_app_health_startup` `GET` `/health/startup` `base/app/health/startups#show`
+- **OWN** `base_app_api_v0_health` `GET` `/api/v0/health.json` `base/app/api/v0/healths#show`
+- **OWN** `base_app_api_v0_revision` `GET` `/api/v0/revision.json` `base/app/api/v0/revisions#show`
+- **OWN** `base_app_api_v0_identity_standing` `GET` `/api/v0/identity/standing(.:format)` `base/app/api/v0/identity/standings#show`
+- **OWN** `base_app_api_v0_identity_selection` `GET` `/api/v0/identity/selection(.:format)` `base/app/api/v0/identity/selections#show`
+- **OWN** `base_app_api_v0_membership_accounts` `GET` `/api/v0/membership/app/accounts(.:format)` `base/app/api/v0/membership/directory#accounts`
+- **OWN** `base_app_api_v0_membership_account` `GET` `/api/v0/membership/app/accounts/:ref(.:format)` `base/app/api/v0/membership/directory#account`
+- **OWN** `base_app_api_v0_membership_organizations` `GET` `/api/v0/membership/app/organizations(.:format)` `base/app/api/v0/membership/directory#organizations`
+- **OWN** `base_app_api_v0_membership_organization` `GET` `/api/v0/membership/app/organizations/:ref(.:format)` `base/app/api/v0/membership/directory#organization`
+- **OWN** `base_app_api_v0_membership_memberships` `GET` `/api/v0/membership/app/organizations/:organization_ref/memberships(.:format)` `base/app/api/v0/membership/directory#memberships`
+- **OWN** `base_app_api_v0_membership_membership` `GET` `/api/v0/membership/app/organizations/:organization_ref/memberships/:id(.:format)` `base/app/api/v0/membership/directory#membership`
+- **OWN** `base_app_api_v0_membership_membership_authorization` `POST` `/api/v0/membership/app/organizations/:organization_ref/memberships/authorization(.:format)` `base/app/api/v0/membership/directory#authorization`
+- **OWN** `base_app_api_v0_avatar_switcher` `GET` `/api/v0/avatar/app/switcher(.:format)` `base/app/api/v0/avatar/switchers#show`
+- **OWN** `(unnamed)` `PUT` `/api/v0/avatar/app/switcher(.:format)` `base/app/api/v0/avatar/switchers#update`
+- **OWN** `base_app_api_v0_avatar_dashboard_identity` `GET` `/api/v0/avatar/app/dashboard-identity(.:format)` `base/app/api/v0/avatar/dashboard_identities#show`
+- **OWN** `base_app_api_v0_avatar_selected_image` `GET` `/api/v0/avatar/app/selected-image(.:format)` `base/app/api/v0/avatar/selected_images#show`
+- **OWN** `base_app_api_v0_avatar_avatars` `GET` `/api/v0/avatar/app/avatars(.:format)` `base/app/api/v0/avatar/avatars#index`
+- **OWN** `(unnamed)` `POST` `/api/v0/avatar/app/avatars(.:format)` `base/app/api/v0/avatar/avatars#create`
+- **OWN** `base_app_api_v0_avatar_avatar` `GET` `/api/v0/avatar/app/avatars/:avatar_ref(.:format)` `base/app/api/v0/avatar/avatars#show`
+- **OWN** `(unnamed)` `PATCH` `/api/v0/avatar/app/avatars/:avatar_ref(.:format)` `base/app/api/v0/avatar/avatars#update`
+- **OWN** `(unnamed)` `PUT` `/api/v0/avatar/app/avatars/:avatar_ref(.:format)` `base/app/api/v0/avatar/avatars#update`
+- **OWN** `base_app_api_v0_avatar_avatar_social_edge` `POST` `/api/v0/avatar/app/avatars/:avatar_ref/:kind(.:format)` `base/app/api/v0/avatar/social_edges#create {kind: /follows|blocks|mutes/}`
+- **OWN** `base_app_api_v0_avatar` `DELETE` `/api/v0/avatar/app/avatars/:avatar_ref/:kind(.:format)` `base/app/api/v0/avatar/social_edges#destroy {kind: /follows|blocks|mutes/}`
+- **OWN** `base_app_api_v0_avatar_ownership_transfers` `POST` `/api/v0/avatar/app/ownership-transfers(.:format)` `base/app/api/v0/avatar/avatar_ownership_transfers#create`
+- **OWN** `base_app_api_v0_avatar_accept_ownership_transfer` `POST` `/api/v0/avatar/app/ownership-transfers/:ref/accept(.:format)` `base/app/api/v0/avatar/avatar_ownership_transfers#accept`
+- **OWN** `base_app_api_v0_avatar_cancel_ownership_transfer` `POST` `/api/v0/avatar/app/ownership-transfers/:ref/cancel(.:format)` `base/app/api/v0/avatar/avatar_ownership_transfers#cancel`
+- **OWN** `base_app_api_v0_avatar_group_avatar_memberships` `POST` `/api/v0/avatar/app/groups/:group_ref/avatar-memberships(.:format)` `base/app/api/v0/avatar/group_avatar_memberships#create`
+- **OWN** `base_app_api_v0_avatar_group_avatar_membership` `PATCH` `/api/v0/avatar/app/groups/:group_ref/avatar-memberships/:ref(.:format)` `base/app/api/v0/avatar/group_avatar_memberships#update`
+- **OWN** `(unnamed)` `PUT` `/api/v0/avatar/app/groups/:group_ref/avatar-memberships/:ref(.:format)` `base/app/api/v0/avatar/group_avatar_memberships#update`
+- **OWN** `(unnamed)` `DELETE` `/api/v0/avatar/app/groups/:group_ref/avatar-memberships/:ref(.:format)` `base/app/api/v0/avatar/group_avatar_memberships#destroy`
+- **OWN** `base_app_api_v0_avatar_groups` `GET` `/api/v0/avatar/app/groups(.:format)` `base/app/api/v0/avatar/groups#index`
+- **OWN** `(unnamed)` `POST` `/api/v0/avatar/app/groups(.:format)` `base/app/api/v0/avatar/groups#create`
+- **OWN** `base_app_api_v0_avatar_group` `GET` `/api/v0/avatar/app/groups/:ref(.:format)` `base/app/api/v0/avatar/groups#show`
+- **OWN** `(unnamed)` `PATCH` `/api/v0/avatar/app/groups/:ref(.:format)` `base/app/api/v0/avatar/groups#update`
+- **OWN** `(unnamed)` `PUT` `/api/v0/avatar/app/groups/:ref(.:format)` `base/app/api/v0/avatar/groups#update`
+- **OWN** `(unnamed)` `DELETE` `/api/v0/avatar/app/groups/:ref(.:format)` `base/app/api/v0/avatar/groups#destroy`
+- **OWN** `base_app_robots` `GET` `/robots.txt(.:format)` `base/app/robots#index`
+- **OWN** `base_app_sitemap` `GET` `/sitemap.xml(.:format)` `base/app/sitemaps#show`
+- **OWN** `base_app_csp_violation_report` `POST` `/csp-violation-report(.:format)` `base/app/csp_violation_reports#create`
+- **OWN** `base_app_pwa_service_worker` `GET` `/service-worker(.:format)` `rails/pwa#service_worker`
+- **OWN** `base_app_pwa_offline` `GET` `/offline(.:format)` `rails/pwa#offline`
+- **OWN** `base_app_api_v0_preferences_cookie` `GET` `/api/v0/preferences/cookie(.:format)` `base/app/api/v0/preferences/cookies#show`
+- **OWN** `(unnamed)` `PATCH` `/api/v0/preferences/cookie(.:format)` `base/app/api/v0/preferences/cookies#update`
+- **OWN** `base_app_api_v0_preferences_theme` `GET` `/api/v0/preferences/theme(.:format)` `base/app/api/v0/preferences/themes#show`
+- **OWN** `(unnamed)` `PATCH` `/api/v0/preferences/theme(.:format)` `base/app/api/v0/preferences/themes#update`
+- **OWN** `base_app_api_v0_preferences_web_push` `GET` `/api/v0/preferences/web_push(.:format)` `base/app/api/v0/preferences/web_pushes#show`
+- **OWN** `(unnamed)` `PATCH` `/api/v0/preferences/web_push(.:format)` `base/app/api/v0/preferences/web_pushes#update`
+- **OWN** `base_app_verification` `GET` `/verification(.:format)` `base/app/verifications#show`
+- **OWN** `(unnamed)` `POST` `/verification(.:format)` `base/app/verifications#create`
+- **OWN** `base_app_verification_cancellation` `GET` `/verification/cancellation(.:format)` `base/app/verification/cancellations#show`
+- **OWN** `(unnamed)` `POST` `/verification/cancellation(.:format)` `base/app/verification/cancellations#create`
+- **OWN** `base_app_verification_completion` `GET` `/verification/completion(.:format)` `base/app/verification/completions#show`
+- **OWN** `(unnamed)` `POST` `/verification/completion(.:format)` `base/app/verification/completions#create`
+- **OWN** `base_app_verification_setup` `GET` `/verification/setup(.:format)` `base/app/verification/setups#show`
+- **OWN** `(unnamed)` `POST` `/verification/setup(.:format)` `base/app/verification/setups#create`
+- **OWN** `base_app_identity` `GET` `/identity(.:format)` `base/app/identities#show`
+- **OWN** `base_app_sessions` `GET` `/sessions(.:format)` `base/app/identity/sessions#index`
+- **OWN** `base_app_session` `GET` `/sessions/:id(.:format)` `base/app/identity/sessions#show`
+- **OWN** `base_app_identity_standing` `GET` `/identity/standing(.:format)` `base/app/identity/standings#show`
+- **OWN** `base_app_identity_passkeys` `GET` `/identity/passkeys(.:format)` `base/app/identity/passkeys#index`
+- **OWN** `base_app_identity_passkey` `GET` `/identity/passkeys/:id(.:format)` `base/app/identity/passkeys#show`
+- **OWN** `base_app_identity_totps` `GET` `/identity/totps(.:format)` `base/app/identity/totps#index`
+- **OWN** `base_app_identity_totp` `GET` `/identity/totps/:id(.:format)` `base/app/identity/totps#show`
+- **OWN** `base_app_identity_emails` `GET` `/identity/emails(.:format)` `base/app/identity/emails#index`
+- **OWN** `base_app_identity_telephones` `GET` `/identity/telephones(.:format)` `base/app/identity/telephones#index`
+- **OWN** `base_app_identity_birthdate` `GET` `/identity/birthdate(.:format)` `base/app/identity/birthdates#show`
+- **OWN** `base_app_identity_sessions` `GET` `/identity/sessions(.:format)` `base/app/identity/sessions#index`
+- **OWN** `base_app_identity_session` `GET` `/identity/sessions/:id(.:format)` `base/app/identity/sessions#show`
+- **OWN** `base_app_identity_activities` `GET` `/identity/activities(.:format)` `base/app/identity/activities#index`
+- **OWN** `new_base_app_identity_withdrawal` `GET` `/identity/withdrawal/new(.:format)` `base/app/identity/withdrawals#new`
+- **OWN** `edit_base_app_identity_withdrawal` `GET` `/identity/withdrawal/edit(.:format)` `base/app/identity/withdrawals#edit`
+- **OWN** `base_app_identity_withdrawal` `PATCH` `/identity/withdrawal(.:format)` `base/app/identity/withdrawals#update`
+- **OWN** `(unnamed)` `PUT` `/identity/withdrawal(.:format)` `base/app/identity/withdrawals#update`
+- **OWN** `(unnamed)` `DELETE` `/identity/withdrawal(.:format)` `base/app/identity/withdrawals#destroy`
+- **OWN** `(unnamed)` `POST` `/identity/withdrawal(.:format)` `base/app/identity/withdrawals#create`
+- **OWN** `new_base_app_identity_withdrawal_session` `GET` `/identity/withdrawal/session/new(.:format)` `base/app/identity/withdrawal/sessions#new`
+- **OWN** `base_app_identity_withdrawal_session` `DELETE` `/identity/withdrawal/session(.:format)` `base/app/identity/withdrawal/sessions#destroy`
+- **OWN** `(unnamed)` `POST` `/identity/withdrawal/session(.:format)` `base/app/identity/withdrawal/sessions#create`
+- **OWN** `new_base_app_identity_privacy_erasure` `GET` `/identity/privacy/erasure/new(.:format)` `base/app/identity/privacy/erasures#new`
+- **OWN** `base_app_identity_privacy_erasure` `POST` `/identity/privacy/erasure(.:format)` `base/app/identity/privacy/erasures#create`
+- **OWN** `base_app_identity_privacy_erasure_status` `GET` `/identity/privacy/erasure/status(.:format)` `base/app/identity/privacy/erasure/statuses#show`
+
+#### Base com — 61 routes
+- **OWN** `base_com_root` `GET` `/` `base/com/roots#index`
+- **OWN** `base_com_preference` `GET` `/preference(.:format)` `base/com/preferences#show`
+- **OWN** `edit_base_com_preference_calendar` `GET` `/preference/calendar/edit(.:format)` `base/com/preference/calendars#edit`
+- **OWN** `base_com_preference_calendar` `PATCH` `/preference/calendar(.:format)` `base/com/preference/calendars#update`
+- **OWN** `(unnamed)` `PUT` `/preference/calendar(.:format)` `base/com/preference/calendars#update`
+- **OWN** `edit_base_com_preference_clock` `GET` `/preference/clock/edit(.:format)` `base/com/preference/clocks#edit`
+- **OWN** `base_com_preference_clock` `PATCH` `/preference/clock(.:format)` `base/com/preference/clocks#update`
+- **OWN** `(unnamed)` `PUT` `/preference/clock(.:format)` `base/com/preference/clocks#update`
+- **OWN** `edit_base_com_preference_cookie` `GET` `/preference/cookie/edit(.:format)` `base/com/preference/cookies#edit`
+- **OWN** `base_com_preference_cookie` `PATCH` `/preference/cookie(.:format)` `base/com/preference/cookies#update`
+- **OWN** `(unnamed)` `PUT` `/preference/cookie(.:format)` `base/com/preference/cookies#update`
+- **OWN** `edit_base_com_preference_currency` `GET` `/preference/currency/edit(.:format)` `base/com/preference/currencies#edit`
+- **OWN** `base_com_preference_currency` `PATCH` `/preference/currency(.:format)` `base/com/preference/currencies#update`
+- **OWN** `(unnamed)` `PUT` `/preference/currency(.:format)` `base/com/preference/currencies#update`
+- **OWN** `edit_base_com_preference_density` `GET` `/preference/density/edit(.:format)` `base/com/preference/densities#edit`
+- **OWN** `base_com_preference_density` `PATCH` `/preference/density(.:format)` `base/com/preference/densities#update`
+- **OWN** `(unnamed)` `PUT` `/preference/density(.:format)` `base/com/preference/densities#update`
+- **OWN** `edit_base_com_preference_language` `GET` `/preference/language/edit(.:format)` `base/com/preference/languages#edit`
+- **OWN** `base_com_preference_language` `PATCH` `/preference/language(.:format)` `base/com/preference/languages#update`
+- **OWN** `(unnamed)` `PUT` `/preference/language(.:format)` `base/com/preference/languages#update`
+- **OWN** `edit_base_com_preference_motion` `GET` `/preference/motion/edit(.:format)` `base/com/preference/motions#edit`
+- **OWN** `base_com_preference_motion` `PATCH` `/preference/motion(.:format)` `base/com/preference/motions#update`
+- **OWN** `(unnamed)` `PUT` `/preference/motion(.:format)` `base/com/preference/motions#update`
+- **OWN** `edit_base_com_preference_notification` `GET` `/preference/notification/edit(.:format)` `base/com/preference/notifications#edit`
+- **OWN** `base_com_preference_notification` `PATCH` `/preference/notification(.:format)` `base/com/preference/notifications#update`
+- **OWN** `(unnamed)` `PUT` `/preference/notification(.:format)` `base/com/preference/notifications#update`
+- **OWN** `edit_base_com_preference_pagination` `GET` `/preference/pagination/edit(.:format)` `base/com/preference/paginations#edit`
+- **OWN** `base_com_preference_pagination` `PATCH` `/preference/pagination(.:format)` `base/com/preference/paginations#update`
+- **OWN** `(unnamed)` `PUT` `/preference/pagination(.:format)` `base/com/preference/paginations#update`
+- **OWN** `edit_base_com_preference_region` `GET` `/preference/region/edit(.:format)` `base/com/preference/regions#edit`
+- **OWN** `base_com_preference_region` `PATCH` `/preference/region(.:format)` `base/com/preference/regions#update`
+- **OWN** `(unnamed)` `PUT` `/preference/region(.:format)` `base/com/preference/regions#update`
+- **OWN** `edit_base_com_preference_customization` `GET` `/preference/customization/edit(.:format)` `base/com/preference/customizations#edit`
+- **OWN** `base_com_preference_customization` `DELETE` `/preference/customization(.:format)` `base/com/preference/customizations#destroy`
+- **OWN** `edit_base_com_preference_screen` `GET` `/preference/screen/edit(.:format)` `base/com/preference/screens#edit`
+- **OWN** `base_com_preference_screen` `PATCH` `/preference/screen(.:format)` `base/com/preference/screens#update`
+- **OWN** `(unnamed)` `PUT` `/preference/screen(.:format)` `base/com/preference/screens#update`
+- **OWN** `edit_base_com_preference_theme` `GET` `/preference/theme/edit(.:format)` `base/com/preference/themes#edit`
+- **OWN** `base_com_preference_theme` `PATCH` `/preference/theme(.:format)` `base/com/preference/themes#update`
+- **OWN** `(unnamed)` `PUT` `/preference/theme(.:format)` `base/com/preference/themes#update`
+- **OWN** `edit_base_com_preference_timezone` `GET` `/preference/timezone/edit(.:format)` `base/com/preference/timezones#edit`
+- **OWN** `base_com_preference_timezone` `PATCH` `/preference/timezone(.:format)` `base/com/preference/timezones#update`
+- **OWN** `(unnamed)` `PUT` `/preference/timezone(.:format)` `base/com/preference/timezones#update`
+- **OWN** `base_com_revision` `GET` `/revision` `base/com/revisions#show`
+- **OWN** `base_com_health` `GET` `/health` `base/com/healths#show`
+- **OWN** `base_com_health_liveness` `GET` `/health/liveness` `base/com/health/livenesses#show`
+- **OWN** `base_com_health_readiness` `GET` `/health/readiness` `base/com/health/readinesses#show`
+- **OWN** `base_com_health_startup` `GET` `/health/startup` `base/com/health/startups#show`
+- **OWN** `base_com_api_v0_health` `GET` `/api/v0/health.json` `base/com/api/v0/healths#show`
+- **OWN** `base_com_api_v0_revision` `GET` `/api/v0/revision.json` `base/com/api/v0/revisions#show`
+- **OWN** `base_com_api_v0_preferences_cookie` `GET` `/api/v0/preferences/cookie(.:format)` `base/com/api/v0/preferences/cookies#show`
+- **OWN** `(unnamed)` `PATCH` `/api/v0/preferences/cookie(.:format)` `base/com/api/v0/preferences/cookies#update`
+- **OWN** `base_com_api_v0_preferences_theme` `GET` `/api/v0/preferences/theme(.:format)` `base/com/api/v0/preferences/themes#show`
+- **OWN** `(unnamed)` `PATCH` `/api/v0/preferences/theme(.:format)` `base/com/api/v0/preferences/themes#update`
+- **OWN** `base_com_api_v0_preferences_web_push` `GET` `/api/v0/preferences/web_push(.:format)` `base/com/api/v0/preferences/web_pushes#show`
+- **OWN** `(unnamed)` `PATCH` `/api/v0/preferences/web_push(.:format)` `base/com/api/v0/preferences/web_pushes#update`
+- **OWN** `base_com_robots` `GET` `/robots.txt(.:format)` `base/com/robots#index`
+- **OWN** `base_com_sitemap` `GET` `/sitemap.xml(.:format)` `base/com/sitemaps#show`
+- **OWN** `base_com_csp_violation_report` `POST` `/csp-violation-report(.:format)` `base/com/csp_violation_reports#create`
+- **OWN** `base_com_pwa_service_worker` `GET` `/service-worker(.:format)` `rails/pwa#service_worker`
+- **OWN** `base_com_pwa_offline` `GET` `/offline(.:format)` `rails/pwa#offline`
+
+#### Base org — 189 routes
+- **OWN** `base_org_root` `GET` `/` `base/org/roots#index`
+- **OWN** `base_org_welcome` `GET` `/welcome(.:format)` `base/org/welcomes#show`
+- **OWN** `base_org_dashboard_avatar_image` `GET` `/dashboard/avatar_image(.:format)` `base/org/dashboard_avatar_images#show`
+- **OWN** `base_org_dashboard` `GET` `/dashboard(.:format)` `base/org/roots#show`
+- **OWN** `base_org_selector` `GET` `/selector(.:format)` `base/org/selectors#show`
+- **OWN** `(unnamed)` `PATCH` `/selector(.:format)` `base/org/selectors#update`
+- **OWN** `(unnamed)` `PUT` `/selector(.:format)` `base/org/selectors#update`
+- **OWN** `base_org_switcher` `GET` `/switcher(.:format)` `base/org/switchers#show`
+- **OWN** `(unnamed)` `PATCH` `/switcher(.:format)` `base/org/switchers#update`
+- **OWN** `(unnamed)` `PUT` `/switcher(.:format)` `base/org/switchers#update`
+- **OWN** `base_org_preference` `GET` `/preference(.:format)` `base/org/preferences#show`
+- **OWN** `base_org_organization_memberships` `GET` `/organizations/:organization_id/memberships(.:format)` `base/org/organizations/memberships#index`
+- **OWN** `base_org_organization_membership` `GET` `/organizations/:organization_id/memberships/:id(.:format)` `base/org/organizations/memberships#show`
+- **OWN** `base_org_organizations` `GET` `/organizations(.:format)` `base/org/organizations#index`
+- **OWN** `base_org_organization` `GET` `/organizations/:id(.:format)` `base/org/organizations#show`
+- **OWN** `edit_base_org_preference_calendar` `GET` `/preference/calendar/edit(.:format)` `base/org/preference/calendars#edit`
+- **OWN** `base_org_preference_calendar` `PATCH` `/preference/calendar(.:format)` `base/org/preference/calendars#update`
+- **OWN** `(unnamed)` `PUT` `/preference/calendar(.:format)` `base/org/preference/calendars#update`
+- **OWN** `edit_base_org_preference_clock` `GET` `/preference/clock/edit(.:format)` `base/org/preference/clocks#edit`
+- **OWN** `base_org_preference_clock` `PATCH` `/preference/clock(.:format)` `base/org/preference/clocks#update`
+- **OWN** `(unnamed)` `PUT` `/preference/clock(.:format)` `base/org/preference/clocks#update`
+- **OWN** `edit_base_org_preference_cookie` `GET` `/preference/cookie/edit(.:format)` `base/org/preference/cookies#edit`
+- **OWN** `base_org_preference_cookie` `PATCH` `/preference/cookie(.:format)` `base/org/preference/cookies#update`
+- **OWN** `(unnamed)` `PUT` `/preference/cookie(.:format)` `base/org/preference/cookies#update`
+- **OWN** `edit_base_org_preference_currency` `GET` `/preference/currency/edit(.:format)` `base/org/preference/currencies#edit`
+- **OWN** `base_org_preference_currency` `PATCH` `/preference/currency(.:format)` `base/org/preference/currencies#update`
+- **OWN** `(unnamed)` `PUT` `/preference/currency(.:format)` `base/org/preference/currencies#update`
+- **OWN** `edit_base_org_preference_density` `GET` `/preference/density/edit(.:format)` `base/org/preference/densities#edit`
+- **OWN** `base_org_preference_density` `PATCH` `/preference/density(.:format)` `base/org/preference/densities#update`
+- **OWN** `(unnamed)` `PUT` `/preference/density(.:format)` `base/org/preference/densities#update`
+- **OWN** `edit_base_org_preference_email` `GET` `/preference/emails/:id/edit(.:format)` `base/org/preference/emails#edit`
+- **OWN** `base_org_preference_email` `DELETE` `/preference/emails/:id(.:format)` `base/org/preference/emails#destroy`
+- **OWN** `(unnamed)` `POST` `/preference/emails/:id(.:format)` `base/org/preference/emails#create`
+- **OWN** `edit_base_org_preference_language` `GET` `/preference/language/edit(.:format)` `base/org/preference/languages#edit`
+- **OWN** `base_org_preference_language` `PATCH` `/preference/language(.:format)` `base/org/preference/languages#update`
+- **OWN** `(unnamed)` `PUT` `/preference/language(.:format)` `base/org/preference/languages#update`
+- **OWN** `edit_base_org_preference_motion` `GET` `/preference/motion/edit(.:format)` `base/org/preference/motions#edit`
+- **OWN** `base_org_preference_motion` `PATCH` `/preference/motion(.:format)` `base/org/preference/motions#update`
+- **OWN** `(unnamed)` `PUT` `/preference/motion(.:format)` `base/org/preference/motions#update`
+- **OWN** `edit_base_org_preference_notification` `GET` `/preference/notification/edit(.:format)` `base/org/preference/notifications#edit`
+- **OWN** `base_org_preference_notification` `PATCH` `/preference/notification(.:format)` `base/org/preference/notifications#update`
+- **OWN** `(unnamed)` `PUT` `/preference/notification(.:format)` `base/org/preference/notifications#update`
+- **OWN** `edit_base_org_preference_pagination` `GET` `/preference/pagination/edit(.:format)` `base/org/preference/paginations#edit`
+- **OWN** `base_org_preference_pagination` `PATCH` `/preference/pagination(.:format)` `base/org/preference/paginations#update`
+- **OWN** `(unnamed)` `PUT` `/preference/pagination(.:format)` `base/org/preference/paginations#update`
+- **OWN** `edit_base_org_preference_region` `GET` `/preference/region/edit(.:format)` `base/org/preference/regions#edit`
+- **OWN** `base_org_preference_region` `PATCH` `/preference/region(.:format)` `base/org/preference/regions#update`
+- **OWN** `(unnamed)` `PUT` `/preference/region(.:format)` `base/org/preference/regions#update`
+- **OWN** `edit_base_org_preference_customization` `GET` `/preference/customization/edit(.:format)` `base/org/preference/customizations#edit`
+- **OWN** `base_org_preference_customization` `DELETE` `/preference/customization(.:format)` `base/org/preference/customizations#destroy`
+- **OWN** `edit_base_org_preference_screen` `GET` `/preference/screen/edit(.:format)` `base/org/preference/screens#edit`
+- **OWN** `base_org_preference_screen` `PATCH` `/preference/screen(.:format)` `base/org/preference/screens#update`
+- **OWN** `(unnamed)` `PUT` `/preference/screen(.:format)` `base/org/preference/screens#update`
+- **OWN** `edit_base_org_preference_theme` `GET` `/preference/theme/edit(.:format)` `base/org/preference/themes#edit`
+- **OWN** `base_org_preference_theme` `PATCH` `/preference/theme(.:format)` `base/org/preference/themes#update`
+- **OWN** `(unnamed)` `PUT` `/preference/theme(.:format)` `base/org/preference/themes#update`
+- **OWN** `edit_base_org_preference_timezone` `GET` `/preference/timezone/edit(.:format)` `base/org/preference/timezones#edit`
+- **OWN** `base_org_preference_timezone` `PATCH` `/preference/timezone(.:format)` `base/org/preference/timezones#update`
+- **OWN** `(unnamed)` `PUT` `/preference/timezone(.:format)` `base/org/preference/timezones#update`
+- **OWN** `base_org_well_known_jwks` `GET` `/.well-known/jwks.json` `base/org/well_known/jwks#show`
+- **OWN** `base_org_revision` `GET` `/revision` `base/org/revisions#show`
+- **OWN** `base_org_health` `GET` `/health` `base/org/healths#show`
+- **OWN** `base_org_health_liveness` `GET` `/health/liveness` `base/org/health/livenesses#show`
+- **OWN** `base_org_health_readiness` `GET` `/health/readiness` `base/org/health/readinesses#show`
+- **OWN** `base_org_health_startup` `GET` `/health/startup` `base/org/health/startups#show`
+- **OWN** `base_org_api_v0_health` `GET` `/api/v0/health.json` `base/org/api/v0/healths#show`
+- **OWN** `base_org_api_v0_revision` `GET` `/api/v0/revision.json` `base/org/api/v0/revisions#show`
+- **OWN** `base_org_api_v0_identity_standing` `GET` `/api/v0/identity/standing(.:format)` `base/org/api/v0/identity/standings#show`
+- **OWN** `base_org_api_v0_identity_selection` `GET` `/api/v0/identity/selection(.:format)` `base/org/api/v0/identity/selections#show`
+- **OWN** `base_org_api_v0_membership_accounts` `GET` `/api/v0/membership/org/accounts(.:format)` `base/org/api/v0/membership/directory#accounts`
+- **OWN** `base_org_api_v0_membership_account` `GET` `/api/v0/membership/org/accounts/:ref(.:format)` `base/org/api/v0/membership/directory#account`
+- **OWN** `base_org_api_v0_membership_organizations` `GET` `/api/v0/membership/org/organizations(.:format)` `base/org/api/v0/membership/directory#organizations`
+- **OWN** `base_org_api_v0_membership_organization` `GET` `/api/v0/membership/org/organizations/:ref(.:format)` `base/org/api/v0/membership/directory#organization`
+- **OWN** `base_org_api_v0_membership_memberships` `GET` `/api/v0/membership/org/organizations/:organization_ref/memberships(.:format)` `base/org/api/v0/membership/directory#memberships`
+- **OWN** `base_org_api_v0_membership_membership` `GET` `/api/v0/membership/org/organizations/:organization_ref/memberships/:id(.:format)` `base/org/api/v0/membership/directory#membership`
+- **OWN** `base_org_api_v0_membership_membership_authorization` `POST` `/api/v0/membership/org/organizations/:organization_ref/memberships/authorization(.:format)` `base/org/api/v0/membership/directory#authorization`
+- **OWN** `base_org_api_v0_support_areas` `GET` `/api/v0/support(.:format)` `base/org/api/v0/support/areas#index`
+- **OWN** `base_org_api_v0_support_accounts` `GET` `/api/v0/support/:realm/accounts(.:format)` `base/org/api/v0/support/accounts#index {realm: /app/}`
+- **OWN** `base_org_api_v0_support_account` `GET` `/api/v0/support/:realm/accounts/:ref(.:format)` `base/org/api/v0/support/accounts#show {realm: /app/}`
+- **OWN** `base_org_api_v0_support_revocation_screen` `GET` `/api/v0/support/:realm/accounts/:ref/revocation-screen(.:format)` `base/org/api/v0/support/accounts#revocation_screen {realm: /app/}`
+- **OWN** `base_org_api_v0_support_revocations` `POST` `/api/v0/support/:realm/accounts/:ref/revocations(.:format)` `base/org/api/v0/support/accounts#revoke {realm: /app/}`
+- **OWN** `base_org_api_v0_support_revocation` `GET` `/api/v0/support/:realm/accounts/:ref/revocations/:event_uuid(.:format)` `base/org/api/v0/support/accounts#revocation {realm: /app/}`
+- **OWN** `new_base_org_api_v0_support_enforcement_enforcement_case_approval` `GET` `/api/v0/support/:realm/enforcement_cases/:enforcement_case_id/approval/new(.:format)` `base/org/api/v0/support/enforcement_cases/approvals#new {realm: /app|org/}`
+- **OWN** `base_org_api_v0_support_enforcement_enforcement_case_approval` `POST` `/api/v0/support/:realm/enforcement_cases/:enforcement_case_id/approval(.:format)` `base/org/api/v0/support/enforcement_cases/approvals#create {realm: /app|org/}`
+- **OWN** `new_base_org_api_v0_support_enforcement_enforcement_case_release` `GET` `/api/v0/support/:realm/enforcement_cases/:enforcement_case_id/release/new(.:format)` `base/org/api/v0/support/enforcement_cases/releases#new {realm: /app|org/}`
+- **OWN** `base_org_api_v0_support_enforcement_enforcement_case_release` `POST` `/api/v0/support/:realm/enforcement_cases/:enforcement_case_id/release(.:format)` `base/org/api/v0/support/enforcement_cases/releases#create {realm: /app|org/}`
+- **OWN** `new_base_org_api_v0_support_enforcement_enforcement_case_appeal_review` `GET` `/api/v0/support/:realm/enforcement_cases/:enforcement_case_id/appeal_review/new(.:format)` `base/org/api/v0/support/enforcement_cases/appeal_reviews#new {realm: /app|org/}`
+- **OWN** `base_org_api_v0_support_enforcement_enforcement_case_appeal_review` `POST` `/api/v0/support/:realm/enforcement_cases/:enforcement_case_id/appeal_review(.:format)` `base/org/api/v0/support/enforcement_cases/appeal_reviews#create {realm: /app|org/}`
+- **OWN** `base_org_api_v0_support_enforcement_enforcement_cases` `GET` `/api/v0/support/:realm/enforcement_cases(.:format)` `base/org/api/v0/support/enforcement_cases#index {realm: /app|org/}`
+- **OWN** `(unnamed)` `POST` `/api/v0/support/:realm/enforcement_cases(.:format)` `base/org/api/v0/support/enforcement_cases#create {realm: /app|org/}`
+- **OWN** `new_base_org_api_v0_support_enforcement_enforcement_case` `GET` `/api/v0/support/:realm/enforcement_cases/new(.:format)` `base/org/api/v0/support/enforcement_cases#new {realm: /app|org/}`
+- **OWN** `base_org_api_v0_support_enforcement_enforcement_case` `GET` `/api/v0/support/:realm/enforcement_cases/:id(.:format)` `base/org/api/v0/support/enforcement_cases#show {realm: /app|org/}`
+- **OWN** `base_org_api_v0_iam_grants` `GET` `/api/v0/iam/grants(.:format)` `base/org/api/v0/iam/grants#index`
+- **OWN** `base_org_api_v0_iam_grant_screen` `GET` `/api/v0/iam/grant-screen(.:format)` `base/org/api/v0/iam/grants#screen`
+- **OWN** `(unnamed)` `POST` `/api/v0/iam/grants(.:format)` `base/org/api/v0/iam/grants#create`
+- **OWN** `base_org_api_v0_iam_grant` `GET` `/api/v0/iam/grants/:ref(.:format)` `base/org/api/v0/iam/grants#show`
+- **OWN** `base_org_api_v0_iam_grant_revocation` `POST` `/api/v0/iam/grants/:ref/revocation(.:format)` `base/org/api/v0/iam/grants#revoke`
+- **OWN** `base_org_api_v0_avatar_dashboard_identity` `GET` `/api/v0/avatar/org/dashboard-identity(.:format)` `base/org/api/v0/avatar/dashboard_identities#show`
+- **OWN** `base_org_api_v0_avatar_switcher` `GET` `/api/v0/avatar/org/switcher(.:format)` `base/org/api/v0/avatar/switchers#show`
+- **OWN** `(unnamed)` `PUT` `/api/v0/avatar/org/switcher(.:format)` `base/org/api/v0/avatar/switchers#update`
+- **OWN** `base_org_api_v0_avatar_selected_avatar` `GET` `/api/v0/avatar/org/selected-avatar(.:format)` `base/org/api/v0/avatar/selected_avatars#show`
+- **OWN** `(unnamed)` `PATCH` `/api/v0/avatar/org/selected-avatar(.:format)` `base/org/api/v0/avatar/selected_avatars#update`
+- **OWN** `(unnamed)` `DELETE` `/api/v0/avatar/org/selected-avatar(.:format)` `base/org/api/v0/avatar/selected_avatars#destroy`
+- **OWN** `base_org_api_v0_avatar_selected_image` `GET` `/api/v0/avatar/org/selected-image(.:format)` `base/org/api/v0/avatar/selected_images#show`
+- **OWN** `base_org_api_v0_avatar_ownership_transfers` `POST` `/api/v0/avatar/org/ownership-transfers(.:format)` `base/org/api/v0/avatar/avatar_ownership_transfers#create`
+- **OWN** `base_org_api_v0_avatar_accept_ownership_transfer` `POST` `/api/v0/avatar/org/ownership-transfers/:ref/accept(.:format)` `base/org/api/v0/avatar/avatar_ownership_transfers#accept`
+- **OWN** `base_org_api_v0_avatar_cancel_ownership_transfer` `POST` `/api/v0/avatar/org/ownership-transfers/:ref/cancel(.:format)` `base/org/api/v0/avatar/avatar_ownership_transfers#cancel`
+- **OWN** `base_org_api_v0_tech_capability_check` `POST` `/api/v0/tech-capability-checks(.:format)` `base/org/api/v0/tech_capability_checks#create`
+- **OWN** `base_org_robots` `GET` `/robots.txt(.:format)` `base/org/robots#index`
+- **OWN** `base_org_sitemap` `GET` `/sitemap.xml(.:format)` `base/org/sitemaps#show`
+- **OWN** `base_org_csp_violation_report` `POST` `/csp-violation-report(.:format)` `base/org/csp_violation_reports#create`
+- **OWN** `base_org_pwa_service_worker` `GET` `/service-worker(.:format)` `rails/pwa#service_worker`
+- **OWN** `base_org_pwa_offline` `GET` `/offline(.:format)` `rails/pwa#offline`
+- **OWN** `base_org_settings` `GET` `/settings(.:format)` `base/org/settings#show`
+- **OWN** `base_org_accounts` `GET` `/accounts(.:format)` `base/org/accounts#index`
+- **OWN** `base_org_account` `GET` `/accounts/:id(.:format)` `base/org/accounts#show`
+- **OWN** `base_org_iam_index` `GET` `/iam(.:format)` `base/org/iam#index`
+- **OWN** `new_base_org_iam_grant_revocation` `GET` `/iam/grants/:grant_id/revocation/new(.:format)` `base/org/iam/grants/revocations#new`
+- **OWN** `base_org_iam_grant_revocation` `POST` `/iam/grants/:grant_id/revocation(.:format)` `base/org/iam/grants/revocations#create`
+- **OWN** `base_org_iam_grants` `GET` `/iam/grants(.:format)` `base/org/iam/grants#index`
+- **OWN** `(unnamed)` `POST` `/iam/grants(.:format)` `base/org/iam/grants#create`
+- **OWN** `new_base_org_iam_grant` `GET` `/iam/grants/new(.:format)` `base/org/iam/grants#new`
+- **OWN** `base_org_iam_grant` `GET` `/iam/grants/:id(.:format)` `base/org/iam/grants#show`
+- **OWN** `base_org_system_index` `GET` `/system(.:format)` `base/org/system#index`
+- **OWN** `base_org_audit_index` `GET` `/audit(.:format)` `base/org/audit#index`
+- **OWN** `base_org_support_index` `GET` `/support(.:format)` `base/org/support#index`
+- **OWN** `base_org_support_client_revocations` `POST` `/support/clients/:client_id/revocations(.:format)` `base/org/support/clients/revocations#create`
+- **OWN** `new_base_org_support_client_revocation` `GET` `/support/clients/:client_id/revocations/new(.:format)` `base/org/support/clients/revocations#new`
+- **OWN** `base_org_support_client_revocation` `GET` `/support/clients/:client_id/revocations/:id(.:format)` `base/org/support/clients/revocations#show`
+- **OWN** `base_org_support_clients` `GET` `/support/clients(.:format)` `base/org/support/clients#index`
+- **OWN** `base_org_support_client` `GET` `/support/clients/:id(.:format)` `base/org/support/clients#show`
+- **OWN** `new_base_org_support_app_enforcement_case_approval` `GET` `/support/app/enforcement_cases/:enforcement_case_id/approval/new(.:format)` `base/org/support/enforcement_cases/approvals#new {realm: :app}`
+- **OWN** `base_org_support_app_enforcement_case_approval` `POST` `/support/app/enforcement_cases/:enforcement_case_id/approval(.:format)` `base/org/support/enforcement_cases/approvals#create {realm: :app}`
+- **OWN** `new_base_org_support_app_enforcement_case_release` `GET` `/support/app/enforcement_cases/:enforcement_case_id/release/new(.:format)` `base/org/support/enforcement_cases/releases#new {realm: :app}`
+- **OWN** `base_org_support_app_enforcement_case_release` `POST` `/support/app/enforcement_cases/:enforcement_case_id/release(.:format)` `base/org/support/enforcement_cases/releases#create {realm: :app}`
+- **OWN** `new_base_org_support_app_enforcement_case_appeal_review` `GET` `/support/app/enforcement_cases/:enforcement_case_id/appeal_review/new(.:format)` `base/org/support/enforcement_cases/appeal_reviews#new {realm: :app}`
+- **OWN** `base_org_support_app_enforcement_case_appeal_review` `POST` `/support/app/enforcement_cases/:enforcement_case_id/appeal_review(.:format)` `base/org/support/enforcement_cases/appeal_reviews#create {realm: :app}`
+- **OWN** `base_org_support_app_enforcement_cases` `GET` `/support/app/enforcement_cases(.:format)` `base/org/support/enforcement_cases#index {realm: :app}`
+- **OWN** `(unnamed)` `POST` `/support/app/enforcement_cases(.:format)` `base/org/support/enforcement_cases#create {realm: :app}`
+- **OWN** `new_base_org_support_app_enforcement_case` `GET` `/support/app/enforcement_cases/new(.:format)` `base/org/support/enforcement_cases#new {realm: :app}`
+- **OWN** `base_org_support_app_enforcement_case` `GET` `/support/app/enforcement_cases/:id(.:format)` `base/org/support/enforcement_cases#show {realm: :app}`
+- **OWN** `new_base_org_support_org_enforcement_case_approval` `GET` `/support/org/enforcement_cases/:enforcement_case_id/approval/new(.:format)` `base/org/support/enforcement_cases/approvals#new {realm: :org}`
+- **OWN** `base_org_support_org_enforcement_case_approval` `POST` `/support/org/enforcement_cases/:enforcement_case_id/approval(.:format)` `base/org/support/enforcement_cases/approvals#create {realm: :org}`
+- **OWN** `new_base_org_support_org_enforcement_case_release` `GET` `/support/org/enforcement_cases/:enforcement_case_id/release/new(.:format)` `base/org/support/enforcement_cases/releases#new {realm: :org}`
+- **OWN** `base_org_support_org_enforcement_case_release` `POST` `/support/org/enforcement_cases/:enforcement_case_id/release(.:format)` `base/org/support/enforcement_cases/releases#create {realm: :org}`
+- **OWN** `new_base_org_support_org_enforcement_case_appeal_review` `GET` `/support/org/enforcement_cases/:enforcement_case_id/appeal_review/new(.:format)` `base/org/support/enforcement_cases/appeal_reviews#new {realm: :org}`
+- **OWN** `base_org_support_org_enforcement_case_appeal_review` `POST` `/support/org/enforcement_cases/:enforcement_case_id/appeal_review(.:format)` `base/org/support/enforcement_cases/appeal_reviews#create {realm: :org}`
+- **OWN** `base_org_support_org_enforcement_cases` `GET` `/support/org/enforcement_cases(.:format)` `base/org/support/enforcement_cases#index {realm: :org}`
+- **OWN** `(unnamed)` `POST` `/support/org/enforcement_cases(.:format)` `base/org/support/enforcement_cases#create {realm: :org}`
+- **OWN** `new_base_org_support_org_enforcement_case` `GET` `/support/org/enforcement_cases/new(.:format)` `base/org/support/enforcement_cases#new {realm: :org}`
+- **OWN** `base_org_support_org_enforcement_case` `GET` `/support/org/enforcement_cases/:id(.:format)` `base/org/support/enforcement_cases#show {realm: :org}`
+- **OWN** `base_org_billing_index` `GET` `/billing(.:format)` `base/org/billing#index`
+- **OWN** `base_org_api_v0_preferences_cookie` `GET` `/api/v0/preferences/cookie(.:format)` `base/org/api/v0/preferences/cookies#show`
+- **OWN** `(unnamed)` `PATCH` `/api/v0/preferences/cookie(.:format)` `base/org/api/v0/preferences/cookies#update`
+- **OWN** `base_org_api_v0_preferences_theme` `GET` `/api/v0/preferences/theme(.:format)` `base/org/api/v0/preferences/themes#show`
+- **OWN** `(unnamed)` `PATCH` `/api/v0/preferences/theme(.:format)` `base/org/api/v0/preferences/themes#update`
+- **OWN** `base_org_api_v0_preferences_web_push` `GET` `/api/v0/preferences/web_push(.:format)` `base/org/api/v0/preferences/web_pushes#show`
+- **OWN** `(unnamed)` `PATCH` `/api/v0/preferences/web_push(.:format)` `base/org/api/v0/preferences/web_pushes#update`
+- **OWN** `base_org_verification` `GET` `/verification(.:format)` `base/org/verifications#show`
+- **OWN** `(unnamed)` `POST` `/verification(.:format)` `base/org/verifications#create`
+- **OWN** `base_org_verification_cancellation` `GET` `/verification/cancellation(.:format)` `base/org/verification/cancellations#show`
+- **OWN** `(unnamed)` `POST` `/verification/cancellation(.:format)` `base/org/verification/cancellations#create`
+- **OWN** `base_org_verification_completion` `GET` `/verification/completion(.:format)` `base/org/verification/completions#show`
+- **OWN** `(unnamed)` `POST` `/verification/completion(.:format)` `base/org/verification/completions#create`
+- **OWN** `base_org_verification_setup` `GET` `/verification/setup(.:format)` `base/org/verification/setups#show`
+- **OWN** `(unnamed)` `POST` `/verification/setup(.:format)` `base/org/verification/setups#create`
+- **OWN** `base_org_identity` `GET` `/identity(.:format)` `base/org/identities#show`
+- **OWN** `base_org_sessions` `GET` `/sessions(.:format)` `base/org/identity/sessions#index`
+- **OWN** `base_org_session` `GET` `/sessions/:id(.:format)` `base/org/identity/sessions#show`
+- **OWN** `base_org_identity_standing` `GET` `/identity/standing(.:format)` `base/org/identity/standings#show`
+- **OWN** `base_org_identity_passkeys` `GET` `/identity/passkeys(.:format)` `base/org/identity/passkeys#index`
+- **OWN** `base_org_identity_passkey` `GET` `/identity/passkeys/:id(.:format)` `base/org/identity/passkeys#show`
+- **OWN** `base_org_identity_emails` `GET` `/identity/emails(.:format)` `base/org/identity/emails#index`
+- **OWN** `base_org_identity_telephones` `GET` `/identity/telephones(.:format)` `base/org/identity/telephones#index`
+- **OWN** `base_org_identity_birthdate` `GET` `/identity/birthdate(.:format)` `base/org/identity/birthdates#show`
+- **OWN** `base_org_identity_secret_rotation` `POST` `/identity/secrets/:secret_id/rotation(.:format)` `base/org/identity/rotations#create`
+- **OWN** `base_org_identity_secret_removal` `POST` `/identity/secrets/:secret_id/removal(.:format)` `base/org/identity/removals#create`
+- **OWN** `base_org_identity_secrets` `GET` `/identity/secrets(.:format)` `base/org/identity/secret_credentials#index`
+- **OWN** `(unnamed)` `POST` `/identity/secrets(.:format)` `base/org/identity/secret_credentials#create`
+- **OWN** `new_base_org_identity_secret` `GET` `/identity/secrets/new(.:format)` `base/org/identity/secret_credentials#new`
+- **OWN** `edit_base_org_identity_secret` `GET` `/identity/secrets/:id/edit(.:format)` `base/org/identity/secret_credentials#edit`
+- **OWN** `base_org_identity_secret` `GET` `/identity/secrets/:id(.:format)` `base/org/identity/secret_credentials#show`
+- **OWN** `(unnamed)` `PATCH` `/identity/secrets/:id(.:format)` `base/org/identity/secret_credentials#update`
+- **OWN** `(unnamed)` `PUT` `/identity/secrets/:id(.:format)` `base/org/identity/secret_credentials#update`
+- **OWN** `(unnamed)` `DELETE` `/identity/secrets/:id(.:format)` `base/org/identity/secret_credentials#destroy`
+- **OWN** `base_org_identity_sessions` `GET` `/identity/sessions(.:format)` `base/org/identity/sessions#index`
+- **OWN** `base_org_identity_session` `GET` `/identity/sessions/:id(.:format)` `base/org/identity/sessions#show`
+- **OWN** `base_org_identity_activities` `GET` `/identity/activities(.:format)` `base/org/identity/activities#index`
+- **OWN** `base_org_identity_withdrawal` `GET` `/identity/withdrawal(.:format)` `base/org/identity/withdrawals#show`
+
+#### Blazer — 32 routes
+- **OWN** `blazer` `MOUNT` `/` `[mounted app]`
+- **OWN** `run_queries` `POST` `/queries/run(.:format)` `blazer/queries#run`
+- **OWN** `cancel_queries` `POST` `/queries/cancel(.:format)` `blazer/queries#cancel`
+- **OWN** `refresh_query` `POST` `/queries/:id/refresh(.:format)` `blazer/queries#refresh`
+- **OWN** `tables_queries` `GET` `/queries/tables(.:format)` `blazer/queries#tables`
+- **OWN** `schema_queries` `GET` `/queries/schema(.:format)` `blazer/queries#schema`
+- **OWN** `docs_queries` `GET` `/queries/docs(.:format)` `blazer/queries#docs`
+- **OWN** `queries` `GET` `/queries(.:format)` `blazer/queries#index`
+- **OWN** `(unnamed)` `POST` `/queries(.:format)` `blazer/queries#create`
+- **OWN** `new_query` `GET` `/queries/new(.:format)` `blazer/queries#new`
+- **OWN** `edit_query` `GET` `/queries/:id/edit(.:format)` `blazer/queries#edit`
+- **OWN** `query` `GET` `/queries/:id(.:format)` `blazer/queries#show`
+- **OWN** `(unnamed)` `PATCH` `/queries/:id(.:format)` `blazer/queries#update`
+- **OWN** `(unnamed)` `PUT` `/queries/:id(.:format)` `blazer/queries#update`
+- **OWN** `(unnamed)` `DELETE` `/queries/:id(.:format)` `blazer/queries#destroy`
+- **OWN** `run_check` `GET` `/checks/:id/run(.:format)` `blazer/checks#run`
+- **OWN** `checks` `GET` `/checks(.:format)` `blazer/checks#index`
+- **OWN** `(unnamed)` `POST` `/checks(.:format)` `blazer/checks#create`
+- **OWN** `new_check` `GET` `/checks/new(.:format)` `blazer/checks#new`
+- **OWN** `edit_check` `GET` `/checks/:id/edit(.:format)` `blazer/checks#edit`
+- **OWN** `check` `PATCH` `/checks/:id(.:format)` `blazer/checks#update`
+- **OWN** `(unnamed)` `PUT` `/checks/:id(.:format)` `blazer/checks#update`
+- **OWN** `(unnamed)` `DELETE` `/checks/:id(.:format)` `blazer/checks#destroy`
+- **OWN** `refresh_dashboard` `POST` `/dashboards/:id/refresh(.:format)` `blazer/dashboards#refresh`
+- **OWN** `dashboards` `POST` `/dashboards(.:format)` `blazer/dashboards#create`
+- **OWN** `new_dashboard` `GET` `/dashboards/new(.:format)` `blazer/dashboards#new`
+- **OWN** `edit_dashboard` `GET` `/dashboards/:id/edit(.:format)` `blazer/dashboards#edit`
+- **OWN** `dashboard` `GET` `/dashboards/:id(.:format)` `blazer/dashboards#show`
+- **OWN** `(unnamed)` `PATCH` `/dashboards/:id(.:format)` `blazer/dashboards#update`
+- **OWN** `(unnamed)` `PUT` `/dashboards/:id(.:format)` `blazer/dashboards#update`
+- **OWN** `(unnamed)` `DELETE` `/dashboards/:id(.:format)` `blazer/dashboards#destroy`
+- **OWN** `root` `GET` `/` `blazer/queries#home`
+
+#### Flipper — 1 routes
+- **OWN** `flipper` `MOUNT` `/` `[mounted app]`
+
+#### Mission Control Jobs — 25 routes
+- **OWN** `mission_control_jobs` `MOUNT` `/` `[mounted app]`
+- **OWN** `application_queue_pause` `DELETE` `/applications/:application_id/queues/:queue_id/pause(.:format)` `mission_control/jobs/queues/pauses#destroy`
+- **OWN** `(unnamed)` `POST` `/applications/:application_id/queues/:queue_id/pause(.:format)` `mission_control/jobs/queues/pauses#create`
+- **OWN** `application_queues` `GET` `/applications/:application_id/queues(.:format)` `mission_control/jobs/queues#index`
+- **OWN** `application_queue` `GET` `/applications/:application_id/queues/:id(.:format)` `mission_control/jobs/queues#show`
+- **OWN** `application_job_retry` `POST` `/applications/:application_id/jobs/:job_id/retry(.:format)` `mission_control/jobs/retries#create`
+- **OWN** `application_job_discard` `POST` `/applications/:application_id/jobs/:job_id/discard(.:format)` `mission_control/jobs/discards#create`
+- **OWN** `application_job_dispatch` `POST` `/applications/:application_id/jobs/:job_id/dispatch(.:format)` `mission_control/jobs/dispatches#create`
+- **OWN** `application_bulk_retries` `POST` `/applications/:application_id/jobs/bulk_retries(.:format)` `mission_control/jobs/bulk_retries#create`
+- **OWN** `application_bulk_discards` `POST` `/applications/:application_id/jobs/bulk_discards(.:format)` `mission_control/jobs/bulk_discards#create`
+- **OWN** `application_job` `GET` `/applications/:application_id/jobs/:id(.:format)` `mission_control/jobs/jobs#show`
+- **OWN** `application_jobs` `GET` `/applications/:application_id/:status/jobs(.:format)` `mission_control/jobs/jobs#index`
+- **OWN** `application_workers` `GET` `/applications/:application_id/workers(.:format)` `mission_control/jobs/workers#index`
+- **OWN** `application_worker` `GET` `/applications/:application_id/workers/:id(.:format)` `mission_control/jobs/workers#show`
+- **OWN** `application_recurring_tasks` `GET` `/applications/:application_id/recurring_tasks(.:format)` `mission_control/jobs/recurring_tasks#index`
+- **OWN** `application_recurring_task` `GET` `/applications/:application_id/recurring_tasks/:id(.:format)` `mission_control/jobs/recurring_tasks#show`
+- **OWN** `(unnamed)` `PATCH` `/applications/:application_id/recurring_tasks/:id(.:format)` `mission_control/jobs/recurring_tasks#update`
+- **OWN** `(unnamed)` `PUT` `/applications/:application_id/recurring_tasks/:id(.:format)` `mission_control/jobs/recurring_tasks#update`
+- **OWN** `application_batches` `GET` `/applications/:application_id/batches(.:format)` `mission_control/jobs/batches#index`
+- **OWN** `application_batch` `GET` `/applications/:application_id/batches/:id(.:format)` `mission_control/jobs/batches#show`
+- **OWN** `queues` `GET` `/queues(.:format)` `mission_control/jobs/queues#index`
+- **OWN** `queue` `GET` `/queues/:id(.:format)` `mission_control/jobs/queues#show`
+- **OWN** `job` `GET` `/jobs/:id(.:format)` `mission_control/jobs/jobs#show`
+- **OWN** `jobs` `GET` `/:status/jobs(.:format)` `mission_control/jobs/jobs#index`
+- **OWN** `root` `GET` `/` `mission_control/jobs/queues#index`
+
+#### PgHero — 26 routes
+- **OWN** `pghero` `MOUNT` `/` `[mounted app]`
+- **OWN** `space` `GET` `(/:database)/space(.:format)` `pg_hero/home#space`
+- **OWN** `relation_space` `GET` `(/:database)/space/:relation(.:format)` `pg_hero/home#relation_space`
+- **OWN** `index_bloat` `GET` `(/:database)/index_bloat(.:format)` `pg_hero/home#index_bloat`
+- **OWN** `live_queries` `GET` `(/:database)/live_queries(.:format)` `pg_hero/home#live_queries`
+- **OWN** `queries` `GET` `(/:database)/queries(.:format)` `pg_hero/home#queries`
+- **OWN** `show_query` `GET` `(/:database)/queries/:query_hash(.:format)` `pg_hero/home#show_query`
+- **OWN** `system` `GET` `(/:database)/system(.:format)` `pg_hero/home#system`
+- **OWN** `cpu_usage` `GET` `(/:database)/cpu_usage(.:format)` `pg_hero/home#cpu_usage`
+- **OWN** `connection_stats` `GET` `(/:database)/connection_stats(.:format)` `pg_hero/home#connection_stats`
+- **OWN** `replication_lag_stats` `GET` `(/:database)/replication_lag_stats(.:format)` `pg_hero/home#replication_lag_stats`
+- **OWN** `load_stats` `GET` `(/:database)/load_stats(.:format)` `pg_hero/home#load_stats`
+- **OWN** `free_space_stats` `GET` `(/:database)/free_space_stats(.:format)` `pg_hero/home#free_space_stats`
+- **OWN** `explain` `GET` `(/:database)/explain(.:format)` `pg_hero/home#explain`
+- **OWN** `tune` `GET` `(/:database)/tune(.:format)` `pg_hero/home#tune`
+- **OWN** `connections` `GET` `(/:database)/connections(.:format)` `pg_hero/home#connections`
+- **OWN** `maintenance` `GET` `(/:database)/maintenance(.:format)` `pg_hero/home#maintenance`
+- **OWN** `kill` `POST` `(/:database)/kill(.:format)` `pg_hero/home#kill`
+- **OWN** `kill_long_running_queries` `POST` `(/:database)/kill_long_running_queries(.:format)` `pg_hero/home#kill_long_running_queries`
+- **OWN** `kill_all` `POST` `(/:database)/kill_all(.:format)` `pg_hero/home#kill_all`
+- **OWN** `enable_query_stats` `POST` `(/:database)/enable_query_stats(.:format)` `pg_hero/home#enable_query_stats`
+- **OWN** `(unnamed)` `POST` `(/:database)/explain(.:format)` `pg_hero/home#explain`
+- **OWN** `reset_query_stats` `POST` `(/:database)/reset_query_stats(.:format)` `pg_hero/home#reset_query_stats`
+- **OWN** `system_stats` `GET` `(/:database)/system_stats(.:format)` `redirect(301, system)`
+- **OWN** `query_stats` `GET` `(/:database)/query_stats(.:format)` `redirect(301, queries)`
+- **OWN** `root` `GET` `/(:database)(.:format)` `pg_hero/home#index`
+
+#### Swagger — 2 routes
+- **OWN** `rswag_api` `MOUNT` `/openapi` `[mounted app]`
+- **OWN** `rswag_ui` `MOUNT` `/` `[mounted app]`
+
+#### Tech org — 10 routes
+- **OWN** `tech_org_root` `GET` `/` `tech/org/roots#index`
+- **OWN** `tech_org_dashboard` `GET` `/dashboard(.:format)` `tech/org/dashboards#show`
+- **OWN** `tech_org_revision` `GET` `/revision` `tech/org/revisions#show`
+- **OWN** `tech_org_health` `GET` `/health` `tech/org/healths#show`
+- **OWN** `tech_org_health_liveness` `GET` `/health/liveness` `tech/org/health/livenesses#show`
+- **OWN** `tech_org_health_readiness` `GET` `/health/readiness` `tech/org/health/readinesses#show`
+- **OWN** `tech_org_health_startup` `GET` `/health/startup` `tech/org/health/startups#show`
+- **OWN** `tech_org_csp_violation_report` `POST` `/csp-violation-report(.:format)` `tech/org/csp_violation_reports#create`
+- **OWN** `tech_org_api_v0_health` `GET` `/api/v0/health.json` `tech/org/api/v0/healths#show`
+- **OWN** `tech_org_api_v0_revision` `GET` `/api/v0/revision.json` `tech/org/api/v0/revisions#show`
+
+#### Unknown-host fallback — 1 routes
+- **OWN** `(unnamed)` `GET` `/` `unknown_hosts#show`
+
+#### Coverband — 0 routes
+
+## Controller namespace inventory
+
+### Current namespaces — OWN (51)
+
+- **OWN** `ApplicationController`
+- **OWN** `Base`
+- **OWN** `Base::App`
+- **OWN** `Base::App::Api`
+- **OWN** `Base::App::Api::V0`
+- **OWN** `Base::App::Api::V0::Avatar`
+- **OWN** `Base::App::Api::V0::Identity`
+- **OWN** `Base::App::Api::V0::Membership`
+- **OWN** `Base::App::Api::V0::Preferences`
+- **OWN** `Base::App::Health`
+- **OWN** `Base::App::Identity`
+- **OWN** `Base::App::Identity::Privacy`
+- **OWN** `Base::App::Identity::Privacy::Erasure`
+- **OWN** `Base::App::Identity::Withdrawal`
+- **OWN** `Base::App::Organizations`
+- **OWN** `Base::App::Preference`
+- **OWN** `Base::App::Verification`
+- **OWN** `Base::App::WellKnown`
+- **OWN** `Base::Com`
+- **OWN** `Base::Com::Api`
+- **OWN** `Base::Com::Api::V0`
+- **OWN** `Base::Com::Api::V0::Preferences`
+- **OWN** `Base::Com::Health`
+- **OWN** `Base::Com::Preference`
+- **OWN** `Base::Org`
+- **OWN** `Base::Org::Api`
+- **OWN** `Base::Org::Api::V0`
+- **OWN** `Base::Org::Api::V0::Avatar`
+- **OWN** `Base::Org::Api::V0::Iam`
+- **OWN** `Base::Org::Api::V0::Identity`
+- **OWN** `Base::Org::Api::V0::Membership`
+- **OWN** `Base::Org::Api::V0::Preferences`
+- **OWN** `Base::Org::Api::V0::Support`
+- **OWN** `Base::Org::Api::V0::Support::EnforcementCases`
+- **OWN** `Base::Org::Health`
+- **OWN** `Base::Org::Iam`
+- **OWN** `Base::Org::Iam::Grants`
+- **OWN** `Base::Org::Identity`
+- **OWN** `Base::Org::Organizations`
+- **OWN** `Base::Org::Preference`
+- **OWN** `Base::Org::Support`
+- **OWN** `Base::Org::Support::Clients`
+- **OWN** `Base::Org::Support::EnforcementCases`
+- **OWN** `Base::Org::Verification`
+- **OWN** `Base::Org::WellKnown`
+- **OWN** `Tech`
+- **OWN** `Tech::Org`
+- **OWN** `Tech::Org::Api`
+- **OWN** `Tech::Org::Api::V0`
+- **OWN** `Tech::Org::Health`
+- **OWN** `UnknownHostsController`
+
+### Removed namespaces
+
+- **FOREIGN/RETIRED** `Auth`
+- **FOREIGN/RETIRED** `Auth::App`
+- **FOREIGN/RETIRED** `Auth::App::Api`
+- **FOREIGN/RETIRED** `Auth::App::Api::V0`
+- **FOREIGN/RETIRED** `Auth::App::Api::V0::Preferences`
+- **FOREIGN/RETIRED** `Auth::App::Apple`
+- **FOREIGN/RETIRED** `Auth::App::Health`
+- **FOREIGN/RETIRED** `Auth::App::Omniauth`
+- **FOREIGN/RETIRED** `Auth::App::Settings`
+- **FOREIGN/RETIRED** `Auth::App::Settings::Totps`
+- **FOREIGN/RETIRED** `Auth::App::Sign`
+- **FOREIGN/RETIRED** `Auth::App::Sign::In`
+- **FOREIGN/RETIRED** `Auth::App::Sign::In::Challenge`
+- **FOREIGN/RETIRED** `Auth::App::Sign::In::Passkey`
+- **FOREIGN/RETIRED** `Auth::App::Sign::Up`
+- **FOREIGN/RETIRED** `Auth::App::Sign::Up::Check`
+- **FOREIGN/RETIRED** `Auth::App::Sign::Up::Check::Apple`
+- **FOREIGN/RETIRED** `Auth::App::Sign::Up::Check::Email`
+- **FOREIGN/RETIRED** `Auth::App::Sign::Up::Check::Google`
+- **FOREIGN/RETIRED** `Auth::App::Sign::Up::Check::Telephone`
+- **FOREIGN/RETIRED** `Auth::App::Sign::Up::Guard`
+- **FOREIGN/RETIRED** `Auth::App::Social`
+- **FOREIGN/RETIRED** `Auth::App::Verification`
+- **FOREIGN/RETIRED** `Auth::App::Verification::Registration`
+- **FOREIGN/RETIRED** `Auth::App::Web`
+- **FOREIGN/RETIRED** `Auth::App::Web::V0`
+- **FOREIGN/RETIRED** `Auth::App::Web::V0::In`
+- **FOREIGN/RETIRED** `Auth::App::Web::V0::In::Email`
+- **FOREIGN/RETIRED** `Auth::App::WellKnown`
+- **FOREIGN/RETIRED** `Auth::Org`
+- **FOREIGN/RETIRED** `Auth::Org::Api`
+- **FOREIGN/RETIRED** `Auth::Org::Api::V0`
+- **FOREIGN/RETIRED** `Auth::Org::Api::V0::Preferences`
+- **FOREIGN/RETIRED** `Auth::Org::Health`
+- **FOREIGN/RETIRED** `Auth::Org::Omniauth`
+- **FOREIGN/RETIRED** `Auth::Org::Sign`
+- **FOREIGN/RETIRED** `Auth::Org::Sign::In`
+- **FOREIGN/RETIRED** `Auth::Org::Sign::In::Emergency`
+- **FOREIGN/RETIRED** `Auth::Org::Sign::In::Emergency::Passkey`
+- **FOREIGN/RETIRED** `Auth::Org::Sign::In::Passkey`
+- **FOREIGN/RETIRED** `Auth::Org::Sign::Up`
+- **FOREIGN/RETIRED** `Auth::Org::Social`
+- **FOREIGN/RETIRED** `Auth::Org::Verification`
+- **FOREIGN/RETIRED** `Auth::Org::Verification::Registration`
+- **FOREIGN/RETIRED** `Auth::Org::WellKnown`
+- **RETIRED** `Base::App::Avatars`
+- **RETIRED** `Base::App::Identity::Emails`
+- **RETIRED** `Base::App::Identity::Mfa`
+- **RETIRED** `Base::App::Identity::Recovery`
+- **RETIRED** `Base::App::Identity::Revocations`
+- **RETIRED** `Base::App::Identity::Telephones`
+- **RETIRED** `Base::App::Oidc`
+- **RETIRED** `Base::App::Sign`
+- **RETIRED** `Base::App::Social`
+- **RETIRED** `Base::App::Social::Authentication`
+- **RETIRED** `Base::App::Verification::Oidc`
+- **RETIRED** `Base::Dev`
+- **RETIRED** `Base::Dev::Api`
+- **RETIRED** `Base::Dev::Api::V0`
+- **RETIRED** `Base::Dev::Health`
+- **RETIRED** `Base::Net`
+- **RETIRED** `Base::Net::Api`
+- **RETIRED** `Base::Net::Api::V0`
+- **RETIRED** `Base::Net::Health`
+- **RETIRED** `Base::Org::Api::V0::Publishing`
+- **RETIRED** `Base::Org::Identity::Emails`
+- **RETIRED** `Base::Org::Identity::Mfa`
+- **RETIRED** `Base::Org::Identity::Revocations`
+- **RETIRED** `Base::Org::Identity::Telephones`
+- **RETIRED** `Base::Org::Oidc`
+- **RETIRED** `Base::Org::Sign`
+- **RETIRED** `Base::Org::Verification::Oidc`
+- **FOREIGN/RETIRED** `Core`
+- **FOREIGN/RETIRED** `Core::App`
+- **FOREIGN/RETIRED** `Core::App::Api`
+- **FOREIGN/RETIRED** `Core::App::Api::V0`
+- **FOREIGN/RETIRED** `Core::App::Api::V0::Preferences`
+- **FOREIGN/RETIRED** `Core::App::Api::V0::Token`
+- **FOREIGN/RETIRED** `Core::App::Health`
+- **FOREIGN/RETIRED** `Core::App::Oidc`
+- **FOREIGN/RETIRED** `Core::App::Sign`
+- **FOREIGN/RETIRED** `Core::App::WellKnown`
+- **FOREIGN/RETIRED** `Core::Dev`
+- **FOREIGN/RETIRED** `Core::Dev::Api`
+- **FOREIGN/RETIRED** `Core::Dev::Api::V0`
+- **FOREIGN/RETIRED** `Core::Dev::Health`
+- **FOREIGN/RETIRED** `Core::Net`
+- **FOREIGN/RETIRED** `Core::Net::Api`
+- **FOREIGN/RETIRED** `Core::Net::Api::V0`
+- **FOREIGN/RETIRED** `Core::Net::Health`
+- **FOREIGN/RETIRED** `Core::Org`
+- **FOREIGN/RETIRED** `Core::Org::Api`
+- **FOREIGN/RETIRED** `Core::Org::Api::V0`
+- **FOREIGN/RETIRED** `Core::Org::Api::V0::Preferences`
+- **FOREIGN/RETIRED** `Core::Org::Api::V0::Token`
+- **FOREIGN/RETIRED** `Core::Org::Health`
+- **FOREIGN/RETIRED** `Core::Org::Oidc`
+- **FOREIGN/RETIRED** `Core::Org::Sign`
+- **FOREIGN/RETIRED** `Core::Org::WellKnown`
+- **FOREIGN/RETIRED** `Docs`
+- **FOREIGN/RETIRED** `Docs::App`
+- **FOREIGN/RETIRED** `Docs::App::Api`
+- **FOREIGN/RETIRED** `Docs::App::Api::V0`
+- **FOREIGN/RETIRED** `Docs::App::Health`
+- **FOREIGN/RETIRED** `Docs::Com`
+- **FOREIGN/RETIRED** `Docs::Com::Api`
+- **FOREIGN/RETIRED** `Docs::Com::Api::V0`
+- **FOREIGN/RETIRED** `Docs::Com::Health`
+- **FOREIGN/RETIRED** `Docs::Org`
+- **FOREIGN/RETIRED** `Docs::Org::Api`
+- **FOREIGN/RETIRED** `Docs::Org::Api::V0`
+- **FOREIGN/RETIRED** `Docs::Org::Health`
+- **FOREIGN/RETIRED** `Edit`
+- **FOREIGN/RETIRED** `Edit::Org`
+- **FOREIGN/RETIRED** `Edit::Org::Api`
+- **FOREIGN/RETIRED** `Edit::Org::Api::V0`
+- **FOREIGN/RETIRED** `Edit::Org::Health`
+- **FOREIGN/RETIRED** `Edit::Org::Oidc`
+- **FOREIGN/RETIRED** `Edit::Org::Publishing`
+- **FOREIGN/RETIRED** `Edit::Org::Publishing::Docs`
+- **FOREIGN/RETIRED** `Edit::Org::Publishing::Docs::App`
+- **FOREIGN/RETIRED** `Edit::Org::Publishing::Docs::App::Entries`
+- **FOREIGN/RETIRED** `Edit::Org::Publishing::Docs::Com`
+- **FOREIGN/RETIRED** `Edit::Org::Publishing::Docs::Com::Entries`
+- **FOREIGN/RETIRED** `Edit::Org::Publishing::Docs::Org`
+- **FOREIGN/RETIRED** `Edit::Org::Publishing::Docs::Org::Entries`
+- **FOREIGN/RETIRED** `Edit::Org::Publishing::Help`
+- **FOREIGN/RETIRED** `Edit::Org::Publishing::Help::App`
+- **FOREIGN/RETIRED** `Edit::Org::Publishing::Help::App::Entries`
+- **FOREIGN/RETIRED** `Edit::Org::Publishing::Help::Com`
+- **FOREIGN/RETIRED** `Edit::Org::Publishing::Help::Com::Entries`
+- **FOREIGN/RETIRED** `Edit::Org::Publishing::Help::Org`
+- **FOREIGN/RETIRED** `Edit::Org::Publishing::Help::Org::Entries`
+- **FOREIGN/RETIRED** `Edit::Org::Publishing::Info`
+- **FOREIGN/RETIRED** `Edit::Org::Publishing::Info::App`
+- **FOREIGN/RETIRED** `Edit::Org::Publishing::Info::App::Entries`
+- **FOREIGN/RETIRED** `Edit::Org::Publishing::Info::Com`
+- **FOREIGN/RETIRED** `Edit::Org::Publishing::Info::Com::Entries`
+- **FOREIGN/RETIRED** `Edit::Org::Publishing::Info::Org`
+- **FOREIGN/RETIRED** `Edit::Org::Publishing::Info::Org::Entries`
+- **FOREIGN/RETIRED** `Edit::Org::Publishing::News`
+- **FOREIGN/RETIRED** `Edit::Org::Publishing::News::App`
+- **FOREIGN/RETIRED** `Edit::Org::Publishing::News::App::Entries`
+- **FOREIGN/RETIRED** `Edit::Org::Publishing::News::Com`
+- **FOREIGN/RETIRED** `Edit::Org::Publishing::News::Com::Entries`
+- **FOREIGN/RETIRED** `Edit::Org::Publishing::News::Org`
+- **FOREIGN/RETIRED** `Edit::Org::Publishing::News::Org::Entries`
+- **FOREIGN/RETIRED** `Edit::Org::Sign`
+- **FOREIGN/RETIRED** `Guid`
+- **FOREIGN/RETIRED** `Guid::Net`
+- **FOREIGN/RETIRED** `Guid::Net::Api`
+- **FOREIGN/RETIRED** `Guid::Net::Api::V0`
+- **FOREIGN/RETIRED** `Guid::Net::Health`
+- **FOREIGN/RETIRED** `Help`
+- **FOREIGN/RETIRED** `Help::App`
+- **FOREIGN/RETIRED** `Help::App::Api`
+- **FOREIGN/RETIRED** `Help::App::Api::V0`
+- **FOREIGN/RETIRED** `Help::App::Health`
+- **FOREIGN/RETIRED** `Help::Com`
+- **FOREIGN/RETIRED** `Help::Com::Api`
+- **FOREIGN/RETIRED** `Help::Com::Api::V0`
+- **FOREIGN/RETIRED** `Help::Com::Health`
+- **FOREIGN/RETIRED** `Help::Org`
+- **FOREIGN/RETIRED** `Help::Org::Api`
+- **FOREIGN/RETIRED** `Help::Org::Api::V0`
+- **FOREIGN/RETIRED** `Help::Org::Health`
+- **FOREIGN/RETIRED** `Info`
+- **FOREIGN/RETIRED** `Info::App`
+- **FOREIGN/RETIRED** `Info::App::Api`
+- **FOREIGN/RETIRED** `Info::App::Api::V0`
+- **FOREIGN/RETIRED** `Info::App::Health`
+- **FOREIGN/RETIRED** `Info::Com`
+- **FOREIGN/RETIRED** `Info::Com::Api`
+- **FOREIGN/RETIRED** `Info::Com::Api::V0`
+- **FOREIGN/RETIRED** `Info::Com::Health`
+- **FOREIGN/RETIRED** `Info::Org`
+- **FOREIGN/RETIRED** `Info::Org::Api`
+- **FOREIGN/RETIRED** `Info::Org::Api::V0`
+- **FOREIGN/RETIRED** `Info::Org::Health`
+- **FOREIGN/RETIRED** `News`
+- **FOREIGN/RETIRED** `News::App`
+- **FOREIGN/RETIRED** `News::App::Api`
+- **FOREIGN/RETIRED** `News::App::Api::V0`
+- **FOREIGN/RETIRED** `News::App::Health`
+- **FOREIGN/RETIRED** `News::Com`
+- **FOREIGN/RETIRED** `News::Com::Api`
+- **FOREIGN/RETIRED** `News::Com::Api::V0`
+- **FOREIGN/RETIRED** `News::Com::Health`
+- **FOREIGN/RETIRED** `News::Org`
+- **FOREIGN/RETIRED** `News::Org::Api`
+- **FOREIGN/RETIRED** `News::Org::Api::V0`
+- **FOREIGN/RETIRED** `News::Org::Health`
+- **FOREIGN/RETIRED** `Palm`
+- **FOREIGN/RETIRED** `Palm::App`
+- **FOREIGN/RETIRED** `Palm::App::Api`
+- **FOREIGN/RETIRED** `Palm::App::Api::V0`
+- **FOREIGN/RETIRED** `Palm::App::Health`
+- **FOREIGN/RETIRED** `Palm::App::Oidc`
+- **FOREIGN/RETIRED** `Palm::App::Sign`
+- **FOREIGN/RETIRED** `Palm::App::Sign::Out`
+- **FOREIGN/RETIRED** `Palm::App::WellKnown`
+- **RETIRED** `Tech::Org::Oidc`
+- **RETIRED** `Tech::Org::Sign`
+- **RETIRED** `Tech::Org::Sign::Out`
+- **FOREIGN/RETIRED** `Visa`
+- **FOREIGN/RETIRED** `Visa::App`
+- **FOREIGN/RETIRED** `Visa::App::Api`
+- **FOREIGN/RETIRED** `Visa::App::Api::V0`
+- **FOREIGN/RETIRED** `Visa::App::Edge`
+- **FOREIGN/RETIRED** `Visa::App::Edge::V0`
+- **FOREIGN/RETIRED** `Visa::App::Edge::V0::Token`
+- **FOREIGN/RETIRED** `Visa::App::Health`
+- **FOREIGN/RETIRED** `Visa::App::Oauth`
+- **FOREIGN/RETIRED** `Visa::App::Oidc`
+- **FOREIGN/RETIRED** `Visa::App::Oidc::Logouts`
+- **FOREIGN/RETIRED** `Visa::App::Sign`
+- **FOREIGN/RETIRED** `Visa::App::Sign::In`
+- **FOREIGN/RETIRED** `Visa::App::WellKnown`
+- **FOREIGN/RETIRED** `Visa::Org`
+- **FOREIGN/RETIRED** `Visa::Org::Api`
+- **FOREIGN/RETIRED** `Visa::Org::Api::V0`
+- **FOREIGN/RETIRED** `Visa::Org::Edge`
+- **FOREIGN/RETIRED** `Visa::Org::Edge::V0`
+- **FOREIGN/RETIRED** `Visa::Org::Edge::V0::Token`
+- **FOREIGN/RETIRED** `Visa::Org::Health`
+- **FOREIGN/RETIRED** `Visa::Org::Oauth`
+- **FOREIGN/RETIRED** `Visa::Org::Oidc`
+- **FOREIGN/RETIRED** `Visa::Org::Oidc::Logouts`
+- **FOREIGN/RETIRED** `Visa::Org::Sign`
+- **FOREIGN/RETIRED** `Visa::Org::Sign::In`
+- **FOREIGN/RETIRED** `Visa::Org::WellKnown`
+- **FOREIGN/RETIRED** `Warp`
+- **FOREIGN/RETIRED** `Warp::App`
+- **FOREIGN/RETIRED** `Warp::App::Api`
+- **FOREIGN/RETIRED** `Warp::App::Api::V0`
+- **FOREIGN/RETIRED** `Warp::App::Api::V0::Preferences`
+- **FOREIGN/RETIRED** `Warp::App::Health`
+- **FOREIGN/RETIRED** `Warp::App::Oidc`
+- **FOREIGN/RETIRED** `Warp::App::Sign`
+- **FOREIGN/RETIRED** `Warp::App::WellKnown`
+- **FOREIGN/RETIRED** `Warp::Com`
+- **FOREIGN/RETIRED** `Warp::Com::Api`
+- **FOREIGN/RETIRED** `Warp::Com::Api::V0`
+- **FOREIGN/RETIRED** `Warp::Com::Health`
+- **FOREIGN/RETIRED** `Warp::Org`
+- **FOREIGN/RETIRED** `Warp::Org::Api`
+- **FOREIGN/RETIRED** `Warp::Org::Api::V0`
+- **FOREIGN/RETIRED** `Warp::Org::Api::V0::Preferences`
+- **FOREIGN/RETIRED** `Warp::Org::Health`
+- **FOREIGN/RETIRED** `Warp::Org::Oidc`
+- **FOREIGN/RETIRED** `Warp::Org::Sign`
+- **FOREIGN/RETIRED** `Warp::Org::WellKnown`
+
+## Removed code and configuration
+
+Tracked files deleted: 2591. By top-level directory:
+
+- `app/`: 1068
+- `config/`: 17
+- `docs/`: 213
+- `e2e/`: 12
+- `gait/`: 31
+- `lib/`: 11
+- `openapi/`: 6
+- `src/`: 213
+- `test/`: 1020
+
+App/config/docs/test detail by first directory:
+
+- `app/adapters`: 23
+- `app/controllers`: 711
+- `app/errors`: 8
+- `app/forms`: 6
+- `app/helpers`: 5
+- `app/jobs`: 6
+- `app/lib`: 8
+- `app/operations`: 73
+- `app/policies`: 17
+- `app/presenters`: 2
+- `app/queries`: 11
+- `app/resolvers`: 6
+- `app/serializers`: 4
+- `app/services`: 52
+- `app/values`: 48
+- `app/views`: 88
+- `config/initializers`: 4
+- `config/routes`: 12
+- `config/webauthn`: 1
+- `docs/architecture`: 6
+- `docs/backlog`: 1
+- `docs/checklists`: 4
+- `docs/identity`: 1
+- `docs/mermaid`: 147
+- `docs/operations`: 4
+- `docs/policy`: 1
+- `docs/qa`: 1
+- `docs/reference`: 1
+- `docs/runbooks`: 4
+- `docs/security`: 25
+- `docs/tasks`: 1
+- `docs/vendor`: 17
+- `e2e/fixtures`: 4
+- `e2e/rails`: 4
+- `e2e/ui-authenticated-presentation.spec.ts`: 1
+- `e2e/ui-ceremony-presentation.spec.ts`: 1
+- `e2e/ui-erb-presentation.spec.ts`: 1
+- `e2e/ui-presentation.spec.ts`: 1
+- `gait/entrypoints`: 1
+- `gait/features`: 23
+- `gait/pages`: 7
+- `lib/auth_phase_refusal_response_boundary.rb`: 1
+- `lib/config_values_oidc_authority_values.rb`: 1
+- `lib/entra_omniauth_boot_credentials.rb`: 1
+- `lib/external_authentication_infrastructure_omniauth_apple_nonce_enforcement.rb`: 1
+- `lib/external_authentication_infrastructure_omniauth_google_oidc_enforcement.rb`: 1
+- `lib/jit_id_host_env.rb`: 1
+- `lib/omniauth`: 1
+- `lib/rails_performance_record_sanitizer.rb`: 1
+- `lib/rails_performance_store_resilience.rb`: 1
+- `lib/tasks`: 1
+- `lib/visa_csp_report_response_boundary.rb`: 1
+- `openapi/app`: 2
+- `openapi/org`: 2
+- `openapi/shared`: 2
+- `src/entrypoints`: 22
+- `src/features`: 60
+- `src/pages`: 104
+- `src/styles`: 27
+- `test/adapters`: 22
+- `test/concerns`: 4
+- `test/concurrency`: 15
+- `test/config`: 1
+- `test/contracts`: 8
+- `test/controllers`: 268
+- `test/errors`: 6
+- `test/fixtures`: 2
+- `test/forms`: 3
+- `test/helpers`: 3
+- `test/initializers`: 2
+- `test/integration`: 176
+- `test/jobs`: 7
+- `test/lib`: 11
+- `test/mailers`: 1
+- `test/models`: 173
+- `test/notifiers`: 3
+- `test/operations`: 85
+- `test/policies`: 16
+- `test/presenters`: 2
+- `test/queries`: 9
+- `test/resolvers`: 7
+- `test/security`: 11
+- `test/serializers`: 2
+- `test/services`: 121
+- `test/support`: 18
+- `test/unit`: 17
+- `test/values`: 27
+
+Deleted route files: 12.
+- `config/routes/auth.rb`
+- `config/routes/core.rb`
+- `config/routes/docs.rb`
+- `config/routes/edit.rb`
+- `config/routes/guid.rb`
+- `config/routes/help.rb`
+- `config/routes/info.rb`
+- `config/routes/news.rb`
+- `config/routes/palm.rb`
+- `config/routes/performance.rb`
+- `config/routes/visa.rb`
+- `config/routes/warp.rb`
+
+No model, migration or database structure file was deleted. Existing model/schema modifications in the dirty worktree were preserved and remain part of the test state.
+
+### Environment variable names removed
+
+Removed from `.env.container.devcontainer`: 70 keys. Names only:
+
+- `PRIVATE_AUTH_CORPORATE_URL`
+- `PRIVATE_AUTH_SERVICE_URL`
+- `PRIVATE_AUTH_STAFF_URL`
+- `PRIVATE_BASE_DEVELOPER_URL`
+- `PRIVATE_BASE_NETWORK_URL`
+- `PRIVATE_BLAZER_URL`
+- `PRIVATE_CORE_CORPORATE_URL`
+- `PRIVATE_CORE_DEVELOPER_URL`
+- `PRIVATE_CORE_SERVICE_URL`
+- `PRIVATE_CORE_STAFF_URL`
+- `PRIVATE_COVERBAND_URL`
+- `PRIVATE_DOCS_CORPORATE_URL`
+- `PRIVATE_DOCS_SERVICE_URL`
+- `PRIVATE_DOCS_STAFF_URL`
+- `PRIVATE_EDIT_STAFF_URL`
+- `PRIVATE_FLIPPER_URL`
+- `PRIVATE_GUID_SERVICE_URL`
+- `PRIVATE_HELP_CORPORATE_URL`
+- `PRIVATE_HELP_SERVICE_URL`
+- `PRIVATE_HELP_STAFF_URL`
+- `PRIVATE_INFO_CORPORATE_URL`
+- `PRIVATE_INFO_SERVICE_URL`
+- `PRIVATE_INFO_STAFF_URL`
+- `PRIVATE_MISSION_URL`
+- `PRIVATE_NEWS_CORPORATE_URL`
+- `PRIVATE_NEWS_SERVICE_URL`
+- `PRIVATE_NEWS_STAFF_URL`
+- `PRIVATE_PALM_SERVICE_URL`
+- `PRIVATE_PERFORMANCE_URL`
+- `PRIVATE_PGHERO_URL`
+- `PRIVATE_SWAGGER_URL`
+- `PRIVATE_VISA_CORPORATE_URL`
+- `PRIVATE_VISA_SERVICE_URL`
+- `PRIVATE_VISA_STAFF_URL`
+- `PUBLIC_AUTH_CORPORATE_URL`
+- `PUBLIC_AUTH_SERVICE_URL`
+- `PUBLIC_AUTH_STAFF_URL`
+- `PUBLIC_BASE_DEVELOPER_URL`
+- `PUBLIC_BLAZER_URL`
+- `PUBLIC_CORE_CORPORATE_URL`
+- `PUBLIC_CORE_DEVELOPER_URL`
+- `PUBLIC_CORE_SERVICE_URL`
+- `PUBLIC_CORE_STAFF_URL`
+- `PUBLIC_COVERBAND_URL`
+- `PUBLIC_DOCS_CORPORATE_URL`
+- `PUBLIC_DOCS_SERVICE_URL`
+- `PUBLIC_DOCS_STAFF_URL`
+- `PUBLIC_EDGE_CORPORATE_URL`
+- `PUBLIC_EDGE_SERVICE_URL`
+- `PUBLIC_EDGE_STAFF_URL`
+- `PUBLIC_EDIT_STAFF_URL`
+- `PUBLIC_FLIPPER_URL`
+- `PUBLIC_GUID_SERVICE_URL`
+- `PUBLIC_INFO_CORPORATE_URL`
+- `PUBLIC_INFO_SERVICE_URL`
+- `PUBLIC_INFO_STAFF_URL`
+- `PUBLIC_MISSION_URL`
+- `PUBLIC_PALM_SERVICE_URL`
+- `PUBLIC_PERFORMANCE_URL`
+- `PUBLIC_PGHERO_URL`
+- `PUBLIC_STATUS_URL`
+- `PUBLIC_SWAGGER_URL`
+- `PUBLIC_VISA_CORPORATE_URL`
+- `PUBLIC_VISA_SERVICE_URL`
+- `PUBLIC_VISA_STAFF_URL`
+- `PUBLIC_WARP_CORPORATE_URL`
+- `PUBLIC_WARP_SERVICE_URL`
+- `PUBLIC_WARP_STAFF_URL`
+- `RAILS_PERFORMANCE_ENABLED`
+- `RAILS_PERFORMANCE_USERNAME`
+
+### Read-only blockers
+
+`findmnt` confirmed `.devcontainer/compose.yaml` and `.github/workflows/ci.yml` are ZFS mounts with read-only options; `test -w` returned false for both. Existing Compose worktree changes were preserved, and no task-specific edits were made to either mounted file. AC-2 remains incomplete for these paths.
+
+Compose retains 49 host aliases outside the retained Base app/com/org, Tech org, and current operator-tool host names. The aliases cover retired Auth, Visa, Core, Warp, Palm, Edit, Docs, News, Help, Info and Guid families, plus Base developer/network, Edge, regional `www-jp`, and older unscoped tool hosts. Alias names are not environment values and are omitted here.
+
+CI retains 46 URL variable names for retired surface families and Base developer/network hosts; values are intentionally omitted. The final source/config/test/`.env*` scan found all 46 names only in `.github/workflows/ci.yml`; no retired-surface URL variable names remain in editable code or environment templates.
+
+The variable names are:
+
+- `PRIVATE_AUTH_CORPORATE_URL`
+- `PRIVATE_AUTH_SERVICE_URL`
+- `PRIVATE_AUTH_STAFF_URL`
+- `PRIVATE_BASE_DEVELOPER_URL`
+- `PRIVATE_BASE_NETWORK_URL`
+- `PRIVATE_CORE_CORPORATE_URL`
+- `PRIVATE_CORE_DEVELOPER_URL`
+- `PRIVATE_CORE_SERVICE_URL`
+- `PRIVATE_CORE_STAFF_URL`
+- `PRIVATE_DOCS_CORPORATE_URL`
+- `PRIVATE_DOCS_SERVICE_URL`
+- `PRIVATE_DOCS_STAFF_URL`
+- `PRIVATE_EDIT_STAFF_URL`
+- `PRIVATE_HELP_CORPORATE_URL`
+- `PRIVATE_HELP_SERVICE_URL`
+- `PRIVATE_HELP_STAFF_URL`
+- `PRIVATE_INFO_CORPORATE_URL`
+- `PRIVATE_INFO_SERVICE_URL`
+- `PRIVATE_INFO_STAFF_URL`
+- `PRIVATE_NEWS_CORPORATE_URL`
+- `PRIVATE_NEWS_SERVICE_URL`
+- `PRIVATE_NEWS_STAFF_URL`
+- `PRIVATE_PALM_SERVICE_URL`
+- `PUBLIC_AUTH_CORPORATE_URL`
+- `PUBLIC_AUTH_SERVICE_URL`
+- `PUBLIC_AUTH_STAFF_URL`
+- `PUBLIC_BASE_DEVELOPER_URL`
+- `PUBLIC_CORE_CORPORATE_URL`
+- `PUBLIC_CORE_DEVELOPER_URL`
+- `PUBLIC_CORE_SERVICE_URL`
+- `PUBLIC_CORE_STAFF_URL`
+- `PUBLIC_DOCS_CORPORATE_URL`
+- `PUBLIC_DOCS_SERVICE_URL`
+- `PUBLIC_DOCS_STAFF_URL`
+- `PUBLIC_EDGE_CORPORATE_URL`
+- `PUBLIC_EDGE_SERVICE_URL`
+- `PUBLIC_EDGE_STAFF_URL`
+- `PUBLIC_EDIT_STAFF_URL`
+- `PUBLIC_GUID_SERVICE_URL`
+- `PUBLIC_INFO_CORPORATE_URL`
+- `PUBLIC_INFO_SERVICE_URL`
+- `PUBLIC_INFO_STAFF_URL`
+- `PUBLIC_PALM_SERVICE_URL`
+- `PUBLIC_WARP_CORPORATE_URL`
+- `PUBLIC_WARP_SERVICE_URL`
+- `PUBLIC_WARP_STAFF_URL`
+
+CI also retains 15 URL variable names for operator/status settings with no source/config/test reader:
+
+- `PRIVATE_BLAZER_URL`
+- `PRIVATE_COVERBAND_URL`
+- `PRIVATE_FLIPPER_URL`
+- `PRIVATE_MISSION_URL`
+- `PRIVATE_PERFORMANCE_URL`
+- `PRIVATE_PGHERO_URL`
+- `PRIVATE_SWAGGER_URL`
+- `PUBLIC_BLAZER_URL`
+- `PUBLIC_COVERBAND_URL`
+- `PUBLIC_FLIPPER_URL`
+- `PUBLIC_MISSION_URL`
+- `PUBLIC_PERFORMANCE_URL`
+- `PUBLIC_PGHERO_URL`
+- `PUBLIC_STATUS_URL`
+- `PUBLIC_SWAGGER_URL`
+
+CI retains 16 RP database variable names for removed Core, Warp, Palm and Edit clients:
+
+- `POSTGRESQL_RP_CORE_APP_PUB`
+- `POSTGRESQL_RP_CORE_APP_SUB`
+- `POSTGRESQL_RP_CORE_COM_PUB`
+- `POSTGRESQL_RP_CORE_COM_SUB`
+- `POSTGRESQL_RP_CORE_ORG_PUB`
+- `POSTGRESQL_RP_CORE_ORG_SUB`
+- `POSTGRESQL_RP_EDIT_ORG_PUB`
+- `POSTGRESQL_RP_EDIT_ORG_SUB`
+- `POSTGRESQL_RP_PALM_APP_PUB`
+- `POSTGRESQL_RP_PALM_APP_SUB`
+- `POSTGRESQL_RP_WARP_APP_PUB`
+- `POSTGRESQL_RP_WARP_APP_SUB`
+- `POSTGRESQL_RP_WARP_COM_PUB`
+- `POSTGRESQL_RP_WARP_COM_SUB`
+- `POSTGRESQL_RP_WARP_ORG_PUB`
+- `POSTGRESQL_RP_WARP_ORG_SUB`
+
+No database was dropped or cleaned. The test environment reports 26 distinct database configurations, with names disjoint from development and production; names and connection values are not recorded.
+## Database/model report
+
+The report groups concrete models under each abstract `*Record` database target. A model is USED when at least one non-model caller references it; ONLY-VIA-MODELS when callers exist only in models/tests; UNUSED when no app/config/lib/test reference was found. For each non-model-referenced model, the first non-model caller is listed. For model/test-only models, the first model or test reference is listed.
+
+Scanned 765 concrete application models across 22 targets with concrete descendants. `primary` and `search` are the two abstract-only targets; `primary` is framework-used and `search` is unused.
+
+### Abstract `*Record` targets and classification
+
+- `AppPrincipalRecord` → `app_zenith` — **USED**
+- `AppRpRecord` → `app_zenith` — **USED**
+- `AppSettingRecord` → `app_setting` — **USED**
+- `AppSignalRecord` → `app_signal` — **USED**
+- `AppZenithRecord` → `app_zenith` — **USED**
+- `ApplicationRecord` → `primary` — **USED**
+- `AvatarRecord` → `avatar` — **USED**
+- `ChronicleRecord` → `chronicle` — **USED**
+- `ComSettingRecord` → `com_setting` — **USED**
+- `OccurrenceRecord` → `occurrence` — **USED**
+- `OpBaseAppRecord` → `op_base_app` — **USED**
+- `OpBaseOrgRecord` → `op_base_org` — **USED**
+- `OrgPrincipalRecord` → `org_zenith` — **USED**
+- `OrgRpRecord` → `org_zenith` — **USED**
+- `OrgSettingRecord` → `org_setting` — **USED**
+- `OrgSignalRecord` → `org_signal` — **USED**
+- `OrgZenithRecord` → `org_zenith` — **USED**
+- `PublishingRecord` → `publishing` — **ONLY-VIA-MODELS**
+- `RpBaseAppRecord` → `rp_base_app` — **USED**
+- `RpBaseOrgRecord` → `rp_base_org` — **USED**
+- `RpCoreAppRecord` → `rp_core_app` — **ONLY-VIA-MODELS**
+- `RpCoreOrgRecord` → `rp_core_org` — **ONLY-VIA-MODELS**
+- `RpEditOrgRecord` → `rp_edit_org` — **ONLY-VIA-MODELS**
+- `RpPalmAppRecord` → `rp_palm_app` — **ONLY-VIA-MODELS**
+- `RpTechOrgRecord` → `rp_tech_org` — **USED**
+- `RpWarpAppRecord` → `rp_warp_app` — **ONLY-VIA-MODELS**
+- `RpWarpOrgRecord` → `rp_warp_org` — **ONLY-VIA-MODELS**
+- `SearchRecord` → `search` — **UNUSED**
+
+`primary` is USED through the abstract `ApplicationRecord` connection for shared framework persistence; `config/initializers/flipper.rb:24` assigns Flipper's ActiveRecord model to it. It has no concrete domain model descendants. `search` has no concrete model descendants or caller and is UNUSED. No database drop was performed.
+
+### `app_setting` — USED
+29 models: 27 with non-model callers, 1 referenced only by models/tests, 1 unreferenced.
+Non-model callers:
+- `AppPreference` — `app/controllers/base/app/application_controller.rb:35`
+- `AppPreferenceBrowserBinding` — `app/controllers/concerns/preference_browser_state_reader.rb:17`
+- `AppPreferenceConsentReceipt` — `app/controllers/concerns/preference_browser_state_reader.rb:12`
+- `AppPreferenceCookie` — `app/controllers/concerns/preference_class_registry.rb:49`
+- `AppPreferenceCurrency` — `app/controllers/concerns/preference_class_registry.rb:70`
+- `AppPreferenceCurrencyOption` — `app/controllers/concerns/preference_class_registry.rb:58`
+- `AppPreferenceDateFormat` — `app/controllers/concerns/preference_class_registry.rb:71`
+- `AppPreferenceDateFormatOption` — `app/controllers/concerns/preference_class_registry.rb:59`
+- `AppPreferenceDensity` — `app/controllers/concerns/preference_class_registry.rb:74`
+- `AppPreferenceDensityOption` — `app/controllers/concerns/preference_class_registry.rb:62`
+- `AppPreferenceLanguage` — `app/controllers/concerns/preference_class_registry.rb:67`
+- `AppPreferenceLanguageOption` — `app/controllers/concerns/preference_class_registry.rb:55`
+- `AppPreferenceMotion` — `app/controllers/concerns/preference_class_registry.rb:73`
+- `AppPreferenceMotionOption` — `app/controllers/concerns/preference_class_registry.rb:61`
+- `AppPreferencePageSize` — `app/controllers/concerns/preference_class_registry.rb:75`
+- `AppPreferencePageSizeOption` — `app/controllers/concerns/preference_class_registry.rb:63`
+- `AppPreferenceRegion` — `app/controllers/concerns/preference_class_registry.rb:68`
+- `AppPreferenceRegionOption` — `app/controllers/concerns/preference_class_registry.rb:56`
+- `AppPreferenceStatus` — `app/controllers/concerns/preference_class_registry.rb:48`
+- `AppPreferenceTheme` — `app/controllers/concerns/preference_class_registry.rb:69`
+- `AppPreferenceThemeOption` — `app/controllers/concerns/preference_class_registry.rb:57`
+- `AppPreferenceTimeFormat` — `app/controllers/concerns/preference_class_registry.rb:72`
+- `AppPreferenceTimeFormatOption` — `app/controllers/concerns/preference_class_registry.rb:60`
+- `AppPreferenceTimezone` — `app/controllers/concerns/preference_class_registry.rb:66`
+- `AppPreferenceTimezoneOption` — `app/controllers/concerns/preference_class_registry.rb:54`
+- `AppPreferenceWebPush` — `app/controllers/concerns/preference_browser_state_reader.rb:125`
+- `AppPreferenceWebPushOption` — `app/controllers/concerns/preference_browser_state_reader.rb:126`
+Referenced only by models/tests:
+- `AppPreferenceAdultContentGateOption` — model `app/models/app_preference_adult_content_gate.rb:28`; test `test/models/app_preference_adult_content_gate_option_test.rb:15`
+Unreferenced models:
+`AppPreferenceAdultContentGate`
+
+### `app_signal` — USED
+2 models: 1 with non-model callers, 1 referenced only by models/tests, 0 unreferenced.
+Non-model callers:
+- `ClientNotificationRecord` — `app/services/retention_cross_database_child_purge.rb:52`
+Referenced only by models/tests:
+- `MemberNotification` — test `test/models/id_column_type_test.rb:16`
+
+### `app_zenith` — USED
+114 models: 61 with non-model callers, 49 referenced only by models/tests, 4 unreferenced.
+Non-model callers:
+- `AppEnforcementAppeal` — `app/jobs/enforcement_reconciliation_job.rb:19`
+- `AppEnforcementCase` — `app/controllers/base/app/api/v0/identity/standings_controller.rb:37`
+- `AppIdentityAuthenticationEvent` — `app/jobs/op_identity_event_delivery_job.rb:9`
+- `Client` — `app/adapters/avatar_authority_client.rb:79`
+- `ClientAuthorityLock` — `app/operations/client_persona_creator.rb:37`
+- `ClientBanner` — `app/queries/current_banner_query.rb:21`
+- `ClientContactAuditOutbox` — `app/jobs/contact_audit_delivery_job.rb:14`
+- `ClientEmail` — `app/controllers/base/app/identity/emails_controller.rb:14`
+- `ClientEmailStatus` — `app/services/sign_up_artifact_cleanup.rb:271`
+- `ClientEnforcementRecoveryCeremony` — `app/operations/enforcement_case_end_operation.rb:146`
+- `ClientExternalIdentity` — `app/lib/enforcement_identifier_digest.rb:44`
+- `ClientIdentity` — `app/operations/client_persona_creator.rb:40`
+- `ClientPasskey` — `app/controllers/base/app/identity/passkeys_controller.rb:27`
+- `ClientPasskeyAuditOutbox` — `app/jobs/passkey_audit_delivery_job.rb:8`
+- `ClientPasskeyStatus` — `app/services/sign_up_artifact_cleanup.rb:273`
+- `ClientPersona` — `app/controllers/base/app/api/v0/avatar/avatars_controller.rb:101`
+- `ClientPersonaAuthorityCutover` — `app/queries/authority_owner_migration_inventory.rb:93`
+- `ClientPersonaLifecycle` — `app/operations/client_persona_creator.rb:51`
+- `ClientPersonaOwnership` — `app/operations/client_persona_creator.rb:55`
+- `ClientPreference` — `app/controllers/concerns/preference_class_registry.rb:143`
+- `ClientPreferenceCurrency` — `app/controllers/concerns/preference_class_registry.rb:161`
+- `ClientPreferenceCurrencyOption` — `app/controllers/concerns/preference_class_registry.rb:149`
+- `ClientPreferenceDateFormat` — `app/controllers/concerns/preference_class_registry.rb:162`
+- `ClientPreferenceDateFormatOption` — `app/controllers/concerns/preference_class_registry.rb:150`
+- `ClientPreferenceDensity` — `app/controllers/concerns/preference_class_registry.rb:165`
+- `ClientPreferenceDensityOption` — `app/controllers/concerns/preference_class_registry.rb:153`
+- `ClientPreferenceLanguage` — `app/controllers/concerns/preference_class_registry.rb:158`
+- `ClientPreferenceLanguageOption` — `app/controllers/concerns/preference_class_registry.rb:146`
+- `ClientPreferenceMotion` — `app/controllers/concerns/preference_class_registry.rb:164`
+- `ClientPreferenceMotionOption` — `app/controllers/concerns/preference_class_registry.rb:152`
+- `ClientPreferencePageSize` — `app/controllers/concerns/preference_class_registry.rb:166`
+- `ClientPreferencePageSizeOption` — `app/controllers/concerns/preference_class_registry.rb:154`
+- `ClientPreferenceRegion` — `app/controllers/concerns/preference_class_registry.rb:159`
+- `ClientPreferenceRegionOption` — `app/controllers/concerns/preference_class_registry.rb:147`
+- `ClientPreferenceStatus` — `app/controllers/concerns/preference_write_boundary.rb:35`
+- `ClientPreferenceTheme` — `app/controllers/concerns/preference_class_registry.rb:160`
+- `ClientPreferenceThemeOption` — `app/controllers/concerns/preference_class_registry.rb:148`
+- `ClientPreferenceTimeFormat` — `app/controllers/concerns/preference_class_registry.rb:163`
+- `ClientPreferenceTimeFormatOption` — `app/controllers/concerns/preference_class_registry.rb:151`
+- `ClientPreferenceTimezone` — `app/controllers/concerns/preference_class_registry.rb:157`
+- `ClientPreferenceTimezoneOption` — `app/controllers/concerns/preference_class_registry.rb:145`
+- `ClientPrivacyRequest` — `app/controllers/base/app/identity/privacy/erasure/statuses_controller.rb:39`
+- `ClientProcessorErasureNotification` — `app/consumers/processor_erasure_notification_receipt_consumer.rb:40`
+- `ClientRetentionHold` — `app/jobs/retention_purge_job.rb:36`
+- `ClientSecretAuditOutbox` — `app/controllers/base/app/secret_issuances_controller.rb:124`
+- `ClientSecretCredential` — `app/controllers/base/app/secret_issuances_controller.rb:21`
+- `ClientSecretIssuance` — `app/controllers/base/app/secret_issuances_controller.rb:89`
+- `ClientSocialAuditOutbox` — `app/operations/withdrawal_personal_data_anonymizer.rb:102`
+- `ClientStatus` — `app/services/base_selector_bootstrap_authority.rb:217`
+- `ClientTelephone` — `app/controllers/base/app/identity/telephones_controller.rb:16`
+- `ClientTelephoneStatus` — `app/services/sign_up_artifact_cleanup.rb:272`
+- `ClientTotpCredential` — `app/controllers/base/app/identity/totps_controller.rb:19`
+- `ClientWithdrawalCeremony` — `app/controllers/base/app/identity/privacy/erasure/statuses_controller.rb:45`
+- `ClientWithdrawalFlow` — `app/jobs/retention_purge_job.rb:33`
+- `Enterprise` — `app/controllers/base/app/api/v0/membership/directory_controller.rb:121`
+- `EnterpriseAuthorityCutover` — `app/queries/authority_owner_migration_inventory.rb:118`
+- `EnterpriseLifecycle` — `app/operations/enterprise_creator.rb:39`
+- `EnterpriseOwnership` — `app/operations/enterprise_creator.rb:43`
+- `Member` — `app/jobs/retention_purge_job.rb:39`
+- `PersonaMembership` — `app/policies/organization_membership_policy.rb:34`
+- `PersonaMembershipKind` — `app/resolvers/avatar_permission_resolver.rb:31`
+Referenced only by models/tests:
+- `AppEnforcementAuthenticationMethodEffect` — model `app/models/app_enforcement_case.rb:16`; test `test/controllers/base/org/support/enforcement_approval_failures_test.rb:147`
+- `AppEnforcementIdentifierEffect` — model `app/models/app_enforcement_case.rb:19`; test `test/controllers/base/org/support/enforcement_approval_failures_test.rb:148`
+- `AppEnforcementPrincipalEffect` — model `app/models/app_enforcement_case.rb:14`; test `test/concurrency/enforcement_reconciliation_end_race_test.rb:24`
+- `AppEnforcementPrincipalLink` — model `app/models/app_enforcement_case.rb:21`; test `test/controllers/base/org/support/enforcement_approval_failures_test.rb:149`
+- `ClientAccount` — model `app/models/client.rb:248`; test `test/concurrency/base_selector_single_write_http_test.rb:351`
+- `ClientBulletin` — test `test/models/client_bulletin_test.rb:38`
+- `ClientEmailHistory` — model `app/models/client.rb:455`; test `test/jobs/dead_identifier_retention_test.rb:10`
+- `ClientIdentifierRotationAudit` — test `test/services/identifier_hmac_maintenance_boundary_test.rb:17`
+- `ClientIdentityState` — model `app/models/client_identity.rb:36`; test `test/models/account_assignment_uniqueness_test.rb:15`
+- `ClientMemberDeletion` — model `app/models/client.rb:236`; test `test/models/client_member_deletion_test.rb:35`
+- `ClientMemberDiscovery` — model `app/models/client.rb:211`
+- `ClientMemberImpersonation` — model `app/models/client.rb:226`; test `test/models/client_member_impersonation_test.rb:33`
+- `ClientMemberObservation` — model `app/models/client.rb:216`
+- `ClientMemberRevocation` — model `app/models/client.rb:221`; test `test/models/client_member_revocation_test.rb:33`
+- `ClientMemberSuspension` — model `app/models/client.rb:231`; test `test/models/client_member_suspension_test.rb:33`
+- `ClientMembership` — test `test/models/id_column_type_test.rb:9`
+- `ClientMfaStatus` — model `app/models/client.rb:116`; test `test/concurrency/base_selector_single_write_http_test.rb:130`
+- `ClientOidcIdentityBinding` — model `app/models/client_identity.rb:44`
+- `ClientPersonaAdministrationGrant` — model `app/models/client_persona.rb:31`; test `test/models/resource_grant_uniqueness_test.rb:135`
+- `ClientPersonaDelegationGrant` — model `app/models/client_persona.rb:35`; test `test/models/resource_grant_uniqueness_test.rb:135`
+- `ClientPersonaOwnershipTransferRequest` — model `app/models/client_persona.rb:47`; test `test/models/ownership_transfer_pending_uniqueness_test.rb:83`
+- `ClientPersonaUsageGrant` — model `app/models/client_persona.rb:39`; test `test/models/resource_grant_uniqueness_test.rb:135`
+- `ClientPersonaViewGrant` — model `app/models/client_persona.rb:43`; test `test/models/resource_grant_uniqueness_test.rb:136`
+- `ClientPreferenceAdultContentGate` — test `test/models/model_only_line_coverage_test.rb:119`
+- `ClientPreferenceAdultContentGateOption` — model `app/models/client_preference_adult_content_gate.rb:28`; test `test/models/client_preference_adult_content_gate_option_test.rb:15`
+- `ClientPrivacyRequestStatus` — model `app/models/client_privacy_request.rb:7`
+- `ClientProcessorErasureNotificationAttempt` — model `app/models/client_processor_erasure_notification.rb:21`; test `test/models/processor_erasure_attempt_uniqueness_test.rb:8`
+- `ClientProcessorErasureNotificationStatus` — model `app/models/client_processor_erasure_notification.rb:7`
+- `ClientProfile` — model `app/models/client.rb:198`; test `test/models/required_attribute_not_null_contract_test.rb:20`
+- `ClientProfileStatus` — model `app/models/client_profile.rb:37`; test `test/models/client_profile_status_test.rb:16`
+- `ClientRegistrationCompletion` — model `app/models/client_registration_completion_method.rb:6`
+- `ClientRegistrationCompletionMethod` — model `app/models/client_registration_completion.rb:8`
+- `ClientRetentionHoldStatus` — model `app/models/client_retention_hold.rb:7`
+- `ClientSecurityMode` — model `app/models/client.rb:113`; test `test/concurrency/base_selector_single_write_http_test.rb:131`
+- `ClientTelephoneHistory` — model `app/models/client.rb:456`; test `test/jobs/dead_identifier_retention_test.rb:53`
+- `ClientTotpCredentialStatus` — model `app/models/client_totp_credential.rb:56`; test `test/consumers/totp_window_consumer_concurrency_test.rb:15`
+- `ClientVisibility` — model `app/models/client.rb:119`; test `test/concurrency/base_selector_single_write_http_test.rb:130`
+- `ClientWithdrawalFlowEvent` — model `app/models/client_withdrawal_flow.rb:41`; test `test/models/withdrawal_flow_test.rb:30`
+- `ClientWithdrawalFlowStatus` — model `app/models/client_withdrawal_flow.rb:40`
+- `EnterpriseAdministrationGrant` — model `app/models/enterprise.rb:38`; test `test/models/resource_grant_uniqueness_test.rb:6`
+- `EnterpriseDelegationGrant` — model `app/models/enterprise.rb:42`; test `test/models/resource_grant_uniqueness_test.rb:6`
+- `EnterpriseOwnershipTransferRequest` — model `app/models/enterprise.rb:50`; test `test/models/ownership_transfer_pending_uniqueness_test.rb:6`
+- `EnterpriseUnit` — model `app/models/enterprise_unit_closure.rb:28`; test `test/concurrency/base_selector_single_write_http_test.rb:361`
+- `EnterpriseUnitClosure` — model `app/models/concerns/collective_unit.rb:92`; test `test/concurrency/base_selector_single_write_http_test.rb:360`
+- `EnterpriseViewGrant` — model `app/models/enterprise.rb:46`; test `test/models/resource_grant_uniqueness_test.rb:6`
+- `MemberStatus` — test `test/models/database_pk_type_test.rb:18`
+- `PersonaAssignment` — test `test/concurrency/base_selector_single_write_http_test.rb:377`
+- `PersonaMembershipRevokeReason` — model `app/models/persona_membership.rb:71`; test `test/models/persona_enterprise_model_layer_test.rb:11`
+- `PersonaMembershipState` — model `app/models/persona_membership.rb:67`; test `test/models/persona_enterprise_model_layer_test.rb:10`
+Unreferenced models:
+`ClientAppleNotificationEvent`, `ClientMember`, `ClientSocialLinkSourceReceipt`, `CoreAppClientBridge`
+
+### `avatar` — USED
+45 models: 30 with non-model callers, 14 referenced only by models/tests, 1 unreferenced.
+Non-model callers:
+- `Avatar` — `app/adapters/avatar_authority_client.rb:4`
+- `AvatarAgentBinding` — `app/services/avatar_backfill/audit_legacy_client_bindings.rb:162`
+- `AvatarAssignment` — `app/services/retention_cross_database_child_purge.rb:53`
+- `AvatarBlock` — `app/controllers/base/app/api/v0/avatar/social_edges_controller.rb:24`
+- `AvatarBureauAgentGrant` — `app/operations/avatar_access_grants/issue_operation.rb:12`
+- `AvatarBureauOwnershipPeriod` — `app/operations/avatar_access_grants/issue_operation.rb:11`
+- `AvatarBureauToBureauTransferDetail` — `app/operations/avatar_ownership_transfers/registry_accept_operation.rb:32`
+- `AvatarBureauToEnterpriseTransferDetail` — `app/operations/avatar_ownership_transfers/registry_accept_operation.rb:24`
+- `AvatarCapability` — `app/services/avatar_provisioning/create.rb:89`
+- `AvatarEnterpriseOwnershipPeriod` — `app/operations/avatar_access_grants/issue_operation.rb:7`
+- `AvatarEnterprisePersonaGrant` — `app/operations/avatar_access_grants/issue_operation.rb:8`
+- `AvatarEnterpriseToBureauTransferDetail` — `app/operations/avatar_ownership_transfers/registry_accept_operation.rb:16`
+- `AvatarEnterpriseToEnterpriseTransferDetail` — `app/operations/avatar_ownership_transfers/registry_accept_operation.rb:8`
+- `AvatarFollow` — `app/controllers/base/app/api/v0/avatar/social_edges_controller.rb:22`
+- `AvatarGroup` — `app/operations/avatar_group_concrete_ownership_backfill_operation.rb:64`
+- `AvatarGroupConcreteOwnershipPeriod` — `app/operations/avatar_group_concrete_ownership_backfill_operation.rb:100`
+- `AvatarGroupOwnershipPeriod` — `app/operations/avatar_group_concrete_ownership_backfill_operation.rb:71`
+- `AvatarLifecycleState` — `app/operations/avatar_ownership_transfers/operation.rb:86`
+- `AvatarMoniker` — `app/operations/avatar_moniker_writer_operation.rb:30`
+- `AvatarMute` — `app/controllers/base/app/api/v0/avatar/social_edges_controller.rb:26`
+- `AvatarOwnershipCutover` — `app/controllers/base/app/api/v0/avatar/avatar_ownership_transfers_controller.rb:167`
+- `AvatarOwnershipPeriod` — `app/operations/avatar_ownership_transfers/accept_operation.rb:116`
+- `AvatarOwnershipStatus` — `app/operations/avatar_ownership_transfers/accept_operation.rb:69`
+- `AvatarOwnershipTransfer` — `app/operations/avatar_ownership_transfers/accept_operation.rb:38`
+- `AvatarPersonaBinding` — `app/controllers/base/app/api/v0/avatar/avatars_controller.rb:41`
+- `AvatarPurgeDeferral` — `app/jobs/retention_purge_job.rb:204`
+- `AvatarTransferReservation` — `app/controllers/base/app/api/v0/avatar/avatar_ownership_transfers_controller.rb:150`
+- `GroupAvatarMembership` — `app/controllers/base/app/api/v0/avatar/group_avatar_memberships_controller.rb:40`
+- `Handle` — `app/controllers/base/app/api/v0/avatar/avatars_controller.rb:48`
+- `HandleStatus` — `app/services/avatar_provisioning/create.rb:88`
+Referenced only by models/tests:
+- `AvatarLifecycleEvent` — test `test/models/avatar_lifecycle_event_test.rb:9`
+- `AvatarMembership` — test `test/models/avatar_membership_test.rb:38`
+- `AvatarMembershipStatus` — test `test/models/avatar_membership_status_test.rb:16`
+- `AvatarPermission` — test `test/models/avatar_permission_test.rb:27`
+- `AvatarRole` — test `test/models/avatar_role_test.rb:27`
+- `AvatarRolePermission` — test `test/models/avatar_role_permission_test.rb:29`
+- `HandleAssignment` — model `app/models/avatar.rb:54`; test `test/models/handle_assignment_test.rb:55`
+- `MemberAvatarAccess` — test `test/models/member_avatar_access_test.rb:29`
+- `MemberAvatarDeletion` — test `test/models/member_avatar_deletion_test.rb:29`
+- `MemberAvatarExtraction` — test `test/models/member_avatar_extraction_test.rb:29`
+- `MemberAvatarImpersonation` — test `test/models/member_avatar_impersonation_test.rb:29`
+- `MemberAvatarOversight` — test `test/models/member_avatar_oversight_test.rb:29`
+- `MemberAvatarSuspension` — test `test/models/member_avatar_suspension_test.rb:29`
+- `MemberAvatarVisibility` — test `test/models/member_avatar_visibility_test.rb:29`
+Unreferenced models:
+`HandleAssignmentStatus`
+
+### `chronicle` — USED
+22 models: 21 with non-model callers, 1 referenced only by models/tests, 0 unreferenced.
+Non-model callers:
+- `AccountAccessEvent` — `app/jobs/enforcement_reconciliation_job.rb:93`
+- `AppPreferenceChronicle` — `app/controllers/concerns/authentication_audit_writer.rb:275`
+- `AppPreferenceChronicleEvent` — `app/controllers/concerns/preference_class_registry.rb:51`
+- `AppPreferenceChronicleLevel` — `app/controllers/concerns/preference_class_registry.rb:52`
+- `Chronicle` — `app/adapters/otp_adapter.rb:46`
+- `ChronicleOutboxEntry` — `app/controllers/concerns/authentication_audit_writer.rb:10`
+- `ChronicleRetentionPolicy` — `app/jobs/client_secret_audit_delivery_job.rb:80`
+- `ChronicleVisibility` — `app/operations/chronicle_intent_writer.rb:61`
+- `ChronicleVisibilityContext` — `app/operations/chronicle_intent_writer.rb:69`
+- `ClientChronicle` — `app/controllers/base/app/identity/activities_controller.rb:24`
+- `ClientChronicleEvent` — `app/controllers/concerns/authentication_audit_writer.rb:322`
+- `ClientChronicleLevel` — `app/controllers/concerns/authentication_audit_writer.rb:323`
+- `ComPreferenceChronicle` — `app/controllers/concerns/authentication_audit_writer.rb:286`
+- `ComPreferenceChronicleEvent` — `app/controllers/concerns/preference_class_registry.rb:83`
+- `ComPreferenceChronicleLevel` — `app/controllers/concerns/preference_class_registry.rb:84`
+- `OperatorChronicle` — `app/controllers/base/org/identity/activities_controller.rb:24`
+- `OperatorChronicleEvent` — `app/controllers/concerns/authentication_audit_writer.rb:327`
+- `OperatorChronicleLevel` — `app/controllers/concerns/authentication_audit_writer.rb:328`
+- `OrgPreferenceChronicle` — `app/controllers/concerns/authentication_audit_writer.rb:297`
+- `OrgPreferenceChronicleEvent` — `app/controllers/concerns/preference_class_registry.rb:115`
+- `OrgPreferenceChronicleLevel` — `app/controllers/concerns/preference_class_registry.rb:116`
+Referenced only by models/tests:
+- `EnforcementEvent` — model `app/models/concerns/enforcement_case_applicable.rb:168`; test `test/concurrency/enforcement_reconciliation_end_race_test.rb:59`
+
+### `com_setting` — USED
+29 models: 27 with non-model callers, 2 referenced only by models/tests, 0 unreferenced.
+Non-model callers:
+- `ComPreference` — `app/controllers/base/com/application_controller.rb:93`
+- `ComPreferenceBrowserBinding` — `app/controllers/concerns/preference_browser_binding.rb:50`
+- `ComPreferenceConsentReceipt` — `app/controllers/concerns/preference_browser_binding.rb:53`
+- `ComPreferenceCookie` — `app/controllers/concerns/preference_browser_binding.rb:66`
+- `ComPreferenceCurrency` — `app/controllers/concerns/com_preference_screen_writes.rb:60`
+- `ComPreferenceCurrencyOption` — `app/controllers/concerns/com_preference_screen_writes.rb:88`
+- `ComPreferenceDateFormat` — `app/controllers/concerns/com_preference_screen_writes.rb:90`
+- `ComPreferenceDateFormatOption` — `app/controllers/concerns/com_preference_screen_writes.rb:87`
+- `ComPreferenceDensity` — `app/controllers/concerns/com_selectable_preference_screen.rb:39`
+- `ComPreferenceDensityOption` — `app/controllers/concerns/com_selectable_preference_screen.rb:39`
+- `ComPreferenceLanguage` — `app/controllers/concerns/com_preference_screen_writes.rb:89`
+- `ComPreferenceLanguageOption` — `app/controllers/concerns/com_preference_screen_writes.rb:87`
+- `ComPreferenceMotion` — `app/controllers/concerns/com_selectable_preference_screen.rb:38`
+- `ComPreferenceMotionOption` — `app/controllers/concerns/com_selectable_preference_screen.rb:38`
+- `ComPreferencePageSize` — `app/controllers/concerns/com_selectable_preference_screen.rb:40`
+- `ComPreferencePageSizeOption` — `app/controllers/concerns/com_selectable_preference_screen.rb:40`
+- `ComPreferenceRegion` — `app/controllers/base/com/application_controller.rb:100`
+- `ComPreferenceRegionOption` — `app/controllers/concerns/com_preference_screen_writes.rb:87`
+- `ComPreferenceStatus` — `app/controllers/concerns/preference_class_registry.rb:80`
+- `ComPreferenceTheme` — `app/controllers/concerns/preference_class_registry.rb:101`
+- `ComPreferenceThemeOption` — `app/controllers/concerns/preference_class_registry.rb:89`
+- `ComPreferenceTimeFormat` — `app/controllers/concerns/com_preference_screen_writes.rb:91`
+- `ComPreferenceTimeFormatOption` — `app/controllers/concerns/com_preference_screen_writes.rb:88`
+- `ComPreferenceTimezone` — `app/controllers/concerns/com_selectable_preference_screen.rb:26`
+- `ComPreferenceTimezoneOption` — `app/controllers/concerns/com_selectable_preference_screen.rb:26`
+- `ComPreferenceWebPush` — `app/controllers/base/com/api/v0/preferences/web_pushes_controller.rb:52`
+- `ComPreferenceWebPushOption` — `app/controllers/base/com/api/v0/preferences/web_pushes_controller.rb:51`
+Referenced only by models/tests:
+- `ComPreferenceAdultContentGate` — test `test/integration/anonymous_com_web_push_initialization_test.rb:256`
+- `ComPreferenceAdultContentGateOption` — model `app/models/com_preference_adult_content_gate.rb:28`; test `test/jobs/preference_lifecycle_job_test.rb:255`
+
+### `occurrence` — USED
+52 models: 11 with non-model callers, 41 referenced only by models/tests, 0 unreferenced.
+Non-model callers:
+- `AreaOccurrence` — `app/jobs/retention_purge_job.rb:46`
+- `ClientOccurrence` — `app/jobs/retention_purge_job.rb:46`
+- `DomainOccurrence` — `app/jobs/retention_purge_job.rb:47`
+- `EmailOccurrence` — `app/jobs/retention_purge_job.rb:47`
+- `IpOccurrence` — `app/jobs/retention_purge_job.rb:47`
+- `JwtAnomalyEvent` — `app/subscribers/jwt_anomaly_subscriber.rb:34`
+- `JwtOccurrence` — `app/jobs/retention_purge_job.rb:47`
+- `OperatorOccurrence` — `app/jobs/retention_purge_job.rb:46`
+- `TelephoneOccurrence` — `app/jobs/retention_purge_job.rb:47`
+- `VisitorOccurrence` — `app/jobs/retention_purge_job.rb:46`
+- `ZipOccurrence` — `app/jobs/retention_purge_job.rb:46`
+Referenced only by models/tests:
+- `AreaClientOccurrence` — model `app/models/area_occurrence.rb:52`; test `test/models/area_client_occurrence_test.rb:34`
+- `AreaDomainOccurrence` — test `test/models/area_domain_occurrence_test.rb:32`
+- `AreaEmailOccurrence` — test `test/models/area_email_occurrence_test.rb:34`
+- `AreaIpOccurrence` — test `test/models/area_ip_occurrence_test.rb:30`
+- `AreaOccurrenceStatus` — test `test/models/area_occurrence_status_test.rb:16`
+- `AreaOperatorOccurrence` — model `app/models/area_occurrence.rb:47`; test `test/models/area_staff_occurrence_test.rb:34`
+- `AreaTelephoneOccurrence` — test `test/models/area_telephone_occurrence_test.rb:32`
+- `AreaVisitorOccurrence` — test `test/models/area_visitor_occurrence_test.rb:36`
+- `AreaZipOccurrence` — test `test/models/area_zip_occurrence_test.rb:32`
+- `ClientOccurrenceStatus` — model `app/models/client_occurrence.rb:44`; test `test/models/client_occurrence_status_test.rb:17`
+- `ClientZipOccurrence` — test `test/models/client_zip_occurrence_test.rb:30`
+- `DomainClientOccurrence` — model `app/models/client_occurrence.rb:49`; test `test/models/domain_client_occurrence_test.rb:34`
+- `DomainEmailOccurrence` — test `test/models/domain_email_occurrence_test.rb:34`
+- `DomainIpOccurrence` — test `test/models/domain_ip_occurrence_test.rb:30`
+- `DomainOccurrenceStatus` — test `test/models/domain_occurrence_status_test.rb:16`
+- `DomainOperatorOccurrence` — model `app/models/domain_occurrence.rb:45`; test `test/models/domain_staff_occurrence_test.rb:34`
+- `DomainTelephoneOccurrence` — test `test/models/domain_telephone_occurrence_test.rb:32`
+- `DomainZipOccurrence` — test `test/models/domain_zip_occurrence_test.rb:32`
+- `EmailClientOccurrence` — model `app/models/client_occurrence.rb:52`; test `test/models/email_client_occurrence_test.rb:32`
+- `EmailIpOccurrence` — test `test/models/email_ip_occurrence_test.rb:30`
+- `EmailOccurrenceStatus` — test `test/models/database_pk_type_test.rb:29`
+- `EmailOperatorOccurrence` — model `app/models/email_occurrence.rb:48`; test `test/models/email_staff_occurrence_test.rb:32`
+- `EmailTelephoneOccurrence` — test `test/models/email_telephone_occurrence_test.rb:33`
+- `EmailVisitorOccurrence` — test `test/models/email_visitor_occurrence_test.rb:35`
+- `EmailZipOccurrence` — test `test/models/email_zip_occurrence_test.rb:33`
+- `IpClientOccurrence` — model `app/models/client_occurrence.rb:55`; test `test/models/ip_client_occurrence_test.rb:30`
+- `IpOccurrenceStatus` — test `test/models/ip_occurrence_status_test.rb:16`
+- `IpOperatorOccurrence` — model `app/models/ip_occurrence.rb:48`; test `test/models/ip_staff_occurrence_test.rb:30`
+- `IpTelephoneOccurrence` — test `test/models/ip_telephone_occurrence_test.rb:30`
+- `IpVisitorOccurrence` — test `test/models/ip_visitor_occurrence_test.rb:35`
+- `IpZipOccurrence` — test `test/models/ip_zip_occurrence_test.rb:30`
+- `JwtOccurrenceStatus` — test `test/models/jwt_occurrence_status_test.rb:17`
+- `OperatorClientOccurrence` — model `app/models/client_occurrence.rb:58`; test `test/models/operator_client_occurrence_test.rb:32`
+- `OperatorOccurrenceStatus` — model `app/models/operator_occurrence.rb:44`; test `test/models/operator_occurrence_status_test.rb:17`
+- `OperatorTelephoneOccurrence` — model `app/models/operator_occurrence.rb:57`; test `test/models/operator_telephone_occurrence_test.rb:33`
+- `OperatorZipOccurrence` — model `app/models/operator_occurrence.rb:63`; test `test/models/operator_zip_occurrence_test.rb:33`
+- `TelephoneClientOccurrence` — model `app/models/client_occurrence.rb:61`; test `test/models/occurrence_client_association_resolution_test.rb:12`
+- `TelephoneOccurrenceStatus` — test `test/models/reference_defaults_test.rb:15`
+- `TelephoneZipOccurrence` — test `test/models/telephone_zip_occurrence_test.rb:32`
+- `VisitorOccurrenceStatus` — test `test/jobs/retention_purge_job_test.rb:397`
+- `ZipOccurrenceStatus` — test `test/models/reference_defaults_test.rb:22`
+
+### `op_base_app` — USED
+65 models: 40 with non-model callers, 21 referenced only by models/tests, 4 unreferenced.
+Non-model callers:
+- `ClientAuthAdmissionBinding` — `app/controllers/concerns/base_step_up_intent.rb:170`
+- `ClientAuthCeremonySession` — `app/controllers/concerns/base_step_up_intent.rb:171`
+- `ClientDeviceSession` — `app/controllers/concerns/authentication_current_resource_resolver.rb:283`
+- `ClientDpopProofState` — `app/jobs/dpop_proof_state_purge_job.rb:19`
+- `ClientEmailCeremonyTransaction` — `app/controllers/base/app/identity/withdrawal/sessions_controller.rb:71`
+- `ClientOidcAuthorizationTransaction` — `app/jobs/retention_purge_job.rb:374`
+- `ClientOidcConnection` — `app/operations/oidc_connection_recorder.rb:44`
+- `ClientPasskeyCeremonyTransaction` — `app/operations/identity_passkey_ceremony_transaction_purger.rb:6`
+- `ClientSecretCredentialCeremonyTransaction` — `app/operations/identity_secret_credential_ceremony_transaction_purger.rb:6`
+- `ClientSecretSignInReceipt` — `app/jobs/client_secret_lifecycle_job.rb:71`
+- `ClientSensitiveAdmission` — `app/operations/sensitive_admission_accounting_writer.rb:11`
+- `ClientSensitiveAdmissionAuditAttempt` — `app/values/step_up_audit_outbox_sources_registry.rb:5`
+- `ClientSensitiveAdmissionAuditOutbox` — `app/operations/sensitive_admission_accounting_writer.rb:11`
+- `ClientSessionLimitResolutionTransaction` — `app/controllers/concerns/session_limit_gate.rb:164`
+- `ClientSignInFlow` — `app/jobs/client_secret_lifecycle_job.rb:70`
+- `ClientSignUpFlow` — `app/jobs/client_secret_lifecycle_job.rb:99`
+- `ClientStepUpAuditOutbox` — `app/values/step_up_audit_outbox_sources_registry.rb:10`
+- `ClientStepUpAuditOutboxAttempt` — `app/values/step_up_audit_outbox_sources_registry.rb:12`
+- `ClientStepUpCeremonyTransaction` — `app/controllers/base/app/verification/cancellations_controller.rb:32`
+- `ClientStepUpCommit` — `app/services/credential_security_transition.rb:188`
+- `ClientStepUpContext` — `app/operations/base_step_up_admission_issuer.rb:245`
+- `ClientStepUpContextState` — `app/operations/base_step_up_admission_issuer.rb:249`
+- `ClientStepUpContextTransition` — `app/operations/client_step_up_context_transition_writer.rb:39`
+- `ClientStepUpSession` — `app/jobs/retention_purge_job.rb:45`
+- `ClientTelephoneCeremonyTransaction` — `app/jobs/outbound/sms_delivery_job.rb:39`
+- `ClientToken` — `app/controllers/base/app/identity/sessions_controller.rb:16`
+- `ClientTotpCeremonyTransaction` — `app/operations/identity_step_up_ceremony_transaction_purger.rb:12`
+- `ClientVerification` — `app/controllers/concerns/verification_base.rb:560`
+- `IdentityPasskeyCeremonyCandidate` — `app/operations/identity_passkey_registration_final_committer.rb:20`
+- `IdentitySecretCredentialCeremonyCandidate` — `app/services/identity_secret_credential_ceremony_candidate_store.rb:42`
+- `IdentityTotpCeremonyCandidate` — `app/operations/identity_step_up_ceremony_transaction_purger.rb:12`
+- `OpAppAuthorityStop` — `app/operations/op_authority_stop_committer.rb:28`
+- `OpAppAuthorityStopEpochCutoff` — `app/operations/op_authority_stop_committer.rb:31`
+- `OpAppAuthorityStopGrantTarget` — `app/operations/op_authority_stop_committer.rb:30`
+- `OpAppAuthorityStopRootTarget` — `app/operations/op_authority_stop_committer.rb:29`
+- `OpAppGrant` — `app/controllers/base/app/application_controller.rb:118`
+- `OpAppInboundEventReceipt` — `app/operations/op_identity_event_invalidator.rb:14`
+- `SecurityConsumedJti` — `app/jobs/security_consumed_jti_purge_job.rb:27`
+- `SecurityOneTimeReveal` — `app/jobs/security_one_time_reveal_purge_job.rb:8`
+- `TurnstileReplay` — `app/services/turnstile_replay_store.rb:17`
+Referenced only by models/tests:
+- `ClientAuthAdmissionBindingStatus` — model `app/models/client_auth_admission_binding.rb:14`
+- `ClientAuthCeremonySessionStatus` — model `app/models/client_auth_ceremony_session.rb:9`
+- `ClientOidcAuthorizationTransactionStatus` — model `app/models/client_oidc_authorization_transaction.rb:55`
+- `ClientSessionLimitResolutionState` — model `app/models/client_session_limit_resolution_transaction.rb:14`
+- `ClientSignInFlowState` — model `app/models/client_sign_in_flow.rb:51`
+- `ClientSignUpFlowCleanupStatus` — model `app/models/client_sign_up_flow.rb:154`
+- `ClientSignUpFlowStatus` — model `app/models/client_sign_up_flow.rb:66`
+- `ClientSocialCeremonyTransaction` — model `app/models/client_visa_social_link_admission.rb:13`; test `test/models/concerns/social_ceremony_transactionable_test.rb:19`
+- `ClientStepUpAuditOutboxDeliveryState` — model `app/models/client_sensitive_admission_audit_outbox.rb:6`; test `test/models/client_step_up_audit_outbox_attempt_test.rb:17`
+- `ClientTokenBindingMethod` — model `app/models/client_token.rb:104`; test `test/concurrency/base_selector_single_write_http_test.rb:132`
+- `ClientTokenDbscStatus` — model `app/models/client_token.rb:105`; test `test/concurrency/base_selector_single_write_http_test.rb:132`
+- `ClientTokenKind` — model `app/models/client_token.rb:118`; test `test/concurrency/base_selector_single_write_http_test.rb:132`
+- `ClientTokenStatus` — model `app/models/client_token.rb:117`; test `test/concurrency/base_selector_single_write_http_test.rb:132`
+- `IdentitySocialCeremonyCandidate` — test `test/models/model_only_line_coverage_test.rb:371`
+- `LogoutTransaction` — test `test/models/logout_transaction_test.rb:12`
+- `OpAppAuthorityStopCause` — model `app/models/op_app_authority_stop.rb:8`
+- `OpAppAuthorityStopParticipant` — model `app/models/op_app_authority_stop.rb:16`; test `test/concurrency/op_authority_stop_concurrency_test.rb:94`
+- `OpAppAuthorityStopParticipantStatus` — model `app/models/op_app_authority_stop_participant.rb:10`
+- `OpAppAuthorityStopScope` — model `app/models/op_app_authority_stop.rb:9`
+- `OpAppConsumedJti` — test `test/models/model_table_fixture_consistency_test.rb:16`
+- `OpAppGrantLogoutHint` — model `app/models/op_app_grant.rb:7`; test `test/concurrency/base_selector_single_write_http_test.rb:315`
+Unreferenced models:
+`ClientEmergencySignInOperation`, `ClientOauthCallbackState`, `ClientVisaSensitiveAdmission`, `ClientVisaSocialLinkAdmission`
+
+### `op_base_org` — USED
+53 models: 34 with non-model callers, 17 referenced only by models/tests, 2 unreferenced.
+Non-model callers:
+- `OpOrgAuthorityStop` — `app/operations/op_authority_stop_committer.rb:40`
+- `OpOrgAuthorityStopEpochCutoff` — `app/operations/op_authority_stop_committer.rb:43`
+- `OpOrgAuthorityStopGrantTarget` — `app/operations/op_authority_stop_committer.rb:42`
+- `OpOrgAuthorityStopRootTarget` — `app/operations/op_authority_stop_committer.rb:41`
+- `OpOrgGrant` — `app/controllers/base/org/application_controller.rb:117`
+- `OpOrgInboundEventReceipt` — `app/operations/op_identity_event_invalidator.rb:17`
+- `OperatorAuthAdmissionBinding` — `app/controllers/concerns/base_step_up_intent.rb:174`
+- `OperatorAuthCeremonySession` — `app/controllers/concerns/base_step_up_intent.rb:175`
+- `OperatorDeviceSession` — `app/controllers/concerns/authentication_current_resource_resolver.rb:284`
+- `OperatorDpopProofState` — `app/jobs/dpop_proof_state_purge_job.rb:20`
+- `OperatorEmailCeremonyTransaction` — `app/mailers/email/org/otp_mailer.rb:35`
+- `OperatorOidcAuthorizationTransaction` — `app/services/base_auth_admission_coordinator.rb:338`
+- `OperatorOidcConnection` — `app/operations/oidc_connection_recorder.rb:43`
+- `OperatorPasskeyCeremonyCandidate` — `app/operations/identity_passkey_registration_final_committer.rb:34`
+- `OperatorPasskeyCeremonyTransaction` — `app/operations/identity_passkey_ceremony_transaction_purger.rb:7`
+- `OperatorSecretCredentialCeremonyTransaction` — `app/operations/identity_secret_credential_ceremony_transaction_purger.rb:7`
+- `OperatorSensitiveAdmission` — `app/operations/sensitive_admission_accounting_writer.rb:12`
+- `OperatorSensitiveAdmissionAuditAttempt` — `app/values/step_up_audit_outbox_sources_registry.rb:7`
+- `OperatorSensitiveAdmissionAuditOutbox` — `app/operations/sensitive_admission_accounting_writer.rb:12`
+- `OperatorSessionLimitResolutionTransaction` — `app/controllers/concerns/session_limit_gate.rb:165`
+- `OperatorSignInFlow` — `app/jobs/retention_purge_job.rb:32`
+- `OperatorSignUpFlow` — `app/jobs/retention_purge_job.rb:37`
+- `OperatorStepUpAuditOutbox` — `app/values/step_up_audit_outbox_sources_registry.rb:17`
+- `OperatorStepUpAuditOutboxAttempt` — `app/values/step_up_audit_outbox_sources_registry.rb:19`
+- `OperatorStepUpCeremonyTransaction` — `app/controllers/base/org/verification/cancellations_controller.rb:32`
+- `OperatorStepUpCommit` — `app/services/credential_security_transition.rb:189`
+- `OperatorStepUpContext` — `app/operations/base_step_up_admission_issuer.rb:245`
+- `OperatorStepUpContextState` — `app/operations/base_step_up_admission_issuer.rb:249`
+- `OperatorStepUpContextTransition` — `app/operations/operator_step_up_context_transition_writer.rb:39`
+- `OperatorStepUpSession` — `app/jobs/retention_purge_job.rb:45`
+- `OperatorTelephoneCeremonyTransaction` — `app/jobs/outbound/sms_delivery_job.rb:60`
+- `OperatorToken` — `app/controllers/base/org/identity/sessions_controller.rb:17`
+- `OperatorVerification` — `app/controllers/concerns/verification_base.rb:560`
+- `OrganizationInvitation` — `app/policies/org_registration_policy.rb:39`
+Referenced only by models/tests:
+- `OpOrgAuthorityStopCause` — model `app/models/op_org_authority_stop.rb:8`
+- `OpOrgAuthorityStopParticipant` — model `app/models/op_org_authority_stop.rb:16`; test `test/concurrency/org_iam_principal_commit_race_test.rb:112`
+- `OpOrgAuthorityStopParticipantStatus` — model `app/models/op_org_authority_stop_participant.rb:10`
+- `OpOrgAuthorityStopScope` — model `app/models/op_org_authority_stop.rb:9`
+- `OpOrgConsumedJti` — test `test/models/model_table_fixture_consistency_test.rb:17`
+- `OpOrgGrantLogoutHint` — model `app/models/op_org_grant.rb:7`; test `test/concurrency/base_selector_single_write_http_test.rb:319`
+- `OperatorAuthAdmissionBindingStatus` — model `app/models/operator_auth_admission_binding.rb:14`
+- `OperatorAuthCeremonySessionStatus` — model `app/models/operator_auth_ceremony_session.rb:8`
+- `OperatorOidcAuthorizationTransactionStatus` — model `app/models/operator_oidc_authorization_transaction.rb:55`
+- `OperatorSessionLimitResolutionState` — model `app/models/concerns/session_limit_resolution_transactionable.rb:88`
+- `OperatorSignInFlowState` — model `app/models/operator_sign_in_flow.rb:51`
+- `OperatorSignUpFlowStatus` — model `app/models/operator_sign_up_flow.rb:47`
+- `OperatorStepUpAuditOutboxDeliveryState` — model `app/models/operator_sensitive_admission_audit_outbox.rb:6`; test `test/models/operator_step_up_audit_outbox_attempt_test.rb:17`
+- `OperatorTokenBindingMethod` — model `app/models/concerns/dbsc_bindable.rb:40`; test `test/concurrency/base_selector_single_write_http_test.rb:144`
+- `OperatorTokenDbscStatus` — model `app/models/concerns/dbsc_bindable.rb:47`; test `test/concurrency/base_selector_single_write_http_test.rb:145`
+- `OperatorTokenKind` — model `app/models/operator_token.rb:118`; test `test/concurrency/base_selector_single_write_http_test.rb:144`
+- `OperatorTokenStatus` — model `app/models/concerns/token_status_management.rb:208`; test `test/concurrency/base_selector_single_write_http_test.rb:144`
+Unreferenced models:
+`OperatorOauthCallbackState`, `OperatorVisaSensitiveAdmission`
+
+### `org_setting` — USED
+29 models: 27 with non-model callers, 2 referenced only by models/tests, 0 unreferenced.
+Non-model callers:
+- `OrgPreference` — `app/controllers/base/org/application_controller.rb:36`
+- `OrgPreferenceBrowserBinding` — `app/controllers/concerns/preference_browser_state_reader.rb:18`
+- `OrgPreferenceConsentReceipt` — `app/controllers/concerns/preference_browser_state_reader.rb:13`
+- `OrgPreferenceCookie` — `app/controllers/concerns/preference_class_registry.rb:113`
+- `OrgPreferenceCurrency` — `app/controllers/concerns/preference_class_registry.rb:134`
+- `OrgPreferenceCurrencyOption` — `app/controllers/concerns/preference_class_registry.rb:122`
+- `OrgPreferenceDateFormat` — `app/controllers/concerns/preference_class_registry.rb:135`
+- `OrgPreferenceDateFormatOption` — `app/controllers/concerns/preference_class_registry.rb:123`
+- `OrgPreferenceDensity` — `app/controllers/concerns/preference_class_registry.rb:138`
+- `OrgPreferenceDensityOption` — `app/controllers/concerns/preference_class_registry.rb:126`
+- `OrgPreferenceLanguage` — `app/controllers/concerns/preference_class_registry.rb:131`
+- `OrgPreferenceLanguageOption` — `app/controllers/concerns/preference_class_registry.rb:119`
+- `OrgPreferenceMotion` — `app/controllers/concerns/preference_class_registry.rb:137`
+- `OrgPreferenceMotionOption` — `app/controllers/concerns/preference_class_registry.rb:125`
+- `OrgPreferencePageSize` — `app/controllers/concerns/preference_class_registry.rb:139`
+- `OrgPreferencePageSizeOption` — `app/controllers/concerns/preference_class_registry.rb:127`
+- `OrgPreferenceRegion` — `app/controllers/concerns/preference_class_registry.rb:132`
+- `OrgPreferenceRegionOption` — `app/controllers/concerns/preference_class_registry.rb:120`
+- `OrgPreferenceStatus` — `app/controllers/concerns/preference_class_registry.rb:112`
+- `OrgPreferenceTheme` — `app/controllers/concerns/preference_class_registry.rb:133`
+- `OrgPreferenceThemeOption` — `app/controllers/concerns/preference_class_registry.rb:121`
+- `OrgPreferenceTimeFormat` — `app/controllers/concerns/preference_class_registry.rb:136`
+- `OrgPreferenceTimeFormatOption` — `app/controllers/concerns/preference_class_registry.rb:124`
+- `OrgPreferenceTimezone` — `app/controllers/concerns/preference_class_registry.rb:130`
+- `OrgPreferenceTimezoneOption` — `app/controllers/concerns/preference_class_registry.rb:118`
+- `OrgPreferenceWebPush` — `app/controllers/concerns/preference_browser_state_reader.rb:125`
+- `OrgPreferenceWebPushOption` — `app/controllers/concerns/preference_browser_state_reader.rb:126`
+Referenced only by models/tests:
+- `OrgPreferenceAdultContentGate` — test `test/models/model_only_line_coverage_test.rb:127`
+- `OrgPreferenceAdultContentGateOption` — model `app/models/org_preference_adult_content_gate.rb:28`; test `test/models/org_preference_adult_content_gate_option_test.rb:15`
+
+### `org_signal` — USED
+2 models: 1 with non-model callers, 1 referenced only by models/tests, 0 unreferenced.
+Non-model callers:
+- `OperatorNotificationRecord` — `app/services/retention_cross_database_child_purge.rb:57`
+Referenced only by models/tests:
+- `OperatorNotification` — test `test/models/id_column_type_test.rb:17`
+
+### `org_zenith` — USED
+97 models: 53 with non-model callers, 41 referenced only by models/tests, 3 unreferenced.
+Non-model callers:
+- `Agent` — `app/adapters/org_admin_authority_client.rb:7`
+- `AgentAuthorityCutover` — `app/queries/authority_owner_migration_inventory.rb:141`
+- `AgentLifecycle` — `app/operations/agent_creator.rb:48`
+- `AgentMembership` — `app/policies/organization_membership_policy.rb:25`
+- `AgentMembershipKind` — `app/resolvers/avatar_permission_resolver.rb:42`
+- `AgentOwnership` — `app/operations/agent_creator.rb:52`
+- `Bureau` — `app/controllers/base/org/api/v0/membership/directory_controller.rb:121`
+- `BureauAuthorityCutover` — `app/queries/authority_owner_migration_inventory.rb:166`
+- `BureauLifecycle` — `app/operations/bureau_creator.rb:38`
+- `BureauOwnership` — `app/operations/bureau_creator.rb:42`
+- `Operator` — `app/adapters/org_admin_authority_client.rb:6`
+- `OperatorAuthorityLock` — `app/operations/agent_creator.rb:34`
+- `OperatorBanner` — `app/queries/current_banner_query.rb:22`
+- `OperatorCapabilityGrant` — `app/controllers/base/org/api/v0/iam/grants_controller.rb:40`
+- `OperatorEmail` — `app/controllers/base/org/identity/emails_controller.rb:14`
+- `OperatorEmailHistory` — `app/jobs/retention_purge_job.rb:423`
+- `OperatorEntraIdentity` — `app/operations/operator_entra_identity_provisioner.rb:4`
+- `OperatorIdentity` — `app/operations/agent_creator.rb:37`
+- `OperatorLifecycleRequest` — `app/policies/operator_withdrawal_policy.rb:7`
+- `OperatorPasskey` — `app/controllers/base/org/identity/passkeys_controller.rb:28`
+- `OperatorPasskeyAuditOutbox` — `app/jobs/passkey_audit_delivery_job.rb:9`
+- `OperatorPasskeyStatus` — `app/values/webauthn/surface.rb:55`
+- `OperatorPreference` — `app/controllers/concerns/preference_class_registry.rb:170`
+- `OperatorPreferenceCurrency` — `app/controllers/concerns/preference_class_registry.rb:188`
+- `OperatorPreferenceCurrencyOption` — `app/controllers/concerns/preference_class_registry.rb:176`
+- `OperatorPreferenceDateFormat` — `app/controllers/concerns/preference_class_registry.rb:189`
+- `OperatorPreferenceDateFormatOption` — `app/controllers/concerns/preference_class_registry.rb:177`
+- `OperatorPreferenceDensity` — `app/controllers/concerns/preference_class_registry.rb:192`
+- `OperatorPreferenceDensityOption` — `app/controllers/concerns/preference_class_registry.rb:180`
+- `OperatorPreferenceLanguage` — `app/controllers/concerns/preference_class_registry.rb:185`
+- `OperatorPreferenceLanguageOption` — `app/controllers/concerns/preference_class_registry.rb:173`
+- `OperatorPreferenceMotion` — `app/controllers/concerns/preference_class_registry.rb:191`
+- `OperatorPreferenceMotionOption` — `app/controllers/concerns/preference_class_registry.rb:179`
+- `OperatorPreferencePageSize` — `app/controllers/concerns/preference_class_registry.rb:193`
+- `OperatorPreferencePageSizeOption` — `app/controllers/concerns/preference_class_registry.rb:181`
+- `OperatorPreferenceRegion` — `app/controllers/concerns/preference_class_registry.rb:186`
+- `OperatorPreferenceRegionOption` — `app/controllers/concerns/preference_class_registry.rb:174`
+- `OperatorPreferenceStatus` — `app/controllers/concerns/preference_write_boundary.rb:42`
+- `OperatorPreferenceTheme` — `app/controllers/concerns/preference_class_registry.rb:187`
+- `OperatorPreferenceThemeOption` — `app/controllers/concerns/preference_class_registry.rb:175`
+- `OperatorPreferenceTimeFormat` — `app/controllers/concerns/preference_class_registry.rb:190`
+- `OperatorPreferenceTimeFormatOption` — `app/controllers/concerns/preference_class_registry.rb:178`
+- `OperatorPreferenceTimezone` — `app/controllers/concerns/preference_class_registry.rb:184`
+- `OperatorPreferenceTimezoneOption` — `app/controllers/concerns/preference_class_registry.rb:172`
+- `OperatorSecretCredential` — `app/controllers/base/org/identity/secret_credentials_controller.rb:28`
+- `OperatorStatus` — `app/resolvers/avatar_permission_resolver.rb:35`
+- `OperatorTelephone` — `app/controllers/base/org/identity/telephones_controller.rb:16`
+- `OperatorTelephoneHistory` — `app/jobs/retention_purge_job.rb:424`
+- `OperatorWorkspaceAccount` — `app/jobs/retention_purge_job.rb:39`
+- `OrgEnforcementAppeal` — `app/jobs/enforcement_reconciliation_job.rb:19`
+- `OrgEnforcementCase` — `app/controllers/base/org/api/v0/identity/standings_controller.rb:37`
+- `OrgIamOperationOutcome` — `app/operations/org_iam_audited_commit.rb:91`
+- `OrgIdentityAuthenticationEvent` — `app/jobs/op_identity_event_delivery_job.rb:9`
+Referenced only by models/tests:
+- `AgentAdministrationGrant` — model `app/models/agent.rb:45`; test `test/models/resource_grant_uniqueness_test.rb:424`
+- `AgentAssignment` — test `test/concurrency/base_selector_single_write_http_test.rb:412`
+- `AgentDelegationGrant` — model `app/models/agent.rb:49`; test `test/models/resource_grant_uniqueness_test.rb:424`
+- `AgentMembershipRevokeReason` — model `app/models/agent_membership.rb:71`; test `test/models/agent_bureau_model_layer_test.rb:11`
+- `AgentMembershipState` — model `app/models/agent_membership.rb:67`; test `test/models/agent_bureau_model_layer_test.rb:10`
+- `AgentOwnershipTransferRequest` — model `app/models/agent.rb:61`; test `test/models/ownership_transfer_pending_uniqueness_test.rb:255`
+- `AgentUsageGrant` — model `app/models/agent.rb:53`; test `test/models/resource_grant_uniqueness_test.rb:424`
+- `AgentViewGrant` — model `app/models/agent.rb:57`; test `test/models/resource_grant_uniqueness_test.rb:424`
+- `BureauAdministrationGrant` — model `app/models/bureau.rb:38`; test `test/models/resource_grant_uniqueness_test.rb:301`
+- `BureauDelegationGrant` — model `app/models/bureau.rb:42`; test `test/models/resource_grant_uniqueness_test.rb:301`
+- `BureauOwnershipTransferRequest` — model `app/models/bureau.rb:50`; test `test/models/ownership_transfer_pending_uniqueness_test.rb:178`
+- `BureauUnit` — model `app/models/bureau_unit_closure.rb:28`; test `test/concurrency/base_selector_single_write_http_test.rb:396`
+- `BureauUnitClosure` — model `app/models/bureau_unit.rb:35`; test `test/concurrency/base_selector_single_write_http_test.rb:395`
+- `BureauViewGrant` — model `app/models/bureau.rb:46`; test `test/models/resource_grant_uniqueness_test.rb:301`
+- `Department` — model `app/models/organization_status.rb:23`; test `test/models/department_test.rb:41`
+- `DepartmentStatus` — model `app/models/department.rb:43`; test `test/models/department_status_test.rb:15`
+- `Division` — test `test/models/bureau_root_units_test.rb:8`
+- `OperatorAccount` — model `app/models/operator.rb:165`; test `test/concurrency/base_selector_single_write_http_test.rb:385`
+- `OperatorBulletin` — model `app/models/operator.rb:163`; test `test/models/operator_bulletin_test.rb:38`
+- `OperatorEmailStatus` — model `app/models/operator_email.rb:54`; test `test/controllers/base/org/identity/removals_controller_test.rb:332`
+- `OperatorEntraIdentityState` — model `app/models/operator_entra_identity.rb:46`; test `test/models/operator_entra_identity_test.rb:13`
+- `OperatorIdentityState` — model `app/models/operator_identity.rb:35`; test `test/models/account_assignment_uniqueness_test.rb:102`
+- `OperatorMfaStatus` — model `app/models/operator.rb:96`; test `test/models/concerns/has_birthdate_test.rb:15`
+- `OperatorOidcIdentityBinding` — model `app/models/operator_identity.rb:39`
+- `OperatorOrganization` — model `app/models/department.rb:48`; test `test/models/authority_vocabulary_test.rb:16`
+- `OperatorPreferenceAdultContentGate` — test `test/models/model_only_line_coverage_test.rb:124`
+- `OperatorPreferenceAdultContentGateOption` — model `app/models/operator_preference_adult_content_gate.rb:28`; test `test/models/operator_preference_adult_content_gate_option_test.rb:15`
+- `OperatorSecretCredentialKind` — model `app/models/operator_secret_credential.rb:76`; test `test/controllers/base/identity_credential_management_test.rb:34`
+- `OperatorSecretCredentialStatus` — model `app/models/concerns/secret_credential.rb:58`; test `test/controllers/base/identity_credential_management_test.rb:32`
+- `OperatorSecurityMode` — model `app/models/operator.rb:93`; test `test/concurrency/base_selector_single_write_http_test.rb:142`
+- `OperatorTelephoneStatus` — model `app/models/operator_telephone.rb:47`; test `test/models/operator_telephone_status_test.rb:18`
+- `OperatorVisibility` — model `app/models/operator.rb:99`; test `test/concurrency/base_selector_single_write_http_test.rb:140`
+- `OperatorWorkspaceAccountMembership` — model `app/models/operator.rb:154`; test `test/models/operator_workspace_account_test.rb:46`
+- `OperatorWorkspaceAccountStatus` — test `test/models/database_pk_type_test.rb:11`
+- `OrgEnforcementAuthenticationMethodEffect` — model `app/models/org_enforcement_case.rb:16`; test `test/controllers/base/org/support/enforcement_cases_controller_test.rb:83`
+- `OrgEnforcementIdentifierEffect` — model `app/models/org_enforcement_case.rb:18`; test `test/controllers/base/org/support/enforcement_cases_controller_test.rb:84`
+- `OrgEnforcementPrincipalEffect` — model `app/models/org_enforcement_case.rb:14`; test `test/concurrency/enforcement_reconciliation_end_race_test.rb:209`
+- `OrgEnforcementPrincipalLink` — model `app/models/org_enforcement_case.rb:20`; test `test/controllers/base/org/support/enforcement_cases_controller_test.rb:85`
+- `OrganizationEntraConnection` — model `app/models/operator_entra_identity.rb:55`; test `test/models/operator_entra_identity_test.rb:15`
+- `OrganizationEntraConnectionState` — model `app/models/organization_entra_connection.rb:41`; test `test/models/operator_entra_identity_test.rb:12`
+- `OrganizationStatus` — model `app/models/operator_organization.rb:20`; test `test/models/database_pk_type_test.rb:13`
+Unreferenced models:
+`CoreOrgOperatorBridge`, `DivisionStatus`, `OperatorIdentifierRotationAudit`
+
+### `publishing` — ONLY-VIA-MODELS
+157 models: 0 with non-model callers, 133 referenced only by models/tests, 24 unreferenced.
+Referenced only by models/tests:
+- `Publishing::Docs::App::Entry` — model `app/models/publishing/content_families.rb:12`
+- `Publishing::Docs::App::EntryRevision` — model `app/models/publishing/content_families.rb:65`
+- `Publishing::Docs::App::EntryVersion` — model `app/models/publishing/content_families.rb:66`
+- `Publishing::Docs::App::RevisionMediaUsage` — model `app/models/publishing/content_families.rb:71`
+- `Publishing::Docs::App::RevisionMultipleTaxonomyAssignment` — model `app/models/publishing/content_families.rb:70`
+- `Publishing::Docs::App::RevisionSingleTaxonomyAssignment` — model `app/models/publishing/content_families.rb:69`
+- `Publishing::Docs::App::TaxonomyTerm` — model `app/models/publishing/content_families.rb:68`
+- `Publishing::Docs::App::VersionMediaUsage` — model `app/models/publishing/content_families.rb:74`
+- `Publishing::Docs::App::VersionMultipleTaxonomyAssignment` — model `app/models/publishing/content_families.rb:73`
+- `Publishing::Docs::App::VersionSingleTaxonomyAssignment` — model `app/models/publishing/content_families.rb:72`
+- `Publishing::Docs::App::Vocabulary` — model `app/models/publishing/content_families.rb:67`
+- `Publishing::Docs::Com::Entry` — model `app/models/publishing/content_families.rb:13`
+- `Publishing::Docs::Com::EntryRevision` — model `app/models/publishing/content_families.rb:78`
+- `Publishing::Docs::Com::EntryVersion` — model `app/models/publishing/content_families.rb:79`
+- `Publishing::Docs::Com::RevisionMediaUsage` — model `app/models/publishing/content_families.rb:84`
+- `Publishing::Docs::Com::RevisionMultipleTaxonomyAssignment` — model `app/models/publishing/content_families.rb:83`
+- `Publishing::Docs::Com::RevisionSingleTaxonomyAssignment` — model `app/models/publishing/content_families.rb:82`
+- `Publishing::Docs::Com::TaxonomyTerm` — model `app/models/publishing/content_families.rb:81`
+- `Publishing::Docs::Com::VersionMediaUsage` — model `app/models/publishing/content_families.rb:87`
+- `Publishing::Docs::Com::VersionMultipleTaxonomyAssignment` — model `app/models/publishing/content_families.rb:86`
+- `Publishing::Docs::Com::VersionSingleTaxonomyAssignment` — model `app/models/publishing/content_families.rb:85`
+- `Publishing::Docs::Com::Vocabulary` — model `app/models/publishing/content_families.rb:80`
+- `Publishing::Docs::Org::Entry` — model `app/models/publishing/content_families.rb:14`
+- `Publishing::Docs::Org::EntryRevision` — model `app/models/publishing/content_families.rb:91`
+- `Publishing::Docs::Org::EntryVersion` — model `app/models/publishing/content_families.rb:92`
+- `Publishing::Docs::Org::RevisionMediaUsage` — model `app/models/publishing/content_families.rb:97`
+- `Publishing::Docs::Org::RevisionMultipleTaxonomyAssignment` — model `app/models/publishing/content_families.rb:96`
+- `Publishing::Docs::Org::RevisionSingleTaxonomyAssignment` — model `app/models/publishing/content_families.rb:95`
+- `Publishing::Docs::Org::TaxonomyTerm` — model `app/models/publishing/content_families.rb:94`
+- `Publishing::Docs::Org::VersionMediaUsage` — model `app/models/publishing/content_families.rb:100`
+- `Publishing::Docs::Org::VersionMultipleTaxonomyAssignment` — model `app/models/publishing/content_families.rb:99`
+- `Publishing::Docs::Org::VersionSingleTaxonomyAssignment` — model `app/models/publishing/content_families.rb:98`
+- `Publishing::Docs::Org::Vocabulary` — model `app/models/publishing/content_families.rb:93`
+- `Publishing::Help::App::Entry` — model `app/models/publishing/content_families.rb:18`
+- `Publishing::Help::App::EntryRevision` — model `app/models/publishing/content_families.rb:143`
+- `Publishing::Help::App::EntryVersion` — model `app/models/publishing/content_families.rb:144`
+- `Publishing::Help::App::RevisionMediaUsage` — model `app/models/publishing/content_families.rb:149`
+- `Publishing::Help::App::RevisionMultipleTaxonomyAssignment` — model `app/models/publishing/content_families.rb:148`
+- `Publishing::Help::App::RevisionSingleTaxonomyAssignment` — model `app/models/publishing/content_families.rb:147`
+- `Publishing::Help::App::TaxonomyTerm` — model `app/models/publishing/content_families.rb:146`
+- `Publishing::Help::App::VersionMediaUsage` — model `app/models/publishing/content_families.rb:152`
+- `Publishing::Help::App::VersionMultipleTaxonomyAssignment` — model `app/models/publishing/content_families.rb:151`
+- `Publishing::Help::App::VersionSingleTaxonomyAssignment` — model `app/models/publishing/content_families.rb:150`
+- `Publishing::Help::App::Vocabulary` — model `app/models/publishing/content_families.rb:145`
+- `Publishing::Help::Com::Entry` — model `app/models/publishing/content_families.rb:19`
+- `Publishing::Help::Com::EntryRevision` — model `app/models/publishing/content_families.rb:156`
+- `Publishing::Help::Com::EntryVersion` — model `app/models/publishing/content_families.rb:157`
+- `Publishing::Help::Com::RevisionMediaUsage` — model `app/models/publishing/content_families.rb:162`
+- `Publishing::Help::Com::RevisionMultipleTaxonomyAssignment` — model `app/models/publishing/content_families.rb:161`
+- `Publishing::Help::Com::RevisionSingleTaxonomyAssignment` — model `app/models/publishing/content_families.rb:160`
+- `Publishing::Help::Com::TaxonomyTerm` — model `app/models/publishing/content_families.rb:159`
+- `Publishing::Help::Com::VersionMediaUsage` — model `app/models/publishing/content_families.rb:165`
+- `Publishing::Help::Com::VersionMultipleTaxonomyAssignment` — model `app/models/publishing/content_families.rb:164`
+- `Publishing::Help::Com::VersionSingleTaxonomyAssignment` — model `app/models/publishing/content_families.rb:163`
+- `Publishing::Help::Com::Vocabulary` — model `app/models/publishing/content_families.rb:158`
+- `Publishing::Help::Org::Entry` — model `app/models/publishing/content_families.rb:20`
+- `Publishing::Help::Org::EntryRevision` — model `app/models/publishing/content_families.rb:169`
+- `Publishing::Help::Org::EntryVersion` — model `app/models/publishing/content_families.rb:170`
+- `Publishing::Help::Org::RevisionMediaUsage` — model `app/models/publishing/content_families.rb:175`
+- `Publishing::Help::Org::RevisionMultipleTaxonomyAssignment` — model `app/models/publishing/content_families.rb:174`
+- `Publishing::Help::Org::RevisionSingleTaxonomyAssignment` — model `app/models/publishing/content_families.rb:173`
+- `Publishing::Help::Org::TaxonomyTerm` — model `app/models/publishing/content_families.rb:172`
+- `Publishing::Help::Org::VersionMediaUsage` — model `app/models/publishing/content_families.rb:178`
+- `Publishing::Help::Org::VersionMultipleTaxonomyAssignment` — model `app/models/publishing/content_families.rb:177`
+- `Publishing::Help::Org::VersionSingleTaxonomyAssignment` — model `app/models/publishing/content_families.rb:176`
+- `Publishing::Help::Org::Vocabulary` — model `app/models/publishing/content_families.rb:171`
+- `Publishing::Info::App::Entry` — model `app/models/publishing/content_families.rb:9`
+- `Publishing::Info::App::EntryRevision` — model `app/models/publishing/content_families.rb:26`
+- `Publishing::Info::App::EntryVersion` — model `app/models/publishing/content_families.rb:27`
+- `Publishing::Info::App::RevisionMediaUsage` — model `app/models/publishing/content_families.rb:32`
+- `Publishing::Info::App::RevisionMultipleTaxonomyAssignment` — model `app/models/publishing/content_families.rb:31`
+- `Publishing::Info::App::RevisionSingleTaxonomyAssignment` — model `app/models/publishing/content_families.rb:30`
+- `Publishing::Info::App::TaxonomyTerm` — model `app/models/publishing/content_families.rb:29`
+- `Publishing::Info::App::VersionMediaUsage` — model `app/models/publishing/content_families.rb:35`
+- `Publishing::Info::App::VersionMultipleTaxonomyAssignment` — model `app/models/publishing/content_families.rb:34`
+- `Publishing::Info::App::VersionSingleTaxonomyAssignment` — model `app/models/publishing/content_families.rb:33`
+- `Publishing::Info::App::Vocabulary` — model `app/models/publishing/content_families.rb:28`
+- `Publishing::Info::Com::Entry` — model `app/models/publishing/content_families.rb:10`
+- `Publishing::Info::Com::EntryRevision` — model `app/models/publishing/content_families.rb:39`
+- `Publishing::Info::Com::EntryVersion` — model `app/models/publishing/content_families.rb:40`
+- `Publishing::Info::Com::RevisionMediaUsage` — model `app/models/publishing/content_families.rb:45`
+- `Publishing::Info::Com::RevisionMultipleTaxonomyAssignment` — model `app/models/publishing/content_families.rb:44`
+- `Publishing::Info::Com::RevisionSingleTaxonomyAssignment` — model `app/models/publishing/content_families.rb:43`
+- `Publishing::Info::Com::TaxonomyTerm` — model `app/models/publishing/content_families.rb:42`
+- `Publishing::Info::Com::VersionMediaUsage` — model `app/models/publishing/content_families.rb:48`
+- `Publishing::Info::Com::VersionMultipleTaxonomyAssignment` — model `app/models/publishing/content_families.rb:47`
+- `Publishing::Info::Com::VersionSingleTaxonomyAssignment` — model `app/models/publishing/content_families.rb:46`
+- `Publishing::Info::Com::Vocabulary` — model `app/models/publishing/content_families.rb:41`
+- `Publishing::Info::Org::Entry` — model `app/models/publishing/content_families.rb:11`
+- `Publishing::Info::Org::EntryRevision` — model `app/models/publishing/content_families.rb:52`
+- `Publishing::Info::Org::EntryVersion` — model `app/models/publishing/content_families.rb:53`
+- `Publishing::Info::Org::RevisionMediaUsage` — model `app/models/publishing/content_families.rb:58`
+- `Publishing::Info::Org::RevisionMultipleTaxonomyAssignment` — model `app/models/publishing/content_families.rb:57`
+- `Publishing::Info::Org::RevisionSingleTaxonomyAssignment` — model `app/models/publishing/content_families.rb:56`
+- `Publishing::Info::Org::TaxonomyTerm` — model `app/models/publishing/content_families.rb:55`
+- `Publishing::Info::Org::VersionMediaUsage` — model `app/models/publishing/content_families.rb:61`
+- `Publishing::Info::Org::VersionMultipleTaxonomyAssignment` — model `app/models/publishing/content_families.rb:60`
+- `Publishing::Info::Org::VersionSingleTaxonomyAssignment` — model `app/models/publishing/content_families.rb:59`
+- `Publishing::Info::Org::Vocabulary` — model `app/models/publishing/content_families.rb:54`
+- `Publishing::MediaFile` — model `app/models/concerns/publishing_revision_media_usage_record.rb:11`
+- `Publishing::News::App::Entry` — model `app/models/publishing/content_families.rb:15`
+- `Publishing::News::App::EntryRevision` — model `app/models/publishing/content_families.rb:104`
+- `Publishing::News::App::EntryVersion` — model `app/models/publishing/content_families.rb:105`
+- `Publishing::News::App::RevisionMediaUsage` — model `app/models/publishing/content_families.rb:110`
+- `Publishing::News::App::RevisionMultipleTaxonomyAssignment` — model `app/models/publishing/content_families.rb:109`
+- `Publishing::News::App::RevisionSingleTaxonomyAssignment` — model `app/models/publishing/content_families.rb:108`
+- `Publishing::News::App::TaxonomyTerm` — model `app/models/publishing/content_families.rb:107`
+- `Publishing::News::App::VersionMediaUsage` — model `app/models/publishing/content_families.rb:113`
+- `Publishing::News::App::VersionMultipleTaxonomyAssignment` — model `app/models/publishing/content_families.rb:112`
+- `Publishing::News::App::VersionSingleTaxonomyAssignment` — model `app/models/publishing/content_families.rb:111`
+- `Publishing::News::App::Vocabulary` — model `app/models/publishing/content_families.rb:106`
+- `Publishing::News::Com::Entry` — model `app/models/publishing/content_families.rb:16`
+- `Publishing::News::Com::EntryRevision` — model `app/models/publishing/content_families.rb:117`
+- `Publishing::News::Com::EntryVersion` — model `app/models/publishing/content_families.rb:118`
+- `Publishing::News::Com::RevisionMediaUsage` — model `app/models/publishing/content_families.rb:123`
+- `Publishing::News::Com::RevisionMultipleTaxonomyAssignment` — model `app/models/publishing/content_families.rb:122`
+- `Publishing::News::Com::RevisionSingleTaxonomyAssignment` — model `app/models/publishing/content_families.rb:121`
+- `Publishing::News::Com::TaxonomyTerm` — model `app/models/publishing/content_families.rb:120`
+- `Publishing::News::Com::VersionMediaUsage` — model `app/models/publishing/content_families.rb:126`
+- `Publishing::News::Com::VersionMultipleTaxonomyAssignment` — model `app/models/publishing/content_families.rb:125`
+- `Publishing::News::Com::VersionSingleTaxonomyAssignment` — model `app/models/publishing/content_families.rb:124`
+- `Publishing::News::Com::Vocabulary` — model `app/models/publishing/content_families.rb:119`
+- `Publishing::News::Org::Entry` — model `app/models/publishing/content_families.rb:17`
+- `Publishing::News::Org::EntryRevision` — model `app/models/publishing/content_families.rb:130`
+- `Publishing::News::Org::EntryVersion` — model `app/models/publishing/content_families.rb:131`
+- `Publishing::News::Org::RevisionMediaUsage` — model `app/models/publishing/content_families.rb:136`
+- `Publishing::News::Org::RevisionMultipleTaxonomyAssignment` — model `app/models/publishing/content_families.rb:135`
+- `Publishing::News::Org::RevisionSingleTaxonomyAssignment` — model `app/models/publishing/content_families.rb:134`
+- `Publishing::News::Org::TaxonomyTerm` — model `app/models/publishing/content_families.rb:133`
+- `Publishing::News::Org::VersionMediaUsage` — model `app/models/publishing/content_families.rb:139`
+- `Publishing::News::Org::VersionMultipleTaxonomyAssignment` — model `app/models/publishing/content_families.rb:138`
+- `Publishing::News::Org::VersionSingleTaxonomyAssignment` — model `app/models/publishing/content_families.rb:137`
+- `Publishing::News::Org::Vocabulary` — model `app/models/publishing/content_families.rb:132`
+Unreferenced models:
+`Publishing::Docs::App::EntrySlug`, `Publishing::Docs::App::Publication`, `Publishing::Docs::Com::EntrySlug`, `Publishing::Docs::Com::Publication`, `Publishing::Docs::Org::EntrySlug`, `Publishing::Docs::Org::Publication`, `Publishing::Help::App::EntrySlug`, `Publishing::Help::App::Publication`, `Publishing::Help::Com::EntrySlug`, `Publishing::Help::Com::Publication`, `Publishing::Help::Org::EntrySlug`, `Publishing::Help::Org::Publication`, `Publishing::Info::App::EntrySlug`, `Publishing::Info::App::Publication`, `Publishing::Info::Com::EntrySlug`, `Publishing::Info::Com::Publication`, `Publishing::Info::Org::EntrySlug`, `Publishing::Info::Org::Publication`, `Publishing::News::App::EntrySlug`, `Publishing::News::App::Publication`, `Publishing::News::Com::EntrySlug`, `Publishing::News::Com::Publication`, `Publishing::News::Org::EntrySlug`, `Publishing::News::Org::Publication`
+
+### `rp_base_app` — USED
+13 models: 10 with non-model callers, 2 referenced only by models/tests, 1 unreferenced.
+Non-model callers:
+- `RpBaseAppIdentityBinding` — `app/resolvers/base_zenith_identity_resolver.rb:18`
+- `RpBaseAppOpSessionBinding` — `app/values/rp_step_up_cell_registry.rb:13`
+- `RpBaseAppPrincipal` — `app/resolvers/base_zenith_identity_resolver.rb:19`
+- `RpBaseAppSession` — `app/controllers/base/app/application_controller.rb:116`
+- `RpBaseAppSessionSelection` — `app/controllers/concerns/browser_rp_authentication.rb:559`
+- `RpStepUpAuditOutbox` — `app/values/step_up_audit_outbox_sources_registry.rb:24`
+- `RpStepUpAuditOutboxAttempt` — `app/values/step_up_audit_outbox_sources_registry.rb:26`
+- `RpStepUpState` — `app/values/rp_step_up_cell_registry.rb:14`
+- `RpStepUpStateStatus` — `app/values/rp_step_up_cell_registry.rb:15`
+- `RpStepUpStateTransition` — `app/values/rp_step_up_cell_registry.rb:15`
+Referenced only by models/tests:
+- `RpBaseAppEventReceipt` — model `app/models/rp_base_app_op_session_binding.rb:16`; test `test/concurrency/base_selector_single_write_http_test.rb:303`
+- `RpStepUpAuditOutboxDeliveryState` — model `app/models/rp_step_up_audit_outbox.rb:20`; test `test/models/rp_step_up_audit_outbox_attempt_test.rb:17`
+Unreferenced models:
+`RpBaseAppCallbackState`
+
+### `rp_base_org` — USED
+14 models: 11 with non-model callers, 2 referenced only by models/tests, 1 unreferenced.
+Non-model callers:
+- `RpBaseOrgIdentityBinding` — `app/resolvers/base_zenith_identity_resolver.rb:27`
+- `RpBaseOrgOpSessionBinding` — `app/values/rp_step_up_cell_registry.rb:21`
+- `RpBaseOrgPrincipal` — `app/resolvers/base_zenith_identity_resolver.rb:28`
+- `RpBaseOrgSession` — `app/controllers/base/org/application_controller.rb:115`
+- `RpBaseOrgSessionAvatarSelection` — `app/services/acme_selectable_context.rb:168`
+- `RpBaseOrgSessionSelection` — `app/controllers/concerns/browser_rp_authentication.rb:606`
+- `RpBaseOrgStepUpAuditOutbox` — `app/values/step_up_audit_outbox_sources_registry.rb:31`
+- `RpBaseOrgStepUpAuditOutboxAttempt` — `app/values/step_up_audit_outbox_sources_registry.rb:33`
+- `RpBaseOrgStepUpState` — `app/values/rp_step_up_cell_registry.rb:22`
+- `RpBaseOrgStepUpStateStatus` — `app/values/rp_step_up_cell_registry.rb:23`
+- `RpBaseOrgStepUpStateTransition` — `app/values/rp_step_up_cell_registry.rb:23`
+Referenced only by models/tests:
+- `RpBaseOrgEventReceipt` — model `app/models/rp_base_org_op_session_binding.rb:16`; test `test/concurrency/base_selector_single_write_http_test.rb:303`
+- `RpBaseOrgStepUpAuditOutboxDeliveryState` — model `app/models/rp_base_org_step_up_audit_outbox.rb:22`; test `test/models/model_table_fixture_consistency_test.rb:31`
+Unreferenced models:
+`RpBaseOrgCallbackState`
+
+### `rp_core_app` — ONLY-VIA-MODELS
+6 models: 0 with non-model callers, 5 referenced only by models/tests, 1 unreferenced.
+Referenced only by models/tests:
+- `RpCoreAppEventReceipt` — model `app/models/rp_core_app_op_session_binding.rb:16`; test `test/models/rp_sender_key_uniqueness_test.rb:9`
+- `RpCoreAppIdentityBinding` — model `app/models/rp_core_app_op_session_binding.rb:11`; test `test/models/rp_live_session_uniqueness_test.rb:9`
+- `RpCoreAppOpSessionBinding` — model `app/models/rp_core_app_event_receipt.rb:11`; test `test/models/rp_live_session_uniqueness_test.rb:9`
+- `RpCoreAppPrincipal` — model `app/models/rp_core_app_identity_binding.rb:11`; test `test/models/rp_live_session_uniqueness_test.rb:9`
+- `RpCoreAppSession` — model `app/models/rp_core_app_op_session_binding.rb:13`; test `test/models/rp_live_session_uniqueness_test.rb:9`
+Unreferenced models:
+`RpCoreAppCallbackState`
+
+### `rp_core_org` — ONLY-VIA-MODELS
+6 models: 0 with non-model callers, 5 referenced only by models/tests, 1 unreferenced.
+Referenced only by models/tests:
+- `RpCoreOrgEventReceipt` — model `app/models/rp_core_org_op_session_binding.rb:16`; test `test/models/rp_sender_key_uniqueness_test.rb:10`
+- `RpCoreOrgIdentityBinding` — model `app/models/rp_core_org_op_session_binding.rb:11`; test `test/models/rp_live_session_uniqueness_test.rb:10`
+- `RpCoreOrgOpSessionBinding` — model `app/models/rp_core_org_event_receipt.rb:11`; test `test/models/rp_live_session_uniqueness_test.rb:10`
+- `RpCoreOrgPrincipal` — model `app/models/rp_core_org_identity_binding.rb:11`; test `test/models/rp_live_session_uniqueness_test.rb:10`
+- `RpCoreOrgSession` — model `app/models/rp_core_org_op_session_binding.rb:13`; test `test/models/rp_live_session_uniqueness_test.rb:10`
+Unreferenced models:
+`RpCoreOrgCallbackState`
+
+### `rp_edit_org` — ONLY-VIA-MODELS
+6 models: 0 with non-model callers, 5 referenced only by models/tests, 1 unreferenced.
+Referenced only by models/tests:
+- `RpEditOrgEventReceipt` — model `app/models/rp_edit_org_op_session_binding.rb:16`; test `test/models/rp_sender_key_uniqueness_test.rb:15`
+- `RpEditOrgIdentityBinding` — model `app/models/rp_edit_org_op_session_binding.rb:11`; test `test/models/rp_live_session_uniqueness_test.rb:15`
+- `RpEditOrgOpSessionBinding` — model `app/models/rp_edit_org_event_receipt.rb:11`; test `test/models/rp_live_session_uniqueness_test.rb:15`
+- `RpEditOrgPrincipal` — model `app/models/rp_edit_org_identity_binding.rb:11`; test `test/models/rp_live_session_uniqueness_test.rb:15`
+- `RpEditOrgSession` — model `app/models/rp_edit_org_op_session_binding.rb:13`; test `test/models/rp_live_session_uniqueness_test.rb:15`
+Unreferenced models:
+`RpEditOrgCallbackState`
+
+### `rp_palm_app` — ONLY-VIA-MODELS
+6 models: 0 with non-model callers, 5 referenced only by models/tests, 1 unreferenced.
+Referenced only by models/tests:
+- `RpPalmAppEventReceipt` — model `app/models/rp_palm_app_op_session_binding.rb:16`; test `test/models/rp_sender_key_uniqueness_test.rb:13`
+- `RpPalmAppIdentityBinding` — model `app/models/rp_palm_app_op_session_binding.rb:11`; test `test/models/rp_live_session_uniqueness_test.rb:13`
+- `RpPalmAppOpSessionBinding` — model `app/models/rp_palm_app_event_receipt.rb:11`; test `test/models/rp_live_session_uniqueness_test.rb:13`
+- `RpPalmAppPrincipal` — model `app/models/rp_palm_app_identity_binding.rb:11`; test `test/models/rp_live_session_uniqueness_test.rb:13`
+- `RpPalmAppSession` — model `app/models/rp_palm_app_op_session_binding.rb:13`; test `test/models/rp_live_session_uniqueness_test.rb:13`
+Unreferenced models:
+`RpPalmAppCallbackState`
+
+### `rp_tech_org` — USED
+6 models: 1 with non-model callers, 4 referenced only by models/tests, 1 unreferenced.
+Non-model callers:
+- `RpTechOrgSession` — `app/services/rp_request_authenticator.rb:23`
+Referenced only by models/tests:
+- `RpTechOrgEventReceipt` — model `app/models/rp_tech_org_op_session_binding.rb:16`; test `test/models/rp_sender_key_uniqueness_test.rb:14`
+- `RpTechOrgIdentityBinding` — model `app/models/rp_tech_org_op_session_binding.rb:11`; test `test/models/rp_live_session_uniqueness_test.rb:14`
+- `RpTechOrgOpSessionBinding` — model `app/models/rp_tech_org_event_receipt.rb:11`; test `test/models/rp_live_session_uniqueness_test.rb:14`
+- `RpTechOrgPrincipal` — model `app/models/rp_tech_org_identity_binding.rb:11`; test `test/models/rp_live_session_uniqueness_test.rb:14`
+Unreferenced models:
+`RpTechOrgCallbackState`
+
+### `rp_warp_app` — ONLY-VIA-MODELS
+6 models: 0 with non-model callers, 5 referenced only by models/tests, 1 unreferenced.
+Referenced only by models/tests:
+- `RpWarpAppEventReceipt` — model `app/models/rp_warp_app_op_session_binding.rb:16`; test `test/models/rp_sender_key_uniqueness_test.rb:11`
+- `RpWarpAppIdentityBinding` — model `app/models/rp_warp_app_op_session_binding.rb:11`; test `test/models/rp_live_session_uniqueness_test.rb:11`
+- `RpWarpAppOpSessionBinding` — model `app/models/rp_warp_app_event_receipt.rb:11`; test `test/models/rp_live_session_uniqueness_test.rb:11`
+- `RpWarpAppPrincipal` — model `app/models/rp_warp_app_identity_binding.rb:11`; test `test/models/rp_live_session_uniqueness_test.rb:11`
+- `RpWarpAppSession` — model `app/models/rp_warp_app_op_session_binding.rb:13`; test `test/models/rp_live_session_uniqueness_test.rb:11`
+Unreferenced models:
+`RpWarpAppCallbackState`
+
+### `rp_warp_org` — ONLY-VIA-MODELS
+6 models: 0 with non-model callers, 5 referenced only by models/tests, 1 unreferenced.
+Referenced only by models/tests:
+- `RpWarpOrgEventReceipt` — model `app/models/rp_warp_org_op_session_binding.rb:16`; test `test/models/rp_sender_key_uniqueness_test.rb:12`
+- `RpWarpOrgIdentityBinding` — model `app/models/rp_warp_org_op_session_binding.rb:11`; test `test/models/rp_live_session_uniqueness_test.rb:12`
+- `RpWarpOrgOpSessionBinding` — model `app/models/rp_warp_org_event_receipt.rb:11`; test `test/models/rp_live_session_uniqueness_test.rb:12`
+- `RpWarpOrgPrincipal` — model `app/models/rp_warp_org_identity_binding.rb:11`; test `test/models/rp_live_session_uniqueness_test.rb:12`
+- `RpWarpOrgSession` — model `app/models/rp_warp_org_op_session_binding.rb:13`; test `test/models/rp_live_session_uniqueness_test.rb:12`
+Unreferenced models:
+`RpWarpOrgCallbackState`
+
+## Retained items with foreign-looking names
+
+- `AuthIoKeys` and `AuthMethodGuard` are called by retained Base welcome, authentication, credential and withdrawal flows. `AuthEmailOtp*` values and `AuthEmailOtpChallenge` implement local Base email verification; these are not Auth surface controllers or outbound Auth/Visa providers.
+- `AUTH_STATE_REDIS_URL` is the internal Valkey state-store configuration referenced by `config/valkey.yml`, not a remote Auth surface URL.
+- Base service/staff and Tech staff URL settings identify the retained Base app/org and Tech org boundaries. `PUBLIC_JUMP_GATEWAY_URL` remains the browser redirect destination used by retained Base Jump RT flows; it is separate from Auth/Visa. `PUBLIC_ASSET_URL` remains the production asset origin.
+- Mission Control Jobs, Flipper, Blazer, PgHero, Swagger and Coverband remain as owner-approved operator tools.
+- `UnknownHostsController` remains to reject unknown host requests.
+- `RpDeploymentBindingValue` remains because retained model bridges and the client store still call it; its foreign RP identifiers are model-retirement follow-up, not active routed surfaces.
+- The `core` Dev Container service name remains infrastructure, not a Rails route/controller namespace. Current Docs/SRS, session-limit and emergency-access records are explicitly historical; negative tests that assert retired roots stay absent remain containment guards.
+- Base corporate URL settings remain only because Base com routes are intentionally retained.
+- Accepted ADRs remain as historical decision records; current surface docs and the open hard-reset spec describe this implementation.
+
+## Verification
+
+- `bin/rails zeitwerk:check`: passed; all constants load.
+- `bin/rails routes`: passed; the current logical-host inventory contains 525 entries, grouped above.
+- `bin/rubocop`: passed; 3,610 files inspected, no offenses after targeted autocorrection of the modified session-presentation test.
+- `bundle exec erb_lint --lint-all`: passed; no ERB errors.
+- `git diff --check`: passed after final edits.
+- Route-focused tests: 12 runs, 120 assertions, 0 failures, 0 errors.
+- `bin/rails test`: exit 1 on the final rerun after RuboCop autocorrection; 10,150 runs, 58,203 assertions, 252 failures, 1,588 errors, 0 skips.
+- Focused `test/controllers/base/app/accounts_controller_test.rb`: 5 runs, 8 assertions, 4 failures, 0 errors, 0 skips; the same four behavior failures were present in the clean-HEAD baseline.
+- A focused run of `test/controllers/base/identity_sessions_presentation_test.rb` had 5 failures; those same five test cases failed in the clean-HEAD baseline.
+- A focused run of unchanged `test/operations/rp_session_revoker_test.rb`, after the full suite, had 10 `ActiveRecord::RecordNotUnique` errors and no assertions. No test database cleanup or database drop was performed.
+
+### Pre-existing and unclassified test failures
+
+The clean-HEAD baseline was already red: 10,379 runs, 56,471 assertions, 356 failures, 1,732 errors. Its leading error classes were `ActiveRecord::InvalidForeignKey` (1,492), `NameError` (94), `I18n::MissingTranslationData` (77), and `ActiveRecord::RecordNotUnique` (11). An earlier current run had 264 failures and 1,585 errors, with `ActiveRecord::InvalidForeignKey` (1,449), `NameError` (87), and `ActiveRecord::RecordNotUnique` (17) among its leading classes. `OidcClientRegistry::ClientNotFound` errors present in the baseline no longer appeared in that run's top classes. The final rerun changed failure/error totals from the earlier run (264/1,585 to 252/1,588). The current suite ran 229 fewer tests after retired tests were removed, and unrelated uncommitted worktree changes were present. The varying totals and changed suite composition prevent full per-test attribution; remaining failures are not all claimed as pre-existing. AC-5 remains incomplete because the full suite is red and attribution is partial.
+
+AC-2 remains incomplete for the two read-only ZFS mounts. All other requested checks were executed; no database was dropped, and no model or migration file was deleted.

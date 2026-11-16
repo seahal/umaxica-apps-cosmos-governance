@@ -30,14 +30,28 @@
 #
 class EnterpriseUnit < AppRpRecord
   include ::CollectiveUnit
+  include ::PublicId
+
+  before_validation :generate_public_id, on: :create
+  before_validation :refresh_generated_public_id_after_collision, on: :create
+  before_create :generate_public_id
+  around_create :retry_public_id_collision
+  validate :public_id_immutable_after_create, on: :update
+  validates :public_id, presence: true, length: { is: PublicId::GENERATION_SIZE }, uniqueness: true
+  after_create :create_closure_rows
+  validates :name, presence: true
+  validate :parent_must_belong_to_same_collective
+  validate :parent_id_is_immutable, on: :update
 
   collective_unit_config collective_foreign_key: :enterprise_id,
                          closure_class_name: "EnterpriseUnitClosure"
 
   belongs_to :enterprise, inverse_of: :enterprise_units
+  # A unit with no parent is the root of its enterprise hierarchy.
   belongs_to :parent,
              class_name: "EnterpriseUnit",
-             inverse_of: :children
+             inverse_of: :children,
+             optional: true
   has_many :children,
            class_name: "EnterpriseUnit",
            foreign_key: :parent_id,
@@ -56,4 +70,8 @@ class EnterpriseUnit < AppRpRecord
   has_many :ancestors, through: :ancestor_links, source: :ancestor
   has_many :descendants, through: :descendant_links, source: :descendant
   has_many :persona_memberships, dependent: :restrict_with_error, inverse_of: :enterprise_unit
+
+  validates :enterprise_id, exclusion: { in: [nil] }
+  # Unique indexes that include the primary key back composite references; checked only for an explicit id.
+  validates :id, uniqueness: { scope: %i(enterprise_id) }, allow_nil: true, if: :will_save_change_to_id?
 end

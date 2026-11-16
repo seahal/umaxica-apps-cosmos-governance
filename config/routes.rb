@@ -2,34 +2,21 @@
 # frozen_string_literal: true
 
 Rails.application.routes.draw do
-  # Base owns the OP/Authorization Server and durable identity/session authority.
+  # Governance owns the Base browser-RP and Tech operator surfaces.
   draw :base
 
-  # Auth owns the credential gateway for sign-in/sign-up ceremonies.
-  draw :auth
+  # Tech owns the global operator tools Browser RP.
+  draw :tech
 
-  # Info owns public informational content.
-  draw :info
-
-  # Core owns the regional BFF surface.
-  draw :core
-
-  # Side owns the Rails foundation/control-plane surface.
-  draw :side
-
-  # Palm owns the native RP and bearer-token API surface.
-  draw :palm
-
-  # Help owns the public help content surface.
-  draw :help
-
-  # Docs owns the public documentation content surface.
-  draw :docs
-
-  # News owns the public news content surface.
-  draw :news
+  # Repository-local diagnostic tools keep their exact host constraints and own Basic Auth.
+  draw :mission
+  draw :flipper
+  draw :blazer
+  draw :pghero
+  draw :swagger
+  draw :coverband
 
   # Any host that reached the app without matching a surface above is unknown;
   # answer it here rather than leaking a routing error.
-  get "/", to: "unknown_hosts#show"
+  get "/", to: "unknown_hosts#show" # FIXIME: I want to remove this, or use root!
 end

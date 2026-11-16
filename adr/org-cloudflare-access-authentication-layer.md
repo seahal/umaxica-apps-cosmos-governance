@@ -2,6 +2,11 @@
 
 Accepted: 2026-06-29
 
+> **Local-route disposition (2026-11-10):** The owner-approved local-surface hard reset removes this
+> repository's Docs, Help, Info, and News Rails routes/controllers. This supersedes the local Rails
+> endpoint scope recorded below. Existing Cloudflare Access or external content-host contracts are
+> not changed by this repository decision and require their own owner decision if they need changes.
+
 ## Context
 
 The org surface is divided into two categories of endpoints by authentication posture:

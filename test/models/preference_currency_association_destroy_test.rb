@@ -4,6 +4,18 @@
 require "test_helper"
 
 class PreferenceCurrencyAssociationDestroyTest < ActiveSupport::TestCase
+  CLIENT_DESTROY_ASSOCIATIONS = %i(
+    client_external_identities client_apple_notification_events client_emails client_telephones
+    client_totp_credentials client_passkeys client_withdrawal_ceremonies
+    client_memberships clients client_banners client_members client_member_discoveries
+    client_member_observations client_member_revocations client_member_impersonations client_member_suspensions
+    client_member_deletions owned_members client_bulletins rp_account authority_lock core_app_client_bridges
+  ).freeze
+  OPERATOR_DESTROY_ASSOCIATIONS = %i(
+    staff_passkeys staff_secret_credentials staff_operators
+    operator_workspace_accounts staff_bulletins staff_banners rp_account authority_lock core_org_operator_bridges
+  ).freeze
+
   self.fixture_table_names = []
 
   setup do
@@ -11,32 +23,25 @@ class PreferenceCurrencyAssociationDestroyTest < ActiveSupport::TestCase
   end
 
   test "destroying client destroys currency preference child" do
-    client = Client.create!
-    preference = ClientPreference.create!(user: client)
+    client = Client.create!(security_mode_id: SecurityModeConfigurable::NORMAL)
+    preference = ClientPreference.create!(client: client)
     currency = ClientPreferenceCurrency.create!(preference: preference)
 
+    # An Identity is physically erased only once it has lapsed and is purgeable.
+    client.reload.update!(discard_at: client.created_at, purge_eligible_at: client.created_at)
+    client = Client.includes(*CLIENT_DESTROY_ASSOCIATIONS, :client_preference).find(client.id)
     client.destroy!
 
     assert_not ClientPreference.exists?(preference.id)
     assert_not ClientPreferenceCurrency.exists?(currency.id)
   end
 
-  test "destroying visitor destroys currency preference child" do
-    visitor = Visitor.create!
-    preference = VisitorPreference.create!(visitor: visitor)
-    currency = VisitorPreferenceCurrency.create!(preference: preference)
-
-    visitor.destroy!
-
-    assert_not VisitorPreference.exists?(preference.id)
-    assert_not VisitorPreferenceCurrency.exists?(currency.id)
-  end
-
   test "destroying operator destroys currency preference child" do
-    operator = Operator.create!
-    preference = OperatorPreference.create!(staff: operator)
+    operator = Operator.create!(security_mode_id: SecurityModeConfigurable::ADVANCED)
+    preference = OperatorPreference.create!(operator: operator)
     currency = OperatorPreferenceCurrency.create!(preference: preference)
 
+    operator = Operator.includes(*OPERATOR_DESTROY_ASSOCIATIONS, :operator_preference).find(operator.id)
     operator.destroy!
 
     assert_not OperatorPreference.exists?(preference.id)
@@ -49,17 +54,12 @@ class PreferenceCurrencyAssociationDestroyTest < ActiveSupport::TestCase
     [
       ClientStatus,
       ClientVisibility,
-      ClientMfaLevel,
+
       ClientMfaStatus,
       ClientPreferenceCurrencyOption,
-      VisitorStatus,
-      VisitorVisibility,
-      VisitorMfaLevel,
-      VisitorMfaStatus,
-      VisitorPreferenceCurrencyOption,
       OperatorStatus,
       OperatorVisibility,
-      OperatorMfaLevel,
+
       OperatorMfaStatus,
       OperatorPreferenceCurrencyOption,
     ].each(&:ensure_defaults!)

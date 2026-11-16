@@ -1,4 +1,6 @@
+# frozen_string_literal: true
 # typed: false
+
 # == Schema Information
 #
 # Table name: org_preference_languages
@@ -21,14 +23,15 @@
 #  fk_rails_...                              (preference_id => org_preferences.id)
 #
 
-# frozen_string_literal: true
-
 require "test_helper"
 
 class OrgPreferenceLanguageTest < ActiveSupport::TestCase
   setup do
-    OrgPreferenceStatus.find_or_create_by!(id: OrgPreferenceStatus::NOTHING)
-    @preference = OrgPreference.create!(status_id: OrgPreferenceStatus::NOTHING)
+    OrgPreferenceStatus.find_or_create_by!(id: OrgPreferenceStatus::ACTIVE)
+    @preference = OrgPreference.create!(
+      jti: SecureRandom.uuid, last_issued_at: Time.current, last_issued_expires_at: 400.days.from_now,
+      status_id: OrgPreferenceStatus::ACTIVE,
+    )
   end
 
   test "belongs to preference" do

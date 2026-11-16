@@ -19,7 +19,6 @@ ENV["RAILS_ENV"] ||= "test"
 # host and making results depend on how the suite was invoked. Host configuration belongs
 # to the process environment (compose.yaml, the CI job env), which is set before boot.
 # test/config/host_configuration_consistency_test.rb fails loudly if the two ever diverge.
-ENV["SOCIAL_AUTH_CEREMONY_HMAC_KEY"] = "test-social-auth-ceremony-hmac-key"
 ENV["SMTP_FROM_ADDRESS_APP"] = "from@umaxica.app"
 RubyVM::YJIT.enable if defined?(RubyVM::YJIT)
 
@@ -41,31 +40,53 @@ require_relative "../config/environment"
 # digest of the watched files against `tmp/cache/vite/last-build-test.json` and skips the Vite
 # call when nothing changed, so a repeat run pays only for the digest.
 unless ViteRuby.commands.build
-  # rubocop:disable I18n/RailsI18n/DecorateString
   abort <<~MESSAGE
     Vite test-mode build failed, so public/vite-test has no usable manifest and every test that
     renders a layout would fail on a missing entrypoint. See the Vite output above; the same build
     runs standalone as `bunx vite build --mode test`.
   MESSAGE
-  # rubocop:enable I18n/RailsI18n/DecorateString
 end
 
 require "rails/test_help"
+# `Minitest.load(:test_prof)` only requires the Minitest reporter shims
+# (`lib/minitest/test_prof_plugin.rb`); it does not load the TestProf recipe classes
+# (`TestProf::EventProf`, `TestProf::StackProf`, `TestProf::MinitestSample`, ...), which live
+# behind the gem's top-level `require "test_prof"` entrypoint. Loading them here only defines
+# classes and registers `TestProf.activate` hooks that stay inert unless their env var
+# (`EVENT_PROF`, `TEST_STACK_PROF`, `SAMPLE`, ...) is set, so this carries no cost for an
+# ordinary `bin/rails test` run.
+require "test_prof"
+Minitest.load(:test_prof)
+# `MinitestSample` (backs `SAMPLE`/`SAMPLE_GROUPS`) is a recipe, not part of the top-level
+# `test_prof` require above, and must be loaded explicitly like any other TestProf recipe.
+require "test_prof/recipes/minitest/sample"
 require_relative "support/parallel_test_database_cloner"
 require_relative "support/external_identity_test_helper"
-require_relative "support/publishing_content_helper"
+require_relative "support/security_mode_test_default"
+require_relative "support/operator_passkey_test_support"
 require_relative "support/form_action_policy_helper"
 require_relative "support/fetch_metadata_defaults"
 require_relative "support/turnstile_verifier_stub"
+require_relative "support/outbound_http_guard"
 require_relative "support/outbound_http_stub"
-require_relative "support/login_cooldown_helper"
+require_relative "support/in_process_owned_surface_transport"
+require_relative "support/service_stubs"
+require_relative "support/valkey_test_isolation"
+require_relative "support/set_cookie_assertions"
+require_relative "support/withheld_assertions"
+require_relative "support/cookie_jar_helper"
 require_relative "support/inertia_page_object"
+require_relative "support/strict_loading_association_preloader"
+require_relative "support/public_id_fixed_length_assertions"
+require_relative "support/rp_cell_session_helper"
 
 # Inject the Turnstile stub for the whole suite. Application code resolves the verifier
 # through Turnstile::VerifierFactory, so no production class knows about the test suite.
 Rails.application.config.x.turnstile.verifier = "TurnstileVerifierStub"
 
 module AuthenticationHarness
+  include RpCellSessionHelper
+
   TEST_BROWSER_USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) " \
                             "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
@@ -76,41 +97,98 @@ module AuthenticationHarness
     headers
   end
 
-  def as_user_headers(user, host: nil, headers: {}, session_public_id: nil)
-    authenticated_resource_headers(
-      user,
-      host: host,
-      headers: headers,
-      session_public_id: session_public_id,
-      resource_type: "client",
-      session_header: "X-TEST-CURRENT-USER",
-    )
+  def as_user_headers(user, host: nil, headers: {}, session_public_id: nil, select_available_app_persona: true)
+    session = browser_rp_session_for(user, client_id: "base-app-ww", host:, session_public_id:)
+    api_token = base_api_token_for_session(session)
+    if select_available_app_persona && !session.selected_actor_context?
+      selection = BaseSelectorAuthority.prepare(surface: :app, principal: user, session:)
+      if Array(selection[:accounts]).empty? && user.status_id == ClientStatus::ACTIVE &&
+          user.login_allowed? && user.access_enabled?
+        BaseSelectorBootstrapAuthority.call(surface: :app, principal: user)
+        selection = BaseSelectorAuthority.prepare(surface: :app, principal: user, session:)
+      end
+      candidate = Array(selection[:accounts]).first
+      if candidate
+        BaseSelectorAuthority.select(
+          surface: :app, principal: user, session:,
+          params: {
+            account_public_id: candidate.fetch(:public_id),
+            organization_public_id: candidate.dig(:organization, :public_id),
+            organization_unit_public_id: candidate.dig(:organization, :unit_public_id),
+            avatar_public_id: candidate.dig(:avatar, :public_id),
+          },
+        )
+      end
+    end
+    cookies =
+      headers.fetch("Cookie", "").split("; ").reject do |pair|
+        [OidcRpBrowserCredentialContract::ACCESS_COOKIE, OidcRpBrowserCredentialContract::SESSION_COOKIE,
+         OidcRpBrowserCredentialContract::REFRESH_COOKIE, AuthenticationCookieName.access,].include?(pair.split(
+           "=",
+           2,
+         ).first)
+      end
+    cookies << "#{OidcRpBrowserCredentialContract::SESSION_COOKIE}=#{Rack::Utils.escape(session.public_id)}"
+    cookie_header = cookies.join("; ")
+    result = host_headers(host).merge(headers).merge("Cookie" => cookie_header, "HTTP_COOKIE" => cookie_header)
+    result["Authorization"] = "Bearer #{api_token}" if api_token
+    result
   end
 
-  def as_staff_headers(staff, host: nil, headers: {}, session_public_id: nil)
-    authenticated_resource_headers(
-      staff,
-      host: host,
-      headers: headers,
-      session_public_id: session_public_id,
-      resource_type: "operator",
-      session_header: "X-TEST-CURRENT-STAFF",
-    )
-  end
-
-  def as_visitor_headers(visitor, host: nil, headers: {}, session_public_id: nil)
-    authenticated_resource_headers(
-      visitor,
-      host: host,
-      headers: headers,
-      session_public_id: session_public_id,
-      resource_type: "visitor",
-      session_header: "X-TEST-CURRENT-RESOURCE",
-    )
+  def as_staff_headers(staff, host: nil, headers: {}, session_public_id: nil, select_available_org_persona: false)
+    session = browser_rp_session_for(staff, client_id: "base-org-ww", host:, session_public_id:)
+    api_token = base_api_token_for_session(session)
+    if select_available_org_persona && !session.selected_actor_context?
+      selection = BaseSelectorAuthority.prepare(surface: :org, principal: staff, session:)
+      if Array(selection[:accounts]).empty? && staff.status_id == OperatorStatus::ACTIVE &&
+          staff.login_allowed? && staff.access_enabled?
+        BaseSelectorBootstrapAuthority.call(surface: :org, principal: staff)
+        selection = BaseSelectorAuthority.prepare(surface: :org, principal: staff, session:)
+      end
+      candidate = Array(selection[:accounts]).first
+      if candidate
+        BaseSelectorAuthority.select(
+          surface: :org, principal: staff, session:,
+          params: {
+            account_public_id: candidate.fetch(:public_id),
+            organization_public_id: candidate.dig(:organization, :public_id),
+            organization_unit_public_id: candidate.dig(:organization, :unit_public_id),
+            avatar_public_id: candidate.dig(:avatar, :public_id),
+          },
+        )
+      end
+    end
+    cookies =
+      headers.fetch("Cookie", "").split("; ").reject do |pair|
+        [OidcRpBrowserCredentialContract::ACCESS_COOKIE, OidcRpBrowserCredentialContract::SESSION_COOKIE,
+         OidcRpBrowserCredentialContract::REFRESH_COOKIE, AuthenticationCookieName.access,].include?(pair.split(
+           "=",
+           2,
+         ).first)
+      end
+    cookies << "#{OidcRpBrowserCredentialContract::SESSION_COOKIE}=#{Rack::Utils.escape(session.public_id)}"
+    cookie_header = cookies.join("; ")
+    result = host_headers(host).merge(headers).merge("Cookie" => cookie_header, "HTTP_COOKIE" => cookie_header)
+    result["Authorization"] = "Bearer #{api_token}" if api_token
+    result
   end
 
   def bearer_headers(token, host: nil, headers: {})
     host_headers(host).merge(headers).merge("Authorization" => "Bearer #{token}")
+  end
+
+  def with_preference_realm_issuers
+    %w(app com org).each { |realm| JitSecurityJwtRegistry.issuer("preference_#{realm}") }
+    yield
+  end
+
+  def assert_no_preference_state_cookies
+    set_cookie = response.headers["Set-Cookie"].to_s
+
+    [PreferenceCookieName.anonymous_jwt, PreferenceCookieName.anonymous_experience,
+     PreferenceCookieName.binding, PreferenceIoKeys::Cookies::LANGUAGE,].each do |name|
+      assert_not_includes set_cookie, "#{name}=", name
+    end
   end
 
   def submit_step_up_completion_if_present!(host: nil, headers: {})
@@ -134,139 +212,105 @@ module AuthenticationHarness
 
   private
 
-  def authenticated_resource_headers(resource, host:, headers:, session_public_id:, resource_type:, session_header:)
-    token_record = authentication_harness_session_token(resource, session_public_id: session_public_id)
+  def base_api_token_for_session(session)
+    BaseApiAuthorityTokenIssuer.issue(rp_session: session)
+  rescue BaseApiAuthorityTokenIssuer::InactiveRpSession
+    nil
+  end
+
+  def browser_rp_session_for(resource, client_id:, host:, session_public_id:)
+    client = OidcClientRegistry.find!(client_id)
+    valid_resource =
+      (client.resource_type == "client" && resource.is_a?(Client)) ||
+      (client.resource_type == "operator" && resource.is_a?(Operator))
+    raise ArgumentError, "test resource does not match its RP cell" unless valid_resource
+
     host_value = host || (respond_to?(:request, true) ? request&.host : nil)
-    access_token = jwt_access_token_for(
-      resource,
-      host: host_value,
-      session_public_id: token_record.public_id,
-      resource_type: resource_type,
+    normalized_host = URI.parse(host_value.to_s.include?("://") ? host_value.to_s : "https://#{host_value}").host
+    raise AccessOpDataUnavailableError unless normalized_host == OidcIssuer.host_for_client(client)
+
+    @authentication_harness_rp_sessions ||= {}
+    cache_key = [client_id, resource.public_id, session_public_id]
+    session = @authentication_harness_rp_sessions[cache_key] ||= seed_rp_browser_session(
+      client:, actor: resource, sid: session_public_id || SecureRandom.uuid, absolute_expires_at: 1.hour.from_now,
     )
-
-    host_headers(host)
-      .merge(headers)
-      .merge(
-        session_header => resource.id.to_s,
-        "X-TEST-SESSION-PUBLIC-ID" => token_record.public_id,
-        "Authorization" => "Bearer #{access_token}",
-        "Cookie" => "#{AuthenticationBase::ACCESS_COOKIE_KEY}=#{access_token}",
-        "HTTP_COOKIE" => "#{AuthenticationBase::ACCESS_COOKIE_KEY}=#{access_token}",
-      )
+    @base_browser_rp_session_public_ids ||= {}
+    @base_browser_rp_session_public_ids[cache_key] = session.public_id
+    session
   end
 
-  def authentication_harness_session_token(resource, session_public_id:)
-    token = authentication_harness_token_model(resource).find_by(public_id: session_public_id) \
-      if session_public_id.present?
-    token || authentication_harness_latest_token(resource) || authentication_harness_create_token(resource)
-  end
-
-  def authentication_harness_latest_token(resource)
-    authentication_harness_token_model(resource)
-      .where(authentication_harness_token_owner_column(resource) => resource.id)
-      .where("discarded_at > ?", Time.current)
-      .order(created_at: :desc)
-      .first
-  end
-
-  def authentication_harness_create_token(resource)
-    case resource
-    when Client
-      ClientToken.create!(
-        user_id: resource.id,
-        user_token_kind_id: ClientTokenKind::BROWSER_WEB,
-        user_token_status_id: ClientTokenStatus::ACTIVE,
-        user_token_binding_method_id: ClientTokenBindingMethod::LEGACY,
-        user_token_dbsc_status_id: ClientTokenDbscStatus::NOTHING,
-      )
-    when Operator
-      OperatorToken.create!(
-        staff_id: resource.id,
-        staff_token_kind_id: OperatorTokenKind::BROWSER_WEB,
-        staff_token_status_id: OperatorTokenStatus::ACTIVE,
-        staff_token_binding_method_id: OperatorTokenBindingMethod::LEGACY,
-        staff_token_dbsc_status_id: OperatorTokenDbscStatus::NOTHING,
-      )
-    when Visitor
-      VisitorToken.create!(
-        visitor_id: resource.id,
-        visitor_token_kind_id: VisitorTokenKind::BROWSER_WEB,
-        visitor_token_status_id: VisitorTokenStatus::ACTIVE,
-        visitor_token_binding_method_id: VisitorTokenBindingMethod::LEGACY,
-        visitor_token_dbsc_status_id: VisitorTokenDbscStatus::NOTHING,
-      )
-    else
-      raise ArgumentError, "unsupported authenticated resource: #{resource.class.name}"
-    end
-  end
-
-  def authentication_harness_token_model(resource)
-    case resource
-    when Client then ClientToken
-    when Operator then OperatorToken
-    when Visitor then VisitorToken
-    else
-      raise ArgumentError, "unsupported authenticated resource: #{resource.class.name}"
-    end
-  end
-
-  def authentication_harness_token_owner_column(resource)
-    case resource
-    when Client then :user_id
-    when Operator then :staff_id
-    when Visitor then :visitor_id
-    else
-      raise ArgumentError, "unsupported authenticated resource: #{resource.class.name}"
+  def contact_owner_for_test(contact)
+    case contact
+    when ClientEmail, ClientTelephone then Client.find(contact.user_id)
+    else raise ArgumentError, "unsupported Contact class: #{contact.class.name}"
     end
   end
 
   def jwt_access_token_for(resource, host: nil, session_id: nil, session_public_id: nil, resource_type: nil,
-                           dpop_jkt: nil)
-    host_value = host || (respond_to?(:request, true) ? request&.host : nil) || "unknown"
+                           dpop_jkt: nil, authentication_context: nil)
+    raise AccessOpDataUnavailableError if session_id
+
     resource_type ||=
       case resource
       when Client then "client"
       when Operator then "operator"
-      when Visitor then "visitor"
+      else raise ArgumentError, "unsupported test resource"
       end
-
-    AuthenticationToken.encode(
-      resource,
-      host: host_value,
-      session_id: session_id,
-      session_public_id: session_public_id,
-      resource_type: resource_type,
-      dpop_jkt: dpop_jkt,
-      jwt_issuer_id: jwt_issuer_id_for_test_host(host_value, resource_type),
+    client_id =
+      case [resource_type, resource.class]
+      when ["client", Client] then "base-app-ww"
+      when ["operator", Operator], ["staff", Operator] then "base-org-ww"
+      else raise ArgumentError, "test resource does not match its realm"
+      end
+    client = OidcClientRegistry.find!(client_id)
+    session = browser_rp_session_for(resource, client_id:, host:, session_public_id:)
+    now = Time.current.to_i
+    claims = {
+      "iss" => rp_test_issuer_for(client),
+      "sub" => OidcSubject.for(resource, resource_type: client.resource_type),
+      "aud" => [client_id],
+      "client_id" => client_id,
+      "sid" => session.op_session_binding.sid,
+      "jti" => SecureRandom.uuid,
+      "scope" => "openid profile domain:#{client.resource_type}",
+      "iat" => now,
+      "nbf" => now,
+      "exp" => now + 600,
+      "authn_ctx" => authentication_context || AuthenticationContextValue::NORMAL_KEY,
+    }
+    claims["cnf"] = { "jkt" => dpop_jkt } if dpop_jkt
+    access_token = JitSecurityJwtKeyring.encode(
+      claims, typ: "at+jwt",
+              issuer_id: OidcIssuer.jwt_issuer_id_for_client(client),
     )
+    install_base_rp_jwks_client(client_id:, access_token:)
+    access_token
   end
 
-  def jwt_issuer_id_for_test_host(host, resource_type)
-    normalized = host.to_s
-    service = (normalized.include?("base") || normalized.include?("www.")) ? "BASE" : "SIGN"
-    surface =
-      if resource_type == "operator" || normalized.include?(".org") || normalized.include?("org.")
-        "ORG"
-      elsif resource_type == "visitor" || normalized.include?(".com") || normalized.include?("com.")
-        "COM"
-      else
-        "APP"
+  def destroy_test_client_after_cross_database_cleanup!(client)
+    dependent_associations =
+      Client.reflect_on_all_associations.filter_map do |association|
+        association.name if association.options[:dependent]
       end
-    "surface:#{service}_#{surface}"
+    Client.preload(*dependent_associations).find(client.id).destroy!
   end
 end
 
 module ActiveSupport
   class TestCase
     include AuthenticationHarness
+    include WithheldAssertions
+    include CookieJarHelper
     include ExternalIdentityTestHelper
-    include PublishingContentHelper
     include FormActionPolicyHelper
-    include LoginCooldownHelper
     include OutboundHttpStub
+    include PublicIdFixedLengthAssertions
 
-    # Physical cores, not logical: measured on a 16C/32T host -- 32 workers lost more in fork +
-    # per-worker DB-clone overhead than they gained.
+    # Physical cores, not logical processors (SMT/vCPUs): measured on a 16-core/32-thread host --
+    # `PARALLEL_WORKERS=32` (one per logical thread) took 37s on a 3000-test subset versus 22-24s
+    # at 8 or 16 workers, because that many forked Rails processes plus Postgres itself oversubscribe
+    # the physical cores and thrash instead of parallelizing further. See
+    # docs/guides/test-profiling.md.
     #
     # A coverage run uses the same workers as any other run. `.simplecov` sets
     # `merge_subprocesses true`, so SimpleCov hooks `Process._fork` and each worker records and
@@ -275,32 +319,22 @@ module ActiveSupport
     parallel_workers = Integer(ENV.fetch("PARALLEL_WORKERS") { Concurrent.physical_processor_count.to_s }, 10)
     raise ArgumentError, "PARALLEL_WORKERS must be positive" unless parallel_workers.positive?
 
+    # The concrete legacy organization model was renamed to OperatorOrganization while the
+    # physical table and fixture filename remain `organizations`. Without this explicit mapping,
+    # Rails infers the removed Organization constant and loads the fixture on the wrong connection.
+    set_fixture_class organizations: OperatorOrganization
     fixtures :all
+    ValkeyTestIsolation.install!
     ParallelTestDatabaseCloner.install!(workers: parallel_workers)
     parallelize(workers: parallel_workers, parallelize_databases: false)
 
-    # The rate-limit store is a NullStore by default in test, so ordinary
-    # controller and request tests accumulate no counters and never receive a
-    # surprise 429 from an unrelated test's traffic. Tests whose subject is rate
-    # limiting call `with_rate_limit_counters` to swap in a deterministic
-    # MemoryStore for the duration of the test.
-    #
-    # The swap goes through TestSupport::SwappableCacheStore rather than reassigning
-    # config.x.rate_limit[:store], because `rate_limit ..., store:
-    # rate_limit_store` in a controller class body captures the object once at
-    # class-load time; only mutating that captured object reaches it.
-    #
-    # Reset (not just clear) before each test: a test that raised before its
-    # ensure ran must not leave a MemoryStore installed for the next one.
-    setup { Rails.configuration.x.rate_limit.fetch(:store).reset! }
-
-    # Social ceremony availability is a Flipper kill switch that fails closed, so the suite's
-    # baseline is every provider enabled; tests that exercise a disabled provider turn it off
-    # themselves. This runs per test rather than once at boot because the in-memory adapter is
-    # rebuilt whenever Flipper's instance is, which would silently drop a boot-time enable.
+    # Rate-limit uses KVS Valkey namespaced by run and worker. Reset any
+    # with_rate_limit_counters swap, then delete this worker's keys so counters
+    # do not leak into the next case. Application cache is MemoryStore.
     setup do
-      ExternalAuthentication::FlipperProviderAvailabilityAdapter::PROVIDER_FEATURE_NAMES
-        .each_value { |feature| Flipper.enable(feature) }
+      Rails.configuration.x.rate_limit.fetch(:store).reset!
+      Rails.cache.clear
+      ValkeyTestIsolation.cleanup_worker_keys!
     end
 
     # Same reasoning for the per-FQDN availability kill switch: it fails closed, so every served
@@ -309,6 +343,9 @@ module ActiveSupport
       FqdnAvailabilityRegistry.flag_names.each { |feature| Flipper.enable(feature) }
     end
 
+    # Root-login availability is fail-closed, so ordinary regression tests
+    # begin with both Base entry flags enabled. Blocked-path tests flip one flag.
+
     # I18n.locale is thread-local and is set by controller `set_locale`
     # before_actions during integration/controller tests. Those tests share
     # worker processes with model tests, so a request that leaves I18n.locale
@@ -316,6 +353,13 @@ module ActiveSupport
     # messages where it expects the default locale. Reset to the default after
     # every test so locale never leaks across the shared process.
     teardown { I18n.locale = I18n.default_locale } # rubocop:disable Rails/I18nLocaleAssignment
+
+    # ENV is process-global and shared by every test a worker runs. Many integration helpers
+    # (load_jump_rt_env!) write JWT_<NAMESPACE>_* without restoring them, and the local keyset
+    # installer rejects such values, so a later test failed depending on seed order. Snapshot
+    # ENV before each test and restore it afterwards so no assignment outlives its test.
+    setup { @env_snapshot_before_test = ENV.to_h }
+    teardown { ENV.replace(@env_snapshot_before_test) if @env_snapshot_before_test }
 
     # Class-level form of `with_rate_limit_counters`: a test case whose whole
     # subject is rate limiting declares this once and every test in it runs
@@ -329,10 +373,9 @@ module ActiveSupport
       end
     end
 
-    # Opt a rate-limit-focused test into real, retained counters. The default
-    # store is a NullStore (see config/environments/test.rb), which increments
-    # to nothing; a test that asserts thresholds, 429s, independent buckets or
-    # window expiry must wrap its exercise in this.
+    # Opt a rate-limit-focused test into a deterministic in-process MemoryStore.
+    # The default test store is namespaced Valkey; MemoryStore is still used when
+    # a case needs time-travelled windows without talking to KVS.
     #
     # MemoryStore honors expires_in against Time.current, so window resets are
     # asserted by travelling time rather than sleeping.
@@ -340,9 +383,8 @@ module ActiveSupport
       Rails.configuration.x.rate_limit.fetch(:store).with(store, &)
     end
 
-    # Same idea for Rails.cache, which is a NullStore in test. Cache-behavior
-    # tests opt into a deterministic MemoryStore and get the previous store back
-    # even if the block raises, so cache state never leaks between tests.
+    # Rails.cache is already MemoryStore in test. This helper still swaps a
+    # fresh store for cache-behavior tests that need an empty isolated instance.
     def with_application_cache(store = ActiveSupport::Cache::MemoryStore.new)
       previous = Rails.cache
       Rails.cache = store

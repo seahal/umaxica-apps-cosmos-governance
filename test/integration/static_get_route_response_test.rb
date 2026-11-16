@@ -3,19 +3,51 @@
 
 require "test_helper"
 
-# Published static GET routes must reach an HTTP boundary without an unhandled exception.
+# Published static GET routes must reach an HTTP boundary without an unhandled exception on the host
+# they are published for. Each route is requested on the first host its own host constraint lists,
+# so a 404 means the route no longer answers on its host rather than that it was sent elsewhere.
 class StaticGetRouteResponseTest < ActionDispatch::IntegrationTest
-  HOST = "auth.app.localhost"
-  SKIP = %r{/(callback|oauth|social|action_mailbox|conductor|historical_location)\\b}
+  BASE_OWNER_API_PATHS = {
+    "app" => %w(
+      /api/v0/identity/standing /api/v0/identity/selection
+      /api/v0/membership/app/accounts /api/v0/membership/app/organizations
+      /api/v0/avatar/app/switcher /api/v0/avatar/app/dashboard-identity
+      /api/v0/avatar/app/selected-image /api/v0/avatar/app/avatars /api/v0/avatar/app/groups
+    ).freeze,
+    "org" => %w(
+      /api/v0/identity/standing /api/v0/identity/selection
+      /api/v0/membership/org/accounts /api/v0/membership/org/organizations
+      /api/v0/support /api/v0/iam/grants /api/v0/iam/grant-screen
+      /api/v0/avatar/org/dashboard-identity /api/v0/avatar/org/switcher
+      /api/v0/avatar/org/selected-avatar /api/v0/avatar/org/selected-image
+    ).freeze,
+  }.freeze
 
-  test "static GET routes do not produce an unhandled server error" do
-    host! HOST
+  SKIP = %r{/(callback|oauth|social)\b}
+
+  test "static GET routes answer on their own host without a server error or a routing miss" do
+    routes = static_get_routes_by_host
+
+    assert_predicate routes, :any?, "no host-constrained static GET route was discovered"
+
     failures = []
-    static_get_paths.each do |path|
-      get(path)
-      failures << "GET #{path}: #{response.status}" if response.status >= 500
-    rescue StandardError => e
-      failures << "GET #{path}: #{e.class}: #{e.message}"
+    routes.each do |host, paths|
+      host! host
+      paths.each do |path|
+        get(path)
+        owner_paths = {
+          ENV.fetch("PUBLIC_BASE_SERVICE_URL") => BASE_OWNER_API_PATHS.fetch("app"),
+          ENV.fetch("PUBLIC_BASE_STAFF_URL") => BASE_OWNER_API_PATHS.fetch("org"),
+        }
+        if owner_paths.fetch(host, []).include?(path)
+          assert_response :unauthorized
+          assert_includes response.headers["Cache-Control"], "no-store"
+          next
+        end
+        failures << "GET #{host}#{path}: #{response.status}" if response.server_error? || response.not_found?
+      rescue StandardError => e
+        failures << "GET #{host}#{path}: #{e.class}: #{e.message}"
+      end
     end
 
     assert_empty failures, failures.join("\n")
@@ -23,14 +55,13 @@ class StaticGetRouteResponseTest < ActionDispatch::IntegrationTest
 
   private
 
-  def static_get_paths
-    Rails.application.routes.routes.select { |route|
-      route.verb == "GET"
-    }.map { |route|
-      route.path.spec.to_s.sub(
-        /\(\.:format\)\z/,
-        "",
-      )
-    }.reject { |path| path.include?(":") || path.include?("*") || path.match?(SKIP) }.uniq
+  def static_get_routes_by_host
+    Rails.application.routes.routes
+      .select { |route| route.verb == "GET" && route.constraints[:host].is_a?(Array) }
+      .map { |route| [route.constraints[:host].first, route.path.spec.to_s.sub(/\(\.:format\)\z/, "")] }
+      .reject { |_host, path| path.include?(":") || path.include?("*") || path.include?("(") || path.match?(SKIP) }
+      .uniq
+      .group_by(&:first)
+      .transform_values { |pairs| pairs.map(&:last) }
   end
 end

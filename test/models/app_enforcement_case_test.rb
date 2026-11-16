@@ -222,6 +222,27 @@ class AppEnforcementCaseTest < ActiveSupport::TestCase
     assert_predicate the_case.public_id, :present?
   end
 
+  test "an issued public_id cannot be changed" do
+    client = clients(:one)
+    operator = operators(:one)
+    the_case = AppEnforcementCase.create!(
+      kind: "cooldown",
+      duration_mode: "timed",
+      visibility: "visible",
+      release_mode: "automatic",
+      effective_at: Time.current,
+      expires_at: 1.day.from_now,
+      reason_code: "abuse",
+      principal_public_id: client.public_id,
+      applied_by_operator_public_id: operator.public_id,
+    )
+    original_public_id = the_case.public_id
+    the_case.public_id = "replacement-public-id"
+
+    assert_raises(ActiveRecord::RecordInvalid) { the_case.save! }
+    assert_equal original_public_id, the_case.reload.public_id
+  end
+
   test "apply! transitions a temporary_freeze with an access-blocking Principal Effect to active and locks the " \
        "account" do
     client = clients(:one)
@@ -243,22 +264,24 @@ class AppEnforcementCaseTest < ActiveSupport::TestCase
       access_blocking: true,
       effective_at: Time.current,
     )
-    EnforcementCaseApplyOperation.call(enforcement_case: the_case)
+    assert_raises(AccessOpDataUnavailableError) do
+      EnforcementCaseApplyOperation.call(
+        enforcement_case: the_case,
+        actor_operator_public_id: the_case.applied_by_operator_public_id,
+      )
+    end
     client.reload
 
     assert_equal "active", the_case.state
     assert_predicate client, :admin_locked?
-    assert_predicate the_case.sessions_revoked_at, :present?
-    assert_predicate the_case.audited_at, :present?
-    assert_equal 1, EnforcementEvent.where(case_public_id: the_case.public_id, event_type: "applied").count
+    assert_nil the_case.reload.sessions_revoked_at
+    assert_nil the_case.audited_at
+    assert_equal 0, EnforcementEvent.where(case_public_id: the_case.public_id, event_type: "applied").count
   end
 
-  test "apply! on a method_protection case revokes only sessions matching the target method" do
+  test "method protection retains its Governance decision while Access revocation is unavailable" do
     client = clients(:one)
     operator = operators(:one)
-    matching_token = ClientToken.create!(user_id: client.id, established_authentication_method: "passkey")
-    other_token = ClientToken.create!(user_id: client.id, established_authentication_method: "email")
-
     the_case = AppEnforcementCase.new(
       kind: "method_protection",
       duration_mode: "indefinite",
@@ -275,12 +298,16 @@ class AppEnforcementCaseTest < ActiveSupport::TestCase
       effect: "unusable",
       effective_at: Time.current,
     )
-    EnforcementCaseApplyOperation.call(enforcement_case: the_case)
-    matching_token.reload
-    other_token.reload
-
-    assert_predicate matching_token, :revoked?
-    assert_not_predicate other_token, :revoked?
+    assert_raises(AccessOpDataUnavailableError) do
+      EnforcementCaseApplyOperation.call(
+        enforcement_case: the_case,
+        actor_operator_public_id: the_case.applied_by_operator_public_id,
+      )
+    end
+    assert_equal "active", the_case.reload.state
+    assert_equal "unusable", the_case.authentication_method_effects.sole.effect
+    assert_nil the_case.sessions_revoked_at
+    assert_nil the_case.audited_at
   end
 
   test "apply! raises ApprovalRequiredError for a hidden permanent_ban with no approval" do
@@ -298,7 +325,7 @@ class AppEnforcementCaseTest < ActiveSupport::TestCase
       applied_by_operator_public_id: operator.public_id,
     )
 
-    assert_raises(EnforcementCaseApplicable::ApprovalRequiredError) { EnforcementCaseApplyOperation.call(enforcement_case: the_case) }
+    assert_raises(EnforcementCaseApplicable::ApprovalRequiredError) { EnforcementCaseApplyOperation.call(enforcement_case: the_case, actor_operator_public_id: the_case.applied_by_operator_public_id) }
     assert_predicate the_case, :new_record?
   end
 
@@ -317,14 +344,17 @@ class AppEnforcementCaseTest < ActiveSupport::TestCase
       principal_public_id: client.public_id,
       applied_by_operator_public_id: operator.public_id,
     )
-    EnforcementCaseApplyOperation.call(enforcement_case: the_case)
+    EnforcementCaseApplyOperation.call(
+      enforcement_case: the_case,
+      actor_operator_public_id: the_case.applied_by_operator_public_id,
+    )
 
-    assert_raises(EnforcementCaseApplicable::InvalidStateTransitionError) { EnforcementCaseApplyOperation.call(enforcement_case: the_case) }
+    assert_raises(EnforcementCaseApplicable::InvalidStateTransitionError) { EnforcementCaseApplyOperation.call(enforcement_case: the_case, actor_operator_public_id: the_case.applied_by_operator_public_id) }
   end
 
   test "applying a new open method effect closes the prior open row for the same slot" do
-    client = clients(:one)
     operator = operators(:one)
+    principal_public_id = clients(:one).public_id
 
     first_case = AppEnforcementCase.new(
       kind: "method_protection",
@@ -333,16 +363,19 @@ class AppEnforcementCaseTest < ActiveSupport::TestCase
       release_mode: "operator",
       effective_at: Time.current,
       reason_code: "abuse",
-      principal_public_id: client.public_id,
+      principal_public_id: principal_public_id,
       applied_by_operator_public_id: operator.public_id,
     )
     first_case.authentication_method_effects.build(
-      principal_public_id: client.public_id,
+      principal_public_id: principal_public_id,
       authentication_method: "email",
       effect: "mutation_locked",
       effective_at: Time.current,
     )
-    EnforcementCaseApplyOperation.call(enforcement_case: first_case)
+    EnforcementCaseApplyOperation.call(
+      enforcement_case: first_case,
+      actor_operator_public_id: first_case.applied_by_operator_public_id,
+    )
     first_effect = first_case.authentication_method_effects.first
 
     second_case = AppEnforcementCase.new(
@@ -352,23 +385,28 @@ class AppEnforcementCaseTest < ActiveSupport::TestCase
       release_mode: "operator",
       effective_at: Time.current,
       reason_code: "security_incident",
-      principal_public_id: client.public_id,
+      principal_public_id: principal_public_id,
       applied_by_operator_public_id: operator.public_id,
     )
     second_case.authentication_method_effects.build(
-      principal_public_id: client.public_id,
+      principal_public_id: principal_public_id,
       authentication_method: "email",
       effect: "unusable",
       effective_at: Time.current,
     )
-    EnforcementCaseApplyOperation.call(enforcement_case: second_case)
+    assert_raises(AccessOpDataUnavailableError) do
+      EnforcementCaseApplyOperation.call(
+        enforcement_case: second_case,
+        actor_operator_public_id: second_case.applied_by_operator_public_id,
+      )
+    end
 
     first_effect.reload
 
     assert_predicate first_effect.ended_at, :present?
   end
 
-  test "end_case! closes open effects and unlocks the account when no other blocking case remains" do
+  test "ending a case refuses substituted Access proof and never claims the principal was unlocked" do
     client = clients(:one)
     operator = operators(:one)
 
@@ -388,16 +426,30 @@ class AppEnforcementCaseTest < ActiveSupport::TestCase
       access_blocking: true,
       effective_at: Time.current,
     )
-    EnforcementCaseApplyOperation.call(enforcement_case: the_case)
+    assert_raises(AccessOpDataUnavailableError) do
+      EnforcementCaseApplyOperation.call(
+        enforcement_case: the_case,
+        actor_operator_public_id: the_case.applied_by_operator_public_id,
+      )
+    end
 
-    EnforcementCaseEndOperation.call(
-      enforcement_case: the_case, reason: "revoked",
-      ended_by_operator_public_id: operator.public_id,
-    )
+    assert_raises(AccessOpDataUnavailableError) do
+      EnforcementCaseEndOperation.call(
+        enforcement_case: the_case, reason: "revoked",
+        ended_by_operator_public_id: operator.public_id,
+        step_up_token: Object.new, step_up_actor: operator, step_up_evidence: Object.new,
+      )
+    end
+
+    assert_nil the_case.reload.ended_at
+
+    assert_raises(AccessOpDataUnavailableError) do
+      EnforcementCaseEndOperation.call(enforcement_case: the_case, reason: "revoked")
+    end
     client.reload
 
     assert_predicate the_case.ended_at, :present?
-    assert_not_predicate client, :admin_locked?
+    assert_predicate client, :admin_locked?
   end
 
   test "requires_approval? is false for a visible permanent_ban in the app realm (target is never an Operator)" do
@@ -443,7 +495,10 @@ class AppEnforcementCaseTest < ActiveSupport::TestCase
       principal_public_id: client.public_id,
       applied_by_operator_public_id: operator.public_id,
     )
-    EnforcementCaseApplyOperation.call(enforcement_case: converged)
+    EnforcementCaseApplyOperation.call(
+      enforcement_case: converged,
+      actor_operator_public_id: converged.applied_by_operator_public_id,
+    )
 
     stalled = AppEnforcementCase.create!(
       kind: "cooldown",
@@ -484,19 +539,26 @@ class AppEnforcementCaseTest < ActiveSupport::TestCase
       withdrawal_purge_blocked: true,
       effective_at: Time.current,
     )
-    EnforcementCaseApplyOperation.call(enforcement_case: the_case)
+    assert_raises(AccessOpDataUnavailableError) do
+      EnforcementCaseApplyOperation.call(
+        enforcement_case: the_case,
+        actor_operator_public_id: the_case.applied_by_operator_public_id,
+      )
+    end
 
     assert AppEnforcementCase.principal_effect_blocking?(client.public_id, :withdrawal_purge_blocked)
     assert_not AppEnforcementCase.principal_effect_blocking?(client.public_id, :recovery_blocked)
     assert_not AppEnforcementCase.principal_effect_blocking?("client-standing-unknown", :withdrawal_purge_blocked)
 
-    EnforcementCaseEndOperation.call(
-      enforcement_case: the_case,
-      reason: "revoked",
-      ended_by_operator_public_id: operator.public_id,
-    )
+    assert_raises(AccessOpDataUnavailableError) do
+      EnforcementCaseEndOperation.call(
+        enforcement_case: the_case,
+        reason: "revoked",
+      )
+    end
 
     assert_not AppEnforcementCase.principal_effect_blocking?(client.public_id, :withdrawal_purge_blocked)
+    assert_predicate client.reload, :admin_locked?
   end
 
   test "authentication_method_effect_blocking? sees a revoking effect but not a mutation lock" do
@@ -525,7 +587,12 @@ class AppEnforcementCaseTest < ActiveSupport::TestCase
       effect: "mutation_locked",
       effective_at: Time.current,
     )
-    EnforcementCaseApplyOperation.call(enforcement_case: the_case)
+    assert_raises(AccessOpDataUnavailableError) do
+      EnforcementCaseApplyOperation.call(
+        enforcement_case: the_case,
+        actor_operator_public_id: the_case.applied_by_operator_public_id,
+      )
+    end
 
     assert AppEnforcementCase.authentication_method_effect_blocking?(client.public_id, "passkey")
     assert_not AppEnforcementCase.authentication_method_effect_blocking?(client.public_id, "totp")

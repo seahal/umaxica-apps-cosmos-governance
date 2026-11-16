@@ -5,6 +5,7 @@ require "json"
 require "uri"
 require "jit_security_turnstile_config"
 
+# TODO: AUDIT external access: calls Cloudflare Turnstile siteverify.
 class JitSecurityTurnstileVerifier
   VERIFY_URI = URI("https://challenges.cloudflare.com/turnstile/v0/siteverify").freeze
   # siteverify sits on the request path, and this call previously ran on the
@@ -16,33 +17,16 @@ class JitSecurityTurnstileVerifier
   def self.verify(token:, remote_ip:, secret_key: nil, mode: nil)
     new(token: token, remote_ip: remote_ip, secret_key: secret_key, mode: mode).verify
   end
+  public_class_method :verify
 
-  def self.verify_for_ceremony(token:, remote_ip:, ceremony_id:, expected_action:, expected_hostname:, expected_cdata:,
-                               secret_key: nil, mode: nil)
-    new(
-      token: token,
-      remote_ip: remote_ip,
-      secret_key: secret_key,
-      mode: mode,
-      ceremony_id: ceremony_id,
-      expected_action: expected_action,
-      expected_hostname: expected_hostname,
-      expected_cdata: expected_cdata,
-    ).verify_for_ceremony
-  end
-
-  def initialize(token:, remote_ip:, secret_key: nil, mode: nil, ceremony_id: nil, expected_action: nil,
-                 expected_hostname: nil, expected_cdata: nil)
+  def initialize(token:, remote_ip:, secret_key: nil, mode: nil)
     @token = token
     @remote_ip = remote_ip
     @mode = mode
     @secret_key = secret_key || resolve_secret_key
-    @ceremony_id = ceremony_id
-    @expected_action = expected_action
-    @expected_hostname = expected_hostname
-    @expected_cdata = expected_cdata
   end
 
+  public
   def verify
     return failure("missing cf-turnstile-response") if @token.blank?
 
@@ -65,22 +49,6 @@ class JitSecurityTurnstileVerifier
       )
     end
     failure(e.message, unavailable: true)
-  end
-
-  def verify_for_ceremony
-    response = verify
-    return response unless response["success"]
-
-    return failure("missing ceremony binding") if @ceremony_id.blank?
-
-    unless binding_matches?(response)
-      return failure("turnstile binding mismatch")
-    end
-
-    replay_result = consume_replay_token!(response)
-    return replay_result if replay_result.is_a?(Hash) && replay_result["success"] == false
-
-    response
   end
 
   private
@@ -130,37 +98,6 @@ class JitSecurityTurnstileVerifier
         token_present: @token.present?,
       ),
     )
-  end
-
-  def binding_matches?(response)
-    hostname_matches = @expected_hostname.blank? || response["hostname"].to_s == @expected_hostname.to_s
-    action_matches = @expected_action.blank? || response["action"].to_s == @expected_action.to_s
-    cdata_matches = @expected_cdata.blank? || response["cdata"].to_s == @expected_cdata.to_s
-
-    hostname_matches && action_matches && cdata_matches
-  end
-
-  def consume_replay_token!(response)
-    return unless defined?(TurnstileReplayStore)
-
-    TurnstileReplayStore.consume!(
-      token: @token,
-      ceremony_id: @ceremony_id,
-      action: response["action"],
-      hostname: response["hostname"],
-      cdata: response["cdata"],
-      expires_at: parse_expires_at(response["challenge_ts"]),
-    )
-  rescue ActiveRecord::RecordNotUnique
-    failure("turnstile replay detected")
-  end
-
-  def parse_expires_at(challenge_ts)
-    return 15.minutes.from_now if challenge_ts.blank?
-
-    Time.zone.parse(challenge_ts.to_s) + 5.minutes
-  rescue ArgumentError, TypeError
-    15.minutes.from_now
   end
 
   def log_missing_secret

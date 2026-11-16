@@ -9,4 +9,5 @@ class TokenEmergencyService
   def self.call!(*)
     raise NotImplementedError, "TokenEmergencyService.call! is not implemented yet"
   end
+  public_class_method :call!
 end

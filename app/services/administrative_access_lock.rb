@@ -2,17 +2,19 @@
 # frozen_string_literal: true
 
 class AdministrativeAccessLock < ApplicationService
-  SUPPORTED_ACCOUNT_CLASSES = [Client, Visitor, Operator].freeze
+  SUPPORTED_ACCOUNT_CLASSES = [Client, Operator].freeze
 
   class LastEnabledOperatorError < StandardError; end
 
-  def self.lock!(account:, operator:, reason_code:, reason_note: nil, ticket_id: nil, metadata: {})
-    new(account:, operator:, reason_code:, reason_note:, ticket_id:, metadata:).lock!
+  def self.lock!(account:, operator:, reason_code:, reason_note: nil, ticket_id: nil, metadata: {}, &)
+    new(account:, operator:, reason_code:, reason_note:, ticket_id:, metadata:).lock!(&)
   end
+  public_class_method :lock!
 
-  def self.unlock!(account:, operator:, reason_code:, reason_note: nil, ticket_id: nil, metadata: {})
-    new(account:, operator:, reason_code:, reason_note:, ticket_id:, metadata:).unlock!
+  def self.unlock!(account:, operator:, reason_code:, reason_note: nil, ticket_id: nil, metadata: {}, &)
+    new(account:, operator:, reason_code:, reason_note:, ticket_id:, metadata:).unlock!(&)
   end
+  public_class_method :unlock!
 
   def initialize(account:, operator:, reason_code:, reason_note: nil, ticket_id: nil, metadata: {})
     super()
@@ -24,14 +26,18 @@ class AdministrativeAccessLock < ApplicationService
     @metadata = metadata
   end
 
+  public
   def lock!
     validate_inputs!
-    now = Time.current
+    now = nil
     previous_state = nil
 
     account.class.transaction do
+      Operator.lock_availability_guard! if account.is_a?(Operator)
       account.lock!
+      yield if block_given?
       ensure_operator_can_be_locked! if account.is_a?(Operator)
+      now = account.class.database_now
       previous_state = account.access_state
       account.update!(
         access_state: AdministrativeAccessLockable::ACCESS_STATE_ADMIN_LOCKED,
@@ -41,44 +47,21 @@ class AdministrativeAccessLock < ApplicationService
         admin_locked_reason_note: reason_note,
         token_valid_after_at: now,
       )
+      IdentityAuthenticationStopRecorder.call(actor: account, reason: "administrative_access_lock")
+      account.class.current_transaction.after_commit do
+        create_event!(
+          event_type: lock_event_type(previous_state), previous_state: previous_state,
+          next_state: AdministrativeAccessLockable::ACCESS_STATE_ADMIN_LOCKED, occurred_at: now,
+        )
+        raise AccessOpDataUnavailableError
+      end
     end
-
-    revoke_sessions!
-    create_event!(
-      event_type: lock_event_type(previous_state),
-      previous_state: previous_state,
-      next_state: AdministrativeAccessLockable::ACCESS_STATE_ADMIN_LOCKED,
-      occurred_at: now,
-    )
     account
   end
 
   def unlock!
     validate_inputs!
-    now = Time.current
-    previous_state = nil
-
-    account.class.transaction do
-      account.lock!
-      previous_state = account.access_state
-      account.update!(
-        access_state: AdministrativeAccessLockable::ACCESS_STATE_ENABLED,
-        admin_locked_at: nil,
-        admin_locked_by_operator_id: nil,
-        admin_locked_reason_code: nil,
-        admin_locked_reason_note: nil,
-        token_valid_after_at: now,
-        reactivated_at: now,
-      )
-    end
-
-    create_event!(
-      event_type: AccountAccessEvent::EVENT_TYPE_ADMIN_UNLOCK,
-      previous_state: previous_state,
-      next_state: AdministrativeAccessLockable::ACCESS_STATE_ENABLED,
-      occurred_at: now,
-    )
-    account
+    raise AccessOpDataUnavailableError
   end
 
   private
@@ -101,10 +84,6 @@ class AdministrativeAccessLock < ApplicationService
     end
 
     AccountAccessEvent::EVENT_TYPE_ADMIN_LOCK
-  end
-
-  def revoke_sessions!
-    AuthenticationSessionRevoker.tokens_for(account).not_revoked.find_each(&:revoke!)
   end
 
   def create_event!(event_type:, previous_state:, next_state:, occurred_at:)
@@ -130,9 +109,7 @@ class AdministrativeAccessLock < ApplicationService
 
     remaining_enabled_operator_exists =
       Operator
-        .where(access_state: AdministrativeAccessLockable::ACCESS_STATE_ENABLED)
-        .where(deactivated_at: nil, withdrawn_at: nil)
-        .where(Operator.arel_table[:discarded_at].gt(Time.current))
+        .capability_eligible_at(Time.current)
         .where.not(id: account.id)
         .exists?
     return if remaining_enabled_operator_exists

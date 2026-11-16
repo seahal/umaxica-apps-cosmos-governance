@@ -12,12 +12,12 @@
 #  backup_eligible          :boolean
 #  backup_state             :boolean
 #  description              :string           default(""), not null
-#  discarded_at             :datetime         default(Infinity), not null
+#  discard_at             :datetime         default(Infinity), not null
 #  last_used_at             :datetime
 #  metadata_source          :string
 #  provider_name            :string
 #  public_key               :text             not null
-#  purged_at                :datetime         default(Infinity), not null
+#  purge_eligible_at                :datetime         default(Infinity), not null
 #  sign_count               :bigint           default(0), not null
 #  transports               :jsonb
 #  created_at               :datetime         not null
@@ -30,9 +30,10 @@
 #
 # Indexes
 #
-#  index_client_passkeys_on_discarded_at    (discarded_at)
+#  index_client_passkeys_on_discard_at    (discard_at)
 #  index_client_passkeys_on_public_id       (public_id) UNIQUE
-#  index_client_passkeys_on_purged_at       (purged_at)
+#  index_client_passkeys_on_purge_eligible_at       (purge_eligible_at)
+#  index_client_passkeys_on_external_id             (external_id) UNIQUE
 #  index_client_passkeys_on_status_id       (status_id)
 #  index_client_passkeys_on_webauthn_id     (webauthn_id) UNIQUE
 #  index_user_identity_passkeys_on_user_id  (user_id)
@@ -45,41 +46,71 @@
 
 class ClientPasskey < AppPrincipalRecord
   include ::PublicId
+
+  before_validation :generate_public_id, on: :create
+  before_validation :refresh_generated_public_id_after_collision, on: :create
+  before_validation :set_defaults, on: :create
+  before_validation :ensure_status_defaults, on: :create
+  before_create :generate_public_id
+  around_create :retry_public_id_collision
+  validate :public_id_immutable_after_create, on: :update
+  validates :public_id, presence: true, length: { is: PublicId::GENERATION_SIZE }, uniqueness: true
   include Retainable
+
+  attribute :discard_at, :datetime, default: -> { Retainable::SENTINEL }
+  attribute :purge_eligible_at, :datetime, default: -> { Retainable::SENTINEL }
+  validates :discard_at, presence: true
+  validates :purge_eligible_at, presence: true
+  validate :retention_order_valid
+  validate :retention_times_not_before_created_at, on: :update
+  Retainable.register_host(self)
+
   include MfaStatusCredential
 
-  MAX_PASSKEYS_PER_USER = 4
+  MAX_PASSKEYS_PER_USER = 10
   attribute :status_id, default: ClientPasskeyStatus::ACTIVE
 
   belongs_to :user, class_name: "Client", inverse_of: :client_passkeys
   mfa_status_owner :user
   belongs_to :status, class_name: "ClientPasskeyStatus"
 
-  scope :active, -> { where(status_id: ClientPasskeyStatus::ACTIVE) }
+  enum :backup_eligibility, { unknown: "unknown", ineligible: "ineligible", eligible: "eligible" },
+       prefix: true, validate: true
+  enum :backup_observation, { unknown: "unknown", not_backed_up: "not_backed_up", backed_up: "backed_up" },
+       prefix: true, validate: true
 
   validates :webauthn_id, presence: true, uniqueness: true
   validates :external_id, presence: true
+  validates :external_id, uniqueness: true, if: :will_save_change_to_external_id?
   validates :public_key, presence: true
   validates :description, presence: true
+  validate :within_passkey_limit, on: :create
   validates :status_id, numericality: { only_integer: true }
   validates :sign_count, presence: true, numericality: { greater_than_or_equal_to: 0 }
-  validates_with AssociatedRecordLimitValidator,
-                 on: :create,
-                 owner: :user,
-                 association: :client_passkeys,
-                 foreign_key: :user_id,
-                 limit: :MAX_PASSKEYS_PER_USER,
-                 record_name: "passkeys",
-                 owner_name: "user"
+  after_commit :refresh_owner_mfa_status
 
-  before_validation :set_defaults, on: :create
-  before_validation :ensure_status_defaults, on: :create
+  scope :active, -> { where(status_id: ClientPasskeyStatus::ACTIVE) }
 
+  public
   def to_param
     public_id
   end
 
   private
+
+  # Every retained row counts (REQ-P01); a removed Passkey is physically deleted and frees its place.
+  # This check alone races; PasskeyRegistrationOperation repeats it while holding the user lock.
+  def within_passkey_limit
+    return if user_id.nil?
+
+    count =
+      self.class.connection_class_for_self.connected_to(role: :writing) do
+        self.class.where(user_id: user_id).count
+      end
+    return if count < MAX_PASSKEYS_PER_USER
+
+    errors.add(:base, :too_many, message: "exceeds maximum passkeys per user (#{MAX_PASSKEYS_PER_USER})")
+  end
 
   def set_defaults
     self.external_id ||= SecureRandom.uuid

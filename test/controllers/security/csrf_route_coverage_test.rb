@@ -13,13 +13,32 @@ module Security
 
     NULL_SESSION_STRATEGY = ActionController::RequestForgeryProtection::ProtectionMethods::NullSession
     PROTOCOL_ENDPOINTS = [
-      %r{\A/oauth/token(?:\(\.:format\))?\z},
-      %r{\A/oauth/revoke(?:\(\.:format\))?\z},
-      # OIDC back-channel logout: machine-to-machine from IdP, no browser CSRF token.
-      %r{\A/oidc/backchannel/logout(?:\(\.:format\))?\z},
-      # Apple Server Notifications: machine-to-machine from Apple, JWS-signature verified, no browser CSRF token.
-      %r{\A/apple/notifications(?:\(\.:format\))?\z},
+      # Retained Base owner APIs use server-to-server authentication without browser cookies.
+      %r{\A/api/v0/(?:avatar|membership|iam|support|tech-capability-checks)/},
+      %r{\A/api/v0/tech-capability-checks(?:\(\.:format\))?\z},
+      # Visa Back-Channel Logout is a signed server-to-server request, never a browser session.
+      %r{\A/oidc/closures(?:\(\.:format\))?\z},
     ].freeze
+
+    test "retired OP and publishing paths are not exempt from the CSRF route invariant" do
+      %w(/oauth/token /oauth/revoke /apple/notifications /api/v0/publishing/entries).each do |path|
+        assert_not PROTOCOL_ENDPOINTS.any? { |pattern| pattern.match?(path) }, path
+      end
+    end
+
+    test "Base App Back-Channel Logout is an exact server-to-server exception" do
+      assert PROTOCOL_ENDPOINTS.any? { |pattern| pattern.match?("/oidc/closures") }
+      assert_not PROTOCOL_ENDPOINTS.any? { |pattern| pattern.match?("/oidc/closures/other") }
+    end
+
+    test "only API controllers use the server-to-server CSRF invariant exception" do
+      exceptions = state_changing_application_route_targets.select { |target| protocol_endpoint?(target) }
+
+      assert_not_empty exceptions
+      browser_controllers = exceptions.reject { |target| target.fetch(:controller_class) < ActionController::API }
+
+      assert_empty browser_controllers.map { |target| "#{target.fetch(:path)} -> #{target.fetch(:controller)}" }
+    end
 
     test "state-changing application routes do not use null-session csrf handling" do
       violations =
@@ -87,7 +106,6 @@ class Security::CsrfRouteCoverageTest
     "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" unless const_defined?(
       :TEST_BROWSER_USER_AGENT, false,
     )
-  PREFERENCE_JWT_KEY = OpenSSL::PKey::EC.generate("secp384r1") unless const_defined?(:PREFERENCE_JWT_KEY, false)
 
   private
 
@@ -96,11 +114,11 @@ class Security::CsrfRouteCoverageTest
   end
 
   def set_access_cookie(token)
-    cookies[AuthenticationBase::ACCESS_COOKIE_KEY] = token
+    cookies[AuthenticationCookieName.access] = token
   end
 
   def set_refresh_cookie(token)
-    cookies[AuthenticationBase::REFRESH_COOKIE_KEY] = token
+    cookies[AuthenticationCookieName.refresh] = token
   end
 
   def jump_rt_url_from_location(location)
@@ -116,24 +134,6 @@ class Security::CsrfRouteCoverageTest
     location
   end
 
-  def with_preference_jwt_keys(host: nil)
-    audiences = host ? [host] : PreferenceJwtConfiguration.audiences
-    pub_key_for_stub = ->(_kid, **_options) { self.class::PREFERENCE_JWT_KEY }
-    PreferenceJwtConfiguration.stub(:private_key, self.class::PREFERENCE_JWT_KEY) do
-      PreferenceJwtConfiguration.stub(:public_key, self.class::PREFERENCE_JWT_KEY) do
-        PreferenceJwtConfiguration.stub(:private_key_for_active, self.class::PREFERENCE_JWT_KEY) do
-          PreferenceJwtConfiguration.stub(:public_key_for, pub_key_for_stub) do
-            PreferenceJwtConfiguration.stub(:active_kid, "default") do
-              PreferenceJwtConfiguration.stub(:issuer, "jit-preference") do
-                PreferenceJwtConfiguration.stub(:audiences, audiences) { yield }
-              end
-            end
-          end
-        end
-      end
-    end
-  end
-
   def host_headers(host = nil)
     host_value = host || (respond_to?(:request, true) ? request&.host : nil) || ENV["DEFAULT_URL_HOST"]
     headers = { "Client-Agent" => self.class::TEST_BROWSER_USER_AGENT }
@@ -147,63 +147,6 @@ class Security::CsrfRouteCoverageTest
     host_headers.merge("X-CSRF-Token" => csrf_token)
   end
 
-  def as_user_headers(user, host: nil, headers: {}, session_public_id: nil)
-    base = host_headers(host).merge(headers).merge("X-TEST-CURRENT-USER" => user.id.to_s)
-    return base unless user.respond_to?(:persisted?) && user.persisted? && user.class.name == "Client"
-
-    ensure_user_token_reference_records!
-    token = session_public_id.present? ? ClientToken.find_by(public_id: session_public_id) : nil
-    token ||= ClientToken.where(user_id: user.id).where("discarded_at > ?", Time.current).order(created_at: :desc).first
-    token ||= ClientToken.create!(
-      user_id: user.id, user_token_kind_id: ClientTokenKind::BROWSER_WEB,
-      user_token_status_id: ClientTokenStatus::ACTIVE,
-      user_token_binding_method_id: ClientTokenBindingMethod::LEGACY,
-      user_token_dbsc_status_id: ClientTokenDbscStatus::NOTHING,
-    )
-    base["X-TEST-SESSION-PUBLIC-ID"] = session_public_id.presence || token.public_id
-    base
-  end
-
-  def as_staff_headers(staff, host: nil, headers: {}, session_public_id: nil)
-    base = host_headers(host).merge(headers).merge("X-TEST-CURRENT-STAFF" => staff.id.to_s)
-    return base unless staff.respond_to?(:persisted?) && staff.persisted? && staff.class.name == "Operator"
-
-    ensure_staff_token_reference_records!
-    token = session_public_id.present? ? OperatorToken.find_by(public_id: session_public_id) : nil
-    token ||= OperatorToken.where(staff_id: staff.id).where(
-      "discarded_at > ?",
-      Time.current,
-    ).order(created_at: :desc).first
-    token ||= OperatorToken.create!(
-      staff_id: staff.id, staff_token_kind_id: OperatorTokenKind::BROWSER_WEB,
-      staff_token_status_id: OperatorTokenStatus::ACTIVE,
-      staff_token_binding_method_id: OperatorTokenBindingMethod::LEGACY,
-      staff_token_dbsc_status_id: OperatorTokenDbscStatus::NOTHING,
-    )
-    base["X-TEST-SESSION-PUBLIC-ID"] = session_public_id.presence || token.public_id
-    base
-  end
-
-  def as_visitor_headers(visitor, host: nil, headers: {}, session_public_id: nil)
-    base = host_headers(host).merge(headers).merge("X-TEST-CURRENT-RESOURCE" => visitor.id.to_s)
-    return base unless visitor.respond_to?(:persisted?) && visitor.persisted? && visitor.class.name == "Visitor"
-
-    ensure_visitor_token_reference_records!
-    token = session_public_id.present? ? VisitorToken.find_by(public_id: session_public_id) : nil
-    token ||= VisitorToken.where(visitor_id: visitor.id).where(
-      "discarded_at > ?",
-      Time.current,
-    ).order(created_at: :desc).first
-    token ||= VisitorToken.create!(
-      visitor_id: visitor.id, visitor_token_kind_id: VisitorTokenKind::BROWSER_WEB,
-      visitor_token_status_id: VisitorTokenStatus::ACTIVE,
-      visitor_token_binding_method_id: VisitorTokenBindingMethod::LEGACY,
-      visitor_token_dbsc_status_id: VisitorTokenDbscStatus::NOTHING,
-    )
-    base["X-TEST-SESSION-PUBLIC-ID"] = session_public_id.presence || token.public_id
-    base
-  end
-
   def bearer_headers(token, host: nil, headers: {})
     host_headers(host).merge(headers).merge("Authorization" => "Bearer #{token}")
   end
@@ -211,80 +154,12 @@ class Security::CsrfRouteCoverageTest
   def ensure_user_reference_records!
     ClientStatus.find_or_create_by!(id: ClientStatus::NOTHING)
     ClientVisibility.find_or_create_by!(id: ClientVisibility::USER)
-    ClientMfaLevel.find_or_create_by!(id: ClientMfaLevel::NOTHING)
     ClientMfaStatus.find_or_create_by!(id: ClientMfaStatus::NOTHING)
     ClientMfaStatus.find_or_create_by!(id: ClientMfaStatus::ACTIVE)
     ClientMfaStatus.find_or_create_by!(id: ClientMfaStatus::UNCONFIGURED)
     ClientEmailStatus.find_or_create_by!(id: ClientEmailStatus::VERIFIED)
     ClientTelephoneStatus.find_or_create_by!(id: ClientTelephoneStatus::VERIFIED)
     ClientPasskeyStatus.find_or_create_by!(id: ClientPasskeyStatus::ACTIVE)
-  end
-
-  def ensure_visitor_reference_records!
-    VisitorStatus.find_or_create_by!(id: VisitorStatus::NOTHING)
-    VisitorVisibility.find_or_create_by!(id: VisitorVisibility::VISITOR)
-    VisitorMfaLevel.find_or_create_by!(id: VisitorMfaLevel::NOTHING)
-    VisitorMfaStatus.find_or_create_by!(id: VisitorMfaStatus::UNCONFIGURED)
-    VisitorEmailStatus.find_or_create_by!(id: VisitorEmailStatus::VERIFIED)
-    VisitorTelephoneStatus.find_or_create_by!(id: VisitorTelephoneStatus::VERIFIED)
-    VisitorPasskeyStatus.find_or_create_by!(id: VisitorPasskeyStatus::ACTIVE)
-  end
-
-  def ensure_user_token_reference_records!
-    ClientTokenKind.find_or_create_by!(id: ClientTokenKind::BROWSER_WEB)
-    ClientTokenStatus.find_or_create_by!(id: ClientTokenStatus::ACTIVE)
-    ClientTokenBindingMethod.find_or_create_by!(id: ClientTokenBindingMethod::LEGACY)
-    ClientTokenDbscStatus.find_or_create_by!(id: ClientTokenDbscStatus::NOTHING)
-  end
-
-  def ensure_staff_token_reference_records!
-    OperatorTokenKind.find_or_create_by!(id: OperatorTokenKind::BROWSER_WEB)
-    OperatorTokenStatus.find_or_create_by!(id: OperatorTokenStatus::ACTIVE)
-    OperatorTokenBindingMethod.find_or_create_by!(id: OperatorTokenBindingMethod::LEGACY)
-    OperatorTokenDbscStatus.find_or_create_by!(id: OperatorTokenDbscStatus::NOTHING)
-  end
-
-  def ensure_visitor_token_reference_records!
-    VisitorTokenKind.find_or_create_by!(id: VisitorTokenKind::BROWSER_WEB)
-    VisitorTokenStatus.find_or_create_by!(id: VisitorTokenStatus::ACTIVE)
-    VisitorTokenBindingMethod.find_or_create_by!(id: VisitorTokenBindingMethod::LEGACY)
-    VisitorTokenDbscStatus.find_or_create_by!(id: VisitorTokenDbscStatus::NOTHING)
-  end
-
-  def create_verified_visitor_with_email(email_address: "visitor-#{SecureRandom.hex(4)}@example.com")
-    ensure_visitor_reference_records!
-    visitor = Visitor.create!(status_id: VisitorStatus::NOTHING, visibility_id: VisitorVisibility::VISITOR)
-    VisitorEmail.create!(
-      visitor_id: visitor.id, address: email_address,
-      address_digest: IdentifierBlindIndex.bidx_for_email(email_address),
-      visitor_email_status_id: VisitorEmailStatus::VERIFIED,
-      otp_private_key: SecureRandom.base64(24),
-      otp_counter: "",
-      otp_attempts_count: 0,
-      public_id: SecureRandom.alphanumeric(21),
-    )
-    visitor.reload
-  end
-
-  def satisfy_user_verification(token, scope: nil)
-    _verification, raw_token = ClientVerification.issue_for_token!(token: token)
-    cookies[ClientVerification.cookie_name] = raw_token
-    mark_token_step_up_satisfied_for_test(token, scope: scope)
-    true
-  end
-
-  def satisfy_staff_verification(token, scope: nil)
-    _verification, raw_token = OperatorVerification.issue_for_token!(token: token)
-    cookies[OperatorVerification.cookie_name] = raw_token
-    mark_token_step_up_satisfied_for_test(token, scope: scope)
-    true
-  end
-
-  def satisfy_visitor_verification(token, scope: nil)
-    _verification, raw_token = VisitorVerification.issue_for_token!(token: token)
-    cookies[VisitorVerification.cookie_name] = raw_token
-    mark_token_step_up_satisfied_for_test(token, scope: scope)
-    true
   end
 
   def mark_token_step_up_satisfied_for_test(token, scope: nil, at: Time.current)
@@ -299,13 +174,12 @@ class Security::CsrfRouteCoverageTest
 
   def load_jump_rt_env!
     @jump_rt_env_originals ||= {}
-    jump_rt_key = Base64.strict_encode64(OpenSSL::PKey::EC.generate("secp384r1").to_der)
-    %w(SIGN_APP SIGN_ORG SIGN_COM ACME_APP ACME_ORG ACME_COM CORE_APP CORE_ORG CORE_COM BASE_APP BASE_ORG
-       BASE_COM).each do |namespace|
+    jump_rt_key = Base64.strict_encode64(OpenSSL::PKey::RSA.generate(3072).to_der)
+    %w(FOREIGN_APP FOREIGN_ORG BASE_APP BASE_ORG).each do |namespace|
       ENV["JWT_#{namespace}_ACTIVE_KID"] = "#{namespace.downcase.tr("_", "-")}-test"
       ENV["JWT_#{namespace}_PRIVATE_KEY"] = jump_rt_key
     end
-    ENV["JUMP_GATEWAY_URL"] = "https://jump.umaxica.net"
+    ENV["PUBLIC_JUMP_GATEWAY_URL"] = "https://jump.umaxica.net"
     JitSecurityJwtRegistry.reload! if defined?(JitSecurityJwtRegistry)
   end
 
@@ -358,13 +232,5 @@ class Security::CsrfRouteCoverageTest
     rescue NameError
       nil
     end
-  end
-
-  def setup_google_mock_auth(uid: "google_uid_123", email: "google@example.com")
-    OmniAuth.config.mock_auth[:google_app] =
-      OmniAuth::AuthHash.new(
-        provider: "google_app", uid: uid, info: { email: email, name: "Google Client" },
-        credentials: { token: "google_token", expires_at: 1.hour.from_now.to_i },
-      )
   end
 end

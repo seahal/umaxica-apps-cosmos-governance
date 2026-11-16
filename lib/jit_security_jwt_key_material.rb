@@ -4,6 +4,7 @@
 require "base64"
 require "json"
 require "openssl"
+require "jit_security_jwt_jwk"
 
 module JitSecurityJwtKeyMaterial
   module_function
@@ -25,11 +26,13 @@ module JitSecurityJwtKeyMaterial
     return nil if value.blank?
 
     raw = value.to_s
-    key = raw.include?("BEGIN") ? OpenSSL::PKey.read(raw) : OpenSSL::PKey::EC.new(Base64.decode64(raw))
-    raise Error, "must be an EC private key" unless key.is_a?(OpenSSL::PKey::EC)
+    key = raw.include?("BEGIN") ? OpenSSL::PKey.read(raw) : OpenSSL::PKey.read(Base64.strict_decode64(raw))
+    raise Error, "must be an RSA private key" unless key.is_a?(OpenSSL::PKey::RSA) && key.private?
+    raise Error, "RSA private key must have at least #{JitSecurityJwtJwk::MIN_RSA_MODULUS_BITS} bits" if
+      key.n.num_bits < JitSecurityJwtJwk::MIN_RSA_MODULUS_BITS
 
     key
   rescue OpenSSL::PKey::PKeyError, ArgumentError => e
-    raise Error, "contains invalid EC key material: #{e.class.name}"
+    raise Error, "contains invalid RSA key material: #{e.class.name}"
   end
 end

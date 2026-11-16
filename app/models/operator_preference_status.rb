@@ -1,0 +1,22 @@
+# frozen_string_literal: true
+# typed: false
+
+class OperatorPreferenceStatus < OrgPrincipalRecord
+  include ReferenceRecord
+
+  ACTIVE = 0
+  RETIRED = 1
+  DEFAULTS = [ACTIVE, RETIRED].freeze
+
+  self.record_timestamps = false
+
+  has_many :operator_preferences, foreign_key: :status_id,
+                                  inverse_of: :operator_preference_status,
+                                  dependent: :restrict_with_error
+
+  def self.ensure_defaults!
+    insert_missing_fixed_ids!(DEFAULTS)
+  end
+
+  public_class_method :ensure_defaults!
+end

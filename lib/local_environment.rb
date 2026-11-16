@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-require "pathname"
-
 # Minimal dotenv-compatible loader for the repository's non-secret development contract.
 # It intentionally does not execute shell syntax and never overrides an explicitly exported
 # environment variable. Production processes do not read repository-local environment files.
@@ -15,7 +13,6 @@ module LocalEnvironment
 
     path = Pathname.new(ENV.fetch("UMAXICA_ENV_FILE", default_path))
     path = Pathname.new(File.expand_path("../.env", __dir__)) unless path.file?
-    path = Pathname.new(File.expand_path("../.env.example", __dir__)) unless path.file?
     return unless path.file?
 
     path.each_line do |line|
@@ -48,4 +45,6 @@ module LocalEnvironment
 
     value.sub(/\s+#.*\z/, "").strip
   end
+
+  private_class_method :unquote
 end

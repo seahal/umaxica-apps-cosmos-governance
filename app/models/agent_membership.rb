@@ -53,6 +53,21 @@
 class AgentMembership < OrgRpRecord
   include ::CollectiveMembership
 
+  scope :current, lambda {
+    now = Time.current
+    table = arel_table
+
+    where(revoked_at: nil)
+      .where(table[:starts_at].eq(nil).or(table[:starts_at].lteq(now)))
+      .where(table[:ends_at].eq(nil).or(table[:ends_at].gt(now)))
+  }
+  scope :active, -> { current.where(membership_state_id: membership_state_active_id) }
+  scope :primary_first, -> { order(primary: :desc, created_at: :asc, id: :asc) }
+  scope :primary_active, -> { active.where(primary: true) }
+
+  validate :unit_must_belong_to_same_collective
+  validate :only_one_active_primary_membership
+
   collective_membership_config account_foreign_key: :agent_id,
                                collective_foreign_key: :bureau_id,
                                unit_association_name: :bureau_unit
@@ -66,16 +81,22 @@ class AgentMembership < OrgRpRecord
   belongs_to :membership_state,
              class_name: "AgentMembershipState",
              inverse_of: :agent_memberships
+  # Active memberships have no revocation reason until revoked.
   belongs_to :revoke_reason,
              class_name: "AgentMembershipRevokeReason",
-             inverse_of: :agent_memberships
-  belongs_to :granted_by_agent, class_name: "Agent", inverse_of: false
-  belongs_to :approved_by_agent, class_name: "Agent", inverse_of: false
-  belongs_to :revoked_by_agent, class_name: "Agent", inverse_of: false
+             inverse_of: :agent_memberships,
+             optional: true
+  # Audit attribution is nullable and is nullified if its actor is deleted.
+  belongs_to :granted_by_agent, class_name: "Agent", inverse_of: false, optional: true
+  # Audit attribution is nullable and is nullified if its actor is deleted.
+  belongs_to :approved_by_agent, class_name: "Agent", inverse_of: false, optional: true
+  # Audit attribution is nullable and is nullified if its actor is deleted.
+  belongs_to :revoked_by_agent, class_name: "Agent", inverse_of: false, optional: true
 
   validates :agent_id,
             uniqueness: {
               conditions: -> { where(primary: true, revoked_at: nil, ends_at: nil) },
             },
             if: :primary?
+  validates :agent_id, :bureau_id, :bureau_unit_id, exclusion: { in: [nil] }
 end

@@ -17,41 +17,16 @@ class RevisionEndpointTest < ActionDispatch::IntegrationTest
   HTML_MARKER = /<!doctype|<html/i
 
   SURFACES = [
-    { host: ENV.fetch("PRIVATE_AUTH_SERVICE_URL", "auth.app.localhost"), realm: "auth", surface: "app" },
-    { host: ENV.fetch("PRIVATE_AUTH_CORPORATE_URL", "sign.com.localhost"), realm: "auth", surface: "com" },
-    { host: ENV.fetch("PRIVATE_AUTH_STAFF_URL", "sign.org.localhost"), realm: "auth", surface: "org" },
-    { host: ENV.fetch("PUBLIC_BASE_SERVICE_URL", "base.app.localhost"), realm: "base", surface: "app" },
-    { host: ENV.fetch("PUBLIC_BASE_CORPORATE_URL", "base.com.localhost"), realm: "base", surface: "com" },
-    { host: ENV.fetch("PUBLIC_BASE_STAFF_URL", "base.org.localhost"), realm: "base", surface: "org" },
-    { host: ENV.fetch("PRIVATE_BASE_NETWORK_URL", "base.net.localhost"), realm: "base", surface: "net" },
-    { host: ENV.fetch("PRIVATE_BASE_DEVELOPER_URL", "base.dev.localhost"), realm: "base", surface: "dev" },
-    { host: ENV.fetch("PUBLIC_CORE_SERVICE_URL", "core.app.localhost"), realm: "core", surface: "app" },
-    { host: ENV.fetch("PUBLIC_CORE_CORPORATE_URL", "core.com.localhost"), realm: "core", surface: "com" },
-    { host: ENV.fetch("PUBLIC_CORE_STAFF_URL", "core.org.localhost"), realm: "core", surface: "org" },
-    { host: ENV.fetch("PRIVATE_CORE_NETWORK_URL", "core.net.localhost"), realm: "core", surface: "net" },
-    { host: ENV.fetch("PRIVATE_CORE_DEVELOPER_URL", "core.dev.localhost"), realm: "core", surface: "dev" },
-    { host: ENV.fetch("PUBLIC_SIDE_SERVICE_URL", "side.app.localhost"), realm: "side", surface: "app" },
-    { host: ENV.fetch("PUBLIC_SIDE_CORPORATE_URL", "side.com.localhost"), realm: "side", surface: "com" },
-    { host: ENV.fetch("PUBLIC_SIDE_STAFF_URL", "side.org.localhost"), realm: "side", surface: "org" },
-    { host: ENV.fetch("PUBLIC_PALM_SERVICE_URL"), realm: "palm", surface: "app" },
-    { host: ENV.fetch("PRIVATE_HELP_SERVICE_URL"), realm: "help", surface: "app" },
-    { host: ENV.fetch("PRIVATE_HELP_CORPORATE_URL"), realm: "help", surface: "com" },
-    { host: ENV.fetch("PRIVATE_HELP_STAFF_URL"), realm: "help", surface: "org" },
-    { host: ENV.fetch("PRIVATE_DOCS_SERVICE_URL"), realm: "docs", surface: "app" },
-    { host: ENV.fetch("PRIVATE_DOCS_CORPORATE_URL"), realm: "docs", surface: "com" },
-    { host: ENV.fetch("PRIVATE_DOCS_STAFF_URL"), realm: "docs", surface: "org" },
-    { host: ENV.fetch("PRIVATE_NEWS_SERVICE_URL"), realm: "news", surface: "app" },
-    { host: ENV.fetch("PRIVATE_NEWS_CORPORATE_URL"), realm: "news", surface: "com" },
-    { host: ENV.fetch("PRIVATE_NEWS_STAFF_URL"), realm: "news", surface: "org" },
-    { host: "info.app.localhost", realm: "info", surface: "app" },
-    { host: "info.com.localhost", realm: "info", surface: "com" },
-    { host: "info.org.localhost", realm: "info", surface: "org" },
+    { host: ENV.fetch("PUBLIC_BASE_SERVICE_URL"), owner: "base", surface: "app" },
+    { host: ENV.fetch("PUBLIC_BASE_CORPORATE_URL"), owner: "base", surface: "com" },
+    { host: ENV.fetch("PUBLIC_BASE_STAFF_URL"), owner: "base", surface: "org" },
+    { host: ENV.fetch("PUBLIC_TECH_STAFF_URL"), owner: "tech", surface: "org" },
   ].freeze
 
   SURFACES.each do |surface|
-    test "#{surface[:realm]}/#{surface[:surface]} routes both revision endpoints to its own controllers" do
-      text_controller = "#{surface[:realm]}/#{surface[:surface]}/revisions"
-      json_controller = "#{surface[:realm]}/#{surface[:surface]}/api/v0/revisions"
+    test "#{surface[:owner]}/#{surface[:surface]} routes both revision endpoints to its own controllers" do
+      text_controller = "#{surface[:owner]}/#{surface[:surface]}/revisions"
+      json_controller = "#{surface[:owner]}/#{surface[:surface]}/api/v0/revisions"
 
       %i(get head).each do |method|
         recognized = Rails.application.routes.recognize_path(
@@ -73,8 +48,8 @@ class RevisionEndpointTest < ActionDispatch::IntegrationTest
 
   test "every revisions controller is bare and uses the shared rendering concern" do
     SURFACES.each do |surface|
-      %W(#{surface[:realm]}/#{surface[:surface]}/revisions
-         #{surface[:realm]}/#{surface[:surface]}/api/v0/revisions).each do |controller|
+      %W(#{surface[:owner]}/#{surface[:surface]}/revisions
+         #{surface[:owner]}/#{surface[:surface]}/api/v0/revisions).each do |controller|
         controller_class = "#{controller}_controller".camelize.constantize
 
         assert_includes controller_class.ancestors, ::ApplicationRevisionRendering
@@ -124,7 +99,7 @@ class RevisionEndpointTest < ActionDispatch::IntegrationTest
   end
 
   test "the JSON revision endpoint refuses a non-JSON Accept with 406, no text or HTML fallback" do
-    host! ENV.fetch("PUBLIC_SIDE_SERVICE_URL", "side.app.localhost")
+    host! ENV.fetch("PUBLIC_BASE_SERVICE_URL")
 
     ["text/html", "text/plain"].each do |accept|
       Rails.application.stub(:revision, REVISION) do
@@ -138,7 +113,7 @@ class RevisionEndpointTest < ActionDispatch::IntegrationTest
   end
 
   test "a missing revision is a normal response in both representations" do
-    host! ENV.fetch("PUBLIC_SIDE_SERVICE_URL", "side.app.localhost")
+    host! ENV.fetch("PUBLIC_BASE_SERVICE_URL")
 
     Rails.application.stub(:revision, nil) do
       get "/revision"
@@ -159,7 +134,7 @@ class RevisionEndpointTest < ActionDispatch::IntegrationTest
   end
 
   test "revision is passed through verbatim without truncation in both representations" do
-    host! ENV.fetch("PUBLIC_SIDE_SERVICE_URL", "side.app.localhost")
+    host! ENV.fetch("PUBLIC_BASE_SERVICE_URL")
     verbatim = "v2026.08.11+#{REVISION}"
 
     Rails.application.stub(:revision, verbatim) do
@@ -176,7 +151,7 @@ class RevisionEndpointTest < ActionDispatch::IntegrationTest
   end
 
   test "text revision never renders html or an authentication redirect under any Accept" do
-    host! ENV.fetch("PUBLIC_SIDE_SERVICE_URL", "side.app.localhost")
+    host! ENV.fetch("PUBLIC_BASE_SERVICE_URL")
 
     [nil, "text/html", "*/*", "application/json"].each do |accept|
       headers = accept ? { "Accept" => accept } : {}
@@ -194,7 +169,7 @@ class RevisionEndpointTest < ActionDispatch::IntegrationTest
   end
 
   test "neither revision endpoint issues a database query" do
-    host! ENV.fetch("PUBLIC_SIDE_SERVICE_URL", "side.app.localhost")
+    host! ENV.fetch("PUBLIC_BASE_SERVICE_URL")
 
     assert_no_queries do
       Rails.application.stub(:revision, REVISION) do
@@ -212,12 +187,12 @@ class RevisionEndpointTest < ActionDispatch::IntegrationTest
   end
 
   test "revision responses leak no internal detail" do
-    host! ENV.fetch("PUBLIC_SIDE_SERVICE_URL", "side.app.localhost")
+    host! ENV.fetch("PUBLIC_BASE_SERVICE_URL")
 
     forbidden = [
       Rails.root.to_s,
       Rails.application.class.name,
-      ENV.fetch("PUBLIC_SIDE_SERVICE_URL", "side.app.localhost"),
+      ENV.fetch("PUBLIC_BASE_SERVICE_URL"),
       "secret_key_base",
       "REVISION",
       "git",
@@ -239,7 +214,7 @@ class RevisionEndpointTest < ActionDispatch::IntegrationTest
   end
 
   test "HEAD /revision satisfies the text contract with an empty body" do
-    host! ENV.fetch("PUBLIC_SIDE_SERVICE_URL", "side.app.localhost")
+    host! ENV.fetch("PUBLIC_BASE_SERVICE_URL")
 
     Rails.application.stub(:revision, REVISION) do
       get "/revision"

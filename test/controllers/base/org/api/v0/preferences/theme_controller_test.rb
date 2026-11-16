@@ -1,0 +1,273 @@
+# typed: false
+# frozen_string_literal: true
+
+require "openssl"
+
+require "test_helper"
+# require "helpers/global_test_support"
+
+class Base::Org::Api::V0::Preferences::ThemeControllerTest < ActionDispatch::IntegrationTest
+  # include PreferenceJwtHelper
+
+  setup do
+    _ = PreferenceBase # ensure autoload of JwtConfiguration/Token defined in same file
+    @host = ENV.fetch("PUBLIC_BASE_STAFF_URL")
+    host! @host
+    https!
+  end
+
+  test "GET show without a Preference JWT returns default theme sy" do
+    cookies.delete(PreferenceCookieName.anonymous_jwt)
+
+    get base_org_api_v0_preferences_theme_path, as: :json
+
+    assert_response :ok
+    assert_equal "sy", response.parsed_body["theme"]
+  end
+
+  test "GET show returns theme from preference jwt" do
+    token = encode_preference_jwt(
+      preferences: { "theme" => "dark" },
+      host: @host,
+      public_id: "pref-org-public-id",
+      preference_type: "OrgPreference",
+    )
+    cookies[PreferenceCookieName.anonymous_jwt] = token
+
+    with_preference_realm_issuers do
+      get base_org_api_v0_preferences_theme_path, as: :json
+
+      assert_response :success
+    end
+
+    assert_response :ok
+    assert_equal "dr", response.parsed_body["theme"]
+  end
+
+  test "PATCH update sets theme cookie and returns updated theme" do
+    token = encode_preference_jwt(
+      preferences: { "theme" => "system" },
+      host: @host,
+      public_id: "pref-org-public-id",
+      preference_type: "OrgPreference",
+    )
+    cookies[PreferenceCookieName.anonymous_jwt] = token
+
+    with_preference_realm_issuers do
+      patch base_org_api_v0_preferences_theme_path, params: { theme: "light" }, as: :json
+    end
+
+    assert_response :ok
+    assert_equal "li", response.parsed_body["theme"]
+    set_cookie = response.headers["Set-Cookie"].to_s
+
+    assert_includes set_cookie, "#{PreferenceCookieName.anonymous_experience}="
+  end
+
+  test "PATCH updates the Preference record and issues a Preference JWT" do
+    preference = OrgPreference.create!(
+      status_id: OrgPreferenceStatus::ACTIVE,
+      jti: SecureRandom.uuid,
+      last_issued_at: Time.current,
+      last_issued_expires_at: 400.days.from_now,
+    )
+    option_class = PreferenceClassRegistry.option_class("Org", :theme)
+    ensure_theme_defaults!(option_class)
+    OrgPreferenceTheme.create!(
+      preference: preference,
+      option_id: option_class::SYSTEM,
+    )
+    (PreferenceClassRegistry::CHILD_RECORD_TYPES - [:theme]).each do |type|
+      child_option_class = PreferenceClassRegistry.option_class("Org", type)
+      child_option_class.ensure_defaults! if child_option_class.respond_to?(:ensure_defaults!)
+      PreferenceClassRegistry.record_class("Org", type).create!(
+        preference_id: preference.id,
+        option_id: PreferenceClassRegistry.default_option_id("Org", type),
+      )
+    end
+    token = encode_preference_jwt(
+      preferences: { "theme" => "system" },
+      host: @host,
+      public_id: preference.public_id,
+      preference_type: "OrgPreference",
+    )
+    cookies[PreferenceCookieName.anonymous_jwt] = token
+
+    with_preference_realm_issuers do
+      patch base_org_api_v0_preferences_theme_path, params: { theme: "dark" }, as: :json
+    end
+
+    assert_response :ok
+    preference.reload
+
+    assert_equal option_class::DARK, preference.org_preference_theme.option_id
+    set_cookie = response.headers["Set-Cookie"].to_s
+
+    assert_includes set_cookie, "#{PreferenceCookieName.anonymous_experience}="
+    assert_includes set_cookie, "#{PreferenceIoKeys::Cookies::LANGUAGE}="
+    assert_includes set_cookie, "#{PreferenceCookieName.anonymous_jwt}="
+  end
+
+  private
+
+  def ensure_theme_defaults!(option_class)
+    option_class.ensure_defaults! if option_class.respond_to?(:ensure_defaults!)
+  end
+  private
+
+  def encode_preference_jwt(preferences:, host:, public_id:, preference_type: "OrgPreference")
+    preference = OrgPreference.find_by(public_id:)
+    jti = preference&.jti || "test-jti-#{SecureRandom.uuid}"
+    defaults = SecurityJwtPreferenceTokenCodec::ANONYMOUS_PREFERENCE_VALUES.transform_values(&:first)
+    token = nil
+
+    with_preference_realm_issuers do
+      token = PreferenceToken.encode(
+        defaults.merge(preferences),
+        host: host,
+        preference_type: preference_type,
+        public_id: public_id,
+        jti: jti,
+        issued_at: OrgPreference.database_now,
+      )
+    end
+
+    token
+  end
+end
+
+# DAMP local helper copy on the test class.
+class Base::Org::Api::V0::Preferences::ThemeControllerTest
+  TEST_BROWSER_USER_AGENT =
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 " \
+    "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" unless const_defined?(
+      :TEST_BROWSER_USER_AGENT, false,
+    )
+
+  private
+
+  def configured_host(surface_name)
+    Rails.configuration.x.boot_config.fetch(:hosts).public_send(surface_name).host
+  end
+
+  def set_access_cookie(token)
+    cookies[AuthenticationCookieName.access] = token
+  end
+
+  def set_refresh_cookie(token)
+    cookies[AuthenticationCookieName.refresh] = token
+  end
+
+  def jump_rt_url_from_location(location)
+    uri = URI.parse(location.to_s)
+    return location unless uri.host == "jump.umaxica.net"
+
+    token = Rack::Utils.parse_nested_query(uri.query.to_s)["rt"]
+    return location if token.blank?
+
+    payload, = JWT.decode(token, nil, false)
+    payload["url"].presence || location
+  rescue JWT::DecodeError, URI::InvalidURIError
+    location
+  end
+
+  def host_headers(host = nil)
+    host_value = host || (respond_to?(:request, true) ? request&.host : nil) || ENV["DEFAULT_URL_HOST"]
+    headers = { "Client-Agent" => self.class::TEST_BROWSER_USER_AGENT }
+    headers["Host"] = host_value if host_value.present?
+    headers
+  end
+
+  def browser_headers
+    csrf_token = csrf_token_value
+    cookies["csrf_token"] = csrf_token if respond_to?(:cookies, true)
+    host_headers.merge("X-CSRF-Token" => csrf_token)
+  end
+
+  def bearer_headers(token, host: nil, headers: {})
+    host_headers(host).merge(headers).merge("Authorization" => "Bearer #{token}")
+  end
+
+  def ensure_user_reference_records!
+    ClientStatus.find_or_create_by!(id: ClientStatus::NOTHING)
+    ClientVisibility.find_or_create_by!(id: ClientVisibility::USER)
+    ClientMfaStatus.find_or_create_by!(id: ClientMfaStatus::NOTHING)
+    ClientMfaStatus.find_or_create_by!(id: ClientMfaStatus::ACTIVE)
+    ClientMfaStatus.find_or_create_by!(id: ClientMfaStatus::UNCONFIGURED)
+    ClientEmailStatus.find_or_create_by!(id: ClientEmailStatus::VERIFIED)
+    ClientTelephoneStatus.find_or_create_by!(id: ClientTelephoneStatus::VERIFIED)
+    ClientPasskeyStatus.find_or_create_by!(id: ClientPasskeyStatus::ACTIVE)
+  end
+
+  def mark_token_step_up_satisfied_for_test(token, scope: nil, at: Time.current)
+    return unless token.respond_to?(:update_columns)
+
+    token.update_columns(
+      { last_step_up_at: at,
+        last_step_up_scope: scope.presence || token.try(:last_step_up_scope).presence || "verification",
+        updated_at: Time.current, }.compact,
+    )
+  end
+
+  def load_jump_rt_env!
+    @jump_rt_env_originals ||= {}
+    jump_rt_key = Base64.strict_encode64(OpenSSL::PKey::RSA.generate(3072).to_der)
+    %w(FOREIGN_APP FOREIGN_ORG BASE_APP BASE_ORG).each do |namespace|
+      ENV["JWT_#{namespace}_ACTIVE_KID"] = "#{namespace.downcase.tr("_", "-")}-test"
+      ENV["JWT_#{namespace}_PRIVATE_KEY"] = jump_rt_key
+    end
+    ENV["PUBLIC_JUMP_GATEWAY_URL"] = "https://jump.umaxica.net"
+    JitSecurityJwtRegistry.reload! if defined?(JitSecurityJwtRegistry)
+  end
+
+  def with_forgery_protection
+    ActionController::Base.allow_forgery_protection = true
+    yield
+  ensure
+    # Restore the environment default, not the value observed on entry: if the flag was
+    # already leaked as true, restoring the observation would pin the leak for the rest
+    # of the process and every later test expecting protection off would fail.
+    ActionController::Base.allow_forgery_protection =
+      Rails.configuration.action_controller.allow_forgery_protection
+  end
+
+  def csrf_token_value
+    "test-csrf-token"
+  end
+
+  def response_set_cookie_lines
+    raw = response.headers["Set-Cookie"] || response.headers["set-cookie"]
+    lines = raw.is_a?(Array) ? raw : raw.to_s.split("\n")
+    lines.flat_map { |line| line.to_s.split("\n") }.compact_blank
+  end
+
+  def extract_cookies_from_response
+    response_set_cookie_lines.each_with_object({}) do |line, parsed|
+      pair = line.to_s.split(";", 2).first
+      name, value = pair.to_s.split("=", 2)
+      parsed[name] = CGI.unescape(value.to_s) if name.present?
+    end
+  end
+
+  def state_changing_application_route_targets
+    Rails.application.routes.routes.filter_map do |route|
+      verbs = route.verb.to_s.delete("^A-Z|").split("|")
+      next if verbs.empty? || (verbs - %w(GET HEAD)).empty?
+
+      controller = route.required_defaults[:controller].to_s
+      action = route.required_defaults[:action].to_s
+      next if controller.blank? || action.blank?
+
+      controller_class_name = "#{controller.camelize}Controller"
+      next unless Rails.root.join("app/controllers/#{controller}_controller.rb").exist?
+
+      { verb: verbs.join("|"),
+        path: route.path.spec.to_s,
+        controller: controller,
+        action: action,
+        controller_class: Object.const_get(controller_class_name), }
+    rescue NameError
+      nil
+    end
+  end
+end

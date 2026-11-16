@@ -48,6 +48,15 @@ module RequestContext
       assert_equal :optional_overlay, RequestContextContract.family(:ps)
     end
 
+    test "region normalization accepts supported regions and defaults missing or unknown values" do
+      assert_equal "jp", RequestContextContract.default_region
+      assert_equal "jp", RequestContextContract.normalize_region("JP")
+      assert_equal "us", RequestContextContract.normalize_region("US")
+      assert_equal "jp", RequestContextContract.normalize_region(nil)
+      assert_equal "jp", RequestContextContract.normalize_region("")
+      assert_equal "jp", RequestContextContract.normalize_region("unknown")
+    end
+
     test "redirect_target_key? recognizes only pt and nt" do
       assert RequestContextContract.redirect_target_key?(:pt)
       assert RequestContextContract.redirect_target_key?("nt")

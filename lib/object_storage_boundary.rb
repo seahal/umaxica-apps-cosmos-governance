@@ -8,7 +8,7 @@ module ObjectStorage
   # A storage boundary is deliberately a third concept, separate from both the
   # database connection name and any future public URL namespace:
   #
-  #   database connection name  ->  :avatar, :publishing, ...
+  #   database connection name  ->  :avatar, ...
   #   storage boundary key      ->  what this registry names
   #   public URL namespace      ->  undecided; not represented here
   #
@@ -18,14 +18,12 @@ module ObjectStorage
   # name; it is read from an explicitly named variable per boundary.
   #
   # A boundary is registered only when a model in that boundary actually
-  # declares an attachment. Databases without attachments (cache, queue, search,
-  # occurrence, chronicle, ticket, setting, signal) impose no bucket requirement.
+  # declares an attachment. Other databases impose no bucket requirement.
   module Boundary
     module_function
 
     REGISTRY = {
       avatar: "AVATAR",
-      publishing: "PUBLISHING",
     }.freeze
 
     def keys

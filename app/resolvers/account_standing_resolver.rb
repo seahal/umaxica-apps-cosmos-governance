@@ -13,4 +13,5 @@ class AccountStandingResolver
 
     AccountStanding.from_cases(cases)
   end
+  public_class_method :call
 end

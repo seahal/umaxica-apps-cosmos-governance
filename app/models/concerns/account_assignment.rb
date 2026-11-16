@@ -4,17 +4,7 @@
 module AccountAssignment
   extend ActiveSupport::Concern
 
-  include ::PublicId
-
-  included do
-    scope :active, -> { where(revoked_at: nil) }
-
-    before_validation :set_assigned_at, on: :create
-    before_create :set_assigned_at
-
-    validates :assigned_at, presence: true
-  end
-
+  public
   def active?
     revoked_at.blank?
   end

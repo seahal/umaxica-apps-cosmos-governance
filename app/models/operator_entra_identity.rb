@@ -39,6 +39,12 @@
 class OperatorEntraIdentity < OrgRpRecord
   include ::PublicId
 
+  before_validation :generate_public_id, on: :create
+  before_validation :refresh_generated_public_id_after_collision, on: :create
+  before_create :generate_public_id
+  around_create :retry_public_id_collision
+  validate :public_id_immutable_after_create, on: :update
+  validates :public_id, presence: true, length: { is: PublicId::GENERATION_SIZE }, uniqueness: true
   ENTRA_ID_FORMAT = /\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z/i
   private_constant :ENTRA_ID_FORMAT
 
@@ -62,4 +68,6 @@ class OperatorEntraIdentity < OrgRpRecord
   validates :entra_tenant_id, uniqueness: { scope: :entra_object_id }
   validates :entra_tenant_id, format: { with: ENTRA_ID_FORMAT, message: :uuid_format }
   validates :entra_object_id, format: { with: ENTRA_ID_FORMAT, message: :uuid_format }
+  validates :entra_object_id, :entra_tenant_id, length: { maximum: 36 }
+  validates :evidence_issuer, :evidence_subject, length: { maximum: 512 }
 end

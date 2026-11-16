@@ -1,4 +1,6 @@
+# frozen_string_literal: true
 # typed: false
+
 # == Schema Information
 #
 # Table name: app_preference_chronicles
@@ -8,11 +10,11 @@
 #  actor_type     :text             default(""), not null
 #  context        :jsonb            not null
 #  current_value  :text             default(""), not null
-#  discarded_at   :datetime         default(Infinity), not null
+#  discard_at   :datetime         default(Infinity), not null
 #  ip_address     :inet             default(#<IPAddr: IPv4:0.0.0.0/255.255.255.255>), not null
 #  occurred_at    :datetime         not null
 #  previous_value :text             default(""), not null
-#  purged_at      :datetime         not null
+#  purge_eligible_at      :datetime         not null
 #  subject_type   :text             not null
 #  created_at     :datetime         not null
 #  updated_at     :datetime         not null
@@ -28,7 +30,7 @@
 #  index_app_preference_chronicles_on_event_id                  (event_id)
 #  index_app_preference_chronicles_on_level_id                  (level_id)
 #  index_app_preference_chronicles_on_occurred_at               (occurred_at)
-#  index_app_preference_chronicles_on_purged_at                 (purged_at)
+#  index_app_preference_chronicles_on_purge_eligible_at                 (purge_eligible_at)
 #  index_app_preference_chronicles_on_subject_id                (subject_id)
 #
 # Foreign Keys
@@ -36,8 +38,6 @@
 #  fk_rails_...  (event_id => app_preference_chronicle_events.id)
 #  fk_rails_...  (level_id => app_preference_chronicle_levels.id)
 #
-
-# frozen_string_literal: true
 
 require "test_helper"
 
@@ -79,6 +79,10 @@ class AppPreferenceChronicleTest < ActiveSupport::TestCase
   end
 
   test "validates presence of subject_id" do
+    # The `before_create`/`before_update` reference guard resolves an AppPreference subject before
+    # the statement runs, so a nil id is rejected there rather than by the column. Pointing the
+    # audit at a subject type the guard does not resolve keeps this case on the NOT NULL contract.
+    @audit.subject_type = "SomeOtherType"
     @audit.subject_id = nil
 
     assert_raises(ActiveRecord::NotNullViolation) { @audit.save!(validate: false) }

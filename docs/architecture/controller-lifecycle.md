@@ -9,9 +9,6 @@ The active controller bases are:
 - `BareController`
 - surface-local `ApplicationController`
 
-`OpenController`, `PrivateController`, and `GuestController` are legacy compatibility wrappers, not
-the source of truth for authentication classification.
-
 Use this document with `docs/architecture/controller-boundaries.md` and
 `docs/architecture/current_context.md`.
 
@@ -40,10 +37,22 @@ surface authentication-aware controller lifecycle.
 Surface-local `ApplicationController` inherits directly from `ActionController::Base` and owns the
 authentication-aware request lifecycle.
 
+Base app and org each own a separate Browser RP lifecycle. Tech org owns its operator RP lifecycle.
+Base com serves anonymous public and Preference routes. Base App and Base Org each have a neutral
+`GET /sign` and CSRF-protected `POST /sign` entry, interruption and callback routes, RP-local
+sign-out, and a Back-Channel Logout receiver. Their client, Visa issuer, and local RP cell are
+separate. Neither Base realm hosts the Visa provider or its credential ceremonies. Each RP checks
+its explicit Visa host-family origin before starting state; missing configuration fails with 503.
+Each Base RP session cookie is accepted only by its configured RP cell process. If it reaches a
+process that cannot resolve that cell, the request fails with 503 instead of continuing as a guest
+request or writing anonymous Preference state. Access authorization and Jump's deployed trust graph
+remain external readiness conditions. Tech has no RP entry, callback, sign-out, or Back-Channel
+Logout routes. OIDC-driven step-up callback routes remain absent. Existing local RP credentials
+remain subject to the local session boundary.
+
 Authentication modes that are more specific than this base split, including bare endpoints,
 guest-only flows, optional access, and step-up requirements, must be declared and audited explicitly
-by concrete controller/action metadata and policy. They must not be inferred from legacy
-compatibility inheritance alone. Missing declarations resolve to `:deny_all`.
+by concrete controller/action metadata and policy. Missing declarations resolve to `:deny_all`.
 
 ## Request Lifecycle Shape
 
@@ -70,7 +79,6 @@ The target authenticated lifecycle is:
 ```text
 rate limit
 -> verify/decode access token
--> refresh preference token from DB for logged-in HTML preference edit entry when applicable
 -> initialize Actor from token state
 -> overlay valid request-local lx/ct/tz onto Actor.preferences
 -> apply locale/timezone/theme from Actor.preferences
@@ -82,39 +90,39 @@ Current surface-local `ApplicationController` callbacks place the relevant lifec
 order:
 
 1. `set_preferences_cookie`
-2. `transparent_refresh_access_token`
-3. `set_current_actor`
-4. `touch_session_activity!` inside current-resource resolution
+2. `set_current_actor`
 
-`set_preferences_cookie` may write during preference bootstrap, preference refresh rotation,
-refresh-token lifetime updates, and logged-in preference edit entry refresh. These writes are
-allowed only as lifecycle exceptions.
-
-`transparent_refresh_access_token` may write when a valid auth refresh cookie is present and the
-HTML request lacks an access cookie. That path rotates or refreshes auth session/token state before
-the Actor snapshot is finalized.
+`set_preferences_cookie` verifies the current Preference JWT on `GET`/`HEAD`. Base app/org may make
+read-only queries to rebuild a missing or mismatched `language` or `__Secure-experience` display
+cookie from the verified snapshot, active anonymous row and explicit actor values. Base com may read
+its active row for region and browser-bound consent or Web Push. Base may delete unusable shared
+Preference cookies; these response-cookie changes do not alter persisted state. Other read-only
+surfaces verify the JWT without querying the Preference database or changing Preference cookies. No
+GET/HEAD path creates, updates, or retires Preference rows, reissues the JWT, or extends its expiry.
+Preference row lifecycle changes happen at their explicit non-GET writer boundaries.
 
 `set_current_actor` should install the immutable request Actor snapshot. It must not create
 preference rows, rotate tokens, or repair malformed preference JWTs.
 
-`touch_session_activity!` may write a throttled `last_used_at` update to the token/session row while
-resolving the current authenticated resource. This is a session-lifecycle write, not a product data
-write.
+The current browser RP request path has no session-activity tracking hook: neither
+`track_authenticated_session_activity?` nor `touch_session_activity!` is called during request
+handling. Ordinary requests therefore do not update token or session activity timestamps. If
+activity tracking is reintroduced, it needs an explicit owner-approved write boundary and request
+tests.
 
-The GET/HEAD write categories above are allowlisted in
-[`docs/security/db-write-allowlist.md`](../security/db-write-allowlist.md). New read-side writes
-must be added there before tests or CI allow them.
+The current read-side database writes are listed in
+[`docs/security/db-write-allowlist.md`](../security/db-write-allowlist.md). Ordinary page navigation
+and Preference reads are not database-write exceptions. A new read-side database write requires an
+explicit reviewed contract and test before the allowlist changes.
 
-The request-local `lx`, `ct`, and `tz` overlay changes only the current request's
-`Actor.preferences`. It must not write the database, reissue JWTs, or update the persistent
-preference snapshot. Locale, timezone, theme, observability, and similar request effects should be
-applied after the Actor snapshot and request overlay are resolved. Runtime reads should use
-`Actor.preferences`.
+Supported request-local context overlays change only the current request's `Actor.preferences`. They
+must not write the database, reissue JWTs, or update the persistent Preference snapshot. Locale,
+timezone, theme, observability, and similar request effects should be applied after the Actor
+snapshot and request overlay are resolved. Runtime reads should use `Actor.preferences`.
 
-The logged-in HTML preference edit entry refresh is a bounded preference-screen exception. It exists
-so preference edit screens can pick up actor-local DB changes made in another browser or device
-before rendering. It must run before `set_current_actor`, and it must not be used as a generic
-database fallback for normal pages or broken JWTs.
+Do not add a database refresh of actor-local preference values to an HTML edit-page GET. If a future
+flow needs cross-device reconciliation, give it an explicit write boundary and document its
+authority and concurrency behavior.
 
 Actor cleanup should use the domain-facing `Actor.clear` API. Prefer a prepended `around_action`
 with `ensure` for new lifecycle code so redirects, renders, and exceptions do not leave stale
@@ -153,14 +161,14 @@ or `Actor.preferences` exposes the needed value. Writes remain in the preference
 surface-specific models because shared preference and actor-local preference are stored separately.
 
 Here, "shared preference" means `AppPreference`, `OrgPreference`, or `ComPreference`: the
-login-independent surface preference state. "Actor-local preference" means `UserPreference`,
-`OperatorPreference`, or `VisitorPreference`: the account-local state for the current runtime actor.
-This is not Rails `session`, and it is not the `Actor` CurrentAttributes object.
+login-independent surface preference state. "Actor-local preference" means `ClientPreference` or
+`OperatorPreference`: the account-local state for the current runtime actor. COM has no actor-local
+preference. This is not Rails `session`, and it is not the `Actor` CurrentAttributes object.
 
-`/preference`, `/setting`, and `/configurator` are distinct URL responsibilities. `/preference` owns
-login-independent preference edits, `/setting` owns signed-in user self-service settings, and
-`/configurator` owns operator-managed configuration. Existing plural `/settings` routes are a
-compatibility gap, not the target language for new route work.
+`/preference`, `/setting`, and `/configurator` have distinct responsibilities. Base app and org
+routes own their own preference and management controllers; shared path text does not share a
+controller or lifecycle. `/configurator` remains the generic path for new operator-managed
+configuration.
 
 ## Cookie Key Compatibility
 
@@ -180,10 +188,9 @@ registers no callbacks from `included do`; controllers that need locale/timezone
 `before_action :apply_localization_preferences` explicitly in their base class. All surface
 `ApplicationController`s now also run `set_color_theme` after `set_current_actor`, so theme
 reflection can rely on `Actor.preferences` being complete. These two gaps are resolved as of the
-2026-07-17 controller-layer audit (`memos/2026-07-17-controller-layer-problem-audit.md`).
+2026-07-17 controller-layer audit.
 
-Some preference setup code still has deliberate side effects, including preference token reissue,
-cookie writes, refresh token lifetime updates, and login-time adoption. Those effects should remain
-inside preference/authentication concerns and must not be moved into `set_current_context`.
-
-Exception controllers are tracked by `plans/active/controller-boundary-lifecycle-unification.md`.
+Preference persistence effects now run only through the explicit Base writer boundary. Preference
+token and cookie issuance happens only after the setting transaction commits. Authentication-token
+refresh remains an independent authenticated protocol; it does not rotate Preference state. Do not
+move these explicit write effects into `set_current_context` or ordinary GET/HEAD callbacks.

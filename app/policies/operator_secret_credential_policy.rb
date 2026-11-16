@@ -9,6 +9,7 @@
 # any operator actor; per-record actions require ownership (record.staff_id == user.id). Step-up
 # and Turnstile guards remain on the controller's verification before_actions.
 class OperatorSecretCredentialPolicy < ApplicationPolicy
+  public
   def index?
     user.is_a?(Operator)
   end

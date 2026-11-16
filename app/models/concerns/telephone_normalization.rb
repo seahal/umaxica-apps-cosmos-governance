@@ -93,11 +93,9 @@ module TelephoneNormalization
 
     # Step 4: Handle domestic format (starts with 0 but not +)
     # Pass the flag to know if we should remove domestic 0 after country code
-    cleaned = convert_domestic_format(cleaned, from_intl_prefix)
-
-    # Step 5: Validate and return
-    cleaned
+    convert_domestic_format(cleaned, from_intl_prefix)
   end
+  public_class_method :normalize_to_e164
 
   # Remove formatting characters from input
   # @param input [String] the raw input
@@ -169,18 +167,18 @@ module TelephoneNormalization
     # For other 2-digit country codes ending in non-1 digits
     # Try to detect pattern +XX0[1-9]...
     if input =~ /\A(\+\d{2})0([1-9]\d{7,})\z/
-      return "#{$1}#{$2}"
+      return "#{::Regexp.last_match(1)}#{::Regexp.last_match(2)}"
     end
 
     # For 1-digit country codes (like +1 for US)
     # US doesn't have domestic 0, but other +1 countries might
     if input =~ /\A(\+\d)0([1-9]\d{7,})\z/
-      return "#{$1}#{$2}"
+      return "#{::Regexp.last_match(1)}#{::Regexp.last_match(2)}"
     end
 
     # For 3-digit country codes
     if input =~ /\A(\+\d{3})0([1-9]\d{7,})\z/
-      return "#{$1}#{$2}"
+      return "#{::Regexp.last_match(1)}#{::Regexp.last_match(2)}"
     end
 
     # No domestic 0 found or pattern doesn't match

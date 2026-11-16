@@ -6,9 +6,8 @@ Backlog. Deferred on 2026-05-19.
 
 ## Context
 
-`plans/active/token-rotation-concurrency-hardening.md` improved the safety baseline for auth and
-preference token rotation, but intentionally did not implement a legitimate parallel-refresh overlap
-window.
+`specs/token-rotation-concurrency-hardening.md` improved the safety baseline for auth and preference
+token rotation, but intentionally did not implement a legitimate parallel-refresh overlap window.
 
 The remaining problem is the high-throughput case where multiple legitimate requests present the
 same refresh token close together because of browser concurrency, retry, or a lost response. Redis /
@@ -50,7 +49,9 @@ Use existing state where possible:
 
 - auth already has `refresh_token_family_id`, `refresh_token_generation`, and `rotated_at`;
 - preference already has `used_at` and `replaced_by_id`;
-- both paths now share digest-row locking and device-id matching through `RefreshTokenShared`.
+- no active application consumer of the former shared refresh-token concern was found in the
+  2026-11-13 source audit. Re-audit the current owner-side rotation paths before resuming this plan;
+  this backlog does not establish that both paths share a lock or device-binding contract.
 
 Possible additions if existing columns are insufficient:
 
@@ -68,12 +69,14 @@ Possible additions if existing columns are insufficient:
 - Preference: same matrix as auth.
 - No raw refresh token, verifier, cookie, or authorization header is logged.
 
-## Current Solved Portion
+## Previously Reported Solved Portion
 
 Already done in the active plan:
 
 - Redis/JTI-deduplication direction deprecated.
-- Common DB row-lock primitive added to `RefreshTokenShared`.
+- The former shared primitive has no current application consumers and is removed. This cleanup
+  changed no refresh behavior or schema; reconfirm the shared locking proposal before implementing
+  an overlap window.
 - Auth and preference rotation use the shared lock/device helpers.
 - Preference access-token `jti` is checked against the current DB row.
 - Security-intent tests cover stale `jti`, missing `jti`, invalid verifier without actor revoke,
@@ -81,6 +84,5 @@ Already done in the active plan:
 
 ## Related
 
-- `plans/active/token-rotation-concurrency-hardening.md`
 - `docs/security/refresh-token-rotation.md`
 - `adr/refresh-revoke-aal-downgrade-and-replay-hardening.md`

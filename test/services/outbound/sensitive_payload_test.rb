@@ -6,24 +6,13 @@ require "test_helper"
 
 module Outbound
   class SensitivePayloadTest < ActiveSupport::TestCase
-    test "encrypts and decrypts sms bodies without embedding plaintext" do
-      token = OutboundSensitivePayload.encrypt_sms_body("Your code is 123456")
+    test "encrypts and decrypts complete sms envelopes without embedding plaintext" do
+      token = OutboundSensitivePayload.encrypt_sms_delivery(
+        to: "+819012345678", title: "Verification", body: "Your code is 123456",
+      )
 
       assert_not_includes token, "123456"
-      assert_equal "Your code is 123456", OutboundSensitivePayload.decrypt_sms_body(token)
-    end
-
-    test "email otp tokens cannot be decrypted with sms purpose" do
-      token = OutboundSensitivePayload.encrypt_email_otp("123456")
-
-      assert_raises(ActiveSupport::MessageEncryptor::InvalidMessage) do
-        OutboundSensitivePayload.decrypt_sms_body(token)
-      end
-    end
-
-    test "blank payloads are rejected" do
-      assert_raises(ArgumentError) { OutboundSensitivePayload.encrypt_email_otp("") }
-      assert_raises(ArgumentError) { OutboundSensitivePayload.decrypt_email_otp("") }
+      assert_equal "Your code is 123456", OutboundSensitivePayload.decrypt_sms_delivery(token).fetch(:body)
     end
   end
 end

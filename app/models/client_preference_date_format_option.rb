@@ -16,23 +16,27 @@ class ClientPreferenceDateFormatOption < AppPrincipalRecord
   UK = 2
   US = 3
 
+  DEFAULTS = [NOTHING, ISO, UK, US].freeze
+
+  self.record_timestamps = false
+
   has_many :client_preference_date_formats,
            class_name: "ClientPreferenceDateFormat",
            foreign_key: :option_id,
            inverse_of: :option,
            dependent: :restrict_with_error
 
+  def self.ensure_defaults!
+    insert_missing_fixed_ids!(DEFAULTS)
+  end
+  public_class_method :ensure_defaults!
+
+  public
   def name
     case id
     when 1 then "iso"
     when 2 then "uk"
     when 3 then "us"
     end
-  end
-
-  DEFAULTS = [NOTHING, ISO, UK, US].freeze
-
-  def self.ensure_defaults!
-    insert_missing_fixed_ids!(DEFAULTS)
   end
 end

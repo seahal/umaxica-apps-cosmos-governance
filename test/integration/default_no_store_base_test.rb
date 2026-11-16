@@ -1,0 +1,197 @@
+# typed: false
+# frozen_string_literal: true
+
+require "test_helper"
+
+# Base policy roots start every response from `Cache-Control: no-store`
+# (adr/global-and-publishing-default-no-store-policy.md): rendered pages, redirects issued by
+# authentication callbacks, and responses the FQDN availability gate ends before the action runs.
+# Explicit opt-ins (sitemap, JWKS) keep their public cache contract.
+class DefaultNoStoreBaseTest < ActionDispatch::IntegrationTest
+  test "Base app ApplicationController root page is no-store" do
+    host!("base.app.localhost")
+
+    get("/", params: { ri: "jp" })
+
+    assert_response :success
+    assert_includes response.headers.fetch("Cache-Control"), "no-store"
+  end
+
+  test "Base app ApplicationController sign-entry redirect is no-store" do
+    host!("base.app.localhost")
+
+    get("/groups", params: { ri: "jp" })
+
+    assert_response :see_other
+    assert_equal "no-store", response.headers.fetch("Cache-Control")
+  end
+
+  test "Base app ApplicationController response halted by the availability gate is no-store" do
+    Flipper.disable(FqdnAvailabilityRegistry.flag_name_for(:base_service))
+    host!("base.app.localhost")
+
+    get("/groups", params: { ri: "jp" })
+
+    assert_response :service_unavailable
+    assert_equal "no-store", response.headers.fetch("Cache-Control")
+  end
+
+  test "Base com ApplicationController root page is no-store" do
+    host!("base.com.localhost")
+
+    get("/", params: { ri: "jp" })
+
+    assert_response :success
+    assert_includes response.headers.fetch("Cache-Control"), "no-store"
+  end
+
+  test "Base com ApplicationController response halted by the availability gate is no-store" do
+    Flipper.disable(FqdnAvailabilityRegistry.flag_name_for(:base_corporate))
+    host!("base.com.localhost")
+
+    get("/", params: { ri: "jp" })
+
+    assert_response :service_unavailable
+    assert_equal "no-store", response.headers.fetch("Cache-Control")
+  end
+
+  test "Base org ApplicationController root page is no-store" do
+    host!("base.org.localhost")
+
+    get("/", params: { ri: "jp" })
+
+    assert_response :success
+    assert_includes response.headers.fetch("Cache-Control"), "no-store"
+  end
+
+  test "Base org ApplicationController authentication refusal is no-store" do
+    host!("base.org.localhost")
+
+    get("/settings", params: { ri: "jp" })
+
+    assert_response :see_other
+    target = URI.parse(response.location)
+
+    assert_includes [nil, request.host], target.host
+    assert_equal URI.parse(base_org_sign_show_path(ri: "jp")).path, target.path
+    assert_equal "no-store", response.headers.fetch("Cache-Control")
+  end
+
+  test "Base org ApplicationController response halted by the availability gate is no-store" do
+    Flipper.disable(FqdnAvailabilityRegistry.flag_name_for(:base_staff))
+    host!("base.org.localhost")
+
+    get("/settings", params: { ri: "jp" })
+
+    assert_response :service_unavailable
+    assert_equal "no-store", response.headers.fetch("Cache-Control")
+  end
+
+  test "Base app BareController robots.txt is no-store" do
+    host!("base.app.localhost")
+
+    get("/robots.txt")
+
+    assert_response :success
+    assert_equal "no-store", response.headers.fetch("Cache-Control")
+  end
+
+  test "Base app BareController sitemap keeps its explicit public cache opt-in" do
+    host!("base.app.localhost")
+
+    get("/sitemap.xml")
+
+    assert_response :success
+    cache_control = response.headers.fetch("Cache-Control").split(", ")
+
+    assert_includes cache_control, "public"
+    assert_includes cache_control, "max-age=300"
+    assert_includes cache_control, "s-maxage=600"
+    assert_not_includes cache_control, "no-store"
+  end
+
+  test "Base app BareController JWKS keeps its explicit public cache opt-in" do
+    host!("base.app.localhost")
+
+    get("/.well-known/jwks.json")
+
+    assert_response :success
+    assert_equal "max-age=3600, public", response.headers.fetch("Cache-Control")
+  end
+
+  test "Base app BareController response halted by the availability gate is no-store" do
+    Flipper.disable(FqdnAvailabilityRegistry.flag_name_for(:base_service))
+    host!("base.app.localhost")
+
+    get("/robots.txt")
+
+    assert_response :service_unavailable
+    assert_equal "no-store", response.headers.fetch("Cache-Control")
+  end
+
+  test "Base com BareController robots.txt is no-store" do
+    host!("base.com.localhost")
+
+    get("/robots.txt")
+
+    assert_response :success
+    assert_equal "no-store", response.headers.fetch("Cache-Control")
+  end
+
+  test "Base com BareController sitemap keeps its explicit public cache opt-in" do
+    host!("base.com.localhost")
+
+    get("/sitemap.xml")
+
+    assert_response :success
+    cache_control = response.headers.fetch("Cache-Control").split(", ")
+
+    assert_includes cache_control, "public"
+    assert_includes cache_control, "max-age=300"
+    assert_includes cache_control, "s-maxage=600"
+    assert_not_includes cache_control, "no-store"
+  end
+
+  test "Base com BareController response halted by the availability gate is no-store" do
+    Flipper.disable(FqdnAvailabilityRegistry.flag_name_for(:base_corporate))
+    host!("base.com.localhost")
+
+    get("/robots.txt")
+
+    assert_response :service_unavailable
+    assert_equal "no-store", response.headers.fetch("Cache-Control")
+  end
+
+  test "Base org BareController robots.txt is no-store" do
+    host!("base.org.localhost")
+
+    get("/robots.txt")
+
+    assert_response :success
+    assert_equal "no-store", response.headers.fetch("Cache-Control")
+  end
+
+  test "Base org BareController sitemap keeps its explicit public cache opt-in" do
+    host!("base.org.localhost")
+
+    get("/sitemap.xml")
+
+    assert_response :success
+    cache_control = response.headers.fetch("Cache-Control").split(", ")
+
+    assert_includes cache_control, "public"
+    assert_includes cache_control, "max-age=300"
+    assert_includes cache_control, "s-maxage=600"
+    assert_not_includes cache_control, "no-store"
+  end
+
+  test "Base org BareController response halted by the availability gate is no-store" do
+    Flipper.disable(FqdnAvailabilityRegistry.flag_name_for(:base_staff))
+    host!("base.org.localhost")
+
+    get("/robots.txt")
+
+    assert_response :service_unavailable
+    assert_equal "no-store", response.headers.fetch("Cache-Control")
+  end
+end

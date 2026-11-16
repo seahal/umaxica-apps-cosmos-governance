@@ -15,7 +15,10 @@ export type ChromeBanner = {
 };
 
 export type ChromeCookieControls = {
+  hidden: boolean;
   scope: string;
+  /** Same-origin consent endpoint, or null for the read-only link to Base. */
+  endpoint_url: string | null;
   settings_url: string;
   title: string;
   description_html: string;
@@ -27,6 +30,8 @@ export type ChromeCookieControls = {
 
 export type ChromeThemeControls = {
   hidden: boolean;
+  /** Same-origin path the server declared for this page's theme reads and writes. */
+  endpoint_url: string;
   title: string;
   description: string;
   options: {
@@ -39,14 +44,22 @@ export type ChromeThemeControls = {
 export type SurfaceChrome = {
   family_label: string | null;
   surface: string;
+  locale?: string;
   brand: { name: string; href: string };
   banner: ChromeBanner | null;
-  primary_navigation: ChromeLink[] | null;
   footer_navigation: ChromeLink[] | null;
   /** Absent on the operational surfaces, which have no preference authority to link to. */
   cookie_controls: ChromeCookieControls | null;
   theme_controls: ChromeThemeControls | null;
+  /** Base App only: a neutral entry link while signed out, or sign out while signed in. */
+  account_navigation: ChromeAccountNavigation | null;
   copyright: string;
+};
+
+export type ChromeAccountNavigation = {
+  label: string;
+  signed_in: boolean;
+  links: ChromeLink[];
 };
 
 /**
@@ -59,4 +72,6 @@ export type SurfaceChrome = {
  */
 export type SharedProps = {
   chrome: SurfaceChrome;
+  /** Set by a terminal ceremony so the persistent layout clears encrypted browser history. */
+  clear_history?: boolean;
 };

@@ -2,7 +2,9 @@
 
 ## Status
 
-Accepted on 2026-05-10.
+Superseded on 2026-10-31 by
+[`preference-sign-in-application-is-one-directional.md`](preference-sign-in-application-is-one-directional.md).
+Retained as a historical decision; it is not normative for current Preference behavior.
 
 ## Context
 
@@ -46,6 +48,6 @@ changed each field and could silently preserve stale values.
 
 ## Related
 
-- `plans/backlog/gh629-preference-reconciliation-strategy.md`
+- GH issue #629
 - `docs/architecture/preference.md`
 - `app/controllers/concerns/preference/adoption.rb`

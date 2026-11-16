@@ -5,6 +5,7 @@ class OrgOperatorLifecycleReject
   def self.call(request:, actor:, reason: nil)
     new(request: request, actor: actor, reason: reason).call
   end
+  public_class_method :call
 
   def initialize(request:, actor:, reason: nil)
     @request = request
@@ -12,6 +13,7 @@ class OrgOperatorLifecycleReject
     @reason = reason
   end
 
+  public
   def call
     return failure("Only pending requests can be rejected") unless request.pending?
     return failure("Requester cannot reject their own lifecycle request") if requested_by_actor?

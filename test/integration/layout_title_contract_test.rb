@@ -10,25 +10,17 @@ class LayoutTitleContractTest < ActiveSupport::TestCase
   self.fixture_table_names = []
 
   CANONICAL_LAYOUTS = {
-    "app/views/layouts/auth/app/application.html.erb" => "APP",
-    "app/views/layouts/auth/com/application.html.erb" => "COM",
-    "app/views/layouts/auth/org/application.html.erb" => "ORG",
     "app/views/layouts/base/app/application.html.erb" => "APP",
     "app/views/layouts/base/app/inertia.html.erb" => "APP",
     "app/views/layouts/base/com/application.html.erb" => "COM",
+    "app/views/layouts/base/com/inertia.html.erb" => "COM",
     "app/views/layouts/base/org/application.html.erb" => "ORG",
-    "app/views/layouts/core/app/application.html.erb" => "APP",
-    "app/views/layouts/core/com/application.html.erb" => "COM",
-    "app/views/layouts/core/org/application.html.erb" => "ORG",
-    "app/views/layouts/side/app/application.html.erb" => "APP",
-    "app/views/layouts/side/com/application.html.erb" => "COM",
-    "app/views/layouts/side/org/application.html.erb" => "ORG",
-    "app/views/layouts/palm/app/application.html.erb" => "APP",
+    "app/views/layouts/base/org/inertia.html.erb" => "ORG",
   }.freeze
 
   # Routing and deployment vocabulary. None of it is brand vocabulary, so none of
   # it may appear in the site title.
-  FORBIDDEN_SITE_WORDS = %w(Auth Base Core Side Palm Jump Global Rails Inertia API).freeze
+  FORBIDDEN_SITE_WORDS = %w(Auth Base Core Governance Sphere Press Warp Palm Jump Global Rails Inertia API).freeze
 
   test "canonical layouts hand the brand contract to meta-tags" do
     CANONICAL_LAYOUTS.each do |path, tld|
@@ -42,6 +34,17 @@ class LayoutTitleContractTest < ActiveSupport::TestCase
                       "#{path} must set reverse: true, otherwise meta-tags emits SITE — PAGE"
       assert_includes contents, "display_meta_tags", "#{path} must render its title through meta-tags"
     end
+  end
+
+  test "Tech operational layout keeps its distinct brand label" do
+    path = "app/views/layouts/tech/org/application.html.erb"
+    contents = Rails.root.join(path).read
+
+    assert_includes contents, %(site: "\#{ENV.fetch("BRAND_NAME").upcase} (TECH ORG)"),
+                    "the Tech operational layout must keep its own brand label"
+    assert_includes contents, %(separator: "—")
+    assert_includes contents, "reverse: true"
+    assert_includes contents, "display_meta_tags"
   end
 
   test "canonical layouts keep surface and runtime names out of the site title" do
@@ -84,9 +87,12 @@ class LayoutTitleContractTest < ActiveSupport::TestCase
   end
 
   test "canonical layout roots remain constrained to the current surfaces" do
-    assert_predicate Rails.root.join("app/views/layouts/palm/app/application.html.erb"), :exist?
-    assert_not_predicate Rails.root.join("app/views/layouts/palm/com"), :exist?
-    assert_not_predicate Rails.root.join("app/views/layouts/palm/org"), :exist?
+    assert_predicate Rails.root.join("app/views/layouts/base/app/application.html.erb"), :exist?
+    assert_predicate Rails.root.join("app/views/layouts/tech/org/application.html.erb"), :exist?
+
+    %w(auth visa core palm warp edit info news help docs guid).each do |removed_root|
+      assert_empty Rails.root.glob("app/views/layouts/#{removed_root}/**/*")
+    end
 
     %w(acme sign apex).each do |legacy_root|
       assert_empty Rails.root.glob("app/views/layouts/#{legacy_root}/**/*")

@@ -10,21 +10,13 @@ module Security
       self.fixture_table_names = []
 
       AUTHENTICATED_SURFACE_CONTROLLERS = [
-        Auth::App::ApplicationController,
-        Auth::Com::ApplicationController,
-        Auth::Org::ApplicationController,
         Base::App::ApplicationController,
-        Base::Com::ApplicationController,
         Base::Org::ApplicationController,
-        Core::App::ApplicationController,
-        Core::Com::ApplicationController,
-        Core::Org::ApplicationController,
-        Side::App::ApplicationController,
-        Side::Com::ApplicationController,
-        Side::Org::ApplicationController,
+        Tech::Org::ApplicationController,
       ].freeze
 
       REQUIRED_ORDER = %i(
+        guard_browser_rp_unsafe_request!
         set_current_context
         reset_flash
         set_preferences_cookie
@@ -43,8 +35,12 @@ module Security
         violations =
           AUTHENTICATED_SURFACE_CONTROLLERS.filter_map do |controller|
             filters = before_filters_for(controller)
-            missing = REQUIRED_ORDER - filters
-            out_of_order = out_of_order_filters(filters)
+            required_order = REQUIRED_ORDER
+            if controller < BrowserRpAuthentication
+              required_order = REQUIRED_ORDER - [:transparent_refresh_access_token]
+            end
+            missing = required_order - filters
+            out_of_order = out_of_order_filters(filters, required_order)
             next if missing.empty? && out_of_order.empty?
 
             "#{controller.name}: missing=#{missing.inspect}, out_of_order=#{out_of_order.inspect}"
@@ -76,9 +72,9 @@ module Security
         end
       end
 
-      def out_of_order_filters(filters)
+      def out_of_order_filters(filters, required_order)
         positions =
-          REQUIRED_ORDER.filter_map do |filter|
+          required_order.filter_map do |filter|
             index = filters.index(filter)
             [filter, index] if index
           end

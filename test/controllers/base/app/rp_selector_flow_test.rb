@@ -1,0 +1,165 @@
+# frozen_string_literal: true
+
+require "test_helper"
+
+class Base::App::RpSelectorFlowTest < ActionDispatch::IntegrationTest
+  self.fixture_table_names = []
+
+  setup do
+    @actor = create_actor
+    @host = ENV.fetch("PUBLIC_BASE_SERVICE_URL")
+    host! @host
+    https!
+    @cell = RpCellBinding.for_client("base-app-ww")
+    @visa_origin = Oidc::AcmeServiceOrigin.from_configured_host(
+      Rails.configuration.x.boot_config.fetch(:hosts).visa_service.host, default_scheme: "https",
+    )
+    @issuer = @visa_origin.origin
+    @subject = OidcSubject.for(@actor, resource_type: "client")
+    @sid = SecureRandom.uuid
+    enrollment = seed_rp_cell_session(
+      cell: @cell,
+      issuer: @issuer,
+      subject: @subject,
+      sid: @sid,
+      absolute_expires_at: 1.hour.from_now,
+    )
+
+    @rp_session = enrollment
+    @access_token, @jwks = issue_access_token
+    cookies[OidcRpBrowserCredentialContract::ACCESS_COOKIE] = @access_token
+    cookies[OidcRpBrowserCredentialContract::SESSION_COOKIE] = @rp_session.public_id
+  end
+
+  test "RP session selects its single candidate before reporting the dashboard owner dependency" do
+    with_rp_app_request do
+      get "/dashboard?ri=jp"
+
+      assert_redirected_to "/selector?ri=jp"
+
+      get "/selector?ri=jp"
+
+      assert_redirected_to "/dashboard?ri=jp"
+      candidate = BaseSelectorAuthority.new(
+        surface: :app,
+        principal: @actor,
+        session: @rp_session,
+      ).selectable_candidates.fetch(0).fetch(:public)
+
+      selection = RpBaseAppSessionSelection.find_by!(rp_session_id: @rp_session.id)
+
+      assert_equal candidate.fetch(:account_public_id), selection.account_public_id
+
+      unavailable = AvatarAuthorityClient::Result.new(status: :dependency, data: nil, errors: {})
+      AvatarAuthorityClient.stub(:new, Struct.new(:dashboard_identity).new(unavailable)) do
+        get "/dashboard?ri=jp"
+      end
+
+      assert_response :service_unavailable
+      assert_includes response.headers["Cache-Control"], "no-store"
+      assert_equal candidate.fetch(:account_public_id), selection.reload.account_public_id
+      assert_equal 1, RpBaseAppSession.where(op_session_binding_id: @rp_session.op_session_binding_id).count
+    end
+  end
+
+  test "RP selector refuses a persona owned by another actor" do
+    other_actor = create_actor
+    BaseSelectorBootstrapAuthority.call(surface: :app, principal: @actor)
+    other_bootstrap = BaseSelectorBootstrapAuthority.call(surface: :app, principal: other_actor)
+    other_candidate = BaseSelectorAuthority.new(
+      surface: :app,
+      principal: other_actor,
+      session: nil,
+    ).selectable_candidates.fetch(0).fetch(:public)
+
+    with_rp_app_request do
+      patch "/selector?ri=jp", params: other_candidate, as: :json
+
+      assert_response :unprocessable_content
+      assert_equal "invalid_selection", response.parsed_body.fetch("status")
+      assert_not RpBaseAppSessionSelection.exists?(rp_session_id: @rp_session.id)
+      assert_equal other_bootstrap.account.public_id, other_candidate.fetch(:account_public_id)
+    end
+  end
+
+  test "RP switcher reads and writes the same local session selection" do
+    with_rp_app_request do
+      get "/selector?ri=jp"
+
+      assert_redirected_to "/dashboard?ri=jp"
+      candidate = BaseSelectorAuthority.new(
+        surface: :app, principal: @actor, session: @rp_session,
+      ).selectable_candidates.fetch(0).fetch(:public)
+      selection = RpBaseAppSessionSelection.find_by!(rp_session_id: @rp_session.id)
+
+      assert_equal candidate.fetch(:account_public_id), selection.account_public_id
+
+      get "/switcher?ri=jp", as: :json
+
+      assert_response :success
+      assert_equal candidate.fetch(:account_public_id), response.parsed_body.dig("current", "account_public_id")
+
+      patch "/switcher?ri=jp", params: {
+        account_public_id: candidate.fetch(:account_public_id),
+        organization_public_id: candidate.fetch(:organization_public_id),
+        organization_unit_public_id: candidate.fetch(:organization_unit_public_id),
+        avatar_public_id: candidate.fetch(:avatar_public_id),
+      }, as: :json
+
+      assert_response :success
+      assert_equal "switched", response.parsed_body.fetch("status")
+      assert_equal selection.id, RpBaseAppSessionSelection.find_by!(rp_session_id: @rp_session.id).id
+      assert_equal 1, RpBaseAppSession.where(op_session_binding_id: @rp_session.op_session_binding_id).count
+    end
+  end
+
+  private
+
+  def create_actor
+    Client.create!(
+      security_mode_id: SecurityModeConfigurable::NORMAL,
+      status_id: ClientStatus::ACTIVE,
+      visibility_id: ClientVisibility::USER,
+    )
+  end
+
+  def issue_access_token
+    key = OpenSSL::PKey::RSA.generate(3072)
+    now = Time.current.to_i
+    token = JWT.encode(
+      {
+        "iss" => @issuer,
+        "aud" => [@cell.client_id],
+        "sub" => @subject,
+        "sid" => @sid,
+        "iat" => now,
+        "nbf" => now - 1,
+        "exp" => now + 300,
+        "jti" => SecureRandom.uuid,
+        "scope" => "openid",
+        "client_id" => @cell.client_id,
+        "authn_ctx" => "normal",
+      },
+      key,
+      "PS256",
+      { "kid" => "rp-selector-test", "typ" => "at+jwt" },
+    )
+    jwks = OidcOpJwksClient.new(
+      jwks_uri: @visa_origin.jwks_uri,
+      fetcher: -> { { "keys" => [JitSecurityJwtJwk.export_public(key, kid: "rp-selector-test")] } },
+    )
+    [token, jwks]
+  end
+
+  def with_rp_app_request
+    RuntimeRole.stub(:current, "rp-base-app-ww") do
+      RuntimeRole.stub(:rp_browser_admission_open?, true) do
+        OidcOpJwksClient.stub(:for_jwks_uri, @jwks) do
+          OrgAdminAuthorityClient.stub(:new, ->(**) { flunk("APP selector must not consult the OP root") }) do
+            yield
+          end
+        end
+      end
+    end
+  end
+end

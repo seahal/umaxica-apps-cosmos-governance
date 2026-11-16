@@ -1,22 +1,17 @@
-import ButtonLink from "@/components/ui/ButtonLink";
 import Page from "@/components/ui/Page";
 import Table from "@/components/ui/Table";
-import TextLink from "@/components/ui/TextLink";
-import type { IdentityLink } from "@/types/identity";
 
 type TelephoneRow = {
   public_id: string;
   number: string;
   status_label: string;
-  edit_link: IdentityLink;
 };
 
 type Props = {
   title: string;
   empty_message: string;
-  back_link: IdentityLink;
-  new_link: IdentityLink;
-  table_headings: { number: string; status: string; actions: string };
+  back_link: { label: string; href: string };
+  table_headings: { number: string; status: string };
   telephones: TelephoneRow[];
 };
 
@@ -24,7 +19,6 @@ export default function TelephonesIndex({
   title,
   empty_message: emptyMessage,
   back_link: backLink,
-  new_link: newLink,
   table_headings: headings,
   telephones,
 }: Props) {
@@ -33,22 +27,12 @@ export default function TelephonesIndex({
       title={title}
       up={backLink}
       width="wide"
-      actions={
-        <ButtonLink
-          href={newLink.href}
-          size="sm"
-          inertia
-        >
-          {newLink.label}
-        </ButtonLink>
-      }
     >
-      <Table>
+      <Table label={title}>
         <thead>
           <tr>
             <th scope="col">{headings.number}</th>
             <th scope="col">{headings.status}</th>
-            <th scope="col">{headings.actions}</th>
           </tr>
         </thead>
         <tbody>
@@ -56,15 +40,12 @@ export default function TelephonesIndex({
             <tr key={telephone.public_id}>
               <td>{telephone.number}</td>
               <td className="text-fg-muted">{telephone.status_label}</td>
-              <td>
-                <TextLink href={telephone.edit_link.href}>{telephone.edit_link.label}</TextLink>
-              </td>
             </tr>
           ))}
           {telephones.length === 0 ? (
             <tr>
               <td
-                colSpan={3}
+                colSpan={2}
                 className="text-fg-muted italic"
               >
                 {emptyMessage}

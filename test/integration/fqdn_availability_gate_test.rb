@@ -17,10 +17,11 @@ class FqdnAvailabilityGateTest < ActionDispatch::IntegrationTest
     @host = configured_host(:base_service)
     @slot = FqdnAvailabilityRegistry.slot_for(@host)
     @flag = FqdnAvailabilityRegistry.flag_name_for(@slot)
-    @user = Client.create!(status_id: ClientStatus::ACTIVE, visibility_id: ClientVisibility::USER)
-    @token = ClientToken.create!(user: @user, user_token_kind_id: ClientTokenKind::BROWSER_WEB)
+    @user = Client.create!(
+      security_mode_id: SecurityModeConfigurable::NORMAL, status_id: ClientStatus::ACTIVE,
+      visibility_id: ClientVisibility::USER,
+    )
     BaseSelectorBootstrapAuthority.call(surface: :app, principal: @user)
-    BaseSelectorAuthority.prepare(surface: :app, principal: @user, session: @token)
   end
 
   test "the registry resolves a served hostname to exactly one slot" do
@@ -41,7 +42,10 @@ class FqdnAvailabilityGateTest < ActionDispatch::IntegrationTest
   test "an enabled FQDN serves the request" do
     Flipper.enable(@flag)
 
-    get(base_app_groups_url(ri: "jp", host: @host), headers: as_user_headers(@user, host: @host))
+    http_headers_8 = as_user_headers(@user, host: @host)
+    get(
+      base_app_identity_url(ri: "jp", host: @host), headers: http_headers_8,
+    )
 
     assert_response :success
   end
@@ -49,7 +53,10 @@ class FqdnAvailabilityGateTest < ActionDispatch::IntegrationTest
   test "an explicitly disabled FQDN is refused with 503" do
     Flipper.disable(@flag)
 
-    get(base_app_groups_url(ri: "jp", host: @host), headers: as_user_headers(@user, host: @host))
+    http_headers_7 = as_user_headers(@user, host: @host)
+    get(
+      base_app_identity_url(ri: "jp", host: @host), headers: http_headers_7,
+    )
 
     assert_response :service_unavailable
     assert_equal "60", response.headers["Retry-After"]
@@ -59,7 +66,10 @@ class FqdnAvailabilityGateTest < ActionDispatch::IntegrationTest
   test "an FQDN whose feature was never written is refused with 503" do
     Flipper.remove(@flag)
 
-    get(base_app_groups_url(ri: "jp", host: @host), headers: as_user_headers(@user, host: @host))
+    http_headers_6 = as_user_headers(@user, host: @host)
+    get(
+      base_app_identity_url(ri: "jp", host: @host), headers: http_headers_6,
+    )
 
     assert_response :service_unavailable
   end
@@ -68,8 +78,11 @@ class FqdnAvailabilityGateTest < ActionDispatch::IntegrationTest
   # rejects it before any controller exists to consult a switch. That is the outer fail-closed layer.
   test "an unknown Host is never routed to a surface" do
     get(
-      base_app_groups_url(ri: "jp", host: @host),
-      headers: as_user_headers(@user, host: @host).merge("Host" => "unlisted.example.com"),
+      base_app_identity_url(ri: "jp", host: @host),
+      headers: begin
+        rp_headers = as_user_headers(@user, host: @host)
+        rp_headers
+      end.merge("Host" => "unlisted.example.com"),
     )
 
     assert_response :not_found
@@ -80,14 +93,18 @@ class FqdnAvailabilityGateTest < ActionDispatch::IntegrationTest
   # serve, and must not attempt to derive a feature name from the header.
   test "a routable host with no registry entry is refused with 503" do
     FqdnAvailabilityRegistry.stub(:slot_for, nil) do
-      get(base_app_groups_url(ri: "jp", host: @host), headers: as_user_headers(@user, host: @host))
+      http_headers_5 = as_user_headers(@user, host: @host)
+      get(
+        base_app_identity_url(ri: "jp", host: @host), headers: http_headers_5,
+      )
 
       assert_response :service_unavailable
       assert_includes response.body, I18n.t("errors.fqdn_availability.unavailable")
 
+      http_headers_4 = as_user_headers(@user, host: @host)
       get(
-        base_app_groups_url(ri: "jp", host: @host, format: :json),
-        headers: as_user_headers(@user, host: @host),
+        base_app_identity_url(ri: "jp", host: @host, format: :json),
+        headers: http_headers_4,
       )
 
       assert_equal "unknown_fqdn", response.parsed_body.fetch("error")
@@ -97,7 +114,10 @@ class FqdnAvailabilityGateTest < ActionDispatch::IntegrationTest
   # A flag store that cannot answer is not permission to continue.
   test "a flag store failure fails closed" do
     FeatureFlags.stub(:enabled?, ->(*) { raise ActiveRecord::ConnectionNotEstablished }) do
-      get(base_app_groups_url(ri: "jp", host: @host), headers: as_user_headers(@user, host: @host))
+      http_headers_3 = as_user_headers(@user, host: @host)
+      get(
+        base_app_identity_url(ri: "jp", host: @host), headers: http_headers_3,
+      )
     end
 
     assert_response :service_unavailable
@@ -106,9 +126,10 @@ class FqdnAvailabilityGateTest < ActionDispatch::IntegrationTest
   test "a JSON client is refused with 503 and a machine readable reason" do
     Flipper.disable(@flag)
 
+    http_headers_2 = as_user_headers(@user, host: @host)
     get(
-      base_app_groups_url(ri: "jp", host: @host, format: :json),
-      headers: as_user_headers(@user, host: @host),
+      base_app_identity_url(ri: "jp", host: @host, format: :json),
+      headers: http_headers_2,
     )
 
     assert_response :service_unavailable
@@ -125,7 +146,10 @@ class FqdnAvailabilityGateTest < ActionDispatch::IntegrationTest
     increments = 0
 
     store.stub(:increment, ->(*_args, **_options) { increments += 1 }) do
-      get(base_app_groups_url(ri: "jp", host: @host), headers: as_user_headers(@user, host: @host))
+      http_headers_1 = as_user_headers(@user, host: @host)
+      get(
+        base_app_identity_url(ri: "jp", host: @host), headers: http_headers_1,
+      )
     end
 
     assert_response :service_unavailable
@@ -143,7 +167,10 @@ class FqdnAvailabilityGateTest < ActionDispatch::IntegrationTest
       end
 
     begin
-      get(base_app_groups_url(ri: "jp", host: @host), headers: as_user_headers(@user, host: @host))
+      http_headers_0 = as_user_headers(@user, host: @host)
+      get(
+        base_app_identity_url(ri: "jp", host: @host), headers: http_headers_0,
+      )
     ensure
       ActiveSupport::Notifications.unsubscribe(subscriber)
     end
@@ -157,7 +184,7 @@ class FqdnAvailabilityGateTest < ActionDispatch::IntegrationTest
   test "a disabled FQDN is refused before the authentication redirect" do
     Flipper.disable(@flag)
 
-    get(base_app_groups_url(ri: "jp", host: @host), headers: host_headers(@host))
+    get(base_app_identity_url(ri: "jp", host: @host), headers: host_headers(@host))
 
     assert_response :service_unavailable
     assert_nil response.headers["Location"]
@@ -181,11 +208,16 @@ class FqdnAvailabilityGateTest < ActionDispatch::IntegrationTest
     end
   end
 
+  # The one exception is `DefaultNoStore#apply_default_no_store` on Global and Publishing policy
+  # roots (adr/global-and-publishing-default-no-store-policy.md). It only replaces the in-memory
+  # cache directives of the response, so it spends no rate-limit budget and touches no state, and
+  # running it first is what puts `no-store` on the 503 this gate renders.
   test "the gate is the very first before_action on every gated controller" do
     gated_controllers.each do |controller|
-      first = controller._process_action_callbacks.find { |callback| callback.kind == :before }&.filter
+      filters = controller._process_action_callbacks.select { |callback| callback.kind == :before }.map(&:filter)
+      filters = filters.drop(1) if filters.first == :apply_default_no_store
 
-      assert_equal :enforce_fqdn_availability!, first,
+      assert_equal :enforce_fqdn_availability!, filters.first,
                    "#{controller} must not run anything ahead of the availability switch"
     end
   end

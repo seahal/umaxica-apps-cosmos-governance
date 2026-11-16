@@ -8,7 +8,7 @@ class IdentityCoverageTest < ActiveSupport::TestCase
   setup do
     ClientStatus.find_or_create_by!(id: 1)
     ClientVisibility.find_or_create_by!(id: 1)
-    @user = Client.create!(status_id: 1, visibility_id: 1)
+    @user = Client.create!(security_mode_id: SecurityModeConfigurable::NORMAL, status_id: 1, visibility_id: 1)
   end
 
   test "login_allowed?" do
@@ -25,7 +25,7 @@ class IdentityCoverageTest < ActiveSupport::TestCase
 
     now = Time.current
     deadline = now + 31.days
-    @user.update!(deactivated_at: now, discarded_at: now, purged_at: deadline)
+    @user.update!(deactivated_at: now, discard_at: now, purge_eligible_at: deadline)
     @user.reload
 
     assert_equal deadline.to_i, @user.recovery_deadline.to_i

@@ -17,11 +17,13 @@ class TurnstileDegradation
   def self.apply(result, flipper: Flipper)
     new(flipper: flipper).apply(result)
   end
+  public_class_method :apply
 
   def initialize(flipper: Flipper)
     @flipper = flipper
   end
 
+  public
   def apply(result)
     return result if result["success"]
     return result unless result["unavailable"]

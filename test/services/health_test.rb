@@ -80,11 +80,10 @@ class HealthTest < ActiveSupport::TestCase
     assert_equal [AppRpRecord, AppSettingRecord, AppSignalRecord, AvatarRecord, OccurrenceRecord],
                  Health::Profiles::App.record_classes
     assert_equal [OrgRpRecord, OrgSettingRecord, OrgSignalRecord], Health::Profiles::Org.record_classes
-    assert_equal [AppPrincipalRecord, AppTicketRecord, AppSettingRecord], Health::Profiles::SignApp.record_classes
   end
 
   test "liveness check never touches dependencies" do
-    result = Health::LivenessCheck.call(profile: Health::Profiles::SignApp)
+    result = Health::LivenessCheck.call(profile: Health::Profiles::App)
 
     assert_predicate result, :ok?
     assert_equal :liveness, result.check
@@ -193,6 +192,7 @@ class HealthTest < ActiveSupport::TestCase
     fake_connection = Object.new
     fake_connection.define_singleton_method(:execute) { |_| 1 }
     record_class = Class.new
+    record_class.define_singleton_method(:connection_class_for_self) { record_class }
     record_class.define_singleton_method(:connected_to) do |**, &block|
       block.call
     end
@@ -210,7 +210,7 @@ class HealthTest < ActiveSupport::TestCase
   end
 
   test "startup uses only the boot check" do
-    result = Health::StartupCheck.call(profile: Health::Profiles::SignApp)
+    result = Health::StartupCheck.call(profile: Health::Profiles::App)
 
     assert_predicate result, :ok?
     assert_equal :startup, result.check
@@ -219,7 +219,7 @@ class HealthTest < ActiveSupport::TestCase
 
   test "startup reports unavailable while booting" do
     Rails.application.stub(:initialized?, false) do
-      result = Health::StartupCheck.call(profile: Health::Profiles::SignApp)
+      result = Health::StartupCheck.call(profile: Health::Profiles::App)
 
       assert_not result.ok?
       assert_equal "starting", result.as_public_json.dig(:details, :status)
@@ -227,7 +227,7 @@ class HealthTest < ActiveSupport::TestCase
   end
 
   test "snapshot aggregates the three probes as nested dependencies" do
-    result = Health::SnapshotCheck.call(profile: Health::Profiles::SignApp)
+    result = Health::SnapshotCheck.call(profile: Health::Profiles::App)
     json = result.as_public_json
 
     assert_equal "health", json[:check]

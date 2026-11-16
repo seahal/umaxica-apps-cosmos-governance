@@ -17,28 +17,27 @@ class OperatorPreferenceThemeOption < OrgPrincipalRecord
   DARK = 2
   SYSTEM = 3
 
-  has_many :staff_preference_themes,
-           class_name: "OperatorPreferenceTheme",
-           foreign_key: :option_id,
-           inverse_of: :option,
-           dependent: :restrict_with_error
+  DEFAULTS = [NOTHING, LIGHT, DARK, SYSTEM].freeze
+
+  self.record_timestamps = false
+
   has_many :operator_preference_themes,
            class_name: "OperatorPreferenceTheme",
            foreign_key: :option_id,
            inverse_of: :option,
            dependent: :restrict_with_error
 
+  def self.ensure_defaults!
+    insert_missing_fixed_ids!(DEFAULTS)
+  end
+  public_class_method :ensure_defaults!
+
+  public
   def name
     case id
     when LIGHT then "light"
     when DARK then "dark"
     when SYSTEM then "system"
     end
-  end
-
-  DEFAULTS = [NOTHING, LIGHT, DARK, SYSTEM].freeze
-
-  def self.ensure_defaults!
-    insert_missing_fixed_ids!(DEFAULTS)
   end
 end

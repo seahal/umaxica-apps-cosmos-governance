@@ -7,28 +7,69 @@ module Base
       include ::SurfaceInertiaPage
 
       AUTHENTICATION_MODE = :private
+
+      layout "base/app/inertia"
+      inertia_share chrome: -> { surface_chrome }
+      inertia_share clear_history: -> { session[:inertia_clear_history] == true }
+
       declare_authentication_mode! :private
 
-      before_action :authenticate_client!
+      public
 
       def show
         authorize!(current_client, to: :show?)
         render inertia: true, props: {
           title: "Identity",
           description: "Signed in",
-          credential_warning: apple_only_credential_warning_props,
-          sections: [
-            {
-              heading: "Account",
-              items: [
-                {
-                  label: t("sign.app.settings.show.logout"),
-                  href: new_base_app_sign_out_path,
-                },
-              ],
-            },
+          up_link: dashboard_up_link(label: t("base.shared.identity.up_link")),
+          sections: identity_hub_sections,
+        }
+      end
+
+      private
+
+      def identity_hub_sections
+        [
+          identity_profile_section,
+          identity_security_section,
+          identity_account_section,
+        ]
+      end
+
+      def identity_profile_section
+        {
+          heading: t("base.shared.identity.sections.profile"),
+          items: [
+            identity_hub_link(:emails, base_app_identity_emails_path(ri: params[:ri])),
+            identity_hub_link(:telephones, base_app_identity_telephones_path(ri: params[:ri])),
+            identity_hub_link(:birthdate, base_app_identity_birthdate_path(ri: params[:ri])),
           ],
         }
+      end
+
+      def identity_security_section
+        {
+          heading: t("base.shared.identity.sections.security"),
+          items: [
+            identity_hub_link(:passkey, base_app_identity_passkeys_path(ri: params[:ri])),
+            identity_hub_link(:totp, base_app_identity_totps_path(ri: params[:ri])),
+            identity_hub_link(:activities, base_app_identity_activities_path(ri: params[:ri])),
+            identity_hub_link(:standing, base_app_identity_standing_path(ri: params[:ri])),
+          ],
+        }
+      end
+
+      def identity_account_section
+        {
+          heading: t("base.shared.identity.sections.account"),
+          items: [
+            identity_hub_link(:withdrawal, new_base_app_identity_withdrawal_path(ri: params[:ri])),
+          ],
+        }
+      end
+
+      def identity_hub_link(key, href)
+        { label: t(key, scope: "base.shared.identity.links"), href: href }
       end
     end
   end

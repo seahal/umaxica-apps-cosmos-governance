@@ -2,6 +2,11 @@
 
 **Status:** Accepted (2026-07-31), partially superseded (2026-08-11)
 
+> **Local-route disposition (2026-11-10):** The owner-approved local-surface hard reset removes this
+> repository's Auth/Org sign-in routes/controllers. This supersedes their local implementation scope
+> below, but does not retire Entra identity data, external provider contracts, or retained
+> model/database state.
+
 **Partially superseded by:** `adr/org-entra-single-tenant-credential-configuration.md`. Tenant and
 client are no longer resolved per request from an `OrganizationEntraConnection` but read from Rails
 credentials for a single tenant; client authentication is a client secret rather than a
@@ -155,6 +160,21 @@ middleware owns the callback path, the same documented exception already used fo
 
 `OmniAuth.config.allowed_request_methods = [:post]` is global and already applied to Apple/Google
 before this migration; it applies to Entra automatically, with no per-provider override needed.
+
+The application controller's Rails verification strategy is `:header_or_legacy_token` with Origin
+checking. OmniAuth's request-phase verifier reads that existing root's configuration rather than
+the framework base's header-only default; the global framework default is unchanged. The pinned Rails 8.2 revision
+requires `action_name` during fallback instrumentation, which the pinned CSRF gem does not provide;
+the gem also raises the deprecated `InvalidAuthenticityToken` alias. `OmniauthRailsCsrfVerifier`
+supplies fixed instrumentation metadata and the current `InvalidCrossOriginRequest` exception while
+using the inherited, unmodified Rails `verified_request?` predicate. It replaces the request-phase
+verifier rather than installing a second verification path. No Origin/header rewriting, exception
+suppression, token inference or callback route change is introduced.
+
+An Entra-plus-Passkey Auth result carries recorded authentication evidence to Base before the
+sign-in flow is completed. The ORG handoff requires the existing evidence-ready flow predicate and
+operator policy; Base alone commits the root. Missing primary evidence, missing/expired MFA and
+unverified start requests cannot establish a root.
 
 ### Legacy ceremony removed
 

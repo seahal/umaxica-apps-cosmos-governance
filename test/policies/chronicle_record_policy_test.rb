@@ -74,8 +74,30 @@ class ChronicleRecordPolicyTest < ActiveSupport::TestCase
     assert_equal "compliance", ChronicleRecordPolicy.retention_policy_code_for("chronicle.audit_incomplete")
   end
 
+  test "step-up Chronicle actions select their explicit retention class" do
+    {
+      "step_up.requested" => "security",
+      "step_up.committed" => "compliance",
+      "step_up.installed" => "compliance",
+      "step_up.cancelled" => "compliance",
+      "step_up.expired" => "compliance",
+      "step_up.failed" => "compliance",
+      "step_up.refused" => "compliance",
+      "step_up.indeterminate" => "compliance",
+      "step_up.attempt_rejected" => "security",
+    }.each do |action, policy_code|
+      assert_equal policy_code, ChronicleRecordPolicy.retention_policy_code_for(action)
+    end
+  end
+
   test "retention_policy_code_for defaults to security for unknown actions" do
     assert_equal "security", ChronicleRecordPolicy.retention_policy_code_for("unknown.action")
+  end
+
+  test "retention_policy_code_for rejects unmapped step-up actions before suffix classification" do
+    assert_raises(ArgumentError) do
+      ChronicleRecordPolicy.retention_policy_code_for("step_up.future.deleted")
+    end
   end
 
   test "actor_payload returns nil values for blank actor" do
@@ -94,10 +116,10 @@ class ChronicleRecordPolicyTest < ActiveSupport::TestCase
   end
 
   test "subject_payload extracts subject info" do
-    visitor = visitors(:reserved_visitor)
-    payload = ChronicleRecordPolicy.subject_payload(visitor)
+    client = clients(:one)
+    payload = ChronicleRecordPolicy.subject_payload(client)
 
-    assert_equal "Visitor", payload[:subject_type]
+    assert_equal "Client", payload[:subject_type]
     assert_predicate payload[:subject_id], :present?
   end
 
@@ -146,6 +168,31 @@ class ChronicleRecordPolicyTest < ActiveSupport::TestCase
     assert_not_includes result, "token"
   end
 
+  test "sanitize preserves bounded categorical reason codes" do
+    result = ChronicleRecordPolicy.sanitize(
+      {
+        reason_code: "telephone_verification_rate_limit",
+        unsafe_reason_code: "a" * 64,
+      },
+    )
+
+    assert_equal "telephone_verification_rate_limit", result["reason_code"]
+    assert_equal "[FILTERED]", result["unsafe_reason_code"]
+  end
+
+  test "sanitize preserves a valid external UUID reference" do
+    external_id = "550e8400-e29b-41d4-a716-446655440000"
+
+    result = ChronicleRecordPolicy.sanitize(external_id, key: :external_id)
+
+    assert_equal external_id, result
+  end
+
+  test "sanitize filters malformed and secret-like external references" do
+    assert_equal "[FILTERED]", ChronicleRecordPolicy.sanitize("not-a-uuid", key: :external_id)
+    assert_equal "[FILTERED]", ChronicleRecordPolicy.sanitize("a" * 40, key: :external_id)
+  end
+
   test "sanitize filters reserved context keys" do
     input = { "request_id" => "123", "ip_address" => "127.0.0.1", "user_agent" => "Chrome", "custom" => "ok" }
     result = ChronicleRecordPolicy.sanitize(input)
@@ -172,36 +219,5 @@ class ChronicleRecordPolicyTest < ActiveSupport::TestCase
     result = ChronicleRecordPolicy.sanitize(input)
 
     assert_equal({ "reason" => "mfa_disabled" }, result)
-  end
-
-  test "forbidden_key? detects sensitive keys" do
-    assert ChronicleRecordPolicy.send(:forbidden_key?, "password")
-    assert ChronicleRecordPolicy.send(:forbidden_key?, "PASSWORD")
-    assert ChronicleRecordPolicy.send(:forbidden_key?, "token_value")
-    assert_not ChronicleRecordPolicy.send(:forbidden_key?, "browser")
-    assert_not ChronicleRecordPolicy.send(:forbidden_key?, "session_id_digest")
-  end
-
-  test "sanitize_error_message truncates long messages" do
-    long = "." * (ChronicleRecordPolicy::MAX_ERROR_MESSAGE_BYTES + 100)
-    result = ChronicleRecordPolicy.send(:sanitize_error_message, long)
-
-    assert_operator result.bytesize, :<=, ChronicleRecordPolicy::MAX_ERROR_MESSAGE_BYTES
-    assert_equal "." * ChronicleRecordPolicy::MAX_ERROR_MESSAGE_BYTES, result
-  end
-
-  test "sanitize_error_message returns nil for blank" do
-    assert_nil ChronicleRecordPolicy.send(:sanitize_error_message, "")
-    assert_nil ChronicleRecordPolicy.send(:sanitize_error_message, nil)
-  end
-
-  test "sanitize_string filters all sensitive patterns" do
-    jwt_part = "eyJhbGciOiJIUzI1NiJ9.eyJkYXRhIjoiMSJ9." \
-               "xXxXxXxXxXxXxXxXxXxXxXxXxXxXxXxXxXxXxXxXxXxXxXX"
-    input = "Bearer #{jwt_part} and password=secret123"
-    result = ChronicleRecordPolicy.send(:sanitize_string, input.dup)
-
-    assert_includes result, "[FILTERED]"
-    assert_not_includes result, "password=secret123"
   end
 end

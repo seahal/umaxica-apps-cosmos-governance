@@ -3,11 +3,16 @@
 
 require "aws-sdk-sns"
 
+# TODO: AUDIT external access: sends SMS through AWS SNS.
 class OutboundSmsProvidersAwsSns
+  HTTP_OPEN_TIMEOUT = 5
+  HTTP_READ_TIMEOUT = 10
+
   def initialize
     @client = Aws::SNS::Client.new(client_options)
   end
 
+  public
   def send_message(to:, title:, body:)
     validate_params(to: to, body: body)
 
@@ -28,8 +33,10 @@ class OutboundSmsProvidersAwsSns
   def client_options
     options = {
       access_key_id: Rails.app.creds.require(:AWS_ACCESS_KEY_ID),
-      secret_credential_access_key: Rails.app.creds.require(:AWS_SECRET_ACCESS_KEY),
+      secret_access_key: Rails.app.creds.require(:AWS_SECRET_ACCESS_KEY),
       region: Rails.application.config.aws_region || "ap-northeast-1",
+      http_open_timeout: HTTP_OPEN_TIMEOUT,
+      http_read_timeout: HTTP_READ_TIMEOUT,
     }
     session_token = Rails.app.creds.option(:AWS_SESSION_TOKEN)
     options[:session_token] = session_token if session_token.present?

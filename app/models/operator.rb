@@ -13,10 +13,9 @@
 #  admin_locked_reason_note    :text
 #  birthdate                   :text
 #  deactivated_at              :datetime
-#  discarded_at                :datetime         default(Infinity), not null
+#  discard_at                :datetime         default(Infinity), not null
 #  lock_version                :integer          default(0), not null
-#  mfa_level_enabled           :boolean          default(FALSE), not null
-#  purged_at                   :datetime         default(Infinity), not null
+#  purge_eligible_at                   :datetime         default(Infinity), not null
 #  reactivated_at              :datetime
 #  token_valid_after_at        :datetime
 #  webauthn_user_handle        :string           not null
@@ -25,7 +24,7 @@
 #  created_at                  :datetime         not null
 #  updated_at                  :datetime         not null
 #  admin_locked_by_operator_id :bigint
-#  mfa_level_id                :bigint           default(0), not null
+#  security_mode_id            :bigint           not null
 #  mfa_status_id               :bigint           default(5), not null
 #  public_id                   :string(16)       not null
 #  status_id                   :bigint           default(2), not null
@@ -36,11 +35,11 @@
 #  index_operators_on_access_state           (access_state)
 #  index_operators_on_admin_locked_at        (admin_locked_at) WHERE (admin_locked_at IS NOT NULL)
 #  index_operators_on_deactivated_at         (deactivated_at) WHERE (deactivated_at IS NOT NULL)
-#  index_operators_on_discarded_at           (discarded_at)
-#  index_operators_on_mfa_level_id           (mfa_level_id)
+#  index_operators_on_discard_at           (discard_at)
+#  index_operators_on_security_mode_id       (security_mode_id)
 #  index_operators_on_mfa_status_id          (mfa_status_id)
 #  index_operators_on_public_id              (public_id) UNIQUE
-#  index_operators_on_purged_at              (purged_at)
+#  index_operators_on_purge_eligible_at              (purge_eligible_at)
 #  index_operators_on_status_id              (status_id)
 #  index_operators_on_token_valid_after_at   (token_valid_after_at) WHERE (token_valid_after_at IS NOT NULL)
 #  index_operators_on_visibility_id          (visibility_id)
@@ -50,7 +49,7 @@
 #
 # Foreign Keys
 #
-#  fk_rails_...  (mfa_level_id => operator_mfa_levels.id)
+#  fk_rails_...  (security_mode_id => operator_security_modes.id)
 #  fk_rails_...  (mfa_status_id => operator_mfa_statuses.id)
 #  fk_rails_...  (status_id => operator_statuses.id)
 #  fk_rails_...  (visibility_id => operator_visibilities.id)
@@ -59,34 +58,78 @@
 class Operator < OrgPrincipalRecord
   # rubocop:disable Rails/HasManyOrHasOneDependent
   include Retainable
+
+  attribute :discard_at, :datetime, default: -> { Retainable::SENTINEL }
+  attribute :purge_eligible_at, :datetime, default: -> { Retainable::SENTINEL }
+  validates :discard_at, presence: true
+  validates :purge_eligible_at, presence: true
+  validate :retention_order_valid
+  validate :retention_times_not_before_created_at, on: :update
+  Retainable.register_host(self)
+
   include HasBirthdate
+
+  encrypts :birthdate
+  validates :birthdate, length: { maximum: 10 }, allow_blank: true
+  validate :birthdate_format
+  validate :birthdate_not_future
+
+  include ::Identity
+
+  scope :withdrawn, -> { where.not(withdrawn_at: nil) }
+  include AuthenticationCredentialInventoryOwner
+  include WebauthnUserHandleOwner
+
+  before_validation :ensure_webauthn_user_handle, on: :create
+  validates :webauthn_user_handle, presence: true, uniqueness: true
+  include SecurityModeConfigurable
+  include MfaStatusTrackable
+
+  before_validation :assign_calculated_mfa_status, if: :mfa_status_placeholder?
+  include ActorLifecycleConsistency
+
+  validate :lifecycle_timestamps_are_consistent
+  include AdministrativeAccessLockable
+
+  attribute :access_state, :string, default: AdministrativeAccessLockable::ACCESS_STATE_ENABLED
+  validates :access_state, presence: true, inclusion: { in: AdministrativeAccessLockable::ACCESS_STATES }
+  validates :admin_locked_reason_code,
+            inclusion: { in: AdministrativeAccessLockable::ADMIN_LOCK_REASON_CODES },
+            allow_nil: true,
+            if: :admin_locked_reason_code_column?
+  validate :administrative_lock_columns_are_consistent
+
+  before_validation :normalize_public_id
+  before_validation :assign_public_id!, on: :create
+  # before_save covers writes with validation disabled so the database NOT NULL still holds.
+  before_save :ensure_webauthn_user_handle
+  before_save :normalize_public_id
+  around_create :retry_on_public_id_collision
+  after_create :refresh_mfa_status!
+
+  LOGIN_BLOCKED_STATUS_IDS = [OperatorStatus::RESERVED].freeze
+  # ORG has no public registration; no Operator status is an unfinished registration.
+  UNFINISHED_REGISTRATION_STATUS_IDS = [].freeze
+  PUBLIC_ID_LENGTH = 16
+  PUBLIC_ID_ALPHABET = SecureRandom::BASE32_ALPHABET.join.freeze
+  PUBLIC_ID_FORMAT = /\A[0-9A-FGHJKMNPQRSTVWXYZ]{16}\z/
+  MAX_PUBLIC_ID_RETRIES = 5
+  AVAILABILITY_GUARD_LOCK = [0x554D4158, 0x4F504156].freeze
+
+  encrypts :admin_locked_reason_note
 
   # Operator represents an authenticated actor for the org console.
   # It mirrors `User` for identity concerns but is used for org-scoped access.
   self.ignored_columns += ["operator_id", "webauthn_id"]
 
-  include ::Identity
-  include AuthenticationCredentialInventoryOwner
-  include WebauthnUserHandleOwner
-  include MfaLevelConfigurable
-  include MfaStatusTrackable
-  include ActorLifecycleConsistency
-  include AdministrativeAccessLockable
-
-  LOGIN_BLOCKED_STATUS_IDS = [OperatorStatus::RESERVED].freeze
-  PUBLIC_ID_LENGTH = 16
-  PUBLIC_ID_ALPHABET = SecureRandom::BASE32_ALPHABET.join.freeze
-  PUBLIC_ID_FORMAT = /\A[0-9A-FGHJKMNPQRSTVWXYZ]{16}\z/
-  MAX_PUBLIC_ID_RETRIES = 5
-
   attribute :status_id, default: OperatorStatus::NOTHING
-  mfa_level_reference OperatorMfaLevel
-  mfa_status_reference OperatorMfaStatus
+
+  validates :authentication_epoch, numericality: { only_integer: true, greater_than_or_equal_to: 0 }
 
   belongs_to :staff_status, class_name: "OperatorStatus", foreign_key: :status_id,
                             inverse_of: :staffs
-  belongs_to :mfa_level,
-             class_name: "OperatorMfaLevel",
+  belongs_to :security_mode,
+             class_name: "OperatorSecurityMode",
              inverse_of: :staffs
   belongs_to :mfa_status,
              class_name: "OperatorMfaStatus",
@@ -94,6 +137,38 @@ class Operator < OrgPrincipalRecord
   belongs_to :visibility,
              class_name: "OperatorVisibility",
              inverse_of: :staffs
+  has_many :email_histories, class_name: "OperatorEmailHistory", foreign_key: :staff_id,
+                             inverse_of: :staff, dependent: :restrict_with_error
+  has_many :telephone_histories, class_name: "OperatorTelephoneHistory", foreign_key: :staff_id,
+                                 inverse_of: :staff, dependent: :restrict_with_error
+  has_many :outgoing_bureau_ownership_transfer_requests,
+           class_name: "BureauOwnershipTransferRequest", foreign_key: :source_operator_id,
+           inverse_of: :source_operator, dependent: :restrict_with_error
+  has_many :incoming_bureau_ownership_transfer_requests,
+           class_name: "BureauOwnershipTransferRequest", foreign_key: :destination_operator_id,
+           inverse_of: :destination_operator, dependent: :restrict_with_error
+  has_many :outgoing_agent_ownership_transfer_requests,
+           class_name: "AgentOwnershipTransferRequest", foreign_key: :source_operator_id,
+           inverse_of: :source_operator, dependent: :restrict_with_error
+  has_many :incoming_agent_ownership_transfer_requests,
+           class_name: "AgentOwnershipTransferRequest", foreign_key: :destination_operator_id,
+           inverse_of: :destination_operator, dependent: :restrict_with_error
+  has_many :lifecycle_requests_as_target,
+           class_name: "OperatorLifecycleRequest", foreign_key: :target_operator_id,
+           inverse_of: :target_operator, dependent: :restrict_with_error
+  has_many :lifecycle_requests_as_requester,
+           class_name: "OperatorLifecycleRequest", foreign_key: :requested_by_operator_id,
+           inverse_of: :requested_by_operator, dependent: :restrict_with_error
+  has_many :lifecycle_requests_as_approver,
+           class_name: "OperatorLifecycleRequest", foreign_key: :approved_by_operator_id,
+           inverse_of: :approved_by_operator, dependent: :restrict_with_error
+  has_many :lifecycle_requests_as_rejector,
+           class_name: "OperatorLifecycleRequest", foreign_key: :rejected_by_operator_id,
+           inverse_of: :rejected_by_operator, dependent: :restrict_with_error
+  has_many :lifecycle_requests_as_executor,
+           class_name: "OperatorLifecycleRequest", foreign_key: :executed_by_operator_id,
+           inverse_of: :executed_by_operator, dependent: :restrict_with_error
+
   has_many :staff_emails, class_name: "OperatorEmail", dependent: :restrict_with_error,
                           inverse_of: :staff
   has_many :operator_emails, class_name: "OperatorEmail", foreign_key: :staff_id,
@@ -122,20 +197,12 @@ class Operator < OrgPrincipalRecord
                                       inverse_of: :staff
   has_many :operator_secret_credentials, class_name: "OperatorSecretCredential", foreign_key: :staff_id,
                                          inverse_of: :staff
-  has_many :staff_tokens, class_name: "OperatorToken", dependent: :destroy,
-                          inverse_of: :staff
-  has_many :operator_device_sessions,
-           class_name: "OperatorDeviceSession",
-           foreign_key: :staff_id,
-           dependent: :destroy,
-           inverse_of: :staff
-  has_many :operator_tokens, class_name: "OperatorToken", foreign_key: :staff_id,
-                             inverse_of: :staff
-  has_many :oidc_connections,
-           class_name: "OperatorOidcConnection",
-           foreign_key: :staff_id,
-           dependent: :destroy,
-           inverse_of: :staff
+
+  has_one :authority_lock,
+          class_name: "OperatorAuthorityLock",
+          dependent: :destroy,
+          inverse_of: :operator
+
   # Cross-database (org_signal DB). Purged explicitly via
   # RetentionCrossDatabaseChildPurge from the operator purge path, not by an
   # implicit cross-DB AR cascade.
@@ -155,10 +222,27 @@ class Operator < OrgPrincipalRecord
   has_many :staff_bulletins, class_name: "OperatorBulletin", dependent: :destroy, inverse_of: :staff
   has_many :staff_banners, class_name: "OperatorBanner", dependent: :destroy, inverse_of: :staff
   has_one :rp_account, class_name: "OperatorAccount", dependent: :destroy, inverse_of: :staff
-  has_one :core_org_operator_bridge,
-          dependent: :destroy,
-          inverse_of: :operator
-  has_one :staff_preference, class_name: "OperatorPreference", dependent: :destroy, inverse_of: :staff
+  has_many :agent_ownerships, dependent: :restrict_with_error, inverse_of: :operator
+  has_many :owned_agents, through: :agent_ownerships, source: :agent
+  has_many :agent_administration_grants, dependent: :restrict_with_error, inverse_of: :operator
+  has_many :agent_delegation_grants, dependent: :restrict_with_error, inverse_of: :operator
+  has_many :agent_usage_grants, dependent: :restrict_with_error, inverse_of: :operator
+  has_many :agent_view_grants, dependent: :restrict_with_error, inverse_of: :operator
+  has_many :bureau_ownerships, dependent: :restrict_with_error, inverse_of: :operator
+  has_many :owned_bureaus, through: :bureau_ownerships, source: :bureau
+  has_many :bureau_administration_grants, dependent: :restrict_with_error, inverse_of: :operator
+  has_many :bureau_delegation_grants, dependent: :restrict_with_error, inverse_of: :operator
+  has_many :bureau_view_grants, dependent: :restrict_with_error, inverse_of: :operator
+  has_many :capability_grants, class_name: "OperatorCapabilityGrant", dependent: :restrict_with_error,
+                               inverse_of: :operator
+  has_many :core_org_operator_bridges,
+           dependent: :destroy,
+           inverse_of: :operator
+  has_one :operator_preference, class_name: "OperatorPreference",
+                                dependent: :destroy, inverse_of: :operator
+
+  validates :status_id, numericality: { only_integer: true }
+  mfa_status_reference OperatorMfaStatus
 
   validates :public_id,
             presence: true,
@@ -168,11 +252,40 @@ class Operator < OrgPrincipalRecord
               with: PUBLIC_ID_FORMAT,
               message: :invalid_format,
             }
-  before_validation :normalize_public_id
-  before_validation :assign_public_id!, on: :create
-  before_save :normalize_public_id
-  around_create :retry_on_public_id_collision
+  delegate :generate_public_id, to: :class
 
+  # Lifecycle and administrative-lock writers acquire this before any Operator row lock.
+  def self.lock_availability_guard!
+    connection = lease_connection
+    raise ActiveRecord::ActiveRecordError,
+          "operator availability guard requires a transaction" unless connection.transaction_open?
+
+    connection.execute("SELECT pg_advisory_xact_lock(#{AVAILABILITY_GUARD_LOCK.join(", ")})")
+  end
+  public_class_method :lock_availability_guard!
+
+  def self.generate_public_id
+    Array.new(PUBLIC_ID_LENGTH) { PUBLIC_ID_ALPHABET[SecureRandom.random_number(PUBLIC_ID_ALPHABET.length)] }.join
+  end
+  public_class_method :generate_public_id
+
+  def self.normalize_public_id(value)
+    return value if value.nil?
+
+    value.strip.gsub(/[-_]/, "").upcase
+  end
+  public_class_method :normalize_public_id
+
+  # SQL counterpart of capability_eligible?, used while guarding availability transitions.
+  def self.capability_eligible_at(now)
+    where(
+      access_state: AdministrativeAccessLockable::ACCESS_STATE_ENABLED,
+      withdrawal_started_at: nil, withdrawn_at: nil, deactivated_at: nil,
+    ).where.not(status_id: LOGIN_BLOCKED_STATUS_IDS).where(arel_table[:discard_at].gt(now))
+  end
+  public_class_method :capability_eligible_at
+
+  public
   def operator?
     true
   end
@@ -181,21 +294,31 @@ class Operator < OrgPrincipalRecord
     false
   end
 
-  def self.generate_public_id
-    Array.new(PUBLIC_ID_LENGTH) { PUBLIC_ID_ALPHABET[SecureRandom.random_number(PUBLIC_ID_ALPHABET.length)] }.join
+  public
+
+  # adr/operator-capability-authorization.md: an operator whose access is locked, whose withdrawal
+  # has started, who is deactivated, or who is past retention holds no capability, whatever grants
+  # remain on record. Grants are not revoked by these transitions, so this check is what stops them.
+  def capability_eligible?(now = Time.current)
+    access_enabled? && withdrawal_started_at.nil? && withdrawn_at.nil? && deactivated_at.nil? &&
+      accessible?(now) && LOGIN_BLOCKED_STATUS_IDS.exclude?(status_id)
   end
 
-  delegate :generate_public_id, to: :class
+  # The single capability check every org administrative policy uses. Unknown identifiers raise:
+  # they are programming errors, and treating them as "not granted" would hide a typo that
+  # silently closes (or, after a later edit, opens) an operation.
+  def capability?(capability, now = Time.current)
+    unless OperatorCapabilityGrant::CAPABILITIES.include?(capability)
+      raise ArgumentError, "unknown operator capability: #{capability.inspect}"
+    end
+    return false unless persisted? && capability_eligible?(now)
+
+    capability_grants.in_force(now).exists?(capability: capability)
+  end
 
   def public_id=(value)
     @public_id_supplied = true unless @_assigning_public_id_internally
     super
-  end
-
-  def self.normalize_public_id(value)
-    return value if value.nil?
-
-    value.strip.gsub(/[-_]/, "").upcase
   end
 
   private
@@ -253,3 +376,4 @@ class Operator < OrgPrincipalRecord
     @_assigning_public_id_internally = false
   end
 end
+# rubocop:enable Rails/HasManyOrHasOneDependent

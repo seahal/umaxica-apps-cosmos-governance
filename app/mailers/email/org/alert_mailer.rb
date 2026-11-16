@@ -5,6 +5,7 @@ module Email::Org
   class AlertMailer < ApplicationMailer
     default from: "alert@umaxica.org"
 
+    public
     def notice
       @title = params.fetch(:title)
       @body = params.fetch(:body)

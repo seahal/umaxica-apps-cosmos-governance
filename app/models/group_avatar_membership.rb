@@ -4,23 +4,31 @@
 class GroupAvatarMembership < AvatarRecord
   include PublicId
 
+  before_validation :generate_public_id, on: :create
+  before_validation :refresh_generated_public_id_after_collision, on: :create
+  before_validation :default_assigned_at, on: :create
+  before_create :generate_public_id
+  around_create :retry_public_id_collision
+  validate :public_id_immutable_after_create, on: :update
+  validates :public_id, presence: true, length: { is: PublicId::GENERATION_SIZE }, uniqueness: true
   STATES = %w(active removed).freeze
+  ROLE = "member"
 
   belongs_to :avatar_group, inverse_of: :group_avatar_memberships
   belongs_to :avatar, inverse_of: :group_avatar_memberships
 
-  validates :role, presence: true
+  validates :role, inclusion: { in: [ROLE] }
   validates :position, numericality: { only_integer: true, greater_than_or_equal_to: 0 }
   validates :state, inclusion: { in: STATES }
   validates :avatar_id, uniqueness: { scope: :avatar_group_id, conditions: -> { where(removed_at: nil) } }
   validate :removed_at_not_before_assigned_at
   validate :removed_timestamp_matches_state
-
-  before_validation :default_assigned_at, on: :create
+  validates :assigned_at, exclusion: { in: [nil] }
 
   scope :active, -> { where(state: "active", removed_at: nil) }
   scope :ordered, -> { order(:position, :id) }
 
+  public
   def active?
     state == "active" && removed_at.blank?
   end

@@ -20,6 +20,8 @@ module BasePreferenceScreenDispatch
     "cookie" => %i(edit_cookie_preference_screen update_cookie_preference_screen),
   }.freeze
 
+  public
+
   def edit
     dispatch_preference_screen(:edit)
     render(inertia: preference_screen_component, props: preference_screen_page_props) unless performed?

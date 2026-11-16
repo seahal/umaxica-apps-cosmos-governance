@@ -15,22 +15,26 @@ class ClientPreferenceCurrencyOption < AppPrincipalRecord
   USD = 1
   JPY = 2
 
+  DEFAULTS = [NOTHING, USD, JPY].freeze
+
+  self.record_timestamps = false
+
   has_many :client_preference_currencies,
            class_name: "ClientPreferenceCurrency",
            foreign_key: :option_id,
            inverse_of: :option,
            dependent: :restrict_with_error
 
+  def self.ensure_defaults!
+    insert_missing_fixed_ids!(DEFAULTS)
+  end
+  public_class_method :ensure_defaults!
+
+  public
   def name
     case id
     when 1 then "usd"
     when 2 then "jpy"
     end
-  end
-
-  DEFAULTS = [NOTHING, USD, JPY].freeze
-
-  def self.ensure_defaults!
-    insert_missing_fixed_ids!(DEFAULTS)
   end
 end

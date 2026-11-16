@@ -26,6 +26,37 @@ class Actor < ActiveSupport::CurrentAttributes
   end
 
   class << self
+    CONTEXT_KEY_ALIASES = { actor: :subject }.freeze
+
+    delegate :account, to: :context
+
+    delegate :tenant, to: :context
+
+    delegate :tld, to: :context
+
+    # Route/product surface axis, distinct from tld. See ActorValuesContext.
+    delegate :surface, to: :context
+
+    # Credential transport axis (cookie/bearer/none/unknown).
+    delegate :transport, to: :context
+
+    # Caller channel axis (browser/native/server/unknown).
+    delegate :channel, to: :context
+
+    delegate :trace_id, to: :context
+
+    delegate :span_id, to: :context
+
+    # Role predicates delegate to the installed context. They are role
+    # predicates, not authorization gates: protected behavior must still go
+    # through ActionPolicy / policy enforcement.
+    delegate :client?, :operator?, :unauthenticated?, :authenticated?, to: :context
+
+    # Transport/channel predicates. browser?/native? read channel; cookie?/
+    # bearer? read transport. The two axes are not conflated.
+    delegate :browser?, :native?, :cookie?, :bearer?, to: :context
+
+    public
     def context
       super || ActorValuesContext.empty
     end
@@ -83,32 +114,17 @@ class Actor < ActiveSupport::CurrentAttributes
 
     def whoami = actor_type
 
-    delegate :account, to: :context
-
     def account=(value)
       update(account: value)
     end
-
-    delegate :tenant, to: :context
 
     def tenant=(value)
       update(tenant: value)
     end
 
-    delegate :tld, to: :context
-
     def tld=(value)
       update(tld: value)
     end
-
-    # Route/product surface axis, distinct from tld. See ActorValuesContext.
-    delegate :surface, to: :context
-
-    # Credential transport axis (cookie/bearer/none/unknown).
-    delegate :transport, to: :context
-
-    # Caller channel axis (browser/native/server/unknown).
-    delegate :channel, to: :context
 
     def authn = context.authn || Actor::Authentication::NULL
 
@@ -146,26 +162,13 @@ class Actor < ActiveSupport::CurrentAttributes
       update(step_up: value)
     end
 
-    delegate :trace_id, to: :context
-
     def trace_id=(value)
       update(trace_id: value)
     end
 
-    delegate :span_id, to: :context
-
     def span_id=(value)
       update(span_id: value)
     end
-
-    # Role predicates delegate to the installed context. They are role
-    # predicates, not authorization gates: protected behavior must still go
-    # through ActionPolicy / policy enforcement.
-    delegate :client?, :operator?, :visitor?, :unauthenticated?, :authenticated?, to: :context
-
-    # Transport/channel predicates. browser?/native? read channel; cookie?/
-    # bearer? read transport. The two axes are not conflated.
-    delegate :browser?, :native?, :cookie?, :bearer?, to: :context
 
     alias_method :signed_in?, :authenticated?
 
@@ -204,18 +207,12 @@ class Actor < ActiveSupport::CurrentAttributes
       actor if operator?
     end
 
-    def visitor
-      actor if visitor?
-    end
-
     private
 
     # Map legacy attribute keys onto canonical context fields and coerce blank
     # typed sub-values to their NULL objects. Unknown keys (e.g. the removed
     # :authentication / :preference keys) intentionally flow through to
     # Data#with, which raises ArgumentError.
-    CONTEXT_KEY_ALIASES = { actor: :subject }.freeze
-
     def normalize_context_attributes(attributes)
       attributes.each_with_object({}) do |(key, value), normalized|
         normalized_key = CONTEXT_KEY_ALIASES.fetch(key, key)

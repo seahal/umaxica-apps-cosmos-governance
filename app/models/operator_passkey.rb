@@ -27,7 +27,7 @@
 #
 # Indexes
 #
-#  index_operator_passkeys_on_external_id  (external_id)
+#  index_operator_passkeys_on_external_id_unique (external_id) UNIQUE
 #  index_operator_passkeys_on_staff_id     (staff_id)
 #  index_operator_passkeys_on_status_id    (status_id)
 #  index_operator_passkeys_on_webauthn_id  (webauthn_id) UNIQUE
@@ -41,34 +41,46 @@
 class OperatorPasskey < OrgPrincipalRecord
   include MfaStatusCredential
 
-  MAX_PASSKEYS_PER_STAFF = 4
+  MAX_PASSKEYS_PER_STAFF = 10
   attribute :status_id, default: OperatorPasskeyStatus::ACTIVE
 
   belongs_to :staff, inverse_of: :staff_passkeys, class_name: "Operator"
   mfa_status_owner :staff
   belongs_to :status, class_name: "OperatorPasskeyStatus"
 
-  scope :active, -> { where(status_id: OperatorPasskeyStatus::ACTIVE) }
+  enum :backup_eligibility, { unknown: "unknown", ineligible: "ineligible", eligible: "eligible" },
+       prefix: true, validate: true
+  enum :backup_observation, { unknown: "unknown", not_backed_up: "not_backed_up", backed_up: "backed_up" },
+       prefix: true, validate: true
 
   validates :webauthn_id, presence: true, uniqueness: true
   validates :external_id, presence: true
+  validates :external_id, uniqueness: true, if: :will_save_change_to_external_id?
   validates :public_key, presence: true
   validates :description, presence: true
+  validate :within_passkey_limit, on: :create
   validates :status_id, numericality: { only_integer: true }
   validates :sign_count, presence: true, numericality: { greater_than_or_equal_to: 0 }
-
-  validates_with AssociatedRecordLimitValidator,
-                 on: :create,
-                 owner: :staff,
-                 association: :staff_passkeys,
-                 foreign_key: :staff_id,
-                 limit: :MAX_PASSKEYS_PER_STAFF,
-                 record_name: "passkeys",
-                 owner_name: "staff"
-
   before_validation :set_defaults, on: :create
+  after_commit :refresh_owner_mfa_status
+
+  scope :active, -> { where(status_id: OperatorPasskeyStatus::ACTIVE) }
 
   private
+
+  # Every retained row counts (REQ-P01); a removed Passkey is physically deleted and frees its place.
+  # This check alone races; PasskeyRegistrationOperation repeats it while holding the staff lock.
+  def within_passkey_limit
+    return if staff_id.nil?
+
+    count =
+      self.class.connection_class_for_self.connected_to(role: :writing) do
+        self.class.where(staff_id: staff_id).count
+      end
+    return if count < MAX_PASSKEYS_PER_STAFF
+
+    errors.add(:base, :too_many, message: "exceeds maximum passkeys per staff (#{MAX_PASSKEYS_PER_STAFF})")
+  end
 
   def set_defaults
     self.external_id ||= SecureRandom.uuid

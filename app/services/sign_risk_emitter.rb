@@ -14,19 +14,17 @@ class SignRiskEmitter
     event = SignRiskEvent.new(name, payload: payload)
     persist(event)
   end
+  public_class_method :emit
 
   def self.persist(event)
     user_id = event.payload[:user_id]
     staff_id = event.payload[:staff_id]
-    visitor_id = event.payload[:visitor_id]
-    return unless user_id || staff_id || visitor_id
+    return unless user_id || staff_id
 
     context = build_context(event)
 
     if staff_id
       persist_staff_occurrence(event, staff_id, context)
-    elsif visitor_id
-      persist_visitor_occurrence(event, visitor_id, context)
     else
       persist_user_occurrence(event, user_id, context)
     end
@@ -61,24 +59,8 @@ class SignRiskEmitter
           event_type: "risk.#{event.name}",
           context: context.merge(user_id: user_id),
           status_id: ClientOccurrenceStatus::ACTIVE,
-          discarded_at: expiry,
-          purged_at: expiry,
-        )
-      end
-    defined?(Prosopite) ? Prosopite.pause(&operation) : operation.call
-  end
-
-  def self.persist_visitor_occurrence(event, visitor_id, context)
-    expiry = 1.hour.from_now
-    operation =
-      -> do
-        VisitorOccurrence.create!(
-          body: SecureRandom.uuid,
-          event_type: "risk.#{event.name}",
-          context: context.merge(visitor_id: visitor_id),
-          status_id: VisitorOccurrenceStatus::ACTIVE,
-          discarded_at: expiry,
-          purged_at: expiry,
+          discard_at: expiry,
+          purge_eligible_at: expiry,
         )
       end
     defined?(Prosopite) ? Prosopite.pause(&operation) : operation.call
@@ -93,8 +75,8 @@ class SignRiskEmitter
           event_type: "risk.#{event.name}",
           context: context.merge(staff_id: staff_id),
           status_id: OperatorOccurrenceStatus::ACTIVE,
-          discarded_at: expiry,
-          purged_at: expiry,
+          discard_at: expiry,
+          purge_eligible_at: expiry,
         )
       end
     defined?(Prosopite) ? Prosopite.pause(&operation) : operation.call
@@ -106,6 +88,7 @@ class SignRiskEmitter
     enabled_config = Rails.configuration.try(:x).try(:risk_enforcement).try(:enabled)
     enabled_config || ENV["RISK_ENFORCEMENT_ENABLED"] == "true" || Rails.env.production?
   end
+  public_class_method :feature_enabled?
 
   def self.hmac_email(email)
     return if email.blank?
@@ -129,6 +112,6 @@ class SignRiskEmitter
     meta[:reason] || meta["reason"]
   end
 
-  private_class_method :persist, :build_context, :persist_user_occurrence, :persist_visitor_occurrence,
+  private_class_method :persist, :build_context, :persist_user_occurrence,
                        :persist_staff_occurrence, :hmac_email, :hmac_ip, :meta_reason
 end

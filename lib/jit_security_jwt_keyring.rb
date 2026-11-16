@@ -9,6 +9,8 @@ require "jit_security_jwt_registry"
 module JitSecurityJwtKeyring
   module_function
 
+  ALGORITHM = JitSecurityJwtJwk::ALGORITHM
+
   def active_kid(issuer_id = "auth")
     JitSecurityJwtRegistry.issuer(issuer_id).current_kid ||
       raise(JitSecurityJwtRegistry::ConfigurationError, "#{issuer_id} active kid is not configured")
@@ -30,12 +32,16 @@ module JitSecurityJwtKeyring
     JitSecurityJwtRegistry.public_key_for(issuer_id, kid)
   end
 
-  def encode(payload, issuer_id: "auth")
+  # The JOSE `typ` is always supplied by the caller; it is never derived from
+  # payload claims, so no token family can type itself through its body.
+  def encode(payload, typ:, issuer_id: "auth")
+    raise ArgumentError, "JOSE typ is required" if typ.blank?
+
     kid = active_kid(issuer_id)
     pk = private_key_for(kid, issuer_id: issuer_id)
     raise JitSecurityJwtRegistry::ConfigurationError, "Missing private key for kid: #{kid}" if pk.nil?
 
-    JWT.encode(payload, pk, "ES384", { kid: kid, typ: payload["typ"] })
+    JWT.encode(payload, pk, ALGORITHM, { kid: kid, alg: ALGORITHM, typ: typ })
   end
 
   def parse_header(token)
@@ -56,8 +62,8 @@ module JitSecurityJwtKeyring
   def decode_key(base64_der)
     return nil if base64_der.blank?
 
-    OpenSSL::PKey::EC.new(Base64.decode64(base64_der))
-  rescue OpenSSL::PKey::PKeyError
+    OpenSSL::PKey.read(Base64.strict_decode64(base64_der))
+  rescue OpenSSL::PKey::PKeyError, ArgumentError
     nil
   end
 end

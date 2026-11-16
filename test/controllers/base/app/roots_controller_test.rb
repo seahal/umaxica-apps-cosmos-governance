@@ -7,111 +7,200 @@ require "test_helper"
 class Base::App::RootsControllerTest < ActionDispatch::IntegrationTest
   fixtures :clients, :client_statuses
 
-  test "permanently redirects the jp region to the canonical jp regional root" do
-    host! ENV.fetch("PUBLIC_BASE_SERVICE_URL", "base.app.localhost")
+  test "renders the public root with the Base App neutral entry link" do
+    host! ENV.fetch("PUBLIC_BASE_SERVICE_URL")
     get base_app_root_url(ri: "jp")
 
-    assert_response :moved_permanently
-    assert_equal "https://jp.umaxica.app/", response.location
+    assert_response :success
+    assert_equal "base/app/roots/index", inertia_component
+    assert_equal "Base App", inertia_props.fetch("heading")
+    navigation = inertia_props.dig("chrome", "account_navigation")
+
+    assert_equal I18n.t("layouts.shared.account_navigation.label"), navigation.fetch("label")
+    assert_not navigation.fetch("signed_in")
+    assert_equal "/sign?ri=jp", navigation.fetch("links").sole.fetch("href")
   end
 
-  test "permanently redirects the us region to the canonical us regional root" do
-    host! ENV.fetch("PUBLIC_BASE_SERVICE_URL", "base.app.localhost")
+  test "a malformed RP credential is cleared before public Home renders anonymously" do
+    host! ENV.fetch("PUBLIC_BASE_SERVICE_URL")
+    access_cookie = OidcRpBrowserCredentialContract::ACCESS_COOKIE
+    session_cookie = OidcRpBrowserCredentialContract::SESSION_COOKIE
+    cookies[access_cookie] = "malformed-access-credential"
+    cookies[session_cookie] = "stale-local-session"
+
+    get base_app_root_url(ri: "jp")
+
+    assert_response :success
+    assert_equal "base/app/roots/index", inertia_component
+    navigation = inertia_props.dig("chrome", "account_navigation")
+
+    assert_equal I18n.t("layouts.shared.account_navigation.label"), navigation.fetch("label")
+    assert_equal "/sign?ri=jp", navigation.fetch("links").sole.fetch("href")
+    assert_equal "private, no-store", response.headers.fetch("Cache-Control")
+
+    set_cookie_header = Array(response.headers["Set-Cookie"]).join("\n")
+    [access_cookie, session_cookie].each do |cookie_name|
+      deletion = set_cookie_header.lines.find { |line| line.start_with?("#{cookie_name}=") }
+
+      assert_predicate deletion, :present?, "expected #{cookie_name} to be detached"
+      assert_match(/(?:max-age=0|expires=Thu, 01 Jan 1970)/i, deletion)
+    end
+  end
+
+  test "preserves an incoming request id through Rails request and response handling" do
+    host! ENV.fetch("PUBLIC_BASE_SERVICE_URL")
+    request_id = "550e8400-e29b-41d4-a716-446655440000"
+
+    get base_app_root_url(ri: "jp"), headers: { "X-Request-ID" => request_id }
+
+    assert_response :success
+    assert_equal request_id, request.request_id
+    assert_equal request_id, response.headers.fetch("X-Request-Id")
+  end
+
+  test "generates a request id when the request does not provide one" do
+    host! ENV.fetch("PUBLIC_BASE_SERVICE_URL")
+
+    get base_app_root_url(ri: "jp")
+
+    assert_response :success
+    assert_predicate request.request_id, :present?
+    assert_equal request.request_id, response.headers.fetch("X-Request-Id")
+  end
+
+  test "renders the control-plane root for the us region" do
+    host! ENV.fetch("PUBLIC_BASE_SERVICE_URL")
     get base_app_root_url(ri: "us")
 
-    assert_response :moved_permanently
-    assert_equal "https://us.umaxica.app/", response.location
+    assert_response :success
+    assert_equal "base/app/roots/index", inertia_component
   end
 
-  test "drops every request context parameter from the regional redirect target" do
-    host! ENV.fetch("PUBLIC_BASE_SERVICE_URL", "base.app.localhost")
+  test "keeps extra request context on the control-plane root instead of leaving the host" do
+    host! ENV.fetch("PUBLIC_BASE_SERVICE_URL")
     get base_app_root_url(ri: "jp", ct: "dr", lx: "en", tz: "asia/tokyo")
 
-    assert_response :moved_permanently
-    assert_equal "https://jp.umaxica.app/", response.location
-    assert_not_includes response.location, "?"
-    assert_not_includes response.location, "ri="
-    assert_not_includes response.location, "ct="
-    assert_not_includes response.location, "lx="
-    assert_not_includes response.location, "tz="
+    assert_response :success
+    assert_nil response.location
   end
 
-  test "does not regionally redirect an unknown region" do
-    host! ENV.fetch("PUBLIC_BASE_SERVICE_URL", "base.app.localhost")
+  test "renders Home for an unknown region after region canonicalization" do
+    host! ENV.fetch("PUBLIC_BASE_SERVICE_URL")
     get base_app_root_url(ri: "xx")
 
     assert_response :found
-    assert_equal base_app_root_url(ri: "jp"), response.location
+    assert_redirected_to base_app_root_url(ri: "jp")
+    follow_redirect!
+
+    assert_response :success
+    assert_nil response.location
+    assert_equal "base/app/roots/index", inertia_component
   end
 
-  test "does not regionally redirect a missing region" do
-    host! ENV.fetch("PUBLIC_BASE_SERVICE_URL", "base.app.localhost")
+  test "renders Home for a missing region after region canonicalization" do
+    host! ENV.fetch("PUBLIC_BASE_SERVICE_URL")
     get "/"
 
     assert_response :found
-    assert_equal base_app_root_url(ri: "jp"), response.location
-  end
-
-  test "auth authorize preserves app sign up and sign in screen hints" do
-    host! ENV.fetch("PUBLIC_BASE_SERVICE_URL", "base.app.localhost")
-
-    get base_app_oidc_authorization_url(ri: "jp", screen_hint: "signup")
-
-    assert_response :redirect
-    signup_uri = URI.parse(jump_rt_url_from_location(response.location))
-    signup_query = Rack::Utils.parse_nested_query(signup_uri.query)
-
-    assert_equal "signup", signup_query["screen_hint"]
-    assert_equal "/dashboard?ri=jp", session[:oidc_pt]
-
-    get base_app_oidc_authorization_url(ri: "jp", screen_hint: "signin")
-
-    assert_response :redirect
-    signin_uri = URI.parse(jump_rt_url_from_location(response.location))
-    signin_query = Rack::Utils.parse_nested_query(signin_uri.query)
-
-    assert_equal "signin", signin_query["screen_hint"]
-    assert_equal "/dashboard?ri=jp", session[:oidc_pt]
-  end
-
-  test "mints no preference state on the gateway host it redirects away from" do
-    host! ENV.fetch("PUBLIC_BASE_SERVICE_URL", "base.app.localhost")
-
-    assert_no_difference("AppPreference.count") do
-      get base_app_root_url(ct: "dr", lx: "en", ri: "us", tz: "asia/tokyo")
-    end
-
-    assert_response :moved_permanently
-    assert_nil cookies[PreferenceCookieName.access(surface: :app)].presence
-    assert_nil cookies[PreferenceCookieName.refresh(surface: :app)].presence
-  end
-
-  test "regional redirect takes precedence over the logged in dashboard redirect" do
-    host! ENV.fetch("PUBLIC_BASE_SERVICE_URL", "base.app.localhost")
-    user = clients(:one)
-
-    get base_app_root_url(ri: "jp"),
-        headers: as_user_headers(user, host: ENV.fetch("PUBLIC_BASE_SERVICE_URL", "base.app.localhost"))
-
-    assert_response :moved_permanently
-    assert_equal "https://jp.umaxica.app/", response.location
-  end
-
-  test "a logged in request without a region normalizes the region then leaves the gateway host" do
-    host! ENV.fetch("PUBLIC_BASE_SERVICE_URL", "base.app.localhost")
-    user = clients(:one)
-
-    get "/", headers: as_user_headers(user, host: ENV.fetch("PUBLIC_BASE_SERVICE_URL", "base.app.localhost"))
-
-    assert_response :found
-    assert_equal base_app_root_url(ri: "jp"), response.location
-
+    assert_redirected_to base_app_root_url(ri: "jp")
     follow_redirect!
 
-    assert_response :moved_permanently
-    assert_equal "https://jp.umaxica.app/", response.location
+    assert_response :success
+    assert_nil response.location
+    assert_equal "base/app/roots/index", inertia_component
+  end
+
+  test "renders the control-plane root when extra preference params are supplied" do
+    host! ENV.fetch("PUBLIC_BASE_SERVICE_URL")
+    get base_app_root_url(ct: "dr", lx: "en", ri: "us", tz: "asia/tokyo")
+
+    assert_response :success
+    assert_equal "base/app/roots/index", inertia_component
+  end
+
+  test "authenticated regional Home returns 403 without redirect" do
+    host = ENV.fetch("PUBLIC_BASE_SERVICE_URL")
+    http_headers_4 = as_user_headers(clients(:one), host: host)
+    get base_app_root_url(ri: "jp"), headers: http_headers_4
+
+    assert_response :forbidden
+    assert_nil response.location
+  end
+
+  test "authenticated Home without region returns 403 after region canonicalization" do
+    host = ENV.fetch("PUBLIC_BASE_SERVICE_URL")
+    http_headers_3 = as_user_headers(clients(:one), host: host)
+    get "/", headers: http_headers_3
+
+    assert_response :found
+    assert_redirected_to base_app_root_url(ri: "jp")
+    follow_redirect!(headers: http_headers_3)
+
+    assert_response :forbidden
+    assert_nil response.location
+  end
+  test "authenticated Home answers 403 as a rendered response, not a raised exception" do
+    host = ENV.fetch("PUBLIC_BASE_SERVICE_URL")
+    host! host
+    controller_exception =
+      capture_controller_exception do
+        http_headers_2 = as_user_headers(clients(:one), host: host)
+        get(
+          base_app_root_url(ri: "jp"), headers: http_headers_2,
+        )
+      end
+
+    assert_response :forbidden
+    assert_nil controller_exception
+    assert_nil response.location
+    assert_equal "private, no-store", response.headers["Cache-Control"]
+  end
+
+  test "authenticated Home answers a JSON request with the JSON 403 document" do
+    host = ENV.fetch("PUBLIC_BASE_SERVICE_URL")
+    host! host
+
+    http_headers_1 = as_user_headers(clients(:one), host: host)
+    get base_app_root_url(ri: "jp", format: :json), headers: http_headers_1
+
+    assert_response :forbidden
+    assert_equal({ "status" => 403, "error" => "Forbidden" }, response.parsed_body)
+    assert_equal "private, no-store", response.headers["Cache-Control"]
+  end
+
+  test "authenticated Home answers an HTML request with the plain 403 text" do
+    host = ENV.fetch("PUBLIC_BASE_SERVICE_URL")
+    host! host
+
+    http_headers_0 = as_user_headers(clients(:one), host: host)
+    get base_app_root_url(ri: "jp"), headers: http_headers_0
+
+    assert_response :forbidden
+    assert_equal "text/plain", response.media_type
+    assert_equal I18n.t("errors.messages.not_authorized"), response.body
+  end
+
+  test "anonymous Dashboard is sent to the neutral sign entry" do
+    host! ENV.fetch("PUBLIC_BASE_SERVICE_URL")
+    get base_app_dashboard_url(ri: "jp")
+
+    assert_response :see_other
+    location = URI.parse(response.location)
+
+    assert_equal "/sign", location.path
+    assert_equal({ "ri" => "jp", "target_link_uri" => "/dashboard" }, Rack::Utils.parse_query(location.query))
+    assert_equal "no-store", response.headers["Cache-Control"]
   end
   private
+
+  # The controller's own instrumentation reports an exception that escaped the action; the 404
+  # boundary is ordinary control flow and must not depend on the exceptions app.
+  def capture_controller_exception(&)
+    captured = nil
+    callback = ->(*, payload) { captured = payload[:exception] if payload.key?(:exception) }
+    ActiveSupport::Notifications.subscribed(callback, "process_action.action_controller", &)
+    captured
+  end
 
   def bearer_headers(token, host: nil, headers: {})
     host_headers(host).merge(headers).merge("Authorization" => "Bearer #{token}")
@@ -130,7 +219,6 @@ class Base::App::RootsControllerTest
     "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" unless const_defined?(
       :TEST_BROWSER_USER_AGENT, false,
     )
-  PREFERENCE_JWT_KEY = OpenSSL::PKey::EC.generate("secp384r1") unless const_defined?(:PREFERENCE_JWT_KEY, false)
 
   private
 
@@ -139,11 +227,11 @@ class Base::App::RootsControllerTest
   end
 
   def set_access_cookie(token)
-    cookies[AuthenticationBase::ACCESS_COOKIE_KEY] = token
+    cookies[AuthenticationCookieName.access] = token
   end
 
   def set_refresh_cookie(token)
-    cookies[AuthenticationBase::REFRESH_COOKIE_KEY] = token
+    cookies[AuthenticationCookieName.refresh] = token
   end
 
   def jump_rt_url_from_location(location)
@@ -157,24 +245,6 @@ class Base::App::RootsControllerTest
     payload["url"].presence || location
   rescue JWT::DecodeError, URI::InvalidURIError
     location
-  end
-
-  def with_preference_jwt_keys(host: nil)
-    audiences = host ? [host] : PreferenceJwtConfiguration.audiences
-    pub_key_for_stub = ->(_kid, **_options) { self.class::PREFERENCE_JWT_KEY }
-    PreferenceJwtConfiguration.stub(:private_key, self.class::PREFERENCE_JWT_KEY) do
-      PreferenceJwtConfiguration.stub(:public_key, self.class::PREFERENCE_JWT_KEY) do
-        PreferenceJwtConfiguration.stub(:private_key_for_active, self.class::PREFERENCE_JWT_KEY) do
-          PreferenceJwtConfiguration.stub(:public_key_for, pub_key_for_stub) do
-            PreferenceJwtConfiguration.stub(:active_kid, "default") do
-              PreferenceJwtConfiguration.stub(:issuer, "jit-preference") do
-                PreferenceJwtConfiguration.stub(:audiences, audiences) { yield }
-              end
-            end
-          end
-        end
-      end
-    end
   end
 
   def host_headers(host = nil)
@@ -193,80 +263,12 @@ class Base::App::RootsControllerTest
   def ensure_user_reference_records!
     ClientStatus.find_or_create_by!(id: ClientStatus::NOTHING)
     ClientVisibility.find_or_create_by!(id: ClientVisibility::USER)
-    ClientMfaLevel.find_or_create_by!(id: ClientMfaLevel::NOTHING)
     ClientMfaStatus.find_or_create_by!(id: ClientMfaStatus::NOTHING)
     ClientMfaStatus.find_or_create_by!(id: ClientMfaStatus::ACTIVE)
     ClientMfaStatus.find_or_create_by!(id: ClientMfaStatus::UNCONFIGURED)
     ClientEmailStatus.find_or_create_by!(id: ClientEmailStatus::VERIFIED)
     ClientTelephoneStatus.find_or_create_by!(id: ClientTelephoneStatus::VERIFIED)
     ClientPasskeyStatus.find_or_create_by!(id: ClientPasskeyStatus::ACTIVE)
-  end
-
-  def ensure_visitor_reference_records!
-    VisitorStatus.find_or_create_by!(id: VisitorStatus::NOTHING)
-    VisitorVisibility.find_or_create_by!(id: VisitorVisibility::VISITOR)
-    VisitorMfaLevel.find_or_create_by!(id: VisitorMfaLevel::NOTHING)
-    VisitorMfaStatus.find_or_create_by!(id: VisitorMfaStatus::UNCONFIGURED)
-    VisitorEmailStatus.find_or_create_by!(id: VisitorEmailStatus::VERIFIED)
-    VisitorTelephoneStatus.find_or_create_by!(id: VisitorTelephoneStatus::VERIFIED)
-    VisitorPasskeyStatus.find_or_create_by!(id: VisitorPasskeyStatus::ACTIVE)
-  end
-
-  def ensure_user_token_reference_records!
-    ClientTokenKind.find_or_create_by!(id: ClientTokenKind::BROWSER_WEB)
-    ClientTokenStatus.find_or_create_by!(id: ClientTokenStatus::ACTIVE)
-    ClientTokenBindingMethod.find_or_create_by!(id: ClientTokenBindingMethod::LEGACY)
-    ClientTokenDbscStatus.find_or_create_by!(id: ClientTokenDbscStatus::NOTHING)
-  end
-
-  def ensure_staff_token_reference_records!
-    OperatorTokenKind.find_or_create_by!(id: OperatorTokenKind::BROWSER_WEB)
-    OperatorTokenStatus.find_or_create_by!(id: OperatorTokenStatus::ACTIVE)
-    OperatorTokenBindingMethod.find_or_create_by!(id: OperatorTokenBindingMethod::LEGACY)
-    OperatorTokenDbscStatus.find_or_create_by!(id: OperatorTokenDbscStatus::NOTHING)
-  end
-
-  def ensure_visitor_token_reference_records!
-    VisitorTokenKind.find_or_create_by!(id: VisitorTokenKind::BROWSER_WEB)
-    VisitorTokenStatus.find_or_create_by!(id: VisitorTokenStatus::ACTIVE)
-    VisitorTokenBindingMethod.find_or_create_by!(id: VisitorTokenBindingMethod::LEGACY)
-    VisitorTokenDbscStatus.find_or_create_by!(id: VisitorTokenDbscStatus::NOTHING)
-  end
-
-  def create_verified_visitor_with_email(email_address: "visitor-#{SecureRandom.hex(4)}@example.com")
-    ensure_visitor_reference_records!
-    visitor = Visitor.create!(status_id: VisitorStatus::NOTHING, visibility_id: VisitorVisibility::VISITOR)
-    VisitorEmail.create!(
-      visitor_id: visitor.id, address: email_address,
-      address_digest: IdentifierBlindIndex.bidx_for_email(email_address),
-      visitor_email_status_id: VisitorEmailStatus::VERIFIED,
-      otp_private_key: SecureRandom.base64(24),
-      otp_counter: "",
-      otp_attempts_count: 0,
-      public_id: SecureRandom.alphanumeric(21),
-    )
-    visitor.reload
-  end
-
-  def satisfy_user_verification(token, scope: nil)
-    _verification, raw_token = ClientVerification.issue_for_token!(token: token)
-    cookies[ClientVerification.cookie_name] = raw_token
-    mark_token_step_up_satisfied_for_test(token, scope: scope)
-    true
-  end
-
-  def satisfy_staff_verification(token, scope: nil)
-    _verification, raw_token = OperatorVerification.issue_for_token!(token: token)
-    cookies[OperatorVerification.cookie_name] = raw_token
-    mark_token_step_up_satisfied_for_test(token, scope: scope)
-    true
-  end
-
-  def satisfy_visitor_verification(token, scope: nil)
-    _verification, raw_token = VisitorVerification.issue_for_token!(token: token)
-    cookies[VisitorVerification.cookie_name] = raw_token
-    mark_token_step_up_satisfied_for_test(token, scope: scope)
-    true
   end
 
   def mark_token_step_up_satisfied_for_test(token, scope: nil, at: Time.current)
@@ -281,13 +283,12 @@ class Base::App::RootsControllerTest
 
   def load_jump_rt_env!
     @jump_rt_env_originals ||= {}
-    jump_rt_key = Base64.strict_encode64(OpenSSL::PKey::EC.generate("secp384r1").to_der)
-    %w(SIGN_APP SIGN_ORG SIGN_COM ACME_APP ACME_ORG ACME_COM CORE_APP CORE_ORG CORE_COM BASE_APP BASE_ORG
-       BASE_COM).each do |namespace|
+    jump_rt_key = Base64.strict_encode64(OpenSSL::PKey::RSA.generate(3072).to_der)
+    %w(FOREIGN_APP FOREIGN_ORG BASE_APP BASE_ORG).each do |namespace|
       ENV["JWT_#{namespace}_ACTIVE_KID"] = "#{namespace.downcase.tr("_", "-")}-test"
       ENV["JWT_#{namespace}_PRIVATE_KEY"] = jump_rt_key
     end
-    ENV["JUMP_GATEWAY_URL"] = "https://jump.umaxica.net"
+    ENV["PUBLIC_JUMP_GATEWAY_URL"] = "https://jump.umaxica.net"
     JitSecurityJwtRegistry.reload! if defined?(JitSecurityJwtRegistry)
   end
 
@@ -341,14 +342,6 @@ class Base::App::RootsControllerTest
       nil
     end
   end
-
-  def setup_google_mock_auth(uid: "google_uid_123", email: "google@example.com")
-    OmniAuth.config.mock_auth[:google_app] =
-      OmniAuth::AuthHash.new(
-        provider: "google_app", uid: uid, info: { email: email, name: "Google Client" },
-        credentials: { token: "google_token", expires_at: 1.hour.from_now.to_i },
-      )
-  end
 end
 
 # DAMP: authenticated header helpers that attach a real JWT access cookie so the
@@ -359,27 +352,7 @@ end
 class Base::App::RootsControllerTest
   private
 
-  def jwt_access_token_for(resource, host: nil, session_id: nil, session_public_id: nil, resource_type: nil,
-                           dpop_jkt: nil)
-    host_value = host || (respond_to?(:request, true) ? request&.host : nil) || "unknown"
-    resource_type ||=
-      case resource
-      when Client then "client"
-      when Operator then "operator"
-      when Visitor then "visitor"
-      end
-    AuthenticationToken.encode(
-      resource,
-      host: host_value,
-      session_id: session_id,
-      session_public_id: session_public_id,
-      resource_type: resource_type,
-      dpop_jkt: dpop_jkt,
-      jwt_issuer_id: jwt_issuer_id_for_test_host(host_value, resource_type),
-    )
-  end
-
-  # Derive the issuer id from the test host. Base RP hosts (www.umaxica.app/.org/.com)
+  # Derive the issuer id from the test host. Base RP hosts (www.umaxica.app/.org)
   # must resolve to surface:BASE_* so the access token issuer matches the surface the
   # controller validates against.
   def jwt_issuer_id_for_test_host(host, resource_type)
@@ -390,102 +363,21 @@ class Base::App::RootsControllerTest
       elsif normalized.include?("core")
         "CORE"
       elsif normalized.include?("auth") || normalized.include?("sign") || normalized.include?("log.umaxica")
-        "SIGN"
+        "AUTH"
       else
         "BASE"
       end
     surface =
-      if service == "SIGN"
+      if service == "AUTH"
         case resource_type
         when "operator" then "ORG"
-        when "visitor" then "COM"
         else "APP"
         end
       elsif normalized.include?(".org") || normalized.include?("org.")
         "ORG"
-      elsif normalized.include?(".com") || normalized.include?("com.")
-        "COM"
       else
         "APP"
       end
     "surface:#{service}_#{surface}"
-  end
-
-  def as_user_headers(user, host: nil, headers: {}, session_public_id: nil)
-    base = host_headers(host).merge(headers).merge("X-TEST-CURRENT-USER" => user.id.to_s)
-    return base unless user.respond_to?(:persisted?) && user.persisted? && user.class.name == "Client"
-
-    ensure_user_token_reference_records!
-    token = session_public_id.present? ? ClientToken.find_by(public_id: session_public_id) : nil
-    token ||= ClientToken.where(user_id: user.id).where("discarded_at > ?", Time.current).order(created_at: :desc).first
-    token ||= ClientToken.create!(
-      user_id: user.id,
-      user_token_kind_id: ClientTokenKind::BROWSER_WEB,
-      user_token_status_id: ClientTokenStatus::ACTIVE,
-      user_token_binding_method_id: ClientTokenBindingMethod::LEGACY,
-      user_token_dbsc_status_id: ClientTokenDbscStatus::NOTHING,
-    )
-    token_public_id = session_public_id.presence || token.public_id
-    access_token = jwt_access_token_for(user, host: host, session_public_id: token_public_id, resource_type: "client")
-    set_access_cookie(access_token)
-    base["Cookie"] = [base["Cookie"], "#{AuthenticationBase::ACCESS_COOKIE_KEY}=#{access_token}"].compact.join("; ")
-    base["X-TEST-SESSION-PUBLIC-ID"] = token_public_id
-    base
-  end
-
-  def as_staff_headers(staff, host: nil, headers: {}, session_public_id: nil)
-    base = host_headers(host).merge(headers).merge("X-TEST-CURRENT-STAFF" => staff.id.to_s)
-    return base unless staff.respond_to?(:persisted?) && staff.persisted? && staff.class.name == "Operator"
-
-    ensure_staff_token_reference_records!
-    token = session_public_id.present? ? OperatorToken.find_by(public_id: session_public_id) : nil
-    token ||= OperatorToken.where(staff_id: staff.id).where(
-      "discarded_at > ?",
-      Time.current,
-    ).order(created_at: :desc).first
-    token ||= OperatorToken.create!(
-      staff_id: staff.id,
-      staff_token_kind_id: OperatorTokenKind::BROWSER_WEB,
-      staff_token_status_id: OperatorTokenStatus::ACTIVE,
-      staff_token_binding_method_id: OperatorTokenBindingMethod::LEGACY,
-      staff_token_dbsc_status_id: OperatorTokenDbscStatus::NOTHING,
-    )
-    token_public_id = session_public_id.presence || token.public_id
-    access_token = jwt_access_token_for(
-      staff, host: host, session_public_id: token_public_id,
-             resource_type: "operator",
-    )
-    set_access_cookie(access_token)
-    base["Cookie"] = [base["Cookie"], "#{AuthenticationBase::ACCESS_COOKIE_KEY}=#{access_token}"].compact.join("; ")
-    base["X-TEST-SESSION-PUBLIC-ID"] = token_public_id
-    base
-  end
-
-  def as_visitor_headers(visitor, host: nil, headers: {}, session_public_id: nil)
-    base = host_headers(host).merge(headers).merge("X-TEST-CURRENT-RESOURCE" => visitor.id.to_s)
-    return base unless visitor.respond_to?(:persisted?) && visitor.persisted? && visitor.class.name == "Visitor"
-
-    ensure_visitor_token_reference_records!
-    token = session_public_id.present? ? VisitorToken.find_by(public_id: session_public_id) : nil
-    token ||= VisitorToken.where(visitor_id: visitor.id).where(
-      "discarded_at > ?",
-      Time.current,
-    ).order(created_at: :desc).first
-    token ||= VisitorToken.create!(
-      visitor_id: visitor.id,
-      visitor_token_kind_id: VisitorTokenKind::BROWSER_WEB,
-      visitor_token_status_id: VisitorTokenStatus::ACTIVE,
-      visitor_token_binding_method_id: VisitorTokenBindingMethod::LEGACY,
-      visitor_token_dbsc_status_id: VisitorTokenDbscStatus::NOTHING,
-    )
-    token_public_id = session_public_id.presence || token.public_id
-    access_token = jwt_access_token_for(
-      visitor, host: host, session_public_id: token_public_id,
-               resource_type: "visitor",
-    )
-    set_access_cookie(access_token)
-    base["Cookie"] = [base["Cookie"], "#{AuthenticationBase::ACCESS_COOKIE_KEY}=#{access_token}"].compact.join("; ")
-    base["X-TEST-SESSION-PUBLIC-ID"] = token_public_id
-    base
   end
 end

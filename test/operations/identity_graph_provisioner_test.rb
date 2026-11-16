@@ -5,6 +5,8 @@ require "test_helper"
 # require "helpers/global_test_support"
 
 class IdentityGraphProvisionerTest < ActiveSupport::TestCase
+  self.fixture_table_names = []
+
   setup do
     ensure_reference_rows!
   end
@@ -46,7 +48,7 @@ class IdentityGraphProvisionerTest < ActiveSupport::TestCase
     end
 
     assert_no_difference -> {
-      ClientAccount.count + ClientIdentity.count + Persona.count + Enterprise.count + Avatar.count
+      ClientAccount.count + ClientIdentity.count + ClientPersona.count + Enterprise.count + Avatar.count
     } do
       IdentityGraphProvisioner.call!(surface: :app, principal: user)
     end
@@ -56,13 +58,13 @@ class IdentityGraphProvisionerTest < ActiveSupport::TestCase
 
   def ensure_reference_rows!
     [
-      ClientStatus, ClientVisibility, ClientMfaLevel, ClientMfaStatus,
+      ClientStatus, ClientVisibility, ClientMfaStatus,
       ClientIdentityState, PersonaMembershipKind, PersonaMembershipState,
       HandleStatus, AvatarCapability,
     ].each { |klass| klass.ensure_defaults! if klass.respond_to?(:ensure_defaults!) }
   end
 
   def create_client!
-    Client.create!(status_id: ClientStatus::ACTIVE, visibility_id: ClientVisibility::USER)
+    Client.create!(security_mode_id: SecurityModeConfigurable::NORMAL, status_id: ClientStatus::ACTIVE, visibility_id: ClientVisibility::USER)
   end
 end

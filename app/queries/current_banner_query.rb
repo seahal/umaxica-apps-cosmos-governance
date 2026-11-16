@@ -8,19 +8,18 @@
 # shared props and the query has to be callable from a controller. Keeping it here rather than in a
 # helper also means the one database read the page chrome performs is visible as a query object.
 #
-# Behaviour is deliberately unchanged from the helper it replaces, including the connection role and
-# the rescue: a banner is optional chrome, and an unreachable banner store must not turn every page
-# of the surface into a 500.
+# The retained Base banner stream is selected by the `acme` domain. A banner is optional chrome, and
+# an unreachable banner store must not turn every page of a surface into a 500. Base com has no
+# banner model, but its application layout still validates the same Base domain inputs.
 module CurrentBannerQuery
   module_function
 
-  ALLOWED_TLDS = %i(app org com).freeze
-  ALLOWED_DOMAINS = %i(sign core acme docs news help).freeze
+  ALLOWED_TLDS = %i(app com org).freeze
+  ALLOWED_DOMAINS = %i(acme).freeze
 
   BANNER_MODELS = {
     app: "ClientBanner",
     org: "OperatorBanner",
-    com: "VisitorBanner",
   }.freeze
 
   def call(tld:, region:, domain:)
@@ -69,8 +68,7 @@ module CurrentBannerQuery
   end
 
   def connection_owner_for(banner_model)
-    banner_model.ancestors.find do |ancestor|
-      ancestor.is_a?(Class) && ancestor < ActiveRecord::Base && ancestor.abstract_class?
-    end
+    banner_model.connection_class_for_self
   end
+  private_class_method :validate!, :banner_model_for, :read_current, :connection_owner_for
 end

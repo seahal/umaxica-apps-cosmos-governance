@@ -32,6 +32,7 @@ module Health
       @revision = revision.presence
     end
 
+    public
     def ok?
       http_status == 200
     end
@@ -41,7 +42,7 @@ module Health
     end
 
     # `namespace` names the routed surface that answered, as "<realm>/<surface>"
-    # (for example "core/app"). One Rails process answers on fifteen hostnames and the
+    # (for example "base/app"). One Rails process answers on retained product and operator hosts and the
     # probe bodies were otherwise identical, so a caller that sent the wrong `Host` still
     # saw a 200 and could not tell which surface produced it. The value is derived from the
     # controller that ran, not from a constant listed beside the route, so it cannot drift
@@ -85,6 +86,7 @@ module Health
       @message = message
     end
 
+    public
     def ok?
       status == :ok
     end
@@ -108,11 +110,13 @@ module Health
         raise ArgumentError, "unknown health status: #{status}"
       end
     end
+    public_class_method :http_status
 
     def initialize(acceptable_degraded_kinds: [])
       @acceptable_degraded_kinds = acceptable_degraded_kinds.map(&:to_sym).freeze
     end
 
+    public
     def status_for(results)
       return :ok if results.all?(&:ok?)
       return :starting if results.any? { |result| result.status == :starting }
@@ -138,6 +142,7 @@ module Health
     # Startup check: confirms Rails finished initialization. Intentionally
     # lightweight; it must not touch external dependencies.
     class Boot
+      public
       def call
         return DependencyResult.new(kind: :boot, status: :ok) if Rails.application.initialized?
 
@@ -156,6 +161,7 @@ module Health
         @deadline = deadline
       end
 
+      public
       def call
         with_deadline { check_roles }
 
@@ -174,8 +180,12 @@ module Health
       def check_roles
         operation =
           lambda do
+            # Logical records such as AppPrincipalRecord share the connection
+            # established by their physical zenith base; role switching is only
+            # permitted on the class that called connects_to.
+            connection_owner = record_class.connection_class_for_self
             ROLES.each do |role|
-              record_class.connected_to(role: role) do
+              connection_owner.connected_to(role: role) do
                 record_class.with_connection { |connection| connection.execute(SQL) }
               end
             end
@@ -206,6 +216,7 @@ module Health
         @status_policy = status_policy
       end
 
+      public
       def readiness_checks
         record_classes.map { |record_class| Checks::Database.new(record_class: record_class) }
       end
@@ -227,9 +238,7 @@ module Health
       cache_key: "acme-com",
       surface_label: "com",
       record_classes: [
-        ComRpRecord,
         ComSettingRecord,
-        ComSignalRecord,
       ],
     )
 
@@ -243,35 +252,9 @@ module Health
       ],
     )
 
-    SignApp = Base.new(
-      cache_key: "sign-app",
-      surface_label: "sign app",
-      record_classes: [
-        AppPrincipalRecord,
-        AppTicketRecord,
-        AppSettingRecord,
-      ],
-    )
-
-    SignCom = Base.new(
-      cache_key: "sign-com",
-      surface_label: "sign com",
-      record_classes: [
-        ComPrincipalRecord,
-        ComTicketRecord,
-        ComSettingRecord,
-      ],
-    )
-
-    SignOrg = Base.new(
-      cache_key: "sign-org",
-      surface_label: "sign org",
-      record_classes: [
-        OrgPrincipalRecord,
-        OrgTicketRecord,
-        OrgSettingRecord,
-      ],
-    )
+    # The bootstrap resolver has no authoritative store yet. Readiness therefore checks only the
+    # process boundary; a storage check belongs here when a persistence decision is accepted.
+    Guid = Base.new(cache_key: "guid-net", surface_label: "guid", record_classes: [])
   end
 
   # Liveness probe: only confirms the Rails process can respond.
@@ -279,11 +262,13 @@ module Health
     def self.call(profile:)
       new(profile: profile).call
     end
+    public_class_method :call
 
     def initialize(profile:)
       @profile = profile
     end
 
+    public
     def call
       status = Rails.application.initialized? ? :ok : :starting
 
@@ -302,11 +287,13 @@ module Health
     def self.call(profile:)
       new(profile: profile).call
     end
+    public_class_method :call
 
     def initialize(profile:)
       @profile = profile
     end
 
+    public
     def call
       build_result
     end
@@ -348,11 +335,13 @@ module Health
     def self.call(profile:)
       new(profile: profile).call
     end
+    public_class_method :call
 
     def initialize(profile:)
       @profile = profile
     end
 
+    public
     def call
       boot = Checks::Boot.new.call
       status = profile.status_policy.status_for([boot])
@@ -370,11 +359,13 @@ module Health
     def self.call(profile:)
       new(profile: profile).call
     end
+    public_class_method :call
 
     def initialize(profile:)
       @profile = profile
     end
 
+    public
     def call
       sub_results = {
         liveness: LivenessCheck.call(profile: profile),

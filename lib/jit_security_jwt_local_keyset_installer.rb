@@ -12,102 +12,55 @@ module JitSecurityJwtLocalKeysetInstaller
   module_function
 
   DEFAULT_STORE_PATH = Rails.root.join("tmp/local_jwt_keysets.json")
+  STORE_FORMAT = "governance-single-keyset-v1"
 
   def install!(store_path: DEFAULT_STORE_PATH)
     store = load_store(store_path)
     changed = false
 
-    changed |= install_keyset_issuer!(
-      store,
-      prefix: "AUTH",
-      kid: "#{Rails.env}-auth-es384-a",
-    )
-    changed |= install_keyset_issuer!(
-      store,
-      prefix: "PREFERENCE",
-      kid: "#{Rails.env}-preference-es384-a",
-    )
-
-    JitSecurityJwtRegistry::SURFACE_NAMESPACES.each do |namespace|
-      changed |= install_surface_issuer!(
-        store,
-        namespace: namespace,
-        kid: "#{Rails.env}-#{namespace.downcase.tr("_", "-")}-es384-a",
-      )
-    end
-    JitSecurityJwtRegistry::OIDC_CLIENT_NAMESPACES.each do |namespace|
-      changed |= install_oidc_client_issuer!(
-        store,
-        namespace: namespace,
-        kid: "#{Rails.env}-oidc-client-#{namespace.downcase.tr("_", "-")}-es384-a",
-      )
-    end
+    changed |= install_keyset_issuer!(store, prefix: "AUTH", kid: "#{Rails.env}-governance-ps256-a")
 
     write_store(store_path, store) if changed
+    drop_private_keys_outside_rp_cell!
     true
+  end
+
+  # An RP cell process keeps only the repository keyset assigned by RuntimeRole. Other roles are
+  # unchanged; no per-surface or per-client signing key is installed.
+  def drop_private_keys_outside_rp_cell!
+    return unless RuntimeRole::RP_ROLES.include?(RuntimeRole.current)
+
+    allowed = RuntimeRole.rp_private_env_names
+    ENV.keys.grep(/_PRIVATE_KEY(SET)?\z/).each { |name| ENV.delete(name) unless allowed.include?(name) }
   end
 
   def install_keyset_issuer!(store, prefix:, kid:)
     active_name = "#{prefix}_JWT_ACTIVE_KID"
     private_name = "#{prefix}_JWT_PRIVATE_KEYSET"
     public_name = "#{prefix}_JWT_PUBLIC_KEYSET"
-    return false if complete_env?(active_name, private_name, public_name)
+    if complete_env?(active_name, private_name, public_name)
+      env_values = {
+        "active_kid" => ENV.fetch(active_name),
+        "private_keyset" => ENV.fetch(private_name),
+        "public_keyset" => ENV.fetch(public_name),
+      }
+      return false if store[prefix] == env_values
+
+      store[prefix] = env_values
+      return true
+    end
 
     env_values =
       if store.key?(prefix)
         store.fetch(prefix)
       else
-        warn_local_keyset_regenerated(issuer: prefix, kid: kid)
+        warn_local_keyset_regenerated(issuer: "GOVERNANCE", kid: kid)
         keyset_issuer_env(kid)
       end
     store[prefix] = env_values
 
     ENV[active_name] = env_values.fetch("active_kid")
     ENV[private_name] = env_values.fetch("private_keyset")
-    ENV[public_name] = env_values.fetch("public_keyset")
-    true
-  end
-
-  def install_surface_issuer!(store, namespace:, kid:)
-    active_name = "JWT_#{namespace}_ACTIVE_KID"
-    private_name = "JWT_#{namespace}_PRIVATE_KEY"
-    public_name = "JWT_#{namespace}_PUBLIC_KEYSET"
-    return false if complete_env?(active_name, private_name, public_name)
-
-    store_key = "JWT_#{namespace}"
-    env_values =
-      if store.key?(store_key)
-        store.fetch(store_key)
-      else
-        warn_local_keyset_regenerated(issuer: store_key, kid: kid)
-        surface_issuer_env(kid)
-      end
-    store[store_key] = env_values
-
-    ENV[active_name] = env_values.fetch("active_kid")
-    ENV[private_name] = env_values.fetch("private_key")
-    ENV[public_name] = env_values.fetch("public_keyset")
-    true
-  end
-
-  def install_oidc_client_issuer!(store, namespace:, kid:)
-    active_name = "OIDC_CLIENT_#{namespace}_ACTIVE_KID"
-    private_name = "OIDC_CLIENT_#{namespace}_PRIVATE_KEY"
-    public_name = "OIDC_CLIENT_#{namespace}_PUBLIC_KEYSET"
-    return false if complete_env?(active_name, private_name, public_name)
-
-    store_key = "OIDC_CLIENT_#{namespace}"
-    env_values =
-      if store.key?(store_key)
-        store.fetch(store_key)
-      else
-        warn_local_keyset_regenerated(issuer: store_key, kid: kid)
-        surface_issuer_env(kid)
-      end
-    store[store_key] = env_values
-
-    ENV[active_name] = env_values.fetch("active_kid")
-    ENV[private_name] = env_values.fetch("private_key")
     ENV[public_name] = env_values.fetch("public_keyset")
     true
   end
@@ -140,7 +93,23 @@ module JitSecurityJwtLocalKeysetInstaller
     return {} unless File.exist?(path)
 
     parsed = JSON.parse(File.read(path))
-    parsed.is_a?(Hash) ? parsed : {}
+    unless parsed.is_a?(Hash) && parsed["_algorithm"] == JitSecurityJwtJwk::ALGORITHM &&
+        parsed["_format"] == STORE_FORMAT && parsed.keys.sort == %w(AUTH _algorithm _format) &&
+        parsed["AUTH"].is_a?(Hash) && parsed.dig("AUTH", "active_kid").present? &&
+        parsed.dig("AUTH", "private_keyset").present? && parsed.dig("AUTH", "public_keyset").present?
+      Rails.logger.warn(
+        JitLogEvent.format(
+          "jwt.local_keyset_store.contract_changed",
+          expected_algorithm: JitSecurityJwtJwk::ALGORITHM,
+          expected_format: STORE_FORMAT,
+          path: path.to_s,
+          impact: "local keysets will be regenerated and old local tokens will fail verification",
+        ),
+      )
+      return {}
+    end
+
+    parsed.except("_algorithm", "_format")
   rescue JSON::ParserError => e
     Rails.logger.warn(
       JitLogEvent.format(
@@ -154,23 +123,21 @@ module JitSecurityJwtLocalKeysetInstaller
 
   def write_store(path, store)
     FileUtils.mkdir_p(File.dirname(path))
-    File.write(path, JSON.pretty_generate(store), mode: "w", perm: 0o600)
+    File.write(
+      path,
+      JSON.pretty_generate(
+        { "_algorithm" => JitSecurityJwtJwk::ALGORITHM, "_format" => STORE_FORMAT }.merge(store),
+      ),
+      mode: "w",
+      perm: 0o600,
+    )
   end
 
   def keyset_issuer_env(kid)
-    key = OpenSSL::PKey::EC.generate("secp384r1")
+    key = OpenSSL::PKey::RSA.generate(JitSecurityJwtJwk::MIN_RSA_MODULUS_BITS)
     {
       "active_kid" => kid,
       "private_keyset" => JSON.generate(kid => base64_der(key)),
-      "public_keyset" => JSON.generate("keys" => [public_jwk(key, kid)]),
-    }
-  end
-
-  def surface_issuer_env(kid)
-    key = OpenSSL::PKey::EC.generate("secp384r1")
-    {
-      "active_kid" => kid,
-      "private_key" => base64_der(key),
       "public_keyset" => JSON.generate("keys" => [public_jwk(key, kid)]),
     }
   end
@@ -180,6 +147,9 @@ module JitSecurityJwtLocalKeysetInstaller
   end
 
   def base64_der(key)
-    Base64.strict_encode64(key.to_der)
+    Base64.strict_encode64(key.private_to_der)
   end
+
+  private_class_method :install_keyset_issuer!, :complete_env?, :warn_local_keyset_regenerated,
+                       :load_store, :write_store, :keyset_issuer_env
 end

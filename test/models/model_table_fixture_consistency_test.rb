@@ -6,12 +6,50 @@ require "test_helper"
 class ModelTableFixtureConsistencyTest < ActiveSupport::TestCase
   self.fixture_table_names = []
 
+  # Concrete model renames that intentionally keep their existing physical tables.
+  # Renaming these tables requires a separate data migration.
+  RETAINED_TABLE_NAMES = {
+    "ClientPersona" => "personas",
+    "OperatorOrganization" => "organizations",
+    "AppIdentityAuthenticationEvent" => "identity_authentication_events",
+    "OrgIdentityAuthenticationEvent" => "identity_authentication_events",
+    # APP and ORG have separate RP databases, so both realms intentionally use the same
+    # concise step-up table family without crossing a database ownership boundary.
+    "RpBaseAppStepUpStateStatus" => "rp_step_up_state_statuses",
+    "RpBaseAppStepUpState" => "rp_step_up_states",
+    "RpBaseAppStepUpStateTransition" => "rp_step_up_state_transitions",
+    "RpBaseAppStepUpAuditOutboxDeliveryState" => "rp_step_up_audit_outbox_delivery_states",
+    "RpBaseAppStepUpAuditOutbox" => "rp_step_up_audit_outboxes",
+    "RpBaseAppStepUpAuditOutboxAttempt" => "rp_step_up_audit_outbox_attempts",
+    "RpBaseOrgStepUpStateStatus" => "rp_step_up_state_statuses",
+    "RpBaseOrgStepUpState" => "rp_step_up_states",
+    "RpBaseOrgStepUpStateTransition" => "rp_step_up_state_transitions",
+    "RpBaseOrgStepUpAuditOutboxDeliveryState" => "rp_step_up_audit_outbox_delivery_states",
+    "RpBaseOrgStepUpAuditOutbox" => "rp_step_up_audit_outboxes",
+    "RpBaseOrgStepUpAuditOutboxAttempt" => "rp_step_up_audit_outbox_attempts",
+  }.merge(
+    RpCellBinding::CELLS.values.each_with_object({}) do |cell, mapping|
+      {
+        "#{cell.record_prefix}Principal" => "rp_principals",
+        "#{cell.record_prefix}IdentityBinding" => "rp_identity_bindings",
+        "#{cell.record_prefix}OpSessionBinding" => "rp_op_session_bindings",
+        "#{cell.record_prefix}Session" => "rp_sessions",
+        "#{cell.record_prefix}ConsumedIdTokenJti" => "rp_consumed_id_token_jtis",
+        "#{cell.record_prefix}SessionAuthenticationEvidence" => "rp_session_authentication_evidences",
+        "#{cell.record_prefix}EventReceipt" => "rp_event_receipts",
+      }.each { |model, table| mapping[model] = table }
+      if cell.connection == "rp_tech_org"
+        mapping["#{cell.record_prefix}CallbackState"] = "rp_callback_states"
+      end
+    end,
+  ).freeze
+
   test "application record table names follow model tableize convention" do
     Rails.application.eager_load!
 
     mismatches =
       application_record_models.filter_map do |model|
-        expected = model.name.tableize
+        expected = RETAINED_TABLE_NAMES.fetch(model.name) { model.name.tableize }
         actual = model.table_name
         "#{model.name}: expected #{expected}, got #{actual}" unless expected == actual
       end

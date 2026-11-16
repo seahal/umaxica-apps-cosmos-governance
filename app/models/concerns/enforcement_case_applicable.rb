@@ -22,29 +22,11 @@ module EnforcementCaseApplicable
                    verification_completed).freeze
   ACCESS_BLOCKING_KINDS = %w(temporary_freeze permanent_ban).freeze
   METHOD_REVOKING_EFFECTS = %w(unusable permanently_frozen).freeze
+  MAX_PUBLIC_ID_COLLISION_RETRIES = PublicId::MAX_COLLISION_RETRIES
 
   class ApprovalRequiredError < StandardError; end
 
   class InvalidStateTransitionError < StandardError; end
-
-  included do
-    validates :public_id, presence: true, uniqueness: true, length: { maximum: 21 }
-    validates :kind, presence: true, inclusion: { in: KINDS }
-    validates :state, presence: true, inclusion: { in: STATES }
-    validates :duration_mode, presence: true, inclusion: { in: DURATION_MODES }
-    validates :visibility, presence: true, inclusion: { in: VISIBILITIES }
-    validates :release_mode, presence: true, inclusion: { in: RELEASE_MODES }
-    validates :end_reason, inclusion: { in: END_REASONS }, allow_nil: true
-    # Reused from AdministrativeAccessLockable rather than redefined: the
-    # operational vocabulary for "why did an operator restrict this account"
-    # does not change because the scope widened to Unified Enforcement.
-    validates :reason_code, presence: true, inclusion: { in: AdministrativeAccessLockable::ADMIN_LOCK_REASON_CODES }
-    validates :principal_public_id, presence: true
-    validates :applied_by_operator_public_id, presence: true
-    validates :effective_at, presence: true
-
-    before_validation :assign_public_id, on: :create
-  end
 
   class_methods do
     def in_force
@@ -54,7 +36,11 @@ module EnforcementCaseApplicable
     end
 
     def pending_convergence
-      where(state: "active").where("sessions_revoked_at IS NULL OR audited_at IS NULL")
+      where(state: "active", ended_at: nil).where("sessions_revoked_at IS NULL OR audited_at IS NULL")
+    end
+
+    def pending_end_convergence
+      where(state: "active").where.not(ended_at: nil).where(audited_at: nil)
     end
 
     # adr/unified-enforcement.md, Retention interaction / Purge protection:
@@ -87,6 +73,8 @@ module EnforcementCaseApplicable
     end
   end
 
+  public
+
   def in_force?
     return false unless state == "active"
     return false if ended_at.present?
@@ -103,7 +91,7 @@ module EnforcementCaseApplicable
   def requires_approval?
     return true if break_glass?
     # A Case's principal is always the realm's own principal_class -- an org
-    # Case's principal is always an Operator, never a Client or Visitor -- so
+    # Case's principal is always an Operator, never a Client -- so
     # this is a realm check, not a per-row lookup (D12: any permanent_ban
     # targeting an Operator requires approval).
     return true if kind == "permanent_ban" && (visibility == "hidden" || self.class.principal_class == ::Operator)
@@ -127,20 +115,21 @@ module EnforcementCaseApplicable
   def revoke_method_sessions!
     return unless persisted?
 
-    principal = self.class.principal_class.find_by(public_id: principal_public_id)
-    return unless principal
+    self.class.principal_class.find_by!(public_id: principal_public_id)
 
-    authentication_method_effects.where(ended_at: nil).find_each do |effect|
-      next unless METHOD_REVOKING_EFFECTS.include?(effect.effect)
-
-      AuthenticationSessionRevoker.tokens_for_method(principal, effect.authentication_method)
-        .not_revoked.find_each(&:revoke!)
+    if authentication_method_effects.exists?(ended_at: nil, effect: METHOD_REVOKING_EFFECTS)
+      raise AccessOpDataUnavailableError
     end
 
     update!(sessions_revoked_at: Time.current)
   end
 
-  def write_audit_event!(event_type)
+  # `actor_operator_public_id` is the operator who performed this event: the operator who ran the
+  # apply for `applied`, the approver for `approved`, the ending operator for `ended`, the reviewer
+  # for an appeal decision. It is required and has no default; `nil` is passed explicitly only for
+  # events no operator performed (expiry, a principal's own appeal or verification, job
+  # reconciliation). It is not the Case's applied_by/approved_by attribution.
+  def write_audit_event!(event_type, actor_operator_public_id:)
     ChronicleRecord.connected_to(role: :writing) do
       EnforcementEvent.create!(
         realm: self.class.realm,
@@ -148,7 +137,7 @@ module EnforcementCaseApplicable
         principal_public_id: principal_public_id,
         event_type: event_type,
         reason_code: reason_code,
-        operator_public_id: applied_by_operator_public_id,
+        operator_public_id: actor_operator_public_id,
         break_glass: break_glass,
         ticket_id: ticket_id,
         occurred_at: Time.current,
@@ -156,6 +145,34 @@ module EnforcementCaseApplicable
       )
     end
     update!(audited_at: Time.current)
+  end
+
+  # Chronicle is a separate database, so the source-state transaction cannot
+  # make this write atomic. The source Case row lock serializes retries within
+  # a realm, while checking the Chronicle writer first prevents a crash after
+  # the event commit but before `audited_at` is updated from creating another
+  # event on the next retry. A process crash between the check and insert is
+  # still covered by the existing documented Chronicle durability limit.
+  def write_audit_event_once!(event_type, actor_operator_public_id:)
+    with_lock do
+      if audit_event_recorded?(event_type)
+        update!(audited_at: Time.current) if audited_at.blank?
+        return false
+      end
+
+      write_audit_event!(event_type, actor_operator_public_id: actor_operator_public_id)
+      true
+    end
+  end
+
+  def audit_event_recorded?(event_type)
+    ChronicleRecord.connected_to(role: :writing) do
+      EnforcementEvent.exists?(
+        realm: self.class.realm,
+        case_public_id: public_id,
+        event_type: event_type,
+      )
+    end
   end
 
   # D9: applying a new open effect for a slot another Case still holds open
@@ -170,13 +187,61 @@ module EnforcementCaseApplicable
 
   private
 
+  def public_id_immutable_after_create
+    return unless persisted? && will_save_change_to_public_id?
+
+    errors.add(:public_id, "cannot be changed after creation")
+  end
+  private :public_id_immutable_after_create
+
   def assign_public_id
-    self.public_id ||= SecureRandom.urlsafe_base64(15)
+    return if public_id.present?
+
+    self.public_id = PublicId.generate
+    @public_id_generated_value = public_id
+  end
+
+  def refresh_generated_public_id_after_collision
+    return unless @public_id_generated_value == public_id
+    return unless self.class.exists?(public_id: public_id)
+
+    self.public_id = nil
+    assign_public_id
+  end
+
+  def retry_generated_public_id_collision
+    return yield unless @public_id_generated_value == public_id
+
+    retries = 0
+
+    begin
+      self.class.transaction(requires_new: true) { yield }
+    rescue ActiveRecord::RecordNotUnique => e
+      raise unless public_id_collision?(e)
+
+      retries += 1
+      raise if retries > MAX_PUBLIC_ID_COLLISION_RETRIES
+
+      self.public_id = nil
+      assign_public_id
+      retry
+    end
+  end
+
+  def public_id_collision?(error)
+    result = error.cause&.result
+    return false unless result
+
+    constraint = result.error_field(PG::Result::PG_DIAG_CONSTRAINT_NAME)
+    self.class.lease_connection.schema_cache.indexes(self.class.table_name).any? do |index|
+      index.name == constraint && index.unique && index.where.nil? && index.columns == ["public_id"]
+    end
   end
 
   def close_superseded!(association, key_columns)
-    association.select(&:new_record?).each do |effect|
-      scope = association.klass.where(ended_at: nil)
+    association_object = association.proxy_association
+    association_object.target.select(&:new_record?).each do |effect|
+      scope = association_object.klass.where(ended_at: nil)
       key_columns.each { |column| scope = scope.where(column => effect.public_send(column)) }
       scope.update_all(ended_at: Time.current) # rubocop:disable Rails/SkipsModelValidations
     end

@@ -1,13 +1,15 @@
+# frozen_string_literal: true
 # typed: false
+
 # == Schema Information
 #
 # Table name: members
 # Database name: app_principal
 #
 #  id           :bigint           not null, primary key
-#  discarded_at :datetime         default(Infinity), not null
+#  discard_at :datetime         default(Infinity), not null
 #  moniker      :string
-#  purged_at    :datetime         default(Infinity), not null
+#  purge_eligible_at    :datetime         default(Infinity), not null
 #  created_at   :datetime         not null
 #  updated_at   :datetime         not null
 #  division_id  :bigint
@@ -19,7 +21,7 @@
 #
 #  index_members_on_division_id  (division_id)
 #  index_members_on_public_id    (public_id) UNIQUE
-#  index_members_on_purged_at    (purged_at)
+#  index_members_on_purge_eligible_at    (purge_eligible_at)
 #  index_members_on_status_id    (status_id)
 #  index_members_on_user_id      (user_id)
 #
@@ -29,19 +31,26 @@
 #  fk_rails_...  (user_id => clients.id) ON DELETE => nullify
 #
 
-# frozen_string_literal: true
-
 class Member < AppPrincipalRecord
   include Retainable
-  include ::Account
+
+  attribute :discard_at, :datetime, default: -> { Retainable::SENTINEL }
+  attribute :purge_eligible_at, :datetime, default: -> { Retainable::SENTINEL }
+  validates :discard_at, presence: true
+  validates :purge_eligible_at, presence: true
+  validate :retention_order_valid
+  validate :retention_times_not_before_created_at, on: :update
+  Retainable.register_host(self)
 
   attribute :status_id, default: MemberStatus::NOTHING
+
+  validates :public_id, uniqueness: true
+  validates :public_id, exclusion: { in: [nil] }
 
   belongs_to :user, class_name: "Client", inverse_of: :owned_members
   belongs_to :member_status,
              foreign_key: :status_id,
              inverse_of: :members
-  has_many :avatars, foreign_key: :client_id, dependent: :nullify, inverse_of: :member
   has_many :member_avatar_accesses, dependent: :destroy, inverse_of: :member
   has_many :member_avatar_visibilities, dependent: :destroy, inverse_of: :member
   has_many :member_avatar_oversights, dependent: :destroy, inverse_of: :member

@@ -8,32 +8,6 @@ module PrivacyRequestState
   JURISDICTIONS = %w(jp us_ca eu_eea unknown).freeze
   REQUEST_SOURCES = %w(self_service support_manual authorized_agent guardian).freeze
 
-  included do
-    include PublicId
-    include Retainable
-
-    before_validation :assign_privacy_request_defaults, on: :create
-
-    validates :request_kind, inclusion: { in: REQUEST_KINDS }
-    validates :jurisdiction, inclusion: { in: JURISDICTIONS }
-    validates :request_source, inclusion: { in: REQUEST_SOURCES }
-    validates :status_id, inclusion: { in: ->(record) { record.class::STATUS_IDS } }
-    validates :received_at, :response_due_at, presence: true
-
-    scope :open_for_recovery_block,
-          -> {
-            where(
-              status_id: status_ids_for(
-                "VERIFIED", "PROCESSING", "COMPLETED", "BLOCKED_BY_LEGAL_HOLD",
-                "PARTIALLY_DENIED",
-              ),
-            )
-          }
-    scope :open_for_hold_block,
-          -> { where(status_id: status_ids_for("RECEIVED", "VERIFICATION_REQUIRED", "VERIFIED", "PROCESSING")) }
-    scope :received, -> { where(status_id: status_id_for("RECEIVED")) }
-  end
-
   class_methods do
     def status_id_for(status_name)
       self::STATUSES.fetch(status_name.to_s)
@@ -48,6 +22,7 @@ module PrivacyRequestState
     end
   end
 
+  public
   def received?
     status_id == self.class.status_id_for("RECEIVED")
   end

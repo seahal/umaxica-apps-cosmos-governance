@@ -41,9 +41,6 @@ module Security
       test "every declared feature name is registered" do
         declared =
           OutboundChannelSuspension::CHANNEL_FEATURE_NAMES.values +
-          SignUpSuspension::SURFACE_FEATURE_NAMES.values +
-          OtpEmailNotifierRollout::SURFACE_FEATURE_NAMES.values +
-          ExternalAuthentication::FlipperProviderAvailabilityAdapter::PROVIDER_FEATURE_NAMES.values +
           [TurnstileDegradation::FEATURE_NAME, RetentionPurgeJob::FEATURE_NAME]
 
         assert_empty declared.uniq - FeatureFlags.names
@@ -60,6 +57,16 @@ module Security
         error = assert_raises(ArgumentError) { FeatureFlags.enabled?(:outbund_push_suspended) }
 
         assert_match(/unregistered feature flag/, error.message)
+      end
+
+      test "passes an actor to the registered feature gate" do
+        flag = :outbound_sms_suspended
+        actor = Object.new
+        flipper = Minitest::Mock.new
+        flipper.expect(:enabled?, true, [flag, actor])
+
+        assert FeatureFlags.enabled?(flag, actor, flipper: flipper)
+        flipper.verify
       end
 
       private

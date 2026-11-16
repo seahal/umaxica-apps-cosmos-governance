@@ -10,11 +10,11 @@
 #  actor_type     :text             default(""), not null
 #  context        :jsonb            not null
 #  current_value  :text             default(""), not null
-#  discarded_at   :datetime         default(Infinity), not null
+#  discard_at   :datetime         default(Infinity), not null
 #  ip_address     :inet             default(#<IPAddr: IPv4:0.0.0.0/255.255.255.255>), not null
 #  occurred_at    :datetime         not null
 #  previous_value :text             default(""), not null
-#  purged_at      :datetime         not null
+#  purge_eligible_at      :datetime         not null
 #  subject_type   :text             not null
 #  created_at     :datetime         not null
 #  updated_at     :datetime         not null
@@ -30,7 +30,7 @@
 #  index_client_chronicles_on_event_id                    (event_id)
 #  index_client_chronicles_on_level_id                    (level_id)
 #  index_client_chronicles_on_occurred_at                 (occurred_at)
-#  index_client_chronicles_on_purged_at                   (purged_at)
+#  index_client_chronicles_on_purge_eligible_at                   (purge_eligible_at)
 #  index_client_chronicles_on_subject_id                  (subject_id)
 #  index_user_activities_on_actor                         (actor_type,actor_id)
 #
@@ -43,19 +43,31 @@
 class ClientChronicle < ChronicleRecord
   include Retainable
 
+  attribute :discard_at, :datetime, default: -> { Retainable::SENTINEL }
+  attribute :purge_eligible_at, :datetime, default: -> { Retainable::SENTINEL }
+  validates :discard_at, presence: true
+  validates :purge_eligible_at, presence: true
+  validate :retention_order_valid
+  validate :retention_times_not_before_created_at, on: :update
+  Retainable.register_host(self)
+
+  attribute :level_id, default: ClientChronicleLevel::NOTHING
+  attribute :subject_id, :string
+
+  # Alias for backward compatibility
+  alias_attribute :timestamp, :occurred_at
+
+  encrypts :previous_value
+
   belongs_to :actor, polymorphic: true
   belongs_to :user_chronicle_event, class_name: "ClientChronicleEvent", foreign_key: :event_id,
                                     inverse_of: :client_chronicles
   belongs_to :user_chronicle_level, class_name: "ClientChronicleLevel", foreign_key: :level_id,
                                     inverse_of: :client_chronicles
   # subject_id/subject_type for cross-DB compatibility (no FK)
+  validates :event_uuid, uniqueness: true, allow_nil: true
   validates :subject_id, presence: true
   validates :subject_type, presence: true
-
-  attribute :level_id, default: ClientChronicleLevel::NOTHING
-  attribute :subject_id, :string
-
-  scope :recent_activity_first, -> { order(arel_table[:occurred_at].desc, arel_table[:created_at].desc) }
 
   validates :event_id, numericality: { only_integer: true }, allow_nil: true
   validates :level_id, numericality: { only_integer: true }, allow_nil: true
@@ -63,7 +75,11 @@ class ClientChronicle < ChronicleRecord
   validate :event_id_must_exist
   before_validation :default_actor_to_subject
   before_create :set_timestamp
+
+  scope :recent_activity_first, -> { order(arel_table[:occurred_at].desc, arel_table[:created_at].desc) }
+
   # Helper methods for compatibility with existing code
+  public
   def user
     Client.find(subject_id) if subject_type == "Client"
   end
@@ -80,9 +96,6 @@ class ClientChronicle < ChronicleRecord
     self.subject_id = user.id.to_s
     self.subject_type = "Client"
   end
-
-  # Alias for backward compatibility
-  alias_attribute :timestamp, :occurred_at
 
   def event_id_must_exist
     return if event_id.blank?
@@ -109,6 +122,4 @@ class ClientChronicle < ChronicleRecord
     self.actor_id = subject_id
     self.actor_type = subject_type
   end
-
-  encrypts :previous_value
 end

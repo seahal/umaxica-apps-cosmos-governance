@@ -1,4 +1,6 @@
+# frozen_string_literal: true
 # typed: false
+
 # == Schema Information
 #
 # Table name: com_preference_chronicles
@@ -8,11 +10,11 @@
 #  actor_type     :text             default(""), not null
 #  context        :jsonb            not null
 #  current_value  :text             default(""), not null
-#  discarded_at   :datetime         default(Infinity), not null
+#  discard_at   :datetime         default(Infinity), not null
 #  ip_address     :inet             default(#<IPAddr: IPv4:0.0.0.0/255.255.255.255>), not null
 #  occurred_at    :datetime         not null
 #  previous_value :text             default(""), not null
-#  purged_at      :datetime         not null
+#  purge_eligible_at      :datetime         not null
 #  subject_type   :text             not null
 #  created_at     :datetime         not null
 #  updated_at     :datetime         not null
@@ -29,7 +31,7 @@
 #  index_com_preference_chronicles_on_event_id                  (event_id)
 #  index_com_preference_chronicles_on_level_id                  (level_id)
 #  index_com_preference_chronicles_on_occurred_at               (occurred_at)
-#  index_com_preference_chronicles_on_purged_at                 (purged_at)
+#  index_com_preference_chronicles_on_purge_eligible_at                 (purge_eligible_at)
 #  index_com_preference_chronicles_on_subject_id                (subject_id)
 #
 # Foreign Keys
@@ -37,8 +39,6 @@
 #  fk_rails_...  (event_id => com_preference_chronicle_events.id)
 #  fk_rails_...  (level_id => com_preference_chronicle_levels.id)
 #
-
-# frozen_string_literal: true
 
 require "test_helper"
 
@@ -57,6 +57,18 @@ class ComPreferenceChronicleTest < ActiveSupport::TestCase
 
   test "uses bigint primary key" do
     assert_kind_of Integer, @audit.id
+  end
+
+  test "an audit writer lock blocks a purge lock on another connection" do
+    ComPreferenceChronicle.lock_preference_audit_writers!
+
+    assert_equal "f", probe_advisory_lock("pg_try_advisory_xact_lock")
+  end
+
+  test "a purge lock blocks an audit writer lock on another connection" do
+    ComPreferenceChronicle.lock_preference_audit_for_purge!
+
+    assert_equal "f", probe_advisory_lock("pg_try_advisory_xact_lock_shared")
   end
 
   test "belongs to com_preference" do
@@ -87,9 +99,11 @@ class ComPreferenceChronicleTest < ActiveSupport::TestCase
   end
 
   test "validates presence of subject_id" do
-    @audit.subject_id = nil
-
-    assert_raises(ActiveRecord::NotNullViolation) { @audit.save!(validate: false) }
+    assert_raises(ActiveRecord::NotNullViolation) do
+      ComPreferenceChronicle.transaction(requires_new: true) do
+        ComPreferenceChronicle.where(id: @audit.id).update_all(subject_id: nil)
+      end
+    end
   end
 
   test "validates presence of subject_type" do
@@ -111,5 +125,21 @@ class ComPreferenceChronicleTest < ActiveSupport::TestCase
     @audit.level_id = 1
 
     assert_kind_of Integer, @audit.level_id
+  end
+
+  private
+
+  def probe_advisory_lock(function)
+    config = ComPreferenceChronicle.connection_db_config.configuration_hash
+    connection = PG.connect(
+      host: config.fetch(:host), port: config.fetch(:port), dbname: config.fetch(:database),
+      user: config.fetch(:username), password: config.fetch(:password),
+    )
+    connection.exec("BEGIN")
+    result = connection.exec("SELECT #{function}(#{ComPreferenceChronicle::PREFERENCE_AUDIT_LOCK_KEY})")
+
+    result.getvalue(0, 0)
+  ensure
+    connection&.finish
   end
 end

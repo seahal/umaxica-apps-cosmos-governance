@@ -1,30 +1,28 @@
 # Step-Up MFA Status
 
-> **Partially superseded by Identity Authority inversion:** The credential availability vocabulary
-> in this document remains useful only where it does not assign step-up freshness, session, token,
-> or settings authority to `sign/id`. `acme/www` is the Session, Token, Account, Preference,
-> Authorization, and downstream-token Authority. `sign/id` is ceremony-only. Existing sign-side
-> physical tables/models do not imply sign-side authority. Do not use this document to reintroduce
-> sign-side sessions, refresh, preference, dashboard, account lifecycle, token issuance, logout, or
-> step-up freshness.
+> **Owner supersession (2026-11-13):** Access owns authentication and step-up ceremony execution.
+> Governance retains credential records and step-up policy inputs, but its local setup and
+> verification bootstrap routes have been removed. When a protected RP action requires an
+> unavailable Access ceremony, Governance returns an explicit unavailable response; it does not
+> redirect to a local credential-enrollment flow. The historical enrollment and bootstrap behavior
+> described below is not a current route contract.
 
-This document describes the current step-up gate used by the `app`, `com`, and `org` sign
-configuration surfaces.
+> **Current route status (2026-11-14):** Base App's RP entry and callback are restored, but no
+> credential ceremony or OIDC-driven step-up callback is served by Governance. Access owns those
+> ceremonies. Credential-availability state and operation-level step-up checks remain local Base
+> behavior; this document does not describe a currently routed step-up flow.
 
-`/verification` is intentionally shared by Acme and Sign. On Acme, `/verification` is the
-authority-side request, completion, and cancellation gate. On Sign, `/verification` is the
-credential-side ceremony and cancellation surface. Passkey/WebAuthn ceremony belongs to `sign/id`,
-and cancellation closes a pending verification request without granting step-up freshness.
+This document describes the credential-availability state used by the Base app and Base org
+surfaces. Base com is anonymous-only; Tech does not expose passkey inventory.
 
 Step-up is the product's current `AAL2` boundary. The broader AAL terminology is defined in
 `docs/security/authentication-assurance-levels.md`.
 
 ## Purpose
 
-Step-up protects sensitive signed-in pages, such as personal information, credential management,
-session revocation, and withdrawal. Lightweight users may sign up without being forced to register
-MFA immediately, but sensitive pages either require recent step-up or route the actor into MFA
-registration when no step-up method exists.
+Step-up policy inputs describe the credential evidence required by sensitive signed-in actions, such
+as credential management, session revocation and withdrawal. They do not start or verify a
+credential ceremony in Governance.
 
 ## Columns
 
@@ -46,14 +44,31 @@ The status is recalculated from surface-specific step-up methods:
 | surface | `ACTIVE` when any of these exist                              |
 | ------- | ------------------------------------------------------------- |
 | `app`   | verified user email, active user passkey, or active user TOTP |
-| `com`   | verified visitor email or active visitor passkey              |
 | `org`   | active operator passkey                                       |
 
 When multiple app step-up methods are available, prefer passkey, then TOTP, then email OTP.
 
-Telephone numbers, social identities, and passcodes do not count as step-up methods. Telephone is
-also not an AAL1 method by itself; it may be an entry point into an AAL1 sign-in flow, but the
-verifier used after that entry point is the AAL method.
+### Historical local TOTP verification behavior
+
+Governance retains app TOTP credential records. The attempt selection, verification and counter
+handling described below belonged to the former local verifier; Access owns current TOTP ceremony
+execution. This historical detail is not a current Governance verification contract.
+
+TOTP is supported only on the `app` surface. `com` and `org` do not gain TOTP enrollment, sign-in,
+Step-Up, or settings routes through this status policy. The credential lifecycle and attempt-binding
+rules are recorded in `adr/app-totp-credential-lifecycle.md`.
+
+An app TOTP failure belongs to one actor-owned credential. With one active credential the server
+selects it; with two active credentials the actor selects by `public_id`. The browser never sends a
+database-local credential ID, and a failed guess is never applied to every active credential. The
+PostgreSQL counter is consecutive and bounded from 0 through 100. The 100th failure changes that
+credential to terminal `REVOKED`; a later correct code cannot reactivate it. Only `ACTIVE` and
+`INACTIVE` credentials consume one of the two enrollment slots. Revoked rows remain visible in app
+settings so the actor can distinguish `REVOKED` from `ACTIVE`, but no reactivation action is
+provided.
+
+Telephone numbers, social identities, and passcodes do not count as step-up evidence. This status
+document does not specify their use as sign-in inputs.
 
 Email addresses and telephone numbers are contact identifiers. Contact identifiers are PII used for
 notification, reachability, or recovery, and ordinary credential-management flows must preserve at
@@ -61,42 +76,34 @@ least one usable contact identifier. This contact-identifier minimum is separate
 availability: deleting a telephone can violate the contact-identifier minimum even though telephone
 is not a step-up method.
 
-## Page Classes
+## Current route behavior
 
-Pages fall into three classes:
+Governance has no local bootstrap, credential-registration, or credential-verification route. `GET`
+and `POST /verification` are the RP handoff boundary; credential verification belongs to Access. The
+completion and cancellation endpoints return an explicit unavailable response while Access's query
+and revocation API is absent. Base APP and ORG Passkey routes and Base APP TOTP routes are read-only
+inventory/detail pages; no registration or verification action is routed. A protected action that
+requires unavailable Access evidence fails closed and does not redirect to a local enrollment page.
 
-| class                         | behavior                                                                                                                  |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| No step-up                    | The page does not read `multi_factor_status_id`.                                                                          |
-| Sensitive                     | The page requires step-up. If status is `UNCONFIGURED`, it redirects to setup first.                                      |
-| Bootstrap-exempt registration | The page allows access without step-up only while status is `UNCONFIGURED`; once status is `ACTIVE`, it requires step-up. |
-
-Bootstrap-exempt registration actions are:
-
-| surface | bootstrap-exempt actions                                    |
-| ------- | ----------------------------------------------------------- |
-| `app`   | email registration, passkey registration, TOTP registration |
-| `com`   | email registration, passkey registration                    |
-| `org`   | passkey registration                                        |
-
-For `org`, email registration is credential management, not bootstrap. The first step-up method is
-operator passkey.
-
-## Runtime Rule
-
-Controllers use `multi_factor_status_id` through the shared verification concern. They do not decide
-bootstrap by checking only their own credential type. For example, an `app` user with a verified
-email has status `ACTIVE`, so `/settings/totps` requires step-up even if the user has no TOTP.
-
-Successful credential registration updates the status through model callbacks. The standard
-credential registration audit events continue to record the actual registration.
+The pre-split page classes, bootstrap exemptions, and registration behavior described by earlier
+revisions of this document are retired. They are not the current route contract.
 
 ## MFA Reset Recovery
 
-MFA reset is not a step-up method and must not bypass step-up. When an actor loses all usable MFA
-material, the reset path follows the account-recovery design in
-`docs/security/mfa-reset-account-recovery.md`.
+MFA reset is not a step-up method and must not bypass step-up. The former Base app/org MFA reset
+routes are retired; this repository no longer exposes that account-recovery workflow.
 
-After an approved reset revokes the actor's surface-counting credentials, `multi_factor_status_id`
-is recalculated. If no step-up method remains, the actor returns to `UNCONFIGURED` and must use the
-existing bootstrap-exempt registration flow before sensitive actions can pass normal step-up again.
+No Governance reset or bootstrap route remains. If an approved owner-side credential change leaves
+no surface-counting credential, `multi_factor_status_id` is recalculated to `UNCONFIGURED`.
+Sensitive RP actions then remain unavailable until the owner provides a supported
+credential-enrollment path and Access evidence; Governance does not substitute a local enrollment
+flow.
+
+## Restricted Mode
+
+A session established through org Emergency Access is not eligible to perform step-up-protected
+operations at all, regardless of the credentials the Operator holds. This is an authentication
+context decision rather than a freshness one: the ceremony entry is refused, `StepUpResolver` never
+reports satisfaction, and the freshness committer refuses to write. There is no separate Emergency
+step-up mechanism, and normal step-up behaviour is unchanged. See
+`docs/security/org-emergency-access.md`.

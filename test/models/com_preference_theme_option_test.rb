@@ -1,4 +1,6 @@
+# frozen_string_literal: true
 # typed: false
+
 # == Schema Information
 #
 # Table name: com_preference_theme_options
@@ -7,13 +9,11 @@
 #  id :bigint           not null, primary key
 #
 
-# frozen_string_literal: true
-
 require "test_helper"
 
 class ComPreferenceThemeOptionTest < ActiveSupport::TestCase
   setup do
-    ComPreferenceStatus.find_or_create_by!(id: ComPreferenceStatus::NOTHING)
+    ComPreferenceStatus.find_or_create_by!(id: ComPreferenceStatus::ACTIVE)
   end
 
   test "can be created" do
@@ -24,7 +24,11 @@ class ComPreferenceThemeOptionTest < ActiveSupport::TestCase
 
   test "has many com_preference_themes" do
     option = ComPreferenceThemeOption.create!(id: 99)
-    preference = ComPreference.create!
+    preference = ComPreference.create!(
+      jti: SecureRandom.uuid,
+      last_issued_at: Time.current,
+      last_issued_expires_at: 400.days.from_now,
+    )
     theme = ComPreferenceTheme.create!(preference: preference, option: option)
 
     assert_includes option.com_preference_themes, theme
@@ -32,7 +36,11 @@ class ComPreferenceThemeOptionTest < ActiveSupport::TestCase
 
   test "restricts deletion when associated records exist" do
     option = ComPreferenceThemeOption.create!(id: 99)
-    preference = ComPreference.create!
+    preference = ComPreference.create!(
+      jti: SecureRandom.uuid,
+      last_issued_at: Time.current,
+      last_issued_expires_at: 400.days.from_now,
+    )
     ComPreferenceTheme.create!(preference: preference, option: option)
 
     assert_raises(ActiveRecord::RecordNotDestroyed) do

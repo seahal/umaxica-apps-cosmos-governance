@@ -4,26 +4,15 @@
 // destination, so the page never guesses the next step.
 import ButtonLink from "@/components/ui/ButtonLink";
 import Page from "@/components/ui/Page";
-import CredentialWarning, {
-  type CredentialWarningProps,
-} from "@/features/identity/CredentialWarning";
 
 export type WelcomeShowProps = {
   title: string;
   next_link: { label: string; href: string };
-  /** Absent unless the server decided this actor should be prompted to add a credential. */
-  credential_warning?: CredentialWarningProps | null;
 };
 
-export default function WelcomeShow({
-  title,
-  next_link: nextLink,
-  credential_warning: credentialWarning = null,
-}: WelcomeShowProps) {
+export default function WelcomeShow({ title, next_link: nextLink }: WelcomeShowProps) {
   return (
     <Page title={title}>
-      {credentialWarning ? <CredentialWarning {...credentialWarning} /> : null}
-
       <p>
         <ButtonLink
           href={nextLink.href}

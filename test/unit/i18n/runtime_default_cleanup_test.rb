@@ -23,28 +23,9 @@ class I18nRuntimeDefaultCleanupTest < ActiveSupport::TestCase
     sign.app.settings.withdrawal.recovery.confirm
     sign.app.settings.withdrawal.recovery.unavailable
     sign.app.verification.errors.no_passkey
-    sign.org.in.back
-    sign.org.in.session.restricted_notice
-    sign.org.in.mfa.title
-    sign.org.in.mfa.description
-    sign.org.in.mfa.verification_failed
-    sign.org.in.mfa.no_methods_available
-    sign.org.in.mfa.methods.passkey
-    sign.org.in.mfa.passkey.title
-    sign.org.in.mfa.passkey.description
-    sign.org.in.mfa.passkey.authenticate
-    sign.org.in.mfa.passkey.back
-    sign.org.in.mfa.passkey.success
     sign.org.verification.errors.no_passkey
-    sign.org.settings.google.show.disable
     sign.org.settings.sessions.revoke.others_button
     sign.org.settings.sessions.revoke.others_confirm
-    help.app.contacts.new.submit
-    help.app.contacts.new.cancel
-    help.com.contacts.new.submit
-    help.com.contacts.new.cancel
-    help.org.contacts.new.submit
-    help.org.contacts.new.cancel
     errors.invalid_authenticity_token
   ).freeze
 

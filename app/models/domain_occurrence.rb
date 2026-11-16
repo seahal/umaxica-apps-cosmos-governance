@@ -8,9 +8,9 @@
 #
 #  id           :bigint           not null, primary key
 #  body         :string           default(""), not null
-#  discarded_at :datetime         default(Infinity), not null
+#  discard_at :datetime         default(Infinity), not null
 #  memo         :string           default(""), not null
-#  purged_at    :datetime         default(Infinity), not null
+#  purge_eligible_at    :datetime         default(Infinity), not null
 #  created_at   :datetime         not null
 #  updated_at   :datetime         not null
 #  public_id    :string(21)       default(""), not null
@@ -20,7 +20,7 @@
 #
 #  index_domain_occurrences_on_body       (body) UNIQUE
 #  index_domain_occurrences_on_public_id  (public_id) UNIQUE
-#  index_domain_occurrences_on_purged_at  (purged_at)
+#  index_domain_occurrences_on_purge_eligible_at  (purge_eligible_at)
 #  index_domain_occurrences_on_status_id  (status_id)
 #
 # Foreign Keys
@@ -30,8 +30,32 @@
 
 class DomainOccurrence < OccurrenceRecord
   include Retainable
+
+  attribute :discard_at, :datetime, default: -> { Retainable::SENTINEL }
+  attribute :purge_eligible_at, :datetime, default: -> { Retainable::SENTINEL }
+  validates :discard_at, presence: true
+  validates :purge_eligible_at, presence: true
+  validate :retention_order_valid
+  validate :retention_times_not_before_created_at, on: :update
+  Retainable.register_host(self)
+
   include PublicId
+
+  before_validation :generate_public_id, on: :create
+  before_validation :refresh_generated_public_id_after_collision, on: :create
+  before_create :generate_public_id
+  around_create :retry_public_id_collision
+  validate :public_id_immutable_after_create, on: :update
+  validates :public_id, presence: true, length: { is: PublicId::GENERATION_SIZE }, uniqueness: true
   include Occurrence
+
+  validates :public_id,
+            length: { is: 21 },
+            format: { with: /\A[A-Za-z0-9_-]{21}\z/ },
+            uniqueness: true
+  validates :body, presence: true, uniqueness: true
+  validate :status_id_must_be_present
+  validates :memo, length: { maximum: 1024 }, allow_nil: true
 
   attribute :status_id, default: DomainOccurrenceStatus::NOTHING
 

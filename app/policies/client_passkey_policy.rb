@@ -2,6 +2,8 @@
 # frozen_string_literal: true
 
 class ClientPasskeyPolicy < ApplicationPolicy
+  public
+
   def index?
     user.present?
   end
@@ -34,5 +36,12 @@ class ClientPasskeyPolicy < ApplicationPolicy
     return relation.none unless user
 
     relation.where(user_id: user.id)
+  end
+  def management_requirement(token:)
+    raise AccessOpDataUnavailableError
+  end
+
+  def management_authorized?(token:, now:)
+    raise AccessOpDataUnavailableError
   end
 end

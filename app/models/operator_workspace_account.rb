@@ -1,4 +1,6 @@
+# frozen_string_literal: true
 # typed: false
+
 # == Schema Information
 #
 # Table name: operator_workspace_accounts
@@ -22,12 +24,25 @@
 #  index_operator_workspace_accounts_on_status_id      (status_id)
 #
 
-# frozen_string_literal: true
-
 class OperatorWorkspaceAccount < OrgRpRecord
   include Retainable
-  include ::Account
 
+  attribute :discard_at, :datetime, default: -> { Retainable::SENTINEL }
+  attribute :purge_eligible_at, :datetime, default: -> { Retainable::SENTINEL }
+  validates :discard_at, presence: true
+  validates :purge_eligible_at, presence: true
+  validate :retention_order_valid
+  validate :retention_times_not_before_created_at, on: :update
+  Retainable.register_host(self)
+
+  include ::PublicId
+
+  before_validation :generate_public_id, on: :create
+  before_validation :refresh_generated_public_id_after_collision, on: :create
+  before_create :generate_public_id
+  around_create :retry_public_id_collision
+  validate :public_id_immutable_after_create, on: :update
+  validates :public_id, presence: true, length: { is: PublicId::GENERATION_SIZE }, uniqueness: true
   attribute :status_id, default: OperatorWorkspaceAccountStatus::NOTHING
 
   belongs_to :operator_workspace_account_status,
@@ -40,7 +55,7 @@ class OperatorWorkspaceAccount < OrgRpRecord
   belongs_to :staff,
              class_name: "Operator",
              inverse_of: false
-  belongs_to :department, inverse_of: false
+  belongs_to :department, inverse_of: :operator_workspace_accounts
   has_many :staff_operators, class_name: "OperatorWorkspaceAccountMembership", dependent: :destroy,
                              inverse_of: :operator_workspace_account
   has_many :operators,

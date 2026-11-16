@@ -16,11 +16,13 @@
 module AcmeSelectableContext
   # Raised when a chosen context cannot be persisted (e.g. no session token to write to).
   InvalidSelection = Class.new(StandardError)
+  SelectionAlreadyEstablished = Class.new(StandardError)
+
+  public
 
   # Every (account, collective, unit, avatar) combination the principal may act as. For
-  # surfaces that do not require an avatar, the avatar slot is nil. Membership must be active
-  # and, when an avatar is required, the avatar must be assigned to the principal and owned by
-  # the membership's collective -- this is the authoritative ownership/membership gate.
+  # optional and unsupported Avatar modes the nil slot is explicit. Avatar candidates require
+  # current ownership by the membership's collective and surface-specific avatar.view permission.
   def selectable_candidates
     accounts.flat_map do |account|
       account.current_memberships.flat_map do |membership|
@@ -28,7 +30,7 @@ module AcmeSelectableContext
 
         collective = membership.collective
         unit = membership.collective_unit
-        avatars_for(collective).map do |avatar|
+        avatars_for(account: account, collective: collective).map do |avatar|
           candidate(account: account, collective: collective, unit: unit, avatar: avatar)
         end
       end
@@ -56,28 +58,75 @@ module AcmeSelectableContext
   end
 
   # Atomically write the chosen candidate's public ids onto the session token. Validation is
-  # the caller's responsibility (candidate must already be confirmed); this only persists.
-  def persist_selection!(candidate)
+  # the caller's responsibility (candidate must already be confirmed). A changed selection
+  # invalidates prior ceremony authority in the same token transaction; revisiting does not.
+  def persist_selection!(candidate, once: false)
     raise InvalidSelection, "session_required" if session.blank?
 
     public_ids = candidate.fetch(:public)
-    connection_owner(session.class).connected_to(role: :writing) do
+    return persist_rp_app_selection!(public_ids, once:) if session.instance_of?(RpBaseAppSession)
+    return persist_rp_org_selection!(public_ids, once:) if session.instance_of?(RpBaseOrgSession)
+
+    raise AccessOpDataUnavailableError
+  end
+
+  def persist_rp_app_selection!(public_ids, once:)
+    RpBaseAppRecord.connected_to(role: :writing) do
       session.with_lock do
+        raise InvalidSelection, "invalid_selection" unless session.active?
         raise InvalidSelection, "invalid_selection" unless candidate_still_authorized?(public_ids)
 
         attributes = {
-          selected_account_public_id: public_ids[:account_public_id],
-          selected_collective_public_id: public_ids[:organization_public_id],
-          selected_collective_unit_public_id: public_ids[:organization_unit_public_id],
-          selected_at: Time.current,
+          account_public_id: public_ids.fetch(:account_public_id),
+          organization_public_id: public_ids.fetch(:organization_public_id),
+          organization_unit_public_id: public_ids.fetch(:organization_unit_public_id),
+          avatar_public_id: public_ids.fetch(:avatar_public_id),
         }
-        attributes[:selected_avatar_public_id] =
-          public_ids[:avatar_public_id] if session.respond_to?(:selected_avatar_public_id=)
+        existing = RpBaseAppSessionSelection.find_by(rp_session_id: session.id)
+        if existing
+          raise SelectionAlreadyEstablished if once
 
-        session.update!(attributes)
+          existing.update!(attributes)
+        else
+          RpBaseAppSessionSelection.create!(attributes.merge(rp_session_id: session.id, selected_at: Time.current))
+        end
       end
     end
   end
+
+  def persist_rp_org_selection!(public_ids, once:)
+    RpBaseOrgRecord.connected_to(role: :writing) do
+      session.with_lock do
+        ActiveRecord::Associations::Preloader.new(records: [session], associations: :op_session_binding).call
+        raise InvalidSelection, "invalid_selection" unless session.active?
+        raise InvalidSelection, "invalid_selection" unless candidate_still_authorized?(public_ids)
+
+        attributes = {
+          account_public_id: public_ids.fetch(:account_public_id),
+          organization_public_id: public_ids.fetch(:organization_public_id),
+          organization_unit_public_id: public_ids.fetch(:organization_unit_public_id),
+        }
+        existing = RpBaseOrgSessionSelection.find_by(rp_session_id: session.id)
+        selection =
+          if existing
+            raise SelectionAlreadyEstablished if once
+
+            existing.update!(attributes)
+            existing
+          else
+            RpBaseOrgSessionSelection.create!(
+              attributes.merge(
+                rp_session_id: session.id,
+                selected_at: Time.current,
+              ),
+            )
+          end
+        persist_rp_org_avatar_selection!(selection, public_ids[:avatar_public_id])
+      end
+    end
+  end
+
+  private :persist_rp_app_selection!, :persist_rp_org_selection!
 
   # Flattened, view-friendly serialization of candidates for JSON responses.
   def serialize_candidates(candidates)
@@ -97,6 +146,23 @@ module AcmeSelectableContext
 
   private
 
+  def persist_rp_org_avatar_selection!(selection, avatar_public_id)
+    existing = RpBaseOrgSessionAvatarSelection.find_by(rp_session_id: selection.rp_session_id)
+    if avatar_public_id.blank?
+      existing&.destroy!
+    elsif existing
+      return if existing.avatar_public_id == avatar_public_id
+
+      existing.update!(avatar_public_id:, selected_at: Time.current)
+    else
+      RpBaseOrgSessionAvatarSelection.create!(
+        rp_session_id: selection.rp_session_id,
+        avatar_public_id:,
+        selected_at: Time.current,
+      )
+    end
+  end
+
   def accounts
     config.account_class
       .joins(config.account_identity_association)
@@ -104,15 +170,39 @@ module AcmeSelectableContext
       .order(:created_at, :id)
   end
 
-  def avatars_for(collective)
-    return [nil] unless config.requires_avatar
+  def avatars_for(account:, collective:)
+    return [nil] if config.avatar_mode == :none
+    unless %i(required optional).include?(config.avatar_mode)
+      raise ArgumentError, "unsupported Avatar mode: #{config.avatar_mode.inspect}"
+    end
 
-    Avatar
-      .joins(:avatar_assignments)
-      .where(avatar_assignments: { user_id: principal.id })
-      .where(owner_organization_id: collective.public_id)
-      .distinct
-      .order(:created_at, :id)
+    authorized = AvatarPermissionResolver.call(
+      actor: principal,
+      surface: config.surface,
+      subject_public_id: account.public_id,
+      owner_collective_public_id: collective.public_id,
+      permission: "avatar.view",
+    )
+    avatars =
+      if authorized
+        AvatarOwnershipPeriodSource
+          .relation_for(
+            Avatar.joins(:lifecycle_state),
+            surface: config.surface.to_s,
+            collective_public_id: collective.public_id,
+          )
+          .where(avatar_lifecycle_states: { key: "active" })
+          .where("avatars.discard_at > ?", Time.current)
+          .distinct
+          .order(:created_at, :id)
+      else
+        Avatar.none
+      end
+
+    case config.avatar_mode
+    when :required then avatars.to_a
+    when :optional then [nil, *avatars.to_a]
+    end
   end
 
   def candidate(account:, collective:, unit:, avatar:)
@@ -137,6 +227,38 @@ module AcmeSelectableContext
     end
     return false unless account
 
+    membership = locked_candidate_membership(account, public_ids)
+    return false unless membership
+    return true if config.avatar_mode == :none
+    return true if config.avatar_mode == :optional && public_ids[:avatar_public_id].blank?
+    return false if config.avatar_mode == :required && public_ids[:avatar_public_id].blank?
+
+    authorized = AvatarPermissionResolver.call(
+      actor: principal,
+      surface: config.surface,
+      subject_public_id: public_ids[:account_public_id],
+      owner_collective_public_id: public_ids[:organization_public_id],
+      permission: "avatar.view",
+    )
+    return false unless authorized
+
+    connection_owner(Avatar).connected_to(role: :writing) do
+      AvatarOwnershipPeriodSource
+        .relation_for(
+          Avatar.joins(:lifecycle_state),
+          surface: config.surface.to_s,
+          collective_public_id: public_ids[:organization_public_id],
+        )
+        .lock
+        .where(public_id: public_ids[:avatar_public_id])
+        .where(
+          avatar_lifecycle_states: { key: "active" },
+        )
+        .exists?(["avatars.discard_at > ?", Time.current])
+    end
+  end
+
+  def locked_candidate_membership(account, public_ids)
     membership = nil
     connection_owner(config.membership_class).connected_to(role: :writing) do
       membership =
@@ -146,17 +268,7 @@ module AcmeSelectableContext
             candidate_membership.collective_unit.public_id == public_ids[:organization_unit_public_id]
         end
     end
-    return false unless membership
-    return true unless config.requires_avatar
-
-    connection_owner(Avatar).connected_to(role: :writing) do
-      Avatar
-        .joins(:avatar_assignments)
-        .lock
-        .where(public_id: public_ids[:avatar_public_id])
-        .where(owner_organization_id: public_ids[:organization_public_id])
-        .exists?(avatar_assignments: { user_id: principal.id })
-    end
+    membership
   end
 
   def connection_owner(klass)

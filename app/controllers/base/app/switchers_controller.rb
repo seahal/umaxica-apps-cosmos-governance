@@ -3,67 +3,88 @@
 
 module Base
   module App
-    # Post-login context switcher for the app surface. Selector owns the pre-access ceremony and
-    # commits the first selected context; switcher only runs after that full-access gate is open,
-    # shows the current account / organization / avatar, and atomically changes the current
-    # context. It never creates or edits entities -- that is the accounts/organizations/avatars
-    # controllers' job. Requires a selected actor context (FullAccessController).
+    # Post-login context switcher for the app surface. On the Base RP path, selection reads and
+    # writes stay on the local RP session; legacy root-backed requests use the owner API. It never
+    # creates or edits entities -- that is the accounts/organizations/avatars controllers' job.
+    # Requires a selected actor context (FullAccessController).
     class SwitchersController < Base::App::FullAccessController
       include ::SurfaceInertiaPage
 
       AUTHENTICATION_MODE = :private
+
+      layout "base/app/inertia"
+      inertia_share chrome: -> { surface_chrome }
+      inertia_share clear_history: -> { session[:inertia_clear_history] == true }
+
       declare_authentication_mode! :private
 
+      public
+
+      # The RP session is the selection source for RP browser requests. Legacy root-backed requests
+      # continue to ask the Avatar owner to resolve their current context.
       def show
-        authorize!(current_client, to: :show?)
-        switcher = current_context
+        authorize!(current_client, to: :show?) if rp_app_session?
+        context = switcher_context_data
+        return unless context
 
         respond_to do |format|
-          format.json { render json: switcher }
-          format.html { render inertia: true, props: switcher_page_props(switcher) }
+          format.json { render json: context }
+          format.html { render inertia: true, props: switcher_page_props(context) }
         end
       end
 
       def update
-        authorize!(current_client, to: :update?)
-        BaseSwitcherAuthority.switch(
-          surface: :app,
-          principal: current_client,
-          session: current_session,
-          params: switcher_params,
-        )
+        authorize!(current_client, to: :update?) if rp_app_session?
+        result =
+          if rp_app_session?
+            begin
+              BaseSwitcherAuthority.switch(
+                surface: :app, principal: current_client, session: rp_app_session, params: switcher_params,
+              )
+              AvatarAuthorityClient::Result.new(status: :ok, data: {}, errors: {})
+            rescue BaseSwitcherAuthority::InvalidSwitch => e
+              AvatarAuthorityClient::Result.new(
+                status: :unprocessable, data: { "error" => e.message }, errors: {},
+              )
+            end
+          else
+            relay_switcher(switcher_authority.switch_context(switcher_params))
+          end
+        return unless result
 
-        respond_to do |format|
-          format.json { render json: { status: "switched", next: base_app_dashboard_path(ri: params[:ri]) } }
-          format.html { redirect_to(base_app_dashboard_path(ri: params[:ri]), status: :see_other) }
-        end
-      rescue BaseSwitcherAuthority::InvalidSwitch => e
-        switcher = current_context
-
-        respond_to do |format|
-          format.json { render json: { status: "invalid_switch", error: e.message }, status: :unprocessable_content }
-          format.html do
-            render inertia: "base/app/switchers/show",
-                   props: switcher_page_props(switcher, error: e.message),
-                   status: :unprocessable_content
+        if result.ok?
+          respond_to do |format|
+            format.json { render json: { status: "switched", next: base_app_dashboard_path(ri: params[:ri]) } }
+            format.html { redirect_to(base_app_dashboard_path(ri: params[:ri]), status: :see_other) }
+          end
+        else
+          error = result.data.to_h["error"]
+          context = switcher_context_data || {}
+          respond_to do |format|
+            format.json { render json: { status: "invalid_switch", error: }, status: :unprocessable_content }
+            format.html do
+              render inertia: "base/app/switchers/show", props: switcher_page_props(context, error:),
+                     status: :unprocessable_content
+            end
           end
         end
       end
 
       private
 
-      def switcher_page_props(switcher, error: nil)
-        current = switcher[:current]
+      def switcher_page_props(context, error: nil)
+        current = context[:current]
 
         {
           title: "Switcher",
+          up_link: dashboard_up_link,
           current: current && {
             account_public_id: current[:account_public_id],
             organization_public_id: current[:organization_public_id],
             organization_unit_public_id: current[:organization_unit_public_id],
             avatar_public_id: current[:avatar_public_id],
           },
-          candidates: Array(switcher[:candidates]).map { |candidate| serialize_candidate(candidate) },
+          candidates: Array(context[:candidates]).map { |candidate| serialize_candidate(candidate) },
           error: error,
         }
       end
@@ -76,10 +97,38 @@ module Base
         }
       end
 
-      def current_context
-        BaseSwitcherAuthority.current(
-          surface: :app, principal: current_client, session: current_session,
+      def switcher_authority
+        @switcher_authority ||= AvatarAuthorityClient.new(
+          surface: "app",
+          rp_session: browser_rp_access_state.rp_session,
+          persona: Actor.selection.account_public_id,
+          selection: Actor.selection,
         )
+      end
+
+      def rp_app_session?
+        browser_rp_authenticated? && browser_rp_access_state.rp_session.instance_of?(RpBaseAppSession)
+      end
+
+      def rp_app_session = browser_rp_access_state.rp_session
+
+      def switcher_context_data
+        return BaseSwitcherAuthority.current(
+          surface: :app, principal: current_client, session: rp_app_session,
+        ) if rp_app_session?
+
+        result = relay_switcher(switcher_authority.switcher_context)
+        result&.data&.deep_symbolize_keys
+      end
+
+      def relay_switcher(result)
+        authorize!(result, to: :show?, with: AvatarRemoteResultPolicy)
+        if result.status == :dependency
+          head :service_unavailable
+          return
+        end
+
+        result
       end
 
       def switcher_params

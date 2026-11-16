@@ -15,9 +15,16 @@ module Base
             include PrivacyErasureRequestFlow
 
             AUTHENTICATION_MODE = :open
+
+            layout "base/app/inertia"
+            inertia_share chrome: -> { surface_chrome }
+            inertia_share clear_history: -> { session[:inertia_clear_history] == true }
+
             declare_authentication_mode! :open
 
             before_action :withdrawal_ceremony_required!
+
+            public
 
             def show
               render_privacy_erasure_status(current_withdrawal_subject)
@@ -48,7 +55,7 @@ module Base
               new_base_app_identity_withdrawal_session_path({ ri: params[:ri] }.merge(extra_params))
             end
 
-            def withdrawal_public_fallback_path = auth_app_sign_in_path
+            def withdrawal_public_fallback_path = base_app_root_path(ri: params[:ri])
           end
         end
       end

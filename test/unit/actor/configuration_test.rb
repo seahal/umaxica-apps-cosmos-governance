@@ -45,13 +45,12 @@ class Actor::ConfigurationTest < ActiveSupport::TestCase
   test "null value responds to all predicates" do
     null = Actor::Configuration::NULL_VALUE
 
-    # rubocop:disable Minitest/AssertNil,Minitest/AssertPredicate
-    assert null.nil?
-    # rubocop:enable Minitest/AssertNil,Minitest/AssertPredicate
+    assert_withheld { null.nil? }
     assert_predicate null, :blank?
     assert_not_predicate null, :present?
     assert_predicate null, :null?
     assert_not null.enabled?
+    assert_not_predicate null, :configured?
     assert_predicate null, :disabled?
     assert_empty null.to_a
     assert_empty null.to_h

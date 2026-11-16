@@ -21,21 +21,17 @@ class HostContextResolverTest < ActiveSupport::TestCase
     assert_equal :org, context.surface
   end
 
-  test "resolves net surface from host" do
-    context = HostContextResolver.call(Request.new("base.net.localhost"))
-
-    assert_equal :net, context.surface
-  end
-
-  test "resolves dev surface from host" do
-    context = HostContextResolver.call(Request.new("id.dev.localhost"))
-
-    assert_equal :dev, context.surface
-  end
-
-  test "falls back through Core surface defaults" do
+  test "keeps an unrecognized host outside the supported surfaces" do
     context = HostContextResolver.call(Request.new("example.test"))
 
-    assert_equal CoreSurface::DEFAULT, context.surface
+    assert_equal :unknown, context.surface
+  end
+
+  test "retired base network and developer hosts are outside the supported surfaces" do
+    %w(base.net.localhost base.dev.localhost).each do |host|
+      context = HostContextResolver.call(Request.new(host))
+
+      assert_equal :unknown, context.surface
+    end
   end
 end

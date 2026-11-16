@@ -1,6 +1,12 @@
 # Sign-In Failure Handling Plan
 
-Status: backlog
+Status: superseded for Governance on 2026-11-13. Access now owns authentication ceremonies, so this
+local sign-in implementation backlog must not be resumed here. Preserve as historical context. See
+[`evidence/2026-11-13-remove-unreachable-ceremony-code-Q7M2.md`](../../evidence/2026-11-13-remove-unreachable-ceremony-code-Q7M2.md).
+
+Lifecycle vocabulary: failure classes here use current runtime wording. Classify them with the
+canonical lifecycle terms in `docs/security/idp-flow-lifecycle.md`; the cross-flow migration is
+`plans/backlog/idp-flow-state-machine-unification.md`.
 
 ## Purpose
 

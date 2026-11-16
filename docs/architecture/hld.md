@@ -14,9 +14,10 @@ The repository is a single Rails app with three user-facing surfaces:
 | `org`   | Staff and organization workflows   |
 | `com`   | Public and corporate workflows     |
 
-The application also contains identity provider and relying-party behavior that historically lived
-behind engine names. Those engine boundaries are retired; the active boundaries are surfaces,
-controller lifecycle contracts, database connection groups, and the separate regional repository.
+This repository serves the Base app/com/org and Tech org surfaces plus its host-constrained operator
+tools. Base and Tech are browser RPs; credential and OpenID Provider authorities are external
+dependencies. Former Auth, Visa, Core, Warp, Palm, Edit, content, and Guid route/controller trees
+are retired; remaining models and databases are inventoried for a later cleanup step.
 
 ## Routing
 

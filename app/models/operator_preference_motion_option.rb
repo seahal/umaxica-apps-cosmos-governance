@@ -15,22 +15,26 @@ class OperatorPreferenceMotionOption < OrgPrincipalRecord
   STANDARD = 1
   REDUCED = 2
 
+  DEFAULTS = [NOTHING, STANDARD, REDUCED].freeze
+
+  self.record_timestamps = false
+
   has_many :operator_preference_motions,
            class_name: "OperatorPreferenceMotion",
            foreign_key: :option_id,
            inverse_of: :option,
            dependent: :restrict_with_error
 
+  def self.ensure_defaults!
+    insert_missing_fixed_ids!(DEFAULTS)
+  end
+  public_class_method :ensure_defaults!
+
+  public
   def name
     case id
     when 1 then "standard"
     when 2 then "reduced"
     end
-  end
-
-  DEFAULTS = [NOTHING, STANDARD, REDUCED].freeze
-
-  def self.ensure_defaults!
-    insert_missing_fixed_ids!(DEFAULTS)
   end
 end

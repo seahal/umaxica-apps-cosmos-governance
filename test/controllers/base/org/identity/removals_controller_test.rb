@@ -1,74 +1,84 @@
-# typed: false
 # frozen_string_literal: true
 
 require "test_helper"
 
 class Base::Org::Identity::RemovalsControllerTest < ActionDispatch::IntegrationTest
   setup do
-    @host = configured_host(:base_staff)
-    ensure_operator_reference_records!
-    @operator = Operator.create!(status_id: OperatorStatus::ACTIVE)
-  end
-
-  test "removes the secret credential when another sign-in method still remains" do
-    target = create_active_secret_credential(@operator)
-    create_active_secret_credential(@operator)
-
-    post base_org_identity_secret_removal_url(target.public_id, ri: "jp", host: @host),
-         headers: as_staff_headers(@operator, host: @host)
-
-    assert_response :see_other
-    assert_redirected_to base_org_identity_secrets_path(ri: "jp")
-    assert_not_equal OperatorSecretCredentialStatus::ACTIVE, target.reload.staff_secret_status_id
-  end
-
-  test "refuses to remove the credential that carries the only remaining sign-in method" do
-    only = create_active_secret_credential(@operator)
-
-    post base_org_identity_secret_removal_url(only.public_id, ri: "jp", host: @host),
-         headers: as_staff_headers(@operator, host: @host)
-
-    assert_response :see_other
-    assert_redirected_to base_org_identity_secrets_path(ri: "jp")
-    assert_equal OperatorSecretCredentialStatus::ACTIVE, only.reload.staff_secret_status_id
-  end
-
-  test "a credential owned by another operator is not found" do
-    other = Operator.create!(status_id: OperatorStatus::ACTIVE)
-    other_secret = create_active_secret_credential(other)
-    create_active_secret_credential(other)
-
-    post base_org_identity_secret_removal_url(other_secret.public_id, ri: "jp", host: @host),
-         headers: as_staff_headers(@operator, host: @host)
-
-    assert_response :not_found
-    assert_equal OperatorSecretCredentialStatus::ACTIVE, other_secret.reload.staff_secret_status_id
-  end
-
-  private
-
-  def create_active_secret_credential(operator)
-    OperatorSecretCredential.create!(
-      staff: operator,
-      name: "Removal test secret credential #{SecureRandom.hex(4)}",
-      password_digest: "digest",
+    @host = ENV.fetch("PUBLIC_BASE_STAFF_URL")
+    @operator = Operator.create!(security_mode_id: SecurityModeConfigurable::ADVANCED, status_id: OperatorStatus::ACTIVE)
+    2.times do |index|
+      OperatorPasskey.create!(
+        staff: @operator, webauthn_id: "removal-fixture-#{index}", external_id: SecureRandom.uuid,
+        public_key: "removal-fixture-key-#{index}", description: "Removal fixture",
+        status_id: OperatorPasskeyStatus::ACTIVE,
+      )
+    end
+    @secret = OperatorSecretCredential.create!(
+      staff: @operator, name: "Retained secret", password_digest: "digest",
       staff_secret_kind_id: OperatorSecretCredentialKind::LOGIN,
       staff_secret_status_id: OperatorSecretCredentialStatus::ACTIVE,
     )
+    @headers = as_staff_headers(@operator, host: @host)
   end
 
-  def ensure_operator_reference_records!
-    OperatorStatus.find_or_create_by!(id: OperatorStatus::ACTIVE)
-    [
-      OperatorSecretCredentialStatus::ACTIVE,
-      OperatorSecretCredentialStatus::DELETED,
-      OperatorSecretCredentialStatus::REVOKED,
-    ].each { |id| OperatorSecretCredentialStatus.find_or_create_by!(id: id) }
-    OperatorSecretCredentialKind.find_or_create_by!(id: OperatorSecretCredentialKind::LOGIN)
+  test "registered passkeys do not replace unavailable Access authority for secret removal" do
+    assert_equal [:passkey], AuthenticationCredentialInventory.call(@operator, excluding: @secret).sign_in_methods
+    original = @secret.reload.attributes
+
+    post base_org_identity_secret_removal_url(@secret.public_id, ri: "jp", host: @host), headers: @headers
+
+    assert_response :service_unavailable
+    assert_includes response.headers["Cache-Control"], "no-store"
+    assert_equal original, @secret.reload.attributes
   end
 
-  # DAMP local helper copy for former shared test support.
-  def configured_host(surface_name)
-    Rails.configuration.x.boot_config.fetch(:hosts).public_send(surface_name).host
+  test "direct credential deletion also refuses without removing or revoking the secret" do
+    original = @secret.reload.attributes
+
+    delete base_org_identity_secret_url(@secret.public_id, ri: "jp", host: @host), headers: @headers
+
+    assert_response :service_unavailable
+    assert_nil response.location
+    assert_equal original, @secret.reload.attributes
+  end
+
+  test "unavailable removal does not disclose whether a foreign credential exists" do
+    other = Operator.create!(security_mode_id: SecurityModeConfigurable::ADVANCED, status_id: OperatorStatus::ACTIVE)
+    foreign = OperatorSecretCredential.create!(
+      staff: other, name: "Foreign secret", password_digest: "digest",
+      staff_secret_kind_id: OperatorSecretCredentialKind::LOGIN,
+      staff_secret_status_id: OperatorSecretCredentialStatus::ACTIVE,
+    )
+    original = foreign.reload.attributes
+
+    [@secret.public_id, foreign.public_id, "nonexistent"].each do |reference|
+      post base_org_identity_secret_removal_url(reference, ri: "jp", host: @host), headers: @headers
+
+      assert_response :service_unavailable
+      assert_equal I18n.t("auth.rp_feature_unavailable"), response.body
+      assert_not_includes response.body, "Foreign secret"
+    end
+    assert_equal original, foreign.reload.attributes
+  end
+
+  test "standby external proof cannot update or remove a credential while authority is unavailable" do
+    access = jwt_access_token_for(
+      @operator, host: @host, resource_type: "operator", authentication_context: AuthenticationContextValue::STANDBY_KEY,
+    )
+    browser_cookies = Rack::Utils.parse_cookies_header(@headers.fetch("Cookie"))
+    browser_cookies[OidcRpBrowserCredentialContract::ACCESS_COOKIE] = access
+    cookie_header = browser_cookies.map { |name, value| "#{name}=#{Rack::Utils.escape(value)}" }.join("; ")
+    headers = @headers.merge("Cookie" => cookie_header, "HTTP_COOKIE" => cookie_header)
+    original = @secret.reload.attributes
+
+    patch base_org_identity_secret_url(@secret.public_id, ri: "jp", host: @host),
+          params: { staff_secret_credential: { name: "Refused" } }, headers: headers
+
+    assert_response :service_unavailable
+    assert_equal original, @secret.reload.attributes
+    post base_org_identity_secret_removal_url(@secret.public_id, ri: "jp", host: @host), headers: headers
+
+    assert_response :service_unavailable
+    assert_equal original, @secret.reload.attributes
   end
 end

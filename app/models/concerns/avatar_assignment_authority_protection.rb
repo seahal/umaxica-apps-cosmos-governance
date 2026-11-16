@@ -9,11 +9,6 @@ module AvatarAssignmentAuthorityProtection
     "administrator" => :last_avatar_administrator_assignment,
   }.freeze
 
-  included do
-    before_destroy :ensure_not_destroying_last_protected_assignment
-    validate :ensure_not_demoting_last_protected_assignment, on: :update
-  end
-
   private
 
   def ensure_not_destroying_last_protected_assignment

@@ -26,10 +26,14 @@ class OperatorNotificationRecordTest < ActiveSupport::TestCase
   end
 
   test "belongs to operator through notification_records" do
-    operator = Operator.create!
+    operator = Operator.create!(security_mode_id: SecurityModeConfigurable::ADVANCED)
     notification = OperatorNotificationRecord.create!(operator: operator)
 
     assert_equal operator, notification.operator
     assert_includes operator.notification_records, notification
+  end
+
+  test "public_id is a fixed 21-character NanoID" do
+    assert_public_id_fixed_length(::OperatorNotificationRecord)
   end
 end

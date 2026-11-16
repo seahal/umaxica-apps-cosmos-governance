@@ -1,10 +1,12 @@
 # GET and PATCH /api/v0/preferences/theme on the com surface.
 servers:
-  - url: https://jp.umaxica.com
-    description: Canonical Core public host for the com (public and corporate) surface.
+  - url: https://www.umaxica.com
+    description: Base public host for the com (public and corporate) surface.
 get:
   summary: Current color theme
-  description: Reports the caller's color theme. No session is required.
+  description: >-
+    Reports the caller's color theme. No session is required. A valid same-TLD preference token
+    identifies the preference.
   operationId: getPreferencesTheme
   tags: [Preferences]
   security: []
@@ -20,16 +22,32 @@ get:
         application/json:
           schema:
             $ref: "../../shared/components.yml#/schemas/ColorTheme"
+    "400":
+      description: Ambiguous duplicate preference cookies were rejected without a response body.
     "406":
       $ref: "../../shared/components.yml#/responses/NotAcceptable"
     "429":
       $ref: "../../shared/components.yml#/responses/RateLimited"
 patch:
   summary: Update color theme
-  description: Writes the color theme cookie (and actor record when a preference token is present).
+  description: >-
+    Updates the preference record, creating one when no valid preference token is present. `theme`
+    is `light`, `dark`, or `system` (case-insensitive) or a stored code; any other value, including
+    a missing member, is a 422 with the pointer `/theme`. Unknown members are ignored.
   operationId: patchPreferencesTheme
   tags: [Preferences]
   security: []
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          type: object
+          required: [theme]
+          properties:
+            theme:
+              type: string
+              pattern: "^([lL][iI][gG][hH][tT]|[dD][aA][rR][kK]|[sS][yY][sS][tT][eE][mM]|[lL][iI]|[dD][rR]|[sS][yY])$"
   responses:
     "200":
       description: Theme after the write.
@@ -42,7 +60,21 @@ patch:
         application/json:
           schema:
             $ref: "../../shared/components.yml#/schemas/ColorTheme"
+    "400":
+      description: Malformed JSON or ambiguous duplicate preference cookies.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "../../shared/components.yml#/schemas/Problem"
+    "403":
+      $ref: "../../shared/components.yml#/responses/CsrfVerificationFailed"
     "406":
       $ref: "../../shared/components.yml#/responses/NotAcceptable"
+    "415":
+      $ref: "../../shared/components.yml#/responses/UnsupportedMediaType"
+    "422":
+      $ref: "../../shared/components.yml#/responses/ValidationFailed"
     "429":
       $ref: "../../shared/components.yml#/responses/RateLimited"
+    "503":
+      $ref: "../../shared/components.yml#/responses/Problem"

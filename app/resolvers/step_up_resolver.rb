@@ -3,27 +3,46 @@
 
 class StepUpResolver
   DEFAULT_TTL = StepUpRequirement::DEFAULT_TTL
-  DEFAULT_REQUIRED_AAL = StepUpRequirement::DEFAULT_AAL
+  # Consolidation ADR 2.3: the longest Step-Up validity and the accepted methods per Security Mode.
+  NORMAL_MAXIMUM_TTL = 15.minutes
+  ADVANCED_MAXIMUM_TTL = 5.minutes
+  ADVANCED_METHODS = %w(passkey).freeze
 
-  def self.call(token:, scope: nil, required_aal: DEFAULT_REQUIRED_AAL, allowed_methods: nil,
-                session_binding: nil, token_binding: nil, requirement: nil,
-                now: Time.current, ttl: DEFAULT_TTL, require_session_binding: false)
-    requirement =
-      if requirement
-        StepUpRequirement.build(requirement)
-      else
-        StepUpRequirement.build(
-          scope,
-          required_aal: required_aal,
-          allowed_methods: allowed_methods || StepUpRequirement::DEFAULT_ALLOWED_METHODS,
-          session_binding: session_binding,
-          token_binding: token_binding,
-          ttl: ttl,
-          require_session_binding: require_session_binding,
-        )
-      end
+  def self.call(token:, requirement: nil, scope: nil, allowed_methods: nil,
+                session_binding: nil, token_binding: nil, now: Time.current, ttl: DEFAULT_TTL,
+                require_session_binding: true, phishing_resistant_required: false,
+                user_verification_required: false, full_reauthentication_required: false,
+                purpose: "step_up", audience: "step_up:resolver", actor_ref: "resolver",
+                resource_ref: nil, tenant_ref: nil, step_up_required: true,
+                # @deprecated Legacy AAL demands are refused and never authorize a result.
+                required_aal: nil)
+    unless required_aal.blank? || required_aal.to_s == StepUpRequirement::NO_AAL
+      raise StepUpRequirement::Invalid, "legacy AAL requirements are unsupported"
+    end
+
+    raise AccessOpDataUnavailableError if token.present?
+
+    requirement ||= StepUpRequirement.new(
+      step_up_required: step_up_required,
+      scope: scope,
+      allowed_methods: allowed_methods || StepUpRequirement::DEFAULT_ALLOWED_METHODS,
+      phishing_resistant_required: phishing_resistant_required,
+      user_verification_required: user_verification_required,
+      full_reauthentication_required: full_reauthentication_required,
+      session_binding: session_binding || token&.public_id,
+      token_binding: token_binding || token&.public_id,
+      ttl: ttl,
+      purpose: purpose,
+      audience: audience,
+      require_session_binding: require_session_binding,
+      actor_ref: actor_ref,
+      resource_ref: resource_ref,
+      tenant_ref: tenant_ref,
+    )
+    requirement = StepUpRequirement.build(requirement)
     new(token: token, requirement: requirement, now: now).call
   end
+  public_class_method :call
 
   def initialize(token:, requirement:, now:)
     @token = token
@@ -31,114 +50,34 @@ class StepUpResolver
     @now = now
   end
 
+  public
   def call
+    raise AccessOpDataUnavailableError if token.present?
+
     Actor::StepUp.new(
       scope: requirement.scope,
-      required_aal: requirement.required_aal,
+      required_aal: nil,
       allowed_methods: requirement.allowed_methods,
-      satisfied: satisfied?,
-      satisfied_at: satisfied_at,
-      expires_at: expires_at,
-      usable_token: usable_token?,
-      method: step_up_method,
-      session_bound: session_bound?,
-      token_bound: token_bound?,
+      satisfied: !requirement.step_up_required?,
+      satisfied_at: nil,
+      expires_at: nil,
+      usable_token: false,
+      method: nil,
+      session_bound: !requirement.require_session_binding && requirement.session_binding.blank?,
+      token_bound: false,
       purpose: requirement.purpose,
       audience: requirement.audience,
-      purpose_bound: purpose_bound?,
-      audience_bound: audience_bound?,
+      purpose_bound: requirement.purpose.blank?,
+      audience_bound: requirement.audience.blank?,
+      phishing_resistant_required: requirement.phishing_resistant_required?,
+      user_verification_required: requirement.user_verification_required?,
+      full_reauthentication_required: requirement.full_reauthentication_required?,
+      resource_bound: requirement.resource_ref.blank?,
+      tenant_bound: requirement.tenant_ref.blank?,
     )
   end
 
   private
 
-  attr_reader :token, :requirement, :now
-
-  def satisfied?
-    return true unless requirement.step_up_required?
-
-    usable_token? &&
-      requirement.aal_supported? &&
-      satisfied_at.present? &&
-      expires_at.present? &&
-      expires_at > now &&
-      scope_matches? &&
-      aal_matches? &&
-      method_matches? &&
-      session_bound? &&
-      token_bound? &&
-      purpose_bound? &&
-      audience_bound?
-  end
-
-  def usable_token?
-    token.present? && token.currently_usable?
-  end
-
-  def satisfied_at
-    token&.last_step_up_at
-  end
-
-  def expires_at
-    satisfied_at + requirement.ttl if satisfied_at.present?
-  end
-
-  def scope_matches?
-    requirement.scope.present? && token.last_step_up_scope == requirement.scope
-  end
-
-  def aal_matches?
-    return true unless requirement.aal_required?
-
-    token_value = token_attribute(:last_step_up_aal)
-    return !requirement.aal_required? if token_value.blank?
-
-    token_value.to_s == requirement.required_aal.to_s
-  end
-
-  def method_matches?
-    requirement.method_allowed?(step_up_method)
-  end
-
-  def step_up_method
-    token_attribute(:last_step_up_method)
-  end
-
-  def session_bound?
-    expected = requirement.session_binding
-    return false if requirement.require_session_binding && expected.blank?
-    return true if expected.blank?
-
-    recorded = token_attribute(:last_step_up_session_public_id)
-    recorded.present? && ActiveSupport::SecurityUtils.secure_compare(recorded.to_s, expected.to_s)
-  end
-
-  def token_bound?
-    expected = requirement.token_binding
-    return true if expected.blank?
-
-    token.public_id.present? && ActiveSupport::SecurityUtils.secure_compare(token.public_id.to_s, expected.to_s)
-  end
-
-  def purpose_bound?
-    expected = requirement.purpose
-    return true if expected.blank?
-
-    recorded = token_attribute(:last_step_up_purpose)
-    recorded.present? && ActiveSupport::SecurityUtils.secure_compare(recorded.to_s, expected.to_s)
-  end
-
-  def audience_bound?
-    expected = requirement.audience
-    return true if expected.blank?
-
-    recorded = token_attribute(:last_step_up_audience)
-    recorded.present? && ActiveSupport::SecurityUtils.secure_compare(recorded.to_s, expected.to_s)
-  end
-
-  def token_attribute(name)
-    return unless token&.respond_to?(:has_attribute?) && token.has_attribute?(name.to_s)
-
-    token.public_send(name)
-  end
+  attr_reader :token, :requirement
 end

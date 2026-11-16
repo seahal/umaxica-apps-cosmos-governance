@@ -4,15 +4,7 @@
 module HasBirthdate
   extend ActiveSupport::Concern
 
-  included do
-    encrypts :birthdate
-
-    validates :birthdate, length: { maximum: 10 }, allow_blank: true
-
-    validate :birthdate_format
-    validate :birthdate_not_future
-  end
-
+  public
   def parsed_birthdate
     return nil if birthdate.blank?
 
@@ -35,7 +27,7 @@ module HasBirthdate
     return nil unless bday
 
     age = date.year - bday.year
-    before_birthday = ([date.month, date.day] <=> [bday.month, bday.day]).negative?
+    before_birthday = date < bday.advance(years: age)
 
     before_birthday ? age - 1 : age
   end

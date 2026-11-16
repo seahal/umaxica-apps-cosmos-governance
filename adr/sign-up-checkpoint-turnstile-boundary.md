@@ -4,6 +4,12 @@ Status: Accepted
 
 Date: 2026-05-21
 
+> **Pending split amendment (proposed 2026-11-14):** The checkpoint routes and the Turnstile at
+> ingress belong to Access. The
+> [split amendment](sign-up-finalization-in-auth.md#cosmos-split-amendment-governance-owned-pending-registration-2026-11-14)
+> keeps this ADR's rule that later steps need valid sequence authority, as Governance ingress:
+> signature, single-use `jti`, the registration cookie and the Access ceremony reference.
+
 ## Context
 
 The sign-up surfaces use Cloudflare Turnstile at external entry points where an anonymous browser

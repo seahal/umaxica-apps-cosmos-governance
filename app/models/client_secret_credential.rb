@@ -1,184 +1,308 @@
-# typed: false
 # frozen_string_literal: true
 
-# == Schema Information
-#
-# Table name: client_secret_credentials
-# Database name: app_principal
-#
-#  id                             :bigint           not null, primary key
-#  consumed_at                    :datetime
-#  delivery_method                :string
-#  discarded_at                   :datetime         default(Infinity), not null
-#  failure_count                  :integer          default(0), not null
-#  issued_at                      :datetime
-#  issued_by_ref                  :string
-#  issued_by_type                 :string
-#  last_failed_at                 :datetime
-#  last_used_at                   :datetime
-#  locked_at                      :datetime
-#  lookup_digest                  :string
-#  max_failures                   :integer
-#  max_uses                       :integer
-#  name                           :string           default(""), not null
-#  not_before_at                  :datetime
-#  password_digest                :string           default(""), not null
-#  purged_at                      :datetime         default(Infinity), not null
-#  revoked_at                     :datetime
-#  safe_prefix                    :string
-#  scope                          :string
-#  secret_kind                    :string
-#  usage_policy                   :string
-#  use_count                      :integer          default(0), not null
-#  uses_remaining                 :integer          default(1), not null
-#  created_at                     :datetime         not null
-#  updated_at                     :datetime         not null
-#  issued_by_id                   :bigint
-#  public_id                      :string(21)       not null
-#  user_id                        :bigint           not null
-#  user_identity_secret_status_id :bigint           default(1), not null
-#  user_secret_kind_id            :bigint           default(1), not null
-#
-# Indexes
-#
-#  idx_on_user_identity_secret_status_id_178d36c039        (user_identity_secret_status_id)
-#  index_client_secret_credentials_on_lookup_digest        (lookup_digest)
-#  index_client_secret_credentials_on_public_id            (public_id) UNIQUE
-#  index_client_secret_credentials_on_user_id              (user_id)
-#  index_client_secret_credentials_on_user_secret_kind_id  (user_secret_kind_id)
-#
-# Foreign Keys
-#
-#  fk_rails_...  (user_id => clients.id)
-#  fk_rails_...  (user_identity_secret_status_id => client_secret_credential_statuses.id)
-#  fk_rails_...  (user_secret_kind_id => client_secret_credential_kinds.id)
-#
+class ClientSecretCredential < AppZenithRecord
+  include PublicId
 
-class ClientSecretCredential < AppPrincipalRecord
+  before_validation :generate_public_id, on: :create
+  before_validation :refresh_generated_public_id_after_collision, on: :create
+  before_create :generate_public_id
+  around_create :retry_public_id_collision
+  validate :public_id_immutable_after_create, on: :update
+  validates :public_id, presence: true, length: { is: PublicId::GENERATION_SIZE }, uniqueness: true
   include Retainable
 
-  alias_attribute :user_secret_status_id, :user_identity_secret_status_id
-  include ::PublicId
-  include ::SecretCredential
-  include ClientSecretCredentialKinds
+  attribute :discard_at, :datetime, default: -> { Retainable::SENTINEL }
+  attribute :purge_eligible_at, :datetime, default: -> { Retainable::SENTINEL }
+  validates :discard_at, presence: true
+  validates :purge_eligible_at, presence: true
+  validate :retention_order_valid
+  validate :retention_times_not_before_created_at, on: :update
+  Retainable.register_host(self)
 
-  MAX_SECRETS_PER_USER = 20
-  SIGN_IN_ALLOWED_STATUS_IDS = [ClientSecretCredentialStatus::ACTIVE].freeze
-  SIGN_IN_ALLOWED_KIND_IDS = ClientSecretCredentialKind::ALLOWED_FOR_SECRET_SIGN_IN
-  attr_accessor :raw_secret_credential
+  MAX_PER_CLIENT = 20
+  SECRET_FORMAT = /\A[1-9A-HJ-NP-Za-km-z]{32}\z/
 
-  attribute :user_identity_secret_status_id, default: ClientSecretCredentialStatus::ACTIVE
-  attribute :user_secret_kind_id, default: ClientSecretCredentialKind::LOGIN
+  class InvalidTransition < StandardError; end
 
-  belongs_to :user, class_name: "Client", inverse_of: :client_secret_credentials
-  belongs_to :user_secret_credential_status, class_name: "ClientSecretCredentialStatus",
-                                             inverse_of: :client_secret_credentials,
-                                             foreign_key: :user_identity_secret_status_id
-  belongs_to :user_secret_credential_kind, class_name: "ClientSecretCredentialKind",
-                                           inverse_of: :client_secret_credentials,
-                                           foreign_key: :user_secret_kind_id
+  has_secure_password algorithm: :argon2, validations: false
 
-  validates :name, length: { maximum: 255 }
+  belongs_to :client, inverse_of: :client_secret_credentials
+  belongs_to :issuance, class_name: "ClientSecretIssuance", inverse_of: :credentials
+
+  attr_readonly :public_id, :client_id, :issuance_id, :password_digest
+
+  validates :name, presence: true, length: { maximum: 255 }
   validates :password_digest, presence: true, length: { maximum: 255 }
+  validates :password, format: { with: SECRET_FORMAT }, allow_nil: true
+  validate :persisted_revocation_is_immutable, on: :update
+  validate :revocation_has_source_audit, on: :update
+  validate :terminal_issuance_cannot_confirm_candidate
+  validate :confirmation_has_source_audit, on: :update
+  validate :persisted_confirmation_is_immutable, on: :update
+  validates :claim_operation_id, :claim_sign_in_flow_ref, uniqueness: true, allow_nil: true
+  validates :claim_sign_in_flow_ref, length: { maximum: 21 }
 
-  validates_with AssociatedRecordLimitValidator,
-                 on: :create,
-                 owner: :user,
-                 association: :client_secret_credentials,
-                 foreign_key: :user_id,
-                 limit: :MAX_SECRETS_PER_USER,
-                 record_name: "secret_credentials",
-                 owner_name: "user"
-  validates_with RecoveryIdentityRequiredValidator,
-                 on: :create,
-                 owner: :user,
-                 message: Client::RECOVERY_IDENTITY_REQUIRED_MESSAGE
-
-  scope :allowed_for_secret_credential_sign_in, lambda {
-    where(
-      user_identity_secret_status_id: SIGN_IN_ALLOWED_STATUS_IDS,
-      user_secret_kind_id: SIGN_IN_ALLOWED_KIND_IDS,
-    )
+  scope :available_at, ->(at) {
+    where.not(confirmed_at: nil).where(claimed_at: nil, claim_operation_id: nil, revoked_at: nil)
+      .where("discard_at > ?", at)
   }
 
-  def self.identity_secret_credential_status_class
-    ClientSecretCredentialStatus
+  public
+
+  # confirmed_at needs a validated transition, so fixed Rails writer guards
+  # protect ordinary assignments instead of excluding the column from every save.
+  def write_attribute(name, value)
+    verify_lifecycle_assignment!(name)
+    super
   end
 
-  def self.identity_secret_credential_status_id_column
-    :user_identity_secret_status_id
+  def _write_attribute(name, value)
+    verify_lifecycle_assignment!(name)
+    super
   end
 
-  def self.generate_raw_secret_credential(length: SECRET_PASSWORD_LENGTH)
-    SecureRandom.base58(length)
+  # Rails' generated attribute writers no longer pass through _write_attribute, so each lifecycle
+  # fact also guards its own writer. revoked_at keeps its explicit writer below.
+  %w(claimed_at claim_operation_id claim_sign_in_flow_ref claim_ceremony_session_id consumed_at confirmed_at
+     discard_at).each do |fact|
+    define_method(:"#{fact}=") do |value|
+      verify_lifecycle_assignment!(fact)
+      super(value)
+    end
   end
 
-  # Alias for password to match controller params
-  def value=(val)
-    self.password = val
-  end
-
-  def value
-    password
-  end
-
-  def enabled?
-    active?
-  end
-
-  def usable_for_secret_credential_sign_in?(now: Time.current)
-    return false unless sign_in_status_allowed?
-    return false unless sign_in_kind_allowed?
-    return false if expired_for_secret_credential_sign_in?(now)
-    return true if permanent_secret_credential?
-
-    Integer(uses_remaining.to_s, 10).positive?
-  end
-
-  def verify_for_secret_credential_sign_in!(raw_secret_credential, now: Time.current)
-    with_lock do
-      reload
-
-      auth_result = authenticate(raw_secret_credential)
-      return false unless sign_in_status_allowed?
-      return false unless sign_in_kind_allowed?
-      return false if expired_for_secret_credential_sign_in?(now)
-      return false unless auth_result
-
-      self.last_used_at = now
-      if one_time_secret_credential?
-        return false unless Integer(uses_remaining.to_s, 10).positive?
-
-        self.uses_remaining -= 1
-        self[self.class.identity_secret_credential_status_id_column] =
-          self.class.status_id_for(:used) if uses_remaining.zero?
-      end
-
-      save!
+  def commit_storage_confirmation!(actor_context:, at:)
+    owned_issuance = ClientSecretIssuance.find_by(id: issuance_id, client_id: client_id)
+    unless (at.is_a?(Time) || at.is_a?(ActiveSupport::TimeWithZone)) &&
+        self.class.lease_connection.transaction_open?
+      raise InvalidTransition, "Secret confirmation requires its source transaction and timestamp"
     end
 
-    true
+    unless storage_confirmation_context_matches?(actor_context) && confirmed_at.nil? &&
+        claimed_at.nil? && claim_operation_id.nil? && revoked_at.nil? &&
+        created_at <= at && accessible?(at) && owned_issuance&.confirmed_at == at &&
+        storage_confirmation_source_recorded?(at, issuance: owned_issuance)
+      raise InvalidTransition, "Secret confirmation requires its owning storage declaration"
+    end
+
+    @storage_confirmation_write = true
+    self.confirmed_at = at
+    save!
+    self
+  ensure
+    @storage_confirmation_write = false
   end
 
-  def to_param
-    public_id
+  # Generic attribute assignment cannot write a persisted lifecycle fact.
+  # The dedicated transition below validates and commits it with source audit.
+  def revoked_at=(value)
+    raise ActiveRecord::ReadonlyAttributeError, "revoked_at" if persisted?
+
+    super
+  end
+
+  def commit_management_revocation!(actor_context:, at:, purge_at:)
+    unless persisted? && actor_context.is_a?(ActorValuesContext) && actor_context.client? &&
+        actor_context.tld == :app && actor_context.surface == :base &&
+        actor_context.subject.is_a?(Client) && actor_context.subject.id == client_id
+      raise InvalidTransition, "Secret revocation requires its owning Base app Client"
+    end
+    unless (at.is_a?(Time) || at.is_a?(ActiveSupport::TimeWithZone)) &&
+        (purge_at.is_a?(Time) || purge_at.is_a?(ActiveSupport::TimeWithZone)) && purge_at > at
+      raise InvalidTransition, "Secret revocation requires ordered finite timestamps"
+    end
+
+    AppZenithRecord.connected_to(role: :writing) do
+      actor_context.subject.with_lock(requires_new: true) do
+        with_lock do
+          unless available_at?(at: at) && created_at <= at &&
+              AuthMethodGuard.can_remove_secret_credential?(actor_context.subject, self)
+            raise InvalidTransition, "Secret is unavailable for management revocation"
+          end
+
+          @management_revocation_write = true
+          self[:revoked_at] = at
+          self.discard_at = at
+          self.purge_eligible_at = purge_at
+          operation_ref = SecureRandom.uuid
+          %w(secret.revoked secret.discarded).each do |event_name|
+            ClientSecretAuditOutbox.record!(
+              actor_context: actor_context, client_ref: actor_context.subject.public_id,
+              credential_ref: public_id, operation_ref: operation_ref, occurred_at: at,
+              event_name: event_name, reason: "user_revocation",
+            )
+          end
+          save!
+        end
+      end
+    end
+    self
+  ensure
+    @management_revocation_write = false
+  end
+
+  # Account termination owns this transition; it is not a management Step-Up.
+  # Claimed credentials keep their continuation evidence until Ticket reconciliation.
+  def commit_withdrawal_revocation!(at:, purge_at:)
+    unless (at.is_a?(Time) || at.is_a?(ActiveSupport::TimeWithZone)) &&
+        (purge_at.is_a?(Time) || purge_at.is_a?(ActiveSupport::TimeWithZone)) && purge_at > at
+      raise InvalidTransition, "Secret withdrawal requires ordered retention timestamps"
+    end
+
+    AppZenithRecord.connected_to(role: :writing) do
+      actor = Client.find(client_id)
+      actor.with_lock do
+        raise InvalidTransition, "Secret withdrawal requires a terminated Client" unless actor.terminated?
+
+        with_lock do
+          return self if revoked_at || discard_at != Float::INFINITY
+
+          @management_revocation_write = true
+          self[:revoked_at] = at
+          events = ["secret.revoked"]
+          unless claimed_at
+            self.discard_at = at
+            self.purge_eligible_at = purge_at
+            events << "secret.discarded"
+          end
+          context = ActorValuesContext.empty.with(subject: actor, actor_type: :client, tld: :app, surface: :base)
+          operation_ref = SecureRandom.uuid
+          events.each do |event_name|
+            ClientSecretAuditOutbox.record!(
+              actor_context: context, client_ref: actor.public_id, credential_ref: public_id,
+              operation_ref: operation_ref, occurred_at: at, event_name: event_name, reason: "withdrawal",
+            )
+          end
+          save!
+        end
+      end
+    end
+    self
+  ensure
+    @management_revocation_write = false
+  end
+
+  def available_at?(at:)
+    confirmed_at.present? && claimed_at.nil? && claim_operation_id.nil? &&
+      revoked_at.nil? && accessible?(at)
+  end
+
+  def matches_secret?(raw)
+    return false unless raw.is_a?(String) && raw.valid_encoding? && raw.ascii_only? && SECRET_FORMAT.match?(raw)
+
+    password_digest.present? && authenticate(raw).present?
   end
 
   private
 
-  def sign_in_status_allowed?
-    SIGN_IN_ALLOWED_STATUS_IDS.include?(user_secret_status_id)
+  def storage_confirmation_context_matches?(context)
+    owned_issuance = ClientSecretIssuance.find_by(id: issuance_id, client_id: client_id)
+    persisted? && context.is_a?(ActorValuesContext) && context.client? &&
+      context.tld == :app &&
+      (context.surface == :base || (context.surface == :sign && owned_issuance&.sign_up_flow_ref.present?)) &&
+      context.subject.is_a?(Client) &&
+      context.subject.id == client_id
   end
 
-  def sign_in_kind_allowed?
-    SIGN_IN_ALLOWED_KIND_IDS.include?(user_secret_kind_id)
+  def verify_lifecycle_assignment!(name)
+    return unless persisted?
+
+    attribute = name.to_s
+    if %w(claimed_at claim_operation_id claim_sign_in_flow_ref claim_ceremony_session_id consumed_at)
+        .include?(attribute)
+      raise ActiveRecord::ReadonlyAttributeError, attribute
+    end
+    if attribute == "confirmed_at" && !@storage_confirmation_write
+      raise ActiveRecord::ReadonlyAttributeError, "confirmed_at"
+    end
+    if attribute == "discard_at" && discard_at_in_database != Float::INFINITY
+      raise ActiveRecord::ReadonlyAttributeError, "discard_at"
+    end
+    return unless attribute == "revoked_at" && !@management_revocation_write
+
+    raise ActiveRecord::ReadonlyAttributeError, "revoked_at"
   end
 
-  # Secret sign-in keeps expiry inclusive: now <= expires_at is valid.
-  def expired_for_secret_credential_sign_in?(now)
-    return false if discarded_at.nil?
-    return false if discarded_at.respond_to?(:infinite?) && discarded_at.infinite?
+  # Rails uses this hook for update_columns and touch; those APIs never perform
+  # a source-audited, validated lifecycle transition.
+  def verify_readonly_attribute(name)
+    if %w(confirmed_at revoked_at claimed_at claim_operation_id claim_sign_in_flow_ref claim_ceremony_session_id
+          consumed_at).include?(name.to_s)
+      raise ActiveRecord::ReadonlyAttributeError, name.to_s
+    end
+    # A finite discard timestamp is an irreversible credential fact. Retention
+    # updates and name changes cannot turn it back into an available Secret.
+    if name.to_s == "discard_at" && discard_at_in_database != Float::INFINITY
+      raise ActiveRecord::ReadonlyAttributeError, "discard_at"
+    end
 
-    now > discarded_at
+    super
+  end
+
+  def persisted_confirmation_is_immutable
+    return unless confirmed_at_in_database && will_save_change_to_confirmed_at?
+
+    errors.add(:confirmed_at, "cannot change a terminal storage declaration fact")
+  end
+
+  def confirmation_has_source_audit
+    return unless confirmed_at && confirmed_at_in_database.nil? && will_save_change_to_confirmed_at?
+
+    owned_issuance = ClientSecretIssuance.find_by(id: issuance_id, client_id: client_id)
+    return if owned_issuance&.confirmed_at == confirmed_at &&
+      storage_confirmation_source_recorded?(confirmed_at, issuance: owned_issuance)
+
+    errors.add(:confirmed_at, "requires its matching source audit and storage declaration")
+  end
+
+  def storage_confirmation_source_recorded?(at, issuance: nil)
+    issuance ||= ClientSecretIssuance.find_by(id: issuance_id, client_id: client_id)
+    client_ref = Client.where(id: client_id).pick(:public_id)
+    return false unless issuance && client_ref
+
+    created = ClientSecretAuditOutbox.exists?(
+      client_ref: client_ref, credential_ref: public_id, operation_ref: issuance.origin_operation_id,
+      event_name: "secret.created", occurred_at: at,
+      actor_type: "Client", actor_id: client_id, actor_public_ref: client_ref,
+    )
+    created && ClientSecretAuditOutbox.exists?(
+      client_ref: client_ref, credential_ref: nil, operation_ref: issuance.origin_operation_id,
+      event_name: "secret.storage_declared", occurred_at: at, item_count: issuance.planned_count,
+      actor_type: "Client", actor_id: client_id, actor_public_ref: client_ref,
+    )
+  end
+
+  def terminal_issuance_cannot_confirm_candidate
+    return unless confirmed_at
+
+    owned_issuance = ClientSecretIssuance.find_by(id: issuance_id, client_id: client_id)
+    return unless owned_issuance && (owned_issuance.canceled_at || owned_issuance.planned_count.zero?)
+
+    errors.add(:issuance, "canceled or omitted issuance cannot confirm a candidate")
+  end
+
+  def persisted_revocation_is_immutable
+    return unless revoked_at_in_database && will_save_change_to_revoked_at?
+
+    errors.add(:revoked_at, "cannot change a terminal revocation fact")
+  end
+
+  # Source events are a persistence prerequisite, not session authorization.
+  # Only the management operation verifies the current browser and Step-Up.
+  def revocation_has_source_audit
+    return unless revoked_at && revoked_at_in_database.nil? && will_save_change_to_revoked_at?
+
+    client = Client.find_by(id: client_id)
+    return errors.add(:revoked_at, "requires its matching source audit transaction") unless client
+
+    events = ClientSecretAuditOutbox.where(
+      credential_ref: public_id, client_ref: client.public_id, actor_type: "Client", actor_id: client_id,
+      actor_public_ref: client.public_id, occurred_at: revoked_at, reason: %w(user_revocation withdrawal),
+      event_name: %w(secret.revoked secret.discarded),
+    )
+    return if events.group(:operation_ref).having("COUNT(DISTINCT event_name) = 2").exists?
+    return if claimed_at && client.terminated? && events.exists?(event_name: "secret.revoked", reason: "withdrawal")
+
+    errors.add(:revoked_at, "requires its matching source audit transaction")
   end
 end

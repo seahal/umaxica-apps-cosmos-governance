@@ -36,19 +36,33 @@ class IdentityEmailTest < ActiveSupport::TestCase
       assert_not record.valid?
     end
 
-    test "#{model} enforces case-insensitive uniqueness" do
-      record = model.new(address: "eg@example.com", confirm_policy: true)
-      assign_owner(record)
-      record.save!
+    test "#{model} enforces case-insensitive uniqueness of the effective ownership binding" do
+      if model == ClientEmail
+        owner = Client.create!(security_mode_id: SecurityModeConfigurable::NORMAL)
+        record = ClientEmail.create!(user: owner, address: "eg@example.com", confirm_policy: true)
+        record.tap { |binding_record| binding_record.update!(binding_finalized_at: Time.current) }
+        ["eg@example.com", "EG@EXAMPLE.COM"].each do |address|
+          candidate = ClientEmail.create!(user: owner, address: address, confirm_policy: true)
+          assert_raises(ActiveRecord::RecordNotUnique) do
+            ClientEmail.transaction(requires_new: true) {
+              candidate.tap { |contact|
+                contact.update_columns(binding_finalized_at: Time.current)
+              }
+            }
+          end
+          assert_not_predicate candidate.reload, :binding_effective?
+        end
+      else
+        record = model.new(address: "eg@example.com", confirm_policy: true)
+        assign_owner(record)
+        record.save!
+        ["eg@example.com", "EG@EXAMPLE.COM"].each do |address|
+          duplicate = model.new(address: address, confirm_policy: true)
+          assign_owner(duplicate)
 
-      same_case = model.new(address: "eg@example.com", confirm_policy: true)
-      assign_owner(same_case)
-
-      upper_case = model.new(address: "EG@EXAMPLE.COM", confirm_policy: true)
-      assign_owner(upper_case)
-
-      assert_not same_case.valid?
-      assert_not upper_case.valid?
+          assert_not_predicate duplicate, :valid?
+        end
+      end
     end
 
     test "#{model} downcases address on save" do
@@ -93,7 +107,7 @@ class IdentityEmailTest < ActiveSupport::TestCase
   def assign_owner(record)
     case record
     when ClientEmail
-      record.user = Client.find_by!(public_id: "none_id")
+      record.user = Client.find_by!(public_id: "none_idxxxxxxxxxxxxxx")
     when OperatorEmail
       record.staff = Operator.find_by!(public_id: "CDEF2345GHJK67NM")
     end

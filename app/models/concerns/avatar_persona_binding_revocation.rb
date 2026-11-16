@@ -6,6 +6,7 @@ module AvatarPersonaBindingRevocation
 
   class RevocationDenied < StandardError; end
 
+  public
   def active?
     revoked_at.nil?
   end

@@ -2,6 +2,11 @@
 
 **Status:** Accepted (2026-05-05); temporary Google exception withdrawn on 2026-06-02
 
+> **Local-route disposition (2026-11-10):** The owner-approved local-surface hard reset removes the
+> local Auth/COM sign-in and sign-up routes/controllers. The local route-specific decision below no
+> longer describes a served Rails surface. This note does not change any external identity or
+> provider contract, and it does not authorize retaining COM Auth/Visa host handling here.
+
 ## Context
 
 The IdP runs three host scopes: `app` (`id.umaxica.app`, service users), `com` (`id.umaxica.com`,

@@ -2,8 +2,8 @@
 
 ## Overview
 
-This application implements authorization with **Action Policy** through the `action_policy` gem.
-It does not use Pundit.
+This application implements authorization with **Action Policy** through the `action_policy` gem. It
+does not use Pundit.
 
 Core rules:
 
@@ -11,7 +11,8 @@ Core rules:
   it with `authorize :actor, through: :current_actor`.
 - Every policy inherits from `ApplicationPolicy < ActionPolicy::Base` and defaults to deny-all. An
   action is forbidden unless its predicate explicitly returns true.
-- `ApplicationPolicy` provides ownership, role, JWT scope, and app/org/com surface helpers.
+- `ApplicationPolicy` provides ownership, role and JWT scope helpers for the app and org actor
+  types. The anonymous `com` surface binds no policy actor and authorizes no credential action.
 
 Related implementation:
 
@@ -37,8 +38,8 @@ class ApplicationPolicy < ActionPolicy::Base
 end
 ```
 
-Each surface ApplicationController supplies the actor, for example in
-`app/controllers/core/app/application_controller.rb`:
+The Base app ApplicationController supplies the actor, for example in
+`app/controllers/base/app/application_controller.rb`:
 
 ```ruby
 authorize :actor, through: :current_actor
@@ -48,69 +49,54 @@ authorize :actor, through: :current_actor
 `app/controllers/concerns/actor_support.rb`. Within a policy:
 
 - `actor` is the `Actor::Context`.
-- `user` is the concrete Client, Operator, or Visitor derived from the actor, or nil when anonymous.
+- `user` is the concrete Client or Operator derived from the actor, or nil when anonymous.
 - `record` is the resource being authorized.
 
 ## ApplicationPolicy Helpers
 
 `app/policies/application_policy.rb` provides these policy helpers:
 
-| Method | Meaning |
-|---|---|
-| `actor` / `user` | Authorization context and derived concrete resource |
-| `record` | Resource being authorized |
-| `owner?` | Whether `user` owns `record`, using Client `user_id`, Operator `staff_id`, Visitor `visitor_id`, or resource identity |
-| `operator?` / `manager?` / `editor?` / `contributor?` / `viewer?` | Organization-scoped role checks |
-| `operator_or_manager?` / `can_edit?` / `can_view?` / `can_contribute?` | Composite role checks |
-| `has_scope?(scope)` | JWT scope check based on the current token's `scp` claim |
-| `domain_app?` / `domain_org?` / `domain_com?` / `domain_permitted?(*domains)` | Surface checks based on the JWT `aud` claim |
-| `current_token` | `Actor.authz.token_claims` |
+| Method                                                                               | Meaning                                                                                                                                                                                                     |
+| ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `actor` / `user`                                                                     | Authorization context and derived concrete resource                                                                                                                                                         |
+| `record`                                                                             | Resource being authorized                                                                                                                                                                                   |
+| `owner?`                                                                             | Whether `user` owns `record`, using Client `user_id`, Operator `staff_id`, or matching Client/Operator resource identity                                                                                    |
+| `operator_capability?(capability)`                                                   | Whether `user` is an Operator holding the given `OperatorCapabilityGrant` capability in force                                                                                                               |
+| `operator?` / `operator_or_manager?` / `can_edit?` / `can_view?` / `can_contribute?` | Legacy role helpers retained for historical callers. Current actor models do not define their delegated role API; current policies must use explicit owner checks or the accepted capability grants instead |
+| `authentication_context`                                                             | Authentication context (normal, emergency) read from the signed access token; drives the capability pre-check                                                                                               |
+| `current_token`                                                                      | `Actor.authz.token_claims`                                                                                                                                                                                  |
 
 The default `index?`, `show?`, `create?`, `update?`, and `destroy?` predicates all return false.
 `alias_rule` maps `edit?` to `update?` and `new?` to `create?`.
 
 ## Implementing a Policy
 
-Example from `app/policies/client_policy.rb`:
+`ClientPolicy` is the app-surface self-service policy. It permits a Client to read or update only
+their own Client record. It denies listing, registration, deletion, and every Operator actor.
+Registration has a separate flow, withdrawal uses `ClientWithdrawalPolicy`, and org support uses
+`SupportClientPolicy` with its explicit capability grants.
 
 ```ruby
 class ClientPolicy < ApplicationPolicy
-  def index?
-    user.is_a?(Operator) && operator_or_manager?
-  end
+  def index? = false
 
-  def show?
-    owner? || (user.is_a?(Operator) && operator_or_manager?)
-  end
+  def show? = user.is_a?(Client) && owner?
 
-  def create?
-    user.is_a?(Operator) && operator?
-  end
+  def create? = false
 
-  def update?
-    owner? || (user.is_a?(Operator) && operator_or_manager?)
-  end
+  def update? = user.is_a?(Client) && owner?
 
-  def destroy?
-    (owner? && user.is_a?(Client)) || (user.is_a?(Operator) && operator?)
-  end
+  def destroy? = false
 
-  # Define list filtering with relation_scope.
   relation_scope do |relation|
-    if user.is_a?(Operator) && operator_or_manager?
-      relation.all
-    elsif user.is_a?(Client)
-      relation.where(id: user.id)
-    else
-      relation.none
-    end
+    user.is_a?(Client) ? relation.where(id: user.id) : relation.none
   end
 end
 ```
 
 Important points:
 
-- Branch explicitly on the Client, Operator, or Visitor actor type.
+- Branch explicitly on the Client or Operator actor type.
 - Check ownership explicitly with `owner?`.
 - Define scopes with Action Policy's `relation_scope`, not a Pundit `Scope` class.
 
@@ -122,27 +108,26 @@ Call `authorize!(record, to: :action?)`. Because a `before_action` cannot pass t
 directly, this application conventionally registers a named wrapper method:
 
 ```ruby
-class Sign::App::Settings::SessionsController < ...
-  before_action :authorize_sessions!, only: %i(index)
+class Base::App::Identity::EmailsController < ...
+  before_action :authorize_emails!, only: :index
 
   private
 
-  def authorize_sessions!
-    authorize!(ClientToken, to: :index?)
+  def authorize_emails!
+    authorize!(ClientEmail, to: :index?)
   end
 end
 ```
 
-A concrete record may also be passed directly, such as
-`authorize!(current_client, to: :show?)`.
+A concrete record may also be passed directly, such as `authorize!(current_client, to: :show?)`.
 
 ### Applying a Scope
 
 Use `authorized_scope` to apply `relation_scope` to a collection. For example,
-`app/controllers/sign/app/settings/passkeys_controller.rb` uses:
+`app/controllers/base/app/groups_controller.rb` uses:
 
 ```ruby
-@passkeys = authorized_scope(current_client.client_passkeys).order(created_at: :desc)
+groups = authorized_scope(AvatarGroup.all).order(:created_at, :id)
 ```
 
 ## Authorization Failure Behavior
@@ -174,12 +159,12 @@ denied cases, anonymous actors, another user, another staff member, and each rel
 require "test_helper"
 
 class ClientPolicyTest < ActiveSupport::TestCase
-  test "operator manager can view the client list" do
-    assert_predicate ClientPolicy.new(record, actor: operator_manager_context), :index?
+  test "a Client can update its own record" do
+    assert ClientPolicy.new(client, user: client).apply(:update?)
   end
 
-  test "anonymous actor cannot view the client list" do
-    assert_not_predicate ClientPolicy.new(record, actor: anonymous_context), :index?
+  test "an Operator cannot use the app self-service policy" do
+    assert_not ClientPolicy.new(client, user: operator).apply(:update?)
   end
 end
 ```

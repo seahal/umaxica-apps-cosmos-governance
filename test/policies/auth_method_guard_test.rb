@@ -1,217 +1,128 @@
-# typed: false
 # frozen_string_literal: true
 
 require "test_helper"
-require "support/external_identity_test_helper"
-# require "helpers/global_test_support"
 
 class AuthMethodGuardTest < ActiveSupport::TestCase
-  include ExternalIdentityTestHelper
+  fixtures :client_email_statuses, :client_telephone_statuses, :client_totp_credential_statuses,
+           :operator_passkey_statuses
 
-  fixtures :clients
-
-  setup do
-    @user = clients(:one)
-    @user.client_external_identities.delete_all
-    ClientEmail.where(user: @user).delete_all
-    ClientTelephone.where(user: @user).delete_all
-    ClientSecretCredential.where(user: @user).delete_all
-    ClientPasskey.where(user: @user).delete_all
-    ClientTotpCredential.where(user: @user).delete_all
-  end
-
-  test "remaining_count returns 0 for user with no methods" do
-    user = @user
-
-    assert_equal 0, AuthMethodGuard.remaining_count(user)
-  end
-
-  test "remaining_count includes active Google identity" do
-    user = @user
-
-    create_active_external_identity(client: user, provider: "google")
-
-    assert_equal 1, AuthMethodGuard.remaining_count(user)
-  end
-
-  test "remaining_count includes active Apple identity" do
-    user = @user
-
-    create_active_external_identity(client: user, provider: "apple")
-
-    assert_equal 1, AuthMethodGuard.remaining_count(user)
-  end
-
-  test "remaining_count includes verified emails" do
-    user = @user
-
-    ClientEmail.create!(
-      user: user,
-      address: "test#{SecureRandom.hex(4)}@example.com",
-      user_email_status_id: ClientEmailStatus::VERIFIED,
-    )
-
-    assert_equal 1, AuthMethodGuard.remaining_count(user)
-  end
-
-  test "remaining_count excludes unverified emails" do
-    user = @user
-
-    ClientEmail.create!(
-      user: user,
-      address: "unverified#{SecureRandom.hex(4)}@example.com",
-      user_email_status_id: ClientEmailStatus::UNVERIFIED,
-    )
-
-    assert_equal 0, AuthMethodGuard.remaining_count(user)
-  end
-
-  test "remaining_count excludes verified telephones because telephone is not aal1" do
-    user = @user
-
-    ClientTelephone.create!(
-      user: user,
-      number: "+819012345678",
-      user_identity_telephone_status_id: ClientTelephoneStatus::VERIFIED,
-    )
-
-    assert_equal 0, AuthMethodGuard.remaining_count(user)
-    assert_equal 1, AuthenticationCredentialInventory.call(user).contact_identifier_count
-  end
-
-  test "remaining_count excludes unverified telephones" do
-    user = @user
-
-    ClientTelephone.create!(
-      user: user,
-      number: "+819012345678",
-      user_identity_telephone_status_id: ClientTelephoneStatus::UNVERIFIED,
-    )
-
-    assert_equal 0, AuthMethodGuard.remaining_count(user)
-  end
-
-  test "remaining_count excludes specified identity" do
-    user = @user
-
-    google = create_active_external_identity(client: user, provider: "google")
-
-    assert_equal 0, AuthMethodGuard.remaining_count(user, excluding: google)
-  end
-
-  test "last_method returns true when only one method exists" do
-    user = @user
-
-    google = create_active_external_identity(client: user, provider: "google")
-
-    assert_equal 1, AuthMethodGuard.remaining_count(user)
-    assert AuthMethodGuard.last_method?(user, excluding: google)
-  end
-
-  test "last_method returns false when multiple methods exist" do
-    user = @user
-
-    create_active_external_identity(client: user, provider: "google")
-
-    ClientEmail.create!(
-      user: user,
-      address: "test#{SecureRandom.hex(4)}@example.com",
-      user_email_status_id: ClientEmailStatus::VERIFIED,
-    )
-
-    assert_not AuthMethodGuard.last_method?(user)
-  end
-
-  test "remaining_count counts multiple methods correctly" do
-    user = @user
-
-    create_active_external_identity(client: user, provider: "google")
-    create_active_external_identity(client: user, provider: "apple")
-
-    ClientEmail.create!(
-      user: user,
-      address: "test#{SecureRandom.hex(4)}@example.com",
-      user_email_status_id: ClientEmailStatus::VERIFIED,
-    )
-
-    assert_equal 3, AuthMethodGuard.remaining_count(user)
-  end
-
-  test "remaining_count excludes inactive Google identity" do
-    user = @user
-
-    create_active_external_identity(client: user, provider: "google", state: "consent_revoked")
-
-    assert_equal 0, AuthMethodGuard.remaining_count(user)
-  end
-
-  test "can_remove_telephone preserves at least one contact identifier" do
-    telephone = ClientTelephone.create!(
-      user: @user,
-      number: "+819012300001",
-      user_identity_telephone_status_id: ClientTelephoneStatus::VERIFIED,
-    )
-
-    assert_not AuthMethodGuard.can_remove_telephone?(@user, telephone)
-
-    ClientEmail.create!(
-      user: @user,
-      address: "telephone-removal#{SecureRandom.hex(4)}@example.com",
-      user_email_status_id: ClientEmailStatus::VERIFIED,
-    )
-
-    assert AuthMethodGuard.can_remove_telephone?(@user, telephone)
-  end
-
-  test "can_remove_email preserves contact aal1 and aal2 dimensions" do
+  test "verified email removal is refused until another sign-in and step-up method remains" do
+    client = Client.create!(security_mode_id: SecurityModeConfigurable::NORMAL)
+    now = Client.database_now
     email = ClientEmail.create!(
-      user: @user,
-      address: "email-removal#{SecureRandom.hex(4)}@example.com",
+      user: client,
+      address: "auth-guard-#{SecureRandom.uuid}@example.com",
       user_email_status_id: ClientEmailStatus::VERIFIED,
-    )
-    passkey = @user.client_passkeys.new(
-      webauthn_id: "auth_guard_passkey_#{SecureRandom.hex(4)}",
-      external_id: SecureRandom.uuid,
-      public_key: "public_key",
-      sign_count: 0,
-      description: "auth guard passkey",
-      status_id: ClientPasskeyStatus::ACTIVE,
-      uv_verified_at: Time.current,
-    )
-    passkey.save!(validate: false)
-
-    assert_not AuthMethodGuard.can_remove_email?(@user, email)
-
-    ClientTelephone.create!(
-      user: @user,
-      number: "+819012300002",
-      user_identity_telephone_status_id: ClientTelephoneStatus::VERIFIED,
+      binding_finalized_at: now,
     )
 
-    assert AuthMethodGuard.can_remove_email?(@user, email)
+    assert_not AuthMethodGuard.can_remove_email?(client, email)
+
+    client.client_passkeys.create!(
+      webauthn_id: SecureRandom.uuid,
+      public_key: "email-removal-fallback",
+      uv_verified_at: now,
+    )
+
+    assert AuthMethodGuard.can_remove_email?(client, email)
   end
 
-  test "can_remove_totp preserves at least one aal2 method" do
+  test "telephone removal is refused when it is the only contact for an active secret credential" do
+    client = Client.create!(security_mode_id: SecurityModeConfigurable::NORMAL)
+    now = Client.database_now
+    telephone = ClientTelephone.create!(
+      user: client,
+      number: "+819012345678",
+      user_identity_telephone_status_id: ClientTelephoneStatus::VERIFIED,
+      binding_finalized_at: now,
+    )
+    issuance = ClientSecretIssuance.create!(
+      client: client,
+      origin_operation_id: SecureRandom.uuid,
+      origin: "manual",
+      attempt_number: 1,
+      browser_session_ref: "telephone-guard-session",
+      planned_count: 1,
+      expires_at: now + 5.minutes,
+      presented_at: now - 1.minute,
+      confirmed_at: now,
+    )
+    ClientSecretCredential.create!(
+      client: client,
+      issuance: issuance,
+      name: "Telephone-bound secret",
+      password_digest: Argon2::Password.create("0123456789abcdef0123456789abcdef"),
+      confirmed_at: now,
+    )
+
+    assert_not AuthMethodGuard.can_remove_telephone?(client, telephone)
+  end
+
+  test "TOTP removal is refused until another step-up method remains" do
+    client = Client.create!(security_mode_id: SecurityModeConfigurable::NORMAL)
+    now = Client.database_now
     totp = ClientTotpCredential.create!(
-      user: @user,
+      user: client,
+      user_identity_totp_credential_status_id: ClientTotpCredentialStatus::ACTIVE,
       private_key: ROTP::Base32.random_base32,
-      user_totp_credential_status_id: ClientTotpCredentialStatus::ACTIVE,
-      last_otp_at: Time.zone.at(0),
     )
 
-    assert_not AuthMethodGuard.can_remove_totp?(@user, totp)
+    assert_not AuthMethodGuard.can_remove_totp?(client, totp)
 
-    passkey = @user.client_passkeys.new(
-      webauthn_id: "auth_guard_totp_passkey_#{SecureRandom.hex(4)}",
-      external_id: SecureRandom.uuid,
-      public_key: "public_key",
-      sign_count: 0,
-      description: "auth guard totp passkey",
-      status_id: ClientPasskeyStatus::ACTIVE,
-      uv_verified_at: Time.current,
+    client.client_passkeys.create!(
+      webauthn_id: SecureRandom.uuid,
+      public_key: "totp-removal-fallback",
+      uv_verified_at: now,
     )
-    passkey.save!(validate: false)
 
-    assert AuthMethodGuard.can_remove_totp?(@user, totp)
+    assert AuthMethodGuard.can_remove_totp?(client, totp)
+  end
+
+  test "external identity removal is refused until another sign-in method remains" do
+    client = Client.create!(security_mode_id: SecurityModeConfigurable::NORMAL)
+    identity = ClientExternalIdentity.create!(
+      client: client,
+      provider: "google",
+      issuer: "https://accounts.google.com",
+      subject: "auth-guard-#{SecureRandom.uuid}",
+      audience: "google-client-id",
+      verification_authority: "omniauth-google-oauth2",
+      verified_at: Time.current,
+    )
+
+    assert_not AuthMethodGuard.can_remove_external_identity?(client, identity)
+
+    client.client_passkeys.create!(
+      webauthn_id: SecureRandom.uuid,
+      public_key: "external-identity-removal-fallback",
+      uv_verified_at: Client.database_now,
+    )
+
+    assert AuthMethodGuard.can_remove_external_identity?(client, identity)
+  end
+
+  test "ADVANCED operators keep two active passkeys after a proposed removal" do
+    operator = Operator.create!(security_mode_id: SecurityModeConfigurable::ADVANCED)
+    now = Operator.database_now
+    passkeys =
+      2.times.map do
+        OperatorPasskey.create!(
+          staff: operator,
+          webauthn_id: SecureRandom.uuid,
+          public_key: "advanced-removal-#{SecureRandom.uuid}",
+          uv_verified_at: now,
+        )
+      end
+
+    assert_not AuthMethodGuard.can_remove_passkey?(operator, passkeys.first)
+
+    last_passkey = OperatorPasskey.create!(
+      staff: operator,
+      webauthn_id: SecureRandom.uuid,
+      public_key: "advanced-removal-#{SecureRandom.uuid}",
+      uv_verified_at: now,
+    )
+
+    assert AuthMethodGuard.can_remove_passkey?(operator, last_passkey)
   end
 end

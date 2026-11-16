@@ -32,18 +32,10 @@
 #  fk_rails_...  (handle_id => handles.id)
 #
 
-# frozen_string_literal: true
-
 require "forwardable"
 
 class HandleAssignment < AvatarRecord
-  scope :current, -> { where(valid_to: Float::INFINITY) }
-
   attribute :handle_assignment_status_id, default: HandleAssignmentStatus::NOTHING
-
-  def self.current_attributes
-    [:handle_id, :avatar_id]
-  end
 
   belongs_to :handle, inverse_of: :handle_assignments
   belongs_to :avatar, inverse_of: :handle_assignments
@@ -51,8 +43,19 @@ class HandleAssignment < AvatarRecord
   belongs_to :handle_assignment_status
 
   validates :valid_from, presence: true
-  validates :handle_id, uniqueness: { conditions: -> { current } }
-  validates :avatar_id, uniqueness: { conditions: -> { current } }
+  validates :handle_id, uniqueness: { conditions: -> { current } }, if: :current_temporal_row?
+  validates :avatar_id, uniqueness: { conditions: -> { current } }, if: :current_temporal_row?
 
-  delegate :name, to: :handle
+  scope :current, -> { where(valid_to: Float::INFINITY) }
+
+  def self.current_attributes
+    [:handle_id, :avatar_id]
+  end
+  public_class_method :current_attributes
+
+  private
+
+  def current_temporal_row?
+    valid_to == Float::INFINITY
+  end
 end

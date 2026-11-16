@@ -9,11 +9,18 @@ module Base
         include VerificationClient
 
         AUTHENTICATION_MODE = :private
+
+        layout "base/app/inertia"
+        inertia_share chrome: -> { surface_chrome }
+        inertia_share clear_history: -> { session[:inertia_clear_history] == true }
+
         declare_authentication_mode! :private
 
-        before_action :authenticate_client!
         before_action :authorize_birthdate!, only: :show
         step_up only: :show
+
+        public
+
         def show
           render inertia: true, props: {
             title: t("sign.app.settings.birthdate.show.page_title"),

@@ -26,10 +26,14 @@ class ClientNotificationRecordTest < ActiveSupport::TestCase
   end
 
   test "belongs to client through notification_records" do
-    client = Client.create!
+    client = Client.create!(security_mode_id: SecurityModeConfigurable::NORMAL)
     notification = ClientNotificationRecord.create!(client: client)
 
     assert_equal client, notification.client
     assert_includes client.notification_records, notification
+  end
+
+  test "public_id is a fixed 21-character NanoID" do
+    assert_public_id_fixed_length(::ClientNotificationRecord)
   end
 end

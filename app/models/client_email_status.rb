@@ -21,9 +21,12 @@ class ClientEmailStatus < AppPrincipalRecord
   DEFAULTS = [UNVERIFIED, VERIFIED, SUSPENDED, DELETED, NOTHING, UNVERIFIED_WITH_SIGN_UP,
               VERIFIED_WITH_SIGN_UP,].freeze
 
+  self.record_timestamps = false
+
   has_many :client_emails, inverse_of: :user_email_status, dependent: :restrict_with_error
 
   def self.ensure_defaults!
     insert_missing_fixed_ids!(DEFAULTS)
   end
+  public_class_method :ensure_defaults!
 end

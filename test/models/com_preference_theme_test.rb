@@ -1,4 +1,6 @@
+# frozen_string_literal: true
 # typed: false
+
 # == Schema Information
 #
 # Table name: com_preference_themes
@@ -21,14 +23,17 @@
 #  fk_rails_...                           (preference_id => com_preferences.id)
 #
 
-# frozen_string_literal: true
-
 require "test_helper"
 
 class ComPreferenceThemeTest < ActiveSupport::TestCase
   setup do
-    ComPreferenceStatus.find_or_create_by!(id: ComPreferenceStatus::NOTHING)
-    @preference = ComPreference.create!(status_id: ComPreferenceStatus::NOTHING)
+    ComPreferenceStatus.find_or_create_by!(id: ComPreferenceStatus::ACTIVE)
+    @preference = ComPreference.create!(
+      jti: SecureRandom.uuid,
+      last_issued_at: Time.current,
+      last_issued_expires_at: 400.days.from_now,
+      status_id: ComPreferenceStatus::ACTIVE,
+    )
   end
 
   test "belongs to preference" do

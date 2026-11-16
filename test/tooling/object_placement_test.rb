@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 require "minitest/autorun"
-require "set"
+require "prism"
 
 # Guards .agents/harnesses/rules/project/value-object-boundaries.mdc.
 #
@@ -22,7 +22,7 @@ class ObjectPlacementTest < Minitest::Test
 
   # A suffix and the single root that owns it. Only unambiguous suffixes belong here; roles such as
   # `Issuer`, which names both a persisting operation and a pure token minter, are decided per file
-  # in memos/2026-08-29-object-placement-inventory.md rather than by name.
+  # in research/2026-08-29-object-placement-inventory.md rather than by name.
   OWNED_SUFFIXES = {
     "consumer" => "app/consumers",
     "query" => "app/queries",
@@ -64,11 +64,9 @@ class ObjectPlacementTest < Minitest::Test
 
   # Token minters keep the Issuer name and live in app/lib: they build and sign a payload and
   # persist nothing, so the suffix describes the domain act rather than a state change. Decided in
-  # memos/2026-08-29-object-placement-inventory.md after reading each Issuer individually.
+  # research/2026-08-29-object-placement-inventory.md after reading each Issuer individually.
   TOKEN_MINTERS = %w(
     app/lib/jump_rt_issuer.rb
-    app/lib/oidc_id_token_issuer.rb
-    app/lib/identity_step_up_ceremony_result_issuer.rb
   ).freeze
 
   def test_write_side_objects_are_not_in_app_services
@@ -96,7 +94,8 @@ class ObjectPlacementTest < Minitest::Test
   def test_validators_are_active_model_validators
     offenders =
       ruby_files_under("app/validators").reject do |path|
-        File.read(File.join(REPOSITORY_ROOT, path)).match?(/<\s*ActiveModel::(Each)?Validator\b/)
+        File.read(File.join(REPOSITORY_ROOT, path))
+          .match?(/<\s*(?:ActiveModel::(?:Each)?Validator|ActiveRecord::Validations::UniquenessValidator)\b/)
       end
 
     assert_empty offenders,
@@ -112,7 +111,7 @@ class ObjectPlacementTest < Minitest::Test
   #   app/services   - #868 has not run; the root is still mixed
   #   app/policies   - three files need a rule decision (sign_up_step_gate, quota_limits,
   #                    step_up_available_methods)
-  #   app/adapters   - MCP tools and provider/cache names need a rule decision
+  #   app/adapters   - provider/cache names need a rule decision
   #   app/lib        - ports and primitives, suffix set not settled
   #   app/values     - 96 files grandfathered until #870
   ROOT_SUFFIXES = {
@@ -161,7 +160,7 @@ class ObjectPlacementTest < Minitest::Test
     # Chronicle.capture writes Chronicle rows through these operations. The model here is the audit
     # table itself, so this is a model persisting its own records through extracted steps, not a
     # service orchestrating it - see
-    # memos/2026-08-29-chronicle-and-enforcement-write-dependencies.md. #869 also found that
+    # research/2026-08-29-chronicle-and-enforcement-write-dependencies.md. #869 also found that
     # Chronicle.capture has no production caller, which is the question to settle first.
     "ChronicleIntentWriter" => 869,
     "ChronicleResultWriter" => 869,
@@ -216,10 +215,18 @@ class ObjectPlacementTest < Minitest::Test
         relative = source.delete_prefix("#{REPOSITORY_ROOT}/")
         next [] if relative == "test/tooling/object_placement_test.rb"
 
-        File.read(source).lines.grep(/Rails\.root\.join|file_content\(/).flat_map do |line|
-          line.scan(%r{\bapp/[a-z_]+/[a-z_0-9/]+\.rb\b}).filter_map do |path|
-            "#{relative} reads #{path}, which does not exist" unless File.exist?(File.join(REPOSITORY_ROOT, path))
-          end
+        reads = []
+        pending = [Prism.parse_file(source).value]
+        until pending.empty?
+          node = pending.pop
+          pending.concat(node.compact_child_nodes)
+          next unless node.is_a?(Prism::CallNode)
+          next unless %i(read binread readlines file_content).include?(node.name)
+
+          reads.concat(node.slice.scan(%r{\bapp/[a-z_]+/[a-z_0-9/]+\.rb\b}))
+        end
+        reads.uniq.filter_map do |path|
+          "#{relative} reads #{path}, which does not exist" unless File.exist?(File.join(REPOSITORY_ROOT, path))
         end
       end
 

@@ -14,6 +14,9 @@ module PreferenceAccessTokenTransport
     # reproduces the same payload, so short-circuit. Cookies are request input
     # and do not change within a request.
     return true if @preference_payload.is_a?(Hash)
+    # A detached credential stays detached for the whole request: re-scanning the cookies would
+    # resurrect the payload that the refusal just dropped.
+    return false if preference_credential_detached?
 
     token = matching_access_token_value
     return false if token.blank?
@@ -34,56 +37,41 @@ module PreferenceAccessTokenTransport
 
     operation =
       lambda do
-        with_preference_connection(:writing) do
-          # Scoped to `active.unconsumed` (both already defined by
-          # SingleUseToken, included on AppPreference/ComPreference/
-          # OrgPreference): a discarded/expired row or a `used_at`-consumed
-          # row (retired by PreferenceSignOutRotation, or superseded by
-          # ordinary refresh rotation) must not be resurrected merely
-          # because a still-signature-valid, still-unexpired access JWT
-          # naming its public_id is presented. Without this, a 7-day
-          # PREFERENCE_JWT_TTL access token issued before sign-out would
-          # keep resolving to the retired row for up to 7 days after
-          # retirement -- the DB-side retirement would exist but not
-          # actually be enforced at the access-token verification layer.
-          preference_class.active.unconsumed.includes(preference_associations_to_preload)
-            .find_by(public_id: public_id)
+        with_preference_connection(:reading) do
+          preference = preference_class.includes(preference_associations_to_preload).find_by(public_id: public_id)
+          if preference&.status_id == preference_class::ACTIVE_STATUS_ID &&
+              preference.issuance_active_at?(now: preference_class.database_now)
+            preference
+          end
         end
       end
     @preferences = defined?(Prosopite) ? Prosopite.pause(&operation) : operation.call
-    return unless keep_loaded_access_token_payload?(@preference_payload)
-
     @preferences
-  end
+  rescue ActiveRecord::StatementInvalid, ActiveRecord::ConnectionNotEstablished => e
+    raise unless anonymous_com_claim_shape?(preference_class) && (request.get? || request.head?)
 
-  def keep_loaded_access_token_payload?(payload)
-    if @preferences.blank?
-      cookies.delete(access_token_cookie_name, **preference_cookie_deletion_options)
-      @preference_payload = nil
-      return false
-    end
-
-    return true if preference_access_token_current?(@preferences, payload)
-
-    cookies.delete(access_token_cookie_name, **preference_cookie_deletion_options)
-    @preferences = nil
-    @preference_payload = nil
-    false
+    Rails.logger.error(
+      JitLogEvent.format("preference.access_token.read_failed", realm: "com", error_class: e.class.name),
+    )
+    detach_preference_credential!
   end
 
   def preference_access_token_current?(preference, payload)
     current_jti = preference&.jti
-    return true if current_jti.blank?
+    return false unless current_jti.is_a?(String) && current_jti.present?
 
     payload_jti = PreferenceToken.extract_jti(payload)
-    return false if payload_jti.blank?
+    return false unless payload_jti.is_a?(String) && payload_jti.present?
+    return false unless current_jti.bytesize == payload_jti.bytesize
 
-    secure_compare?(current_jti, payload_jti)
+    ActiveSupport::SecurityUtils.secure_compare(current_jti, payload_jti)
   end
 
   def matching_access_token_value
+    return if preference_credential_detached?
+
     access_token_cookie_names.lazy.filter_map do |cookie_name|
-      token = cookies[cookie_name].to_s.presence
+      token = BrowserCredentialCookie.read(cookies, cookie_name).to_s.presence
       next if token.blank?
 
       payload = decode_matching_access_token(token)
@@ -92,19 +80,33 @@ module PreferenceAccessTokenTransport
       @preference_payload = payload
       token
     end.first
+  rescue PreferenceBase::ResolutionError
+    raise unless anonymous_preference_claim_shape?(preference_class) && (request.get? || request.head?)
+
+    detach_preference_credential!
+    nil
   end
 
   def decode_matching_access_token(token)
+    if anonymous_preference_claim_shape?(preference_class) && token.to_s.bytesize >
+        SecurityJwtPreferenceTokenCodec::ANONYMOUS_REALM_TOKEN_MAX_BYTES
+      return nil
+    end
+
     payload = PreferenceToken.decode(token, host: request.host, jwt_issuer_id: preference_jwt_issuer_id)
     return if payload.blank?
-    return if PreferenceToken.extract_preference_type(payload) != preference_class.name
+
+    return unless anonymous_preference_claim_shape?(preference_class)
+    return unless payload["aud"] == preference_realm_name
 
     payload
+  rescue JitSecurityJwtRegistry::ConfigurationError => e
+    raise_preference_resolution_error!(:verification_configuration, e)
   end
 
   def ensure_preference_access_token_audience_for_write!
     access_token_cookie_names.each do |cookie_name|
-      token = cookies[cookie_name].to_s.presence
+      token = BrowserCredentialCookie.read(cookies, cookie_name).to_s.presence
       next if token.blank?
 
       PreferenceToken.decode(

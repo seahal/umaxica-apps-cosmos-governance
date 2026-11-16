@@ -1,4 +1,6 @@
+# frozen_string_literal: true
 # typed: false
+
 # == Schema Information
 #
 # Table name: app_preference_chronicles
@@ -8,11 +10,11 @@
 #  actor_type     :text             default(""), not null
 #  context        :jsonb            not null
 #  current_value  :text             default(""), not null
-#  discarded_at   :datetime         default(Infinity), not null
+#  discard_at   :datetime         default(Infinity), not null
 #  ip_address     :inet             default(#<IPAddr: IPv4:0.0.0.0/255.255.255.255>), not null
 #  occurred_at    :datetime         not null
 #  previous_value :text             default(""), not null
-#  purged_at      :datetime         not null
+#  purge_eligible_at      :datetime         not null
 #  subject_type   :text             not null
 #  created_at     :datetime         not null
 #  updated_at     :datetime         not null
@@ -28,7 +30,7 @@
 #  index_app_preference_chronicles_on_event_id                  (event_id)
 #  index_app_preference_chronicles_on_level_id                  (level_id)
 #  index_app_preference_chronicles_on_occurred_at               (occurred_at)
-#  index_app_preference_chronicles_on_purged_at                 (purged_at)
+#  index_app_preference_chronicles_on_purge_eligible_at                 (purge_eligible_at)
 #  index_app_preference_chronicles_on_subject_id                (subject_id)
 #
 # Foreign Keys
@@ -37,16 +39,26 @@
 #  fk_rails_...  (level_id => app_preference_chronicle_levels.id)
 #
 
-# frozen_string_literal: true
-
 class AppPreferenceChronicle < ChronicleRecord
+  PREFERENCE_AUDIT_LOCK_KEY = 88_038_921_016_974
+
   include Retainable
 
+  attribute :discard_at, :datetime, default: -> { Retainable::SENTINEL }
+  attribute :purge_eligible_at, :datetime, default: -> { Retainable::SENTINEL }
+  validates :discard_at, presence: true
+  validates :purge_eligible_at, presence: true
+  validate :retention_order_valid
+  validate :retention_times_not_before_created_at, on: :update
+  Retainable.register_host(self)
+
+  # Audit rows may describe another subject type; the guarded callback checks AppPreference references.
   belongs_to :app_preference,
              class_name: "AppPreference",
              foreign_key: :subject_id,
              primary_key: :id,
-             inverse_of: :app_preference_chronicles
+             inverse_of: :app_preference_chronicles,
+             optional: true
   belongs_to :app_preference_chronicle_level, foreign_key: :level_id, inverse_of: :app_preference_chronicles
   belongs_to :app_preference_chronicle_event,
              class_name: "AppPreferenceChronicleEvent",
@@ -57,7 +69,36 @@ class AppPreferenceChronicle < ChronicleRecord
 
   validates :event_id, length: { maximum: 255 }
   validates :level_id, length: { maximum: 255 }
+  validates :subject_id, exclusion: { in: [nil] }
+  before_create :coordinate_preference_reference!
+  before_update :coordinate_preference_reference!, if: :preference_reference_changing?
+
+  class << self
+    public
+
+    def lock_preference_audit_writers!
+      connection_pool.with_connection do |connection|
+        unless connection.transaction_open?
+          raise ActiveRecord::TransactionIsolationError, "Chronicle transaction is required"
+        end
+
+        connection.execute("SELECT pg_advisory_xact_lock_shared(#{PREFERENCE_AUDIT_LOCK_KEY})")
+      end
+    end
+
+    def lock_preference_audit_for_purge!
+      connection_pool.with_connection do |connection|
+        unless connection.transaction_open?
+          raise ActiveRecord::TransactionIsolationError, "Chronicle transaction is required"
+        end
+
+        connection.execute("SELECT pg_advisory_xact_lock(#{PREFERENCE_AUDIT_LOCK_KEY})")
+      end
+    end
+  end
+
   # Helper methods for compatibility
+  public
   def app_preference
     return if subject_id.blank?
 
@@ -67,5 +108,26 @@ class AppPreferenceChronicle < ChronicleRecord
   def app_preference=(pref)
     self.subject_id = pref.id.to_s
     self.subject_type = "AppPreference"
+  end
+
+  private
+
+  def preference_reference_changing?
+    will_save_change_to_subject_id? || will_save_change_to_subject_type? ||
+      will_save_change_to_actor_id? || will_save_change_to_actor_type?
+  end
+
+  def coordinate_preference_reference!
+    return unless subject_type == "AppPreference" || actor_type == "AppPreference"
+
+    self.class.lock_preference_audit_writers!
+    AppSettingRecord.connected_to(role: :writing) do
+      if subject_type == "AppPreference" && !AppPreference.exists?(id: subject_id)
+        raise ActiveRecord::RecordNotFound, "app preference audit subject is missing"
+      end
+      if actor_type == "AppPreference" && !AppPreference.exists?(id: actor_id)
+        raise ActiveRecord::RecordNotFound, "app preference audit actor is missing"
+      end
+    end
   end
 end

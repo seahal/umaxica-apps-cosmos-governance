@@ -4,28 +4,10 @@
 module CollectiveMembership
   extend ActiveSupport::Concern
 
-  included do
-    self.belongs_to_required_by_default = false
-
-    scope :current, lambda {
-      now = Time.current
-      table = arel_table
-
-      where(revoked_at: nil)
-        .where(table[:starts_at].eq(nil).or(table[:starts_at].lteq(now)))
-        .where(table[:ends_at].eq(nil).or(table[:ends_at].gt(now)))
-    }
-    scope :active, -> { current.where(membership_state_id: membership_state_active_id) }
-    scope :primary_first, -> { order(primary: :desc, created_at: :asc, id: :asc) }
-    scope :primary_active, -> { active.where(primary: true) }
-
-    validates :membership_kind, :membership_state, presence: true
-    validate :unit_must_belong_to_same_collective
-    validate :only_one_active_primary_membership
-  end
-
   CONFIG_REGISTRY = {}
   private_constant :CONFIG_REGISTRY
+
+  public
 
   def account
     public_send(self.class.account_association_name)
@@ -35,8 +17,16 @@ module CollectiveMembership
     public_send(self.class.collective_association_name)
   end
 
+  def organization
+    collective
+  end
+
   def collective_unit
     public_send(self.class.unit_association_name)
+  end
+
+  def organization_unit
+    collective_unit
   end
 
   def active?

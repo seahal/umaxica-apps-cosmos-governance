@@ -1,0 +1,46 @@
+# RP return target path is readable outside the RP
+
+Status: Deferred concern; the accepted RP Rails contract was implemented on 2026-10-24 (WU-39). This
+entry remains a backlog item for the accepted path-exposure trade-off; it does not authorize a
+different target transport.
+
+## Concern
+
+The adopted design (owner decisions D-149 and D-151 of the 2026-10 authentication cycle) carries the
+RP's internal return target as the `target_link_uri` claim of the RP's OIDC `state`, a PS256 JWS. A
+JWS is signed, not encrypted. The path is therefore readable wherever the `state` travels or is
+stored: the authorization request URL sent to the OP, the OP's stored authorization transaction, the
+Jump gateway and any log that records those URLs.
+
+The design limits the value to a relative path with no query and no fragment, so query parameters
+are never exposed. A path segment can still carry a value that should stay on the RP, for example a
+protected page whose route contains an invitation code, a verification token or another
+capability-like identifier. If such a page requires sign-in, its path, including that value, reaches
+the OP and Jump.
+
+The owner accepted this for the first implementation: the JWS approach is implemented as decided,
+and a different mechanism is considered after it works.
+
+## State when recorded
+
+The RP Rails slice now uses the PS256 JWS `state` and path-only `target_link_uri` from
+`OidcSsoInitiator`, `OidcCallback`, and `RpTargetLinkUri`. Plain RP `pt` is no longer the browser RP
+return lane. The remaining concern is that the signed path is readable to the OP and Jump; no
+security defect was inferred from that accepted design trade-off.
+
+## Options to evaluate when selected
+
+- Accept only paths that Rails routing recognizes as a GET route of that RP and that contain no
+  dynamic segment; anything else falls back to the RP default page.
+- Keep dynamic segments but refuse an explicit list of routes whose segments are secrets.
+- Keep the target on the RP (for example in the RP's pending entry keyed by the `state` `jti`) so
+  the `state` carries no path at all, or encrypt the claim.
+
+Each option needs boundary tests for accepted and refused paths, and an inventory of RP routes that
+can be protected pages with secret-bearing segments.
+
+## References
+
+- [Redirect target lanes](../../adr/redirect-target-lanes-pt-nt-xt.md)
+- [Signed return targets](../../adr/signed-return-targets-only.md)
+- [Redirect targets](../security/redirect_targets.md)

@@ -1,26 +1,34 @@
-# Redirects Versus Ceremony Results
+# Redirects Versus Authentication Evidence
 
-## Rule
+Redirects move browsers. They do not prove that authentication, step-up verification, account
+linking, or credential registration succeeded.
 
-Redirects move browsers. Ceremony results carry credential evidence.
+## Redirect data
 
-Do not use redirect targets, `return_to`, `rt`, `pt`, `nt`, `xt`, OAuth `state`, OIDC `state`, or
-provider callback navigation as proof that authentication, step-up, account linking, or sign-up
-succeeded.
+Redirect parameters such as `return_to`, `pt`, `nt`, `xt`, OAuth `state`, and OIDC `state` may carry
+validated navigation intent or bind a protocol request. They must not carry credentials, account
+state, token claims, or verification results. Each value is validated by its owning resolver before
+it affects navigation.
 
-## Redirects
+Same-surface destinations may use a validated local path. External destinations go through the
+shared redirect boundary and its configured gateway policy. Cross-surface navigation does not grant
+the destination access to the initiating surface's credentials, permissions, session, or state.
 
-Redirect data may preserve safe navigation intent. It must be signed or registry-bound where the
-existing redirect-target rules require it. It must not contain credential result facts.
+## Authentication and ceremony results
 
-## Ceremony Results
+Authentication and credential changes are committed from verified, purpose-bound server state. The
+browser must not turn a redirect target, query string, or fragment into proof. Form submissions that
+change local state retain the owning surface's CSRF checks, actor authorization, transaction
+binding, expiry checks, and replay controls.
 
-Ceremony results are signed security objects returned from `sign/id` to `acme/www`. They are
-audience-bound, purpose-bound, one-shot, expiring, and transaction/session-bound where applicable.
-
-`acme/www` consumes ceremony results and commits authority state.
+Base app and org retain local verification and credential-management routes. Base App also has a
+neutral relying-party entry and callback; the browser leaves through Jump, and the verified callback
+commits only local RP state. A successful redirect alone never proves sign-in. Base App sign-out
+commits local revocation before the no-hint Visa handoff, while Back-Channel Logout commits its
+verified event before acknowledging it. Governance does not host provider or credential ceremonies.
 
 ## Related
 
-- `docs/security/redirect_targets.md`
-- `docs/security/ceremony-grant-result.md`
+- [Redirect target rules](redirect_targets.md)
+- [Public entrypoints](public-entrypoints.md)
+- [Controller lifecycle](../architecture/controller-lifecycle.md)

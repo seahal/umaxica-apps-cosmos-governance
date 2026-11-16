@@ -63,7 +63,9 @@ class WebauthnDuplicateRegistrationTest < ActiveSupport::TestCase
     first = build_client_passkey(aaguid: aaguid, provider_name: "Google Titan Security Key")
     first.save!
 
-    second = build_client_passkey(aaguid: aaguid, provider_name: "Google Titan Security Key")
+    second = build_client_passkey(
+      aaguid: aaguid, provider_name: "Google Titan Security Key",
+    )
 
     assert second.save
   end
@@ -74,7 +76,7 @@ class WebauthnDuplicateRegistrationTest < ActiveSupport::TestCase
     assert_predicate client.webauthn_user_handle, :present?
     assert_not_equal client.id.to_s, client.webauthn_user_handle
 
-    fresh = Client.new
+    fresh = Client.new(security_mode_id: SecurityModeConfigurable::NORMAL)
     fresh.valid?
 
     assert_predicate fresh.webauthn_user_handle, :present?

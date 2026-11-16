@@ -18,6 +18,8 @@ class OperatorVisibility < OrgPrincipalRecord
 
   DEFAULTS = [NOBODY, USER, STAFF, BOTH].freeze
 
+  self.record_timestamps = false
+
   has_many :staffs,
            class_name: "Operator",
            foreign_key: :visibility_id,

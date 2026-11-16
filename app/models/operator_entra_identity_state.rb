@@ -17,6 +17,8 @@ class OperatorEntraIdentityState < OrgRpRecord
   REVOKED   = 3
   DEFAULTS  = [NOTHING, ACTIVE, SUSPENDED, REVOKED].freeze
 
+  self.record_timestamps = false
+
   has_many :operator_entra_identities,
            foreign_key: :status_id,
            dependent: :restrict_with_error,

@@ -12,7 +12,9 @@ class NoticeAdapter
       raise ArgumentError, "Unknown notice delivery channel: #{surface}/#{channel}"
     end
   end
+  public_class_method :for
 
+  public
   def deliver(**)
     raise NotImplementedError, "#{self.class}#deliver is not implemented"
   end

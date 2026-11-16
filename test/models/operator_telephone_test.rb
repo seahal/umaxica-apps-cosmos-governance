@@ -11,9 +11,7 @@
 #  number                             :string           not null
 #  number_digest                      :string
 #  otp_attempts_count                 :integer          default(0), not null
-#  otp_counter                        :text             not null
-#  otp_expires_at                     :datetime
-#  otp_private_key                    :string           not null
+#  otp_last_sent_at                   :datetime
 #  created_at                         :datetime         not null
 #  updated_at                         :datetime         not null
 #  staff_id                           :bigint           not null
@@ -117,7 +115,7 @@ class OperatorTelephoneTest < ActiveSupport::TestCase
       staff: @staff,
     )
 
-    expected = IdentifierBlindIndex.bidx_for_telephone("+15551234567")
+    expected = IdentifierBlindIndex.bidx_for_telephone("+15551234567", realm: :org)
 
     assert_equal expected, staff_telephone.number_digest
   end
@@ -131,8 +129,10 @@ class OperatorTelephoneTest < ActiveSupport::TestCase
     )
 
     assert_equal staff_telephone,
-                 OperatorTelephone.find_by(number_digest: IdentifierBlindIndex.bidx_for_telephone("+15557654321"))
-    assert_nil OperatorTelephone.find_by(number_digest: IdentifierBlindIndex.bidx_for_telephone("12"))
+                 OperatorTelephone.find_by(
+                   number_digest: IdentifierBlindIndex.bidx_for_telephone("+15557654321", realm: :org),
+                 )
+    assert_nil OperatorTelephone.find_by(number_digest: IdentifierBlindIndex.bidx_for_telephone("12", realm: :org))
   end
 
   test "should generate UUID v7 before creation" do
@@ -147,7 +147,7 @@ class OperatorTelephoneTest < ActiveSupport::TestCase
   end
 
   test "enforces maximum telephones per staff" do
-    staff = Operator.create!(staff_status: OperatorStatus.find(OperatorStatus::NOTHING))
+    staff = Operator.create!(security_mode_id: SecurityModeConfigurable::ADVANCED, staff_status: OperatorStatus.find(OperatorStatus::NOTHING))
     Prosopite.pause do
       OperatorTelephone::MAX_TELEPHONES_PER_STAFF.times do |i|
         OperatorTelephone.create!(
@@ -187,5 +187,9 @@ class OperatorTelephoneTest < ActiveSupport::TestCase
     duplicate.valid?
 
     assert_includes duplicate.errors.details[:number].pluck(:error), :taken
+  end
+
+  test "public_id is a fixed 21-character NanoID" do
+    assert_public_id_fixed_length(::OperatorTelephone)
   end
 end

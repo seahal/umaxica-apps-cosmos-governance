@@ -18,28 +18,60 @@ module Jit
         test "an unparsable private keyset is refused with the variable that holds it" do
           error =
             assert_raises(JitSecurityJwtIssuerBuilder::Error) do
-              JitSecurityJwtIssuerBuilder.parse_private_keyset("{not json", source: "JWT_AUTH_PRIVATE_KEYSET")
+              JitSecurityJwtIssuerBuilder.parse_private_keyset("{not json", source: "AUTH_JWT_PRIVATE_KEYSET")
             end
 
-          assert_match(/JWT_AUTH_PRIVATE_KEYSET/, error.message)
+          assert_match(/AUTH_JWT_PRIVATE_KEYSET/, error.message)
         end
 
         test "an unparsable public JWK collection is refused with the variable that holds it" do
           error =
             assert_raises(JitSecurityJwtIssuerBuilder::Error) do
-              JitSecurityJwtIssuerBuilder.parse_public_jwk_collection("{not json", source: "JWT_AUTH_PUBLIC_KEYSET")
+              JitSecurityJwtIssuerBuilder.parse_public_jwk_collection("{not json", source: "AUTH_JWT_PUBLIC_KEYSET")
             end
 
-          assert_match(/JWT_AUTH_PUBLIC_KEYSET/, error.message)
+          assert_match(/AUTH_JWT_PUBLIC_KEYSET/, error.message)
         end
 
         test "an undecodable private key is refused with the variable that holds it" do
           error =
             assert_raises(JitSecurityJwtIssuerBuilder::Error) do
-              JitSecurityJwtIssuerBuilder.decode_private_key("not-a-key", source: "JWT_AUTH_PRIVATE_KEY")
+              JitSecurityJwtIssuerBuilder.decode_private_key("not-a-key", source: "AUTH_JWT_PRIVATE_KEYSET")
             end
 
-          assert_match(/JWT_AUTH_PRIVATE_KEY/, error.message)
+          assert_match(/AUTH_JWT_PRIVATE_KEYSET/, error.message)
+        end
+
+        test "an RSA key below 3072 bits is refused with the variable that holds it" do
+          undersized = OpenSSL::PKey::RSA.generate(2048)
+
+          error =
+            assert_raises(JitSecurityJwtIssuerBuilder::Error) do
+              JitSecurityJwtIssuerBuilder.parse_private_keyset(
+                JSON.generate("auth-kid" => Base64.strict_encode64(undersized.private_to_der)),
+                source: "AUTH_JWT_PRIVATE_KEYSET",
+              )
+            end
+
+          assert_match(/AUTH_JWT_PRIVATE_KEYSET/, error.message)
+          assert_match(/at least 3072 bits/, error.message)
+          assert_not_includes error.message, "BEGIN RSA PRIVATE KEY"
+          assert_not_includes error.message, "BEGIN PRIVATE KEY"
+        end
+
+        test "an EC keyset is refused with the variable that holds it" do
+          ec_key = OpenSSL::PKey::EC.generate("secp384r1")
+          error =
+            assert_raises(JitSecurityJwtIssuerBuilder::Error) do
+              JitSecurityJwtIssuerBuilder.parse_private_keyset(
+                JSON.generate("auth-kid" => Base64.strict_encode64(ec_key.private_to_der)),
+                source: "AUTH_JWT_PRIVATE_KEYSET",
+              )
+            end
+
+          assert_match(/AUTH_JWT_PRIVATE_KEYSET/, error.message)
+          assert_match(/RSA private key/, error.message)
+          assert_not_includes error.message, "BEGIN EC PRIVATE KEY"
         end
 
         test "a public JWK that cannot be imported is refused as a configuration error" do
@@ -51,8 +83,8 @@ module Jit
         # A private key whose public half disagrees with the published JWK would
         # sign tokens no verifier accepts, so the mismatch is refused at boot.
         test "a private key that disagrees with its published JWK is refused by kid" do
-          key = OpenSSL::PKey::EC.generate("secp384r1")
-          other = OpenSSL::PKey::EC.generate("secp384r1")
+          key = OpenSSL::PKey::RSA.generate(3072)
+          other = OpenSSL::PKey::RSA.generate(3072)
           published = JitSecurityJwtJwk.export_public(other, kid: "auth-2026")
 
           error =
@@ -69,7 +101,7 @@ module Jit
         end
 
         test "a private key that agrees with its published JWK merges into one active record" do
-          key = OpenSSL::PKey::EC.generate("secp384r1")
+          key = OpenSSL::PKey::RSA.generate(3072)
           published = JitSecurityJwtJwk.export_public(key, kid: "auth-2026")
 
           merged =

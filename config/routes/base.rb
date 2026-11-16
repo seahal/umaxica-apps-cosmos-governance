@@ -1,8 +1,7 @@
 # typed: false
 # frozen_string_literal: true
 
-# Base owns identity, OP/Authorization Server, and Rails control-plane surfaces.
-# Auth surfaces handle credential ceremonies and do not own RP authority.
+# Base owns app, com and org routes; remote identity login is retired here.
 scope(module: :base, as: :base) do
   # User authority gateway host. Hosts listed declaratively (DRY intentionally broken).
   constraints(
@@ -11,17 +10,34 @@ scope(module: :base, as: :base) do
   ) do
     scope(module: :app, as: :app) do
       root "roots#index"
-
-      # Model Context Protocol endpoint. The MCP spec requires a single path serving POST; the
-      # transport carries every protocol method in the JSON-RPC body, so one create action is the
-      # whole endpoint.
-      resource :mcp, only: :create
-
+      scope path: "sign", as: :sign do
+        get "", to: "sign/entries#show", as: :show
+        post "", to: "sign/entries#create", as: :create
+        resource :interruption, only: :show, module: :sign
+      end
+      namespace :oidc do
+        resource :callback, only: :show
+        resources :closures, only: :create
+      end
+      scope path: :sign do
+        resource :termination, path: "out", controller: :sign_outs, as: :sign_out,
+                               only: %i(show new edit create)
+        resource :out_completion, only: :show, path: "out/completion",
+                                  controller: :sign_outs, as: :sign_out_completion
+      end
       resource :welcome, only: :show
-      resource :dashboard, only: :show
+      resource :dashboard, only: :show, controller: :roots do
+        # Streams the selected Avatar's private image; see adr/base-dashboard-avatar-image-delivery.md.
+        resource :avatar_image, only: :show, controller: :dashboard_avatar_images
+      end
       resource :selector, only: %i(show update)
       resource :switcher, only: %i(show update)
       resources :billings, only: :index
+      resources :secrets, only: %i(index show new create edit update destroy)
+      resources :secret_issuances, only: %i(show update destroy) do
+        post :reattempt, on: :member
+        resource :presentation, only: :create, controller: :secret_presentations
+      end
       resources :groups, only: %i(index show create update destroy) do
         resources :avatar_memberships, controller: :group_avatar_memberships, only: %i(create update destroy)
       end
@@ -41,6 +57,7 @@ scope(module: :base, as: :base) do
         post "emails/:id", to: "emails#create"
         resource :language, only: %i(edit update)
         resource :motion, only: %i(edit update)
+        resource :notification, only: %i(edit update)
         resource :pagination, only: %i(edit update)
         resource :region, only: %i(edit update)
         resource :customization, only: %i(edit destroy)
@@ -51,10 +68,6 @@ scope(module: :base, as: :base) do
 
       # Paths fixed by OIDC Discovery spec; resource names stay nouns.
       namespace(:well_known, path: ".well-known") do
-        resource(
-          :openid_configuration, only: :show, path: "openid-configuration", controller: :discoveries,
-                                 format: false,
-        )
         resource(:jwks, only: :show, path: "jwks.json", format: false)
       end
 
@@ -75,6 +88,56 @@ scope(module: :base, as: :base) do
         namespace(:v0) do
           resource(:health, only: :show, path: "health.json", format: false)
           resource(:revision, only: :show, path: "revision.json", format: false)
+          # R5-WU15 account/organization/membership owner API for the app Base Self-RP.
+          # R5-WU12 account standing owner (Enforcement) for the Base Self-RP page /identity/standing.
+          get("identity/standing", to: "identity/standings#show", as: :identity_standing)
+          get("identity/selection", to: "identity/selections#show", as: :identity_selection)
+          scope(path: "membership/app", as: :membership) do
+            get("accounts", to: "membership/directory#accounts", as: :accounts)
+            get("accounts/:ref", to: "membership/directory#account", as: :account)
+            get("organizations", to: "membership/directory#organizations", as: :organizations)
+            get("organizations/:ref", to: "membership/directory#organization", as: :organization)
+            get("organizations/:organization_ref/memberships", to: "membership/directory#memberships", as: :memberships)
+            get(
+              "organizations/:organization_ref/memberships/:id", to: "membership/directory#membership",
+                                                                 as: :membership,
+            )
+            post(
+              "organizations/:organization_ref/memberships/authorization", to: "membership/directory#authorization",
+                                                                           as: :membership_authorization,
+            )
+          end
+          # R5-WU14 Avatar owner API for the app Base Self-RP (approved contract 2026-10-17).
+          scope(path: "avatar/app", as: :avatar) do
+            get("switcher", to: "avatar/switchers#show", as: :switcher)
+            put("switcher", to: "avatar/switchers#update")
+            get("dashboard-identity", to: "avatar/dashboard_identities#show", as: :dashboard_identity)
+            get("selected-image", to: "avatar/selected_images#show", as: :selected_image)
+            resources(:avatars, only: %i(index show create update), param: :avatar_ref, controller: "avatar/avatars")
+            post(
+              "avatars/:avatar_ref/:kind", to: "avatar/social_edges#create", as: :avatar_social_edge,
+                                           constraints: { kind: /follows|blocks|mutes/ },
+            )
+            delete(
+              "avatars/:avatar_ref/:kind", to: "avatar/social_edges#destroy",
+                                           constraints: { kind: /follows|blocks|mutes/ },
+            )
+            post("ownership-transfers", to: "avatar/avatar_ownership_transfers#create", as: :ownership_transfers)
+            post(
+              "ownership-transfers/:ref/accept", to: "avatar/avatar_ownership_transfers#accept",
+                                                 as: :accept_ownership_transfer,
+            )
+            post(
+              "ownership-transfers/:ref/cancel", to: "avatar/avatar_ownership_transfers#cancel",
+                                                 as: :cancel_ownership_transfer,
+            )
+            resources(:groups, only: %i(index show create update destroy), param: :ref, controller: "avatar/groups") do
+              resources(
+                :avatar_memberships, only: %i(create update destroy), param: :ref, path: "avatar-memberships",
+                                     controller: "avatar/group_avatar_memberships",
+              )
+            end
+          end
         end
       end
 
@@ -89,143 +152,40 @@ scope(module: :base, as: :base) do
       get("service-worker", to: "/rails/pwa#service_worker", as: :pwa_service_worker)
       get("offline", to: "/rails/pwa#offline", as: :pwa_offline)
 
-      # Base owns the post-authentication sign-out confirmation flow.
-      scope path: :sign do
-        resource :termination, path: "out", controller: :sign_outs, as: :sign_out, only: %i(new edit create) do
-          resource :completion, only: :show, path: "complete", module: :sign_outs
-        end
-      end
-
-      namespace(:oidc) do
-        resource(:authorization, only: :show)
-        resource(:callback, only: :show)
-        resource(:logout, only: %i(show create))
-      end
-
-      # OAuth/OIDC protocol endpoints. Paths are fixed by RFC 6749/7009 and
-      # OIDC Core; resource names stay nouns.
-      namespace(:oauth) do
-        resource(:authorization, only: :show, path: "authorize", controller: :authorizations)
-        resource(:token, only: :create, controller: :tokens)
-        resource(:userinfo, only: :show, controller: :userinfos)
-        resource(:revocation, only: :create, path: "revoke", controller: :revocations)
-      end
-
-      # Public web API: cookie consent, theme.
-      namespace :web do
+      # Browser preference API for this host's own chrome controls (theme, cookie consent).
+      # GET + PATCH only:
+      # `resource ... only: :update` would also map PUT (adr/api-route-vocabulary-consolidation.md,
+      # 2026-10-02 amendment).
+      namespace :api do
         namespace :v0 do
-          resource :theme, only: %i(show update)
-          resource :cookie, only: %i(show update)
-        end
-      end
-
-      # Edge compatibility API: token lifecycle management.
-      namespace :edge do
-        namespace :v0 do
-          resource :cookie, only: %i(show update)
-          namespace :token do
-            resource :status, only: :show, path: "check", controller: :checks, as: :check
-            resource :dbsc, only: :create
-            resource :renewal, only: :create, path: "refresh", controller: :refreshes, as: :refresh
+          namespace :preferences do
+            get :cookie, to: "cookies#show"
+            patch :cookie, to: "cookies#update"
+            get :theme, to: "themes#show"
+            patch :theme, to: "themes#update"
+            get :web_push, to: "web_pushes#show"
+            patch :web_push, to: "web_pushes#update"
           end
         end
-      end
-
-      # Base resolves session-limit remediation before resuming OIDC/social flows.
-      namespace :sign do
-        namespace :in do
-          resource :limitation, only: %i(show update destroy), controller: :limitations
-        end
-      end
-
-      namespace(:social) do
-        # Base-side ceremony endpoints: continuation hands the browser to the
-        # Auth host; completion consumes the signed ceremony result.
-        namespace :authentication do
-          resource :continuation, only: :create
-          resource :completion, only: :create
-        end
-
-        # Non-resourceful exception: OmniAuth middleware owns these fixed provider callback paths.
-        get(
-          "google/callback",
-          to: "/auth/app/omniauth/omniauth_callbacks#omniauth",
-          as: :google_callback,
-          defaults: { provider: "google" },
-        )
-
-        get(
-          "apple/callback",
-          to: "/auth/app/omniauth/omniauth_callbacks#omniauth",
-          as: :apple_callback,
-          defaults: { provider: "apple" },
-        )
-
-        get(
-          "failure",
-          to: "/auth/app/omniauth/omniauth_callbacks#failure",
-          as: :failure,
-        )
-
-        # There is no ceremony start route here. Base starts a social ceremony
-        # through the continuation endpoint above, which issues a grant and
-        # hands the browser to the Auth host's POST-only endpoint with a 307.
-        # A GET start page would be login CSRF (CVE-2015-9284).
       end
 
       # Step-up verification.
-      resource :verification, only: :show
+      resource :verification, only: %i(show create)
       namespace :verification do
-        resource :cancellation, only: :create
-        resource :completion, only: :create
+        resource :cancellation, only: %i(show create)
+        resource :completion, only: %i(show create)
       end
 
       resource :identity, only: :show
-      resources :avatars, only: %i(index show new edit create update) do
-        resource :follow, controller: "avatars/follows", only: %i(create destroy)
-        resource :block, controller: "avatars/blocks", only: %i(create destroy)
-        resource :mute, controller: "avatars/mutes", only: %i(create destroy)
-      end
 
       namespace :identity do
         resource :standing, only: :show
-        resource :recovery, only: :show do
-          resource :completion, only: :create, module: :recovery
-        end
-        namespace :recovery do
-          resource :session, only: %i(new create)
-          resources :appeals, only: :create
-        end
-        namespace :mfa do
-          resource :reset, only: %i(show create)
-          resource :challenge, only: %i(show update)
-        end
-
-        namespace :emails do
-          resource :registration, only: %i(new create edit update) do
-            resource :redelivery, only: :create
-          end
-        end
-
-        resources :emails, only: %i(index edit update destroy)
-
-        namespace :telephones do
-          resource :registration, only: %i(new create edit update)
-        end
-
-        resources :telephones, only: %i(index new create edit destroy)
+        resources :passkeys, only: %i(index show)
+        resources :totps, only: %i(index show)
+        resources :emails, only: :index
+        resources :telephones, only: :index
 
         resource :birthdate, only: :show
-
-        resources :secrets, controller: :secrets, only: %i(index show new edit create update destroy) do
-          resource :rotation, only: :create, module: :secrets
-          resource :removal, only: :create, module: :secrets
-        end
-
-        resources :sessions, only: %i(index show destroy)
-        resource :revocation, only: :destroy, path: "sessions", controller: "revocations/alls", as: :session_set
-        resource :revocation, only: :destroy, path: "other_sessions", controller: "revocations/others",
-                              as: :other_sessions
 
         resources :activities, only: :index
 
@@ -244,27 +204,15 @@ scope(module: :base, as: :base) do
     end
   end
 
-  # Corporate authority gateway host.
+  # Corporate authority gateway host. The com surface is anonymous: it serves the public
+  # preference entry and the operational/static endpoints only. It has no principal, no
+  # credential or session boundary, and no OIDC relying-party route.
   constraints(
     host: [Rails.configuration.x.boot_config.fetch(:hosts).base_corporate.host,
            ENV["PUBLIC_BASE_CORPORATE_URL"], "base.com.localhost",].compact,
   ) do
     scope(module: :com, as: :com) do
       root "roots#index"
-
-      # Model Context Protocol endpoint. The MCP spec requires a single path serving POST; the
-      # transport carries every protocol method in the JSON-RPC body, so one create action is the
-      # whole endpoint.
-      resource :mcp, only: :create
-
-      resource :welcome, only: :show
-      resource :dashboard, only: :show
-      resource :selector, only: %i(show update)
-      resource :switcher, only: %i(show update)
-      resources :accounts, only: %i(index show)
-      resources :organizations, only: %i(index show) do
-        resources :memberships, module: :organizations
-      end
       resource :preference, only: :show
 
       namespace :preference do
@@ -273,26 +221,15 @@ scope(module: :base, as: :base) do
         resource :cookie, only: %i(edit update)
         resource :currency, only: %i(edit update)
         resource :density, only: %i(edit update)
-        resources :emails, only: :edit
-        delete "emails/:id", to: "emails#destroy", as: :email
-        post "emails/:id", to: "emails#create"
         resource :language, only: %i(edit update)
         resource :motion, only: %i(edit update)
+        resource :notification, only: %i(edit update)
         resource :pagination, only: %i(edit update)
         resource :region, only: %i(edit update)
         resource :customization, only: %i(edit destroy)
         resource :screen, only: %i(edit update)
         resource :theme, only: %i(edit update)
         resource :timezone, only: %i(edit update)
-      end
-
-      # Paths fixed by OIDC Discovery spec; resource names stay nouns.
-      namespace(:well_known, path: ".well-known") do
-        resource(
-          :openid_configuration, only: :show, path: "openid-configuration", controller: :discoveries,
-                                 format: false,
-        )
-        resource(:jwks, only: :show, path: "jwks.json", format: false)
       end
 
       # Deployment identifier endpoint.
@@ -306,12 +243,24 @@ scope(module: :base, as: :base) do
       end
 
       # Machine-readable health and revision. The literal ".json" is part of the path, not a Rails
-      # format token (`format: false`), mirroring the `.well-known/jwks.json` precedent above.
-      # These are JSON-only; the controllers answer 406 to any other `Accept`.
+      # format token (`format: false`), mirroring the `.well-known/jwks.json` precedent that the
+      # com realm no longer serves.
       namespace(:api) do
         namespace(:v0) do
           resource(:health, only: :show, path: "health.json", format: false)
           resource(:revision, only: :show, path: "revision.json", format: false)
+
+          # Browser preference API for this host's own chrome controls (theme, cookie consent).
+          # GET + PATCH only: `resource ... only: :update` would also map PUT
+          # (adr/api-route-vocabulary-consolidation.md, 2026-10-02 amendment).
+          namespace :preferences do
+            get :cookie, to: "cookies#show"
+            patch :cookie, to: "cookies#update"
+            get :theme, to: "themes#show"
+            patch :theme, to: "themes#update"
+            get :web_push, to: "web_pushes#show"
+            patch :web_push, to: "web_pushes#update"
+          end
         end
       end
 
@@ -325,102 +274,6 @@ scope(module: :base, as: :base) do
       # `resource`. See adr/pwa-offline-route-exception.md.
       get("service-worker", to: "/rails/pwa#service_worker", as: :pwa_service_worker)
       get("offline", to: "/rails/pwa#offline", as: :pwa_offline)
-
-      # Base owns the post-authentication sign-out confirmation flow.
-      scope path: :sign do
-        resource :termination, path: "out", controller: :sign_outs, as: :sign_out, only: %i(new edit create) do
-          resource :completion, only: :show, path: "complete", module: :sign_outs
-        end
-      end
-
-      namespace(:oidc) do
-        resource(:authorization, only: :show)
-        resource(:callback, only: :show)
-        resource(:logout, only: %i(show create))
-      end
-
-      # OAuth/OIDC protocol endpoints. Paths are fixed by RFC 6749/7009 and
-      # OIDC Core; resource names stay nouns.
-      namespace(:oauth) do
-        resource(:authorization, only: :show, path: "authorize", controller: :authorizations)
-        resource(:token, only: :create, controller: :tokens)
-        resource(:userinfo, only: :show, controller: :userinfos)
-        resource(:revocation, only: :create, path: "revoke", controller: :revocations)
-      end
-
-      # Public web API: cookie consent, theme.
-      namespace :web do
-        namespace :v0 do
-          resource :theme, only: %i(show update)
-          resource :cookie, only: %i(show update)
-        end
-      end
-
-      # Edge compatibility API: token lifecycle management.
-      namespace :edge do
-        namespace :v0 do
-          resource :cookie, only: %i(show update)
-          namespace :token do
-            resource :status, only: :show, path: "check", controller: :checks, as: :check
-            resource :dbsc, only: :create
-            resource :renewal, only: :create, path: "refresh", controller: :refreshes, as: :refresh
-          end
-        end
-      end
-
-      # Step-up verification.
-      resource :verification, only: :show
-      namespace :verification do
-        resource :cancellation, only: :create
-        resource :completion, only: :create
-      end
-
-      resource :identity, only: :show
-      namespace :identity do
-        resource :standing, only: :show
-        resource :recovery, only: :show do
-          resource :completion, only: :create, module: :recovery
-        end
-        namespace :recovery do
-          resource :session, only: %i(new create)
-          resources :appeals, only: :create
-        end
-        namespace :emails do
-          resource :registration, only: %i(new create edit update)
-        end
-        resources :emails, only: %i(index edit update destroy)
-
-        namespace :telephones do
-          resource :registration, only: %i(new create edit update)
-        end
-        resources :telephones, only: %i(index new create edit destroy)
-
-        resource :birthdate, only: :show
-
-        resources :secrets,
-                  controller: :secret_credentials,
-                  only: %i(index show new edit create update destroy) do
-          resource :rotation, only: :create
-          resource :removal, only: :create
-        end
-        resources :sessions, only: %i(index show destroy)
-        resource :revocation, only: :destroy, path: "sessions", controller: "revocations/alls", as: :session_set
-        resource :revocation, only: :destroy, path: "other_sessions", controller: "revocations/others",
-                              as: :other_sessions
-
-        resources :activities, only: :index
-        resource :withdrawal, only: %i(new edit create update destroy)
-        namespace :withdrawal do
-          # DELETE ends the withdrawal ceremony session.
-          resource :session, only: %i(new create destroy)
-        end
-        namespace :privacy do
-          resource :erasure, only: %i(new create)
-          namespace :erasure do
-            resource :status, only: :show
-          end
-        end
-      end
     end
   end
 
@@ -431,20 +284,33 @@ scope(module: :base, as: :base) do
   ) do
     scope(module: :org, as: :org) do
       root "roots#index"
-
-      # Model Context Protocol endpoint. The MCP spec requires a single path serving POST; the
-      # transport carries every protocol method in the JSON-RPC body, so one create action is the
-      # whole endpoint.
-      resource :mcp, only: :create
-
+      scope path: "sign", as: :sign do
+        get "", to: "sign/entries#show", as: :show
+        post "", to: "sign/entries#create", as: :create
+        resource :interruption, only: :show, module: :sign
+      end
+      namespace :oidc do
+        resource :callback, only: :show
+        resources :closures, only: :create
+      end
+      scope path: :sign do
+        resource :termination, path: "out", controller: :sign_outs, as: :sign_out,
+                               only: %i(show new edit create)
+        resource :out_completion, only: :show, path: "out/completion",
+                                  controller: :sign_outs, as: :sign_out_completion
+      end
       resource :welcome, only: :show
-      resource :dashboard, only: :show
+      resource :dashboard, only: :show, controller: :roots do
+        # Streams the selected Avatar's private image; see adr/base-dashboard-avatar-image-delivery.md.
+        resource :avatar_image, only: :show, controller: :dashboard_avatar_images
+      end
       resource :selector, only: %i(show update)
       resource :switcher, only: %i(show update)
       resource :preference, only: :show
-      resource :avatar, only: %i(show edit update destroy)
       resources :organizations, only: %i(index show) do
-        resources :memberships, module: :organizations
+        # Org memberships are read-only: who may add, change, or end an Agent's membership in a
+        # Bureau is not yet specified (adr/operator-capability-authorization.md, Not provided).
+        resources :memberships, only: %i(index show), module: :organizations
       end
 
       namespace :preference do
@@ -458,6 +324,7 @@ scope(module: :base, as: :base) do
         post "emails/:id", to: "emails#create"
         resource :language, only: %i(edit update)
         resource :motion, only: %i(edit update)
+        resource :notification, only: %i(edit update)
         resource :pagination, only: %i(edit update)
         resource :region, only: %i(edit update)
         resource :customization, only: %i(edit destroy)
@@ -466,12 +333,7 @@ scope(module: :base, as: :base) do
         resource :timezone, only: %i(edit update)
       end
 
-      # Paths fixed by OIDC Discovery spec; resource names stay nouns.
       namespace(:well_known, path: ".well-known") do
-        resource(
-          :openid_configuration, only: :show, path: "openid-configuration", controller: :discoveries,
-                                 format: false,
-        )
         resource(:jwks, only: :show, path: "jwks.json", format: false)
       end
 
@@ -492,6 +354,76 @@ scope(module: :base, as: :base) do
         namespace(:v0) do
           resource(:health, only: :show, path: "health.json", format: false)
           resource(:revision, only: :show, path: "revision.json", format: false)
+          # R5-WU15 account/organization/membership owner API for the org Base Self-RP.
+          # R5-WU12 account standing owner (Enforcement) for the Base Self-RP page /identity/standing.
+          get("identity/standing", to: "identity/standings#show", as: :identity_standing)
+          get("identity/selection", to: "identity/selections#show", as: :identity_selection)
+          scope(path: "membership/org", as: :membership) do
+            get("accounts", to: "membership/directory#accounts", as: :accounts)
+            get("accounts/:ref", to: "membership/directory#account", as: :account)
+            get("organizations", to: "membership/directory#organizations", as: :organizations)
+            get("organizations/:ref", to: "membership/directory#organization", as: :organization)
+            get("organizations/:organization_ref/memberships", to: "membership/directory#memberships", as: :memberships)
+            get(
+              "organizations/:organization_ref/memberships/:id", to: "membership/directory#membership",
+                                                                 as: :membership,
+            )
+            post(
+              "organizations/:organization_ref/memberships/authorization", to: "membership/directory#authorization",
+                                                                           as: :membership_authorization,
+            )
+          end
+          # R5-WU14 Avatar owner API for the org Base Self-RP (approved contract 2026-10-17).
+          # R5-WU12 Support owner for app Client administration.
+          # R5-WU17 Support landing owner for the Base Self-RP page /support.
+          get("support", to: "support/areas#index", as: :support_areas)
+          scope(path: "support/:realm", as: :support, constraints: { realm: /app/ }) do
+            get("accounts", to: "support/accounts#index", as: :accounts)
+            get("accounts/:ref", to: "support/accounts#show", as: :account)
+            get("accounts/:ref/revocation-screen", to: "support/accounts#revocation_screen", as: :revocation_screen)
+            post("accounts/:ref/revocations", to: "support/accounts#revoke", as: :revocations)
+            get("accounts/:ref/revocations/:event_uuid", to: "support/accounts#revocation", as: :revocation)
+          end
+          # R5-WU12 Enforcement owner: same resource shape as the Base Self-RP pages it serves; the org
+          # realm stays routed so its policy can deny it exactly as before.
+          scope(path: "support/:realm", as: :support_enforcement, constraints: { realm: /app|org/ }) do
+            resources(:enforcement_cases, only: %i(index show new create), controller: "support/enforcement_cases") do
+              resource(:approval, only: %i(new create), controller: "support/enforcement_cases/approvals")
+              resource(:release, only: %i(new create), controller: "support/enforcement_cases/releases")
+              resource(:appeal_review, only: %i(new create), controller: "support/enforcement_cases/appeal_reviews")
+            end
+          end
+          # R5-WU12 IAM capability grants owner for the org Base Self-RP.
+          scope(path: "iam", as: :iam) do
+            get("grants", to: "iam/grants#index", as: :grants)
+            get("grant-screen", to: "iam/grants#screen", as: :grant_screen)
+            post("grants", to: "iam/grants#create")
+            get("grants/:ref", to: "iam/grants#show", as: :grant)
+            post("grants/:ref/revocation", to: "iam/grants#revoke", as: :grant_revocation)
+          end
+          scope(path: "avatar/org", as: :avatar) do
+            get("dashboard-identity", to: "avatar/dashboard_identities#show", as: :dashboard_identity)
+            get("switcher", to: "avatar/switchers#show", as: :switcher)
+            put("switcher", to: "avatar/switchers#update")
+            get("selected-avatar", to: "avatar/selected_avatars#show", as: :selected_avatar)
+            patch("selected-avatar", to: "avatar/selected_avatars#update")
+            delete("selected-avatar", to: "avatar/selected_avatars#destroy")
+            get("selected-image", to: "avatar/selected_images#show", as: :selected_image)
+            post("ownership-transfers", to: "avatar/avatar_ownership_transfers#create", as: :ownership_transfers)
+            post(
+              "ownership-transfers/:ref/accept", to: "avatar/avatar_ownership_transfers#accept",
+                                                 as: :accept_ownership_transfer,
+            )
+            post(
+              "ownership-transfers/:ref/cancel", to: "avatar/avatar_ownership_transfers#cancel",
+                                                 as: :cancel_ownership_transfer,
+            )
+          end
+          # R5-WU11 org-authority Tech capability decision for the tech-org-ww RP (server-to-server).
+          resource(
+            :tech_capability_check, only: :create, path: "tech-capability-checks",
+                                    controller: :tech_capability_checks,
+          )
         end
       end
 
@@ -506,126 +438,75 @@ scope(module: :base, as: :base) do
       get("service-worker", to: "/rails/pwa#service_worker", as: :pwa_service_worker)
       get("offline", to: "/rails/pwa#offline", as: :pwa_offline)
 
-      # Staff Publishing CMS. The URL is surface and audience only; locale is not a
-      # path segment. Each cell maps to every Edition with that surface and audience.
-      resource :publishing, only: [], module: :publishing do
-        publishing_audiences = %i(app com org)
-        %i(info docs news help).each do |publishing_surface|
-          resource publishing_surface, only: [], module: publishing_surface do
-            publishing_audiences.each do |publishing_audience|
-              resource publishing_audience, only: [], module: publishing_audience do
-                # Publishing and archiving change a different row than a
-                # revision does, so each is its own nested resource rather
-                # than a verb on the entry: a publication window is created
-                # and ended, and an entry's archive state is set and cleared.
-                resources :entries, only: %i(index new create show edit update) do
-                  scope module: :entries do
-                    resources :publications, only: %i(create destroy)
-                    resource :archive, only: %i(create destroy)
-                  end
-                end
-              end
-            end
-          end
-        end
-      end
-
       # Staff management areas.
-      resource :configuration, only: :show
+      resource :settings, only: :show
       resources :accounts, only: %i(index show)
       resources :iam, only: :index
+      # adr/operator-capability-authorization.md, IAM: capability grants. A revocation is its own
+      # noun resource; `new` is the Step-Up-gated confirmation page for each mutation.
+      namespace :iam do
+        resources :grants, only: %i(index show new create) do
+          resource :revocation, only: %i(new create), module: :grants
+        end
+      end
       resources :system, only: :index
       resources :audit, only: :index
       resources :support, only: :index
       namespace :support do
-        resources :clients, only: [] do
-          resource :session, only: :destroy, controller: "clients/sessions", path: "sessions/purge"
-        end
-        resources :visitors, only: [] do
-          resource(
-            :session_emergency_revocation,
-            only: :destroy,
-            controller: "visitors/sessions/emergency_revocations",
-            path: "sessions/emergency_revocation",
-          )
+        # adr/operator-capability-authorization.md, Support: Clients are the app realm, fixed by the
+        # resource name; no parameter selects the target class. Each session revocation is a
+        # recorded operation (`show` is its result).
+        resources :clients, only: %i(index show) do
+          resources :revocations, only: %i(new create show), module: :clients
         end
 
         # adr/unified-enforcement.md, Approval: realm-scoped noun resources, per
         # .agents/harnesses/rules/generic/routing.mdc (no verb actions such as
-        # `approve`/`release`; each is its own nested resource with only `create`).
-        %i(app com org).each do |enforcement_realm|
+        # `approve`/`release`; each is its own nested resource). `new` pages are the Step-Up-gated
+        # confirmation screens. The org realm stays routed but every policy rule denies it: no
+        # capability for disciplining operators is defined.
+        %i(app org).each do |enforcement_realm|
           scope(path: enforcement_realm, as: enforcement_realm, defaults: { realm: enforcement_realm }) do
-            resources :enforcement_cases, only: %i(index show create) do
-              resource :approval, only: :create, controller: "enforcement_cases/approvals"
-              resource :release, only: :create, controller: "enforcement_cases/releases"
-              resource :appeal_review, only: :create, controller: "enforcement_cases/appeal_reviews"
+            resources :enforcement_cases, only: %i(index show new create) do
+              resource :approval, only: %i(new create), controller: "enforcement_cases/approvals"
+              resource :release, only: %i(new create), controller: "enforcement_cases/releases"
+              resource :appeal_review, only: %i(new create), controller: "enforcement_cases/appeal_reviews"
             end
           end
         end
       end
       resources :billing, only: :index
 
-      # Base owns the post-authentication sign-out confirmation flow.
-      scope path: :sign do
-        resource :termination, path: "out", controller: :sign_outs, as: :sign_out, only: %i(new edit create) do
-          resource :completion, only: :show, path: "complete", module: :sign_outs
-        end
-      end
-
-      namespace(:oidc) do
-        resource(:authorization, only: :show)
-        resource(:callback, only: :show)
-        resource(:logout, only: %i(show create))
-      end
-
-      # OAuth/OIDC protocol endpoints. Paths are fixed by RFC 6749/7009 and
-      # OIDC Core; resource names stay nouns.
-      namespace(:oauth) do
-        resource(:authorization, only: :show, path: "authorize", controller: :authorizations)
-        resource(:token, only: :create, controller: :tokens)
-        resource(:userinfo, only: :show, controller: :userinfos)
-        resource(:revocation, only: :create, path: "revoke", controller: :revocations)
-      end
-
-      # Public web API: cookie consent, theme.
-      namespace :web do
+      # Browser preference API for this host's own chrome controls (theme, cookie consent).
+      # GET + PATCH only:
+      # `resource ... only: :update` would also map PUT (adr/api-route-vocabulary-consolidation.md,
+      # 2026-10-02 amendment).
+      namespace :api do
         namespace :v0 do
-          resource :theme, only: %i(show update)
-          resource :cookie, only: %i(show update)
-        end
-      end
-
-      # Edge compatibility API: token lifecycle management.
-      namespace :edge do
-        namespace :v0 do
-          resource :cookie, only: %i(show update)
-          namespace :token do
-            resource :status, only: :show, path: "check", controller: :checks, as: :check
-            resource :dbsc, only: :create
-            resource :renewal, only: :create, path: "refresh", controller: :refreshes, as: :refresh
+          namespace :preferences do
+            get :cookie, to: "cookies#show"
+            patch :cookie, to: "cookies#update"
+            get :theme, to: "themes#show"
+            patch :theme, to: "themes#update"
+            get :web_push, to: "web_pushes#show"
+            patch :web_push, to: "web_pushes#update"
           end
         end
       end
 
       # Step-up verification.
-      resource :verification, only: :show
+      resource :verification, only: %i(show create)
       namespace :verification do
-        resource :cancellation, only: :create
-        resource :completion, only: :create
+        resource :cancellation, only: %i(show create)
+        resource :completion, only: %i(show create)
       end
 
       resource :identity, only: :show
       namespace :identity do
         resource :standing, only: :show
-        namespace :emails do
-          resource :registration, only: %i(new create edit update)
-        end
-        resources :emails, only: %i(index edit update destroy)
-
-        namespace :telephones do
-          resource :registration, only: %i(new create edit update)
-        end
-        resources :telephones, only: %i(index new create edit destroy)
+        resources :passkeys, only: %i(index show)
+        resources :emails, only: :index
+        resources :telephones, only: :index
 
         resource :birthdate, only: :show
 
@@ -635,97 +516,10 @@ scope(module: :base, as: :base) do
           resource :rotation, only: :create
           resource :removal, only: :create
         end
-        resources :sessions, only: %i(index show destroy)
-        resource :session_set, path: "sessions", only: :destroy, controller: "revocations/alls"
-        resource :other_sessions, only: :destroy, controller: "revocations/others"
 
         resources :activities, only: :index
         resource :withdrawal, only: :show
       end
-    end
-  end
-
-  constraints(host: [ENV["PRIVATE_BASE_NETWORK_URL"], "base.net.localhost"].compact) do
-    scope(module: :net, as: :network) do
-      # Thin landing endpoint.
-      root(to: "roots#index")
-
-      # Deployment identifier endpoint.
-      resource(:revision, only: :show, format: false)
-
-      resource(:health, only: :show, format: false)
-      namespace(:health) do
-        resource(:liveness, only: :show, format: false)
-        resource(:readiness, only: :show, format: false)
-        resource(:startup, only: :show, format: false)
-      end
-
-      # Machine-readable health and revision. The literal ".json" is part of the path, not a Rails
-      # format token (`format: false`), mirroring the `.well-known/jwks.json` precedent above.
-      # These are JSON-only; the controllers answer 406 to any other `Accept`.
-      namespace(:api) do
-        namespace(:v0) do
-          resource(:health, only: :show, path: "health.json", format: false)
-          resource(:revision, only: :show, path: "revision.json", format: false)
-        end
-      end
-
-      resource(:csp_violation_report, only: :create, path: "csp-violation-report")
-    end
-  end
-
-  constraints(
-    host: [ENV["PUBLIC_BASE_DEVELOPER_URL"], ENV["PRIVATE_BASE_DEVELOPER_URL"],
-           "base.dev.localhost",].compact,
-  ) do
-    # Feature-flag control surface. Cloudflare Access fronts this host, but the mounted Rack app
-    # must not depend on the edge alone: Flipper::UI subclasses nothing of this application, so
-    # enforce_access_policy! and surface isolation never run for it, and any request that reaches
-    # the origin directly would get unauthenticated read/write over every feature flag.
-    #
-    # Fails closed: when the credentials are not configured the block returns false and every
-    # request is answered with 401, rather than defaulting to open access.
-    mount(
-      Rack::Auth::Basic.new(Flipper::UI.app(Flipper)) do |user, password|
-        expected_user = Rails.app.creds.option(:FLIPPER_UI_USER)
-        expected_password = Rails.app.creds.option(:FLIPPER_UI_PASSWORD)
-
-        if expected_user.blank? || expected_password.blank?
-          false
-        else
-          # Non-short-circuiting `&` so both comparisons always run.
-          ActiveSupport::SecurityUtils.secure_compare(user.to_s, expected_user) &
-            ActiveSupport::SecurityUtils.secure_compare(password.to_s, expected_password)
-        end
-      end.tap { |app| app.realm = "Flipper" } => "/flipper",
-      :as => :flipper,
-    )
-
-    scope(module: :dev, as: :developer) do
-      # Thin landing endpoint.
-      root(to: "roots#index")
-
-      # Deployment identifier endpoint.
-      resource(:revision, only: :show, format: false)
-
-      resource(:health, only: :show, format: false)
-      namespace(:health) do
-        resource(:liveness, only: :show, format: false)
-        resource(:readiness, only: :show, format: false)
-        resource(:startup, only: :show, format: false)
-      end
-
-      # Machine-readable health and revision. The literal ".json" is part of the path, not a Rails
-      # format token (`format: false`), mirroring the `.well-known/jwks.json` precedent above.
-      # These are JSON-only; the controllers answer 406 to any other `Accept`.
-      namespace(:api) do
-        namespace(:v0) do
-          resource(:health, only: :show, path: "health.json", format: false)
-          resource(:revision, only: :show, path: "revision.json", format: false)
-        end
-      end
-
-      resource(:csp_violation_report, only: :create, path: "csp-violation-report")
     end
   end
 end

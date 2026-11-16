@@ -2,38 +2,18 @@
 # frozen_string_literal: true
 
 class AuthenticationSessionRevoker
-  def self.revoke_all_for(resource)
-    tokens = tokens_for(resource)
-    tokens.find_each(&:revoke!)
+  def self.revoke_all_for(_resource)
+    raise AccessOpDataUnavailableError
   end
+  public_class_method :revoke_all_for
 
-  def self.tokens_for(resource)
-    case resource
-    when ::Client
-      ::ClientToken.where(user_id: resource.id)
-    when ::Operator
-      ::OperatorToken.where(staff_id: resource.id)
-    when ::Visitor
-      ::VisitorToken.where(visitor_id: resource.id)
-    else
-      raise ArgumentError, "Unsupported resource type: #{resource.class}"
-    end
+  def self.tokens_for(_resource)
+    raise AccessOpDataUnavailableError
   end
+  public_class_method :tokens_for
 
-  # adr/unified-enforcement.md, Session revocation: the union of sessions
-  # established by `method`, sessions with no recorded establishing method
-  # (always -- not only on the first Authentication Method Effect applied to a
-  # principal, so a second effect never behaves differently from the first),
-  # and -- only when `method` is "totp" -- every session carrying a TOTP
-  # step-up, revoked in full. A session whose elevation rests on a
-  # compromised authenticator is itself suspect; effects on other methods
-  # never propagate through step-up.
-  def self.tokens_for_method(resource, method)
-    scope = tokens_for(resource)
-    method = method.to_s
-    matching_or_unattributed = scope.where(established_authentication_method: [method, nil])
-    return matching_or_unattributed unless method == "totp"
-
-    matching_or_unattributed.or(scope.where(last_step_up_method: "totp"))
+  def self.tokens_for_method(_resource, _method)
+    raise AccessOpDataUnavailableError
   end
+  public_class_method :tokens_for_method
 end

@@ -10,21 +10,21 @@ class PreferenceWebCsrfTest < ActionDispatch::IntegrationTest
     host!(ENV.fetch("PUBLIC_BASE_SERVICE_URL"))
 
     patch(
-      base_app_web_v0_theme_path, params: { theme: "dark" },
-                                  headers: {
-                                    "Accept" => "application/json",
-                                    "Sec-Fetch-Site" => "cross-site",
-                                  }, as: :json,
+      base_app_api_v0_preferences_theme_path, params: { theme: "dark" },
+                                              headers: {
+                                                "Accept" => "application/json",
+                                                "Sec-Fetch-Site" => "cross-site",
+                                              }, as: :json,
     )
 
     assert_response :forbidden
 
     patch(
-      base_app_web_v0_cookie_path, params: { consented: true },
-                                   headers: {
-                                     "Accept" => "application/json",
-                                     "Sec-Fetch-Site" => "cross-site",
-                                   }, as: :json,
+      base_app_api_v0_preferences_cookie_path, params: { consented: true },
+                                               headers: {
+                                                 "Accept" => "application/json",
+                                                 "Sec-Fetch-Site" => "cross-site",
+                                               }, as: :json,
     )
 
     assert_response :forbidden
@@ -42,21 +42,21 @@ class PreferenceWebCsrfTest < ActionDispatch::IntegrationTest
     host!(ENV.fetch("PUBLIC_BASE_CORPORATE_URL"))
 
     patch(
-      base_com_web_v0_theme_path, params: { theme: "dark" },
-                                  headers: {
-                                    "Accept" => "application/json",
-                                    "Sec-Fetch-Site" => "cross-site",
-                                  }, as: :json,
+      base_com_api_v0_preferences_theme_path, params: { theme: "dark" },
+                                              headers: {
+                                                "Accept" => "application/json",
+                                                "Sec-Fetch-Site" => "cross-site",
+                                              }, as: :json,
     )
 
     assert_response :forbidden
 
     patch(
-      base_com_web_v0_cookie_path, params: { consented: true },
-                                   headers: {
-                                     "Accept" => "application/json",
-                                     "Sec-Fetch-Site" => "cross-site",
-                                   }, as: :json,
+      base_com_api_v0_preferences_cookie_path, params: { consented: true },
+                                               headers: {
+                                                 "Accept" => "application/json",
+                                                 "Sec-Fetch-Site" => "cross-site",
+                                               }, as: :json,
     )
 
     assert_response :forbidden
@@ -74,21 +74,21 @@ class PreferenceWebCsrfTest < ActionDispatch::IntegrationTest
     host!(ENV.fetch("PUBLIC_BASE_STAFF_URL"))
 
     patch(
-      base_org_web_v0_theme_path, params: { theme: "dark" },
-                                  headers: {
-                                    "Accept" => "application/json",
-                                    "Sec-Fetch-Site" => "cross-site",
-                                  }, as: :json,
+      base_org_api_v0_preferences_theme_path, params: { theme: "dark" },
+                                              headers: {
+                                                "Accept" => "application/json",
+                                                "Sec-Fetch-Site" => "cross-site",
+                                              }, as: :json,
     )
 
     assert_response :forbidden
 
     patch(
-      base_org_web_v0_cookie_path, params: { consented: true },
-                                   headers: {
-                                     "Accept" => "application/json",
-                                     "Sec-Fetch-Site" => "cross-site",
-                                   }, as: :json,
+      base_org_api_v0_preferences_cookie_path, params: { consented: true },
+                                               headers: {
+                                                 "Accept" => "application/json",
+                                                 "Sec-Fetch-Site" => "cross-site",
+                                               }, as: :json,
     )
 
     assert_response :forbidden
@@ -100,24 +100,30 @@ class PreferenceWebCsrfTest < ActionDispatch::IntegrationTest
       Rails.configuration.action_controller.allow_forgery_protection
   end
 
-  test "same-origin strict-mode POST reaches app controller without a CSRF rejection" do
+  test "same-origin preference mutations require valid tokens across Base surfaces" do
     ActionController::Base.allow_forgery_protection = true
 
-    host = ENV.fetch("PUBLIC_BASE_SERVICE_URL")
-    host!(host)
+    endpoints = [
+      [ENV.fetch("PUBLIC_BASE_SERVICE_URL"), base_app_api_v0_preferences_theme_path],
+      [ENV.fetch("PUBLIC_BASE_CORPORATE_URL"), base_com_api_v0_preferences_theme_path],
+      [ENV.fetch("PUBLIC_BASE_STAFF_URL"), base_org_api_v0_preferences_theme_path],
+    ]
 
-    patch(
-      base_app_web_v0_theme_path,
-      params: { theme: "dark" },
-      headers: {
-        "Accept" => "application/json",
-        "Origin" => "http://#{host}",
-        "Sec-Fetch-Site" => "same-origin",
-      },
-      as: :json,
-    )
+    endpoints.each do |host, path|
+      host!(host)
+      [nil, "invalid-token"].each do |token|
+        headers = {
+          "Accept" => "application/json",
+          "Origin" => "http://#{host}",
+          "Sec-Fetch-Site" => "same-origin",
+        }
+        headers["X-CSRF-Token"] = token if token
 
-    assert_not_equal I18n.t("errors.invalid_authenticity_token"), response.parsed_body["error"]
+        patch(path, params: { theme: "dark" }, headers:, as: :json)
+
+        assert_response :forbidden
+      end
+    end
   ensure
     # Restore the environment default, not the value observed on entry: if the flag was
     # already leaked as true, restoring the observation would pin the leak for the rest
@@ -126,13 +132,13 @@ class PreferenceWebCsrfTest < ActionDispatch::IntegrationTest
       Rails.configuration.action_controller.allow_forgery_protection
   end
 
-  test "same-site strict-mode POST reaches allowed base surfaces without a CSRF rejection" do
+  test "same-site preference mutations without tokens are refused on base surfaces" do
     ActionController::Base.allow_forgery_protection = true
 
     [
-      [ENV.fetch("PUBLIC_BASE_SERVICE_URL"), base_app_web_v0_theme_path],
-      [ENV.fetch("PUBLIC_BASE_CORPORATE_URL"), base_com_web_v0_theme_path],
-      [ENV.fetch("PUBLIC_BASE_STAFF_URL"), base_org_web_v0_theme_path],
+      [ENV.fetch("PUBLIC_BASE_SERVICE_URL"), base_app_api_v0_preferences_theme_path],
+      [ENV.fetch("PUBLIC_BASE_CORPORATE_URL"), base_com_api_v0_preferences_theme_path],
+      [ENV.fetch("PUBLIC_BASE_STAFF_URL"), base_org_api_v0_preferences_theme_path],
     ].each do |host, path|
       host!(host)
       patch(
@@ -146,7 +152,7 @@ class PreferenceWebCsrfTest < ActionDispatch::IntegrationTest
         as: :json,
       )
 
-      assert_not_equal 403, response.status
+      assert_response :forbidden
     end
   ensure
     # Restore the environment default, not the value observed on entry: if the flag was
@@ -156,13 +162,13 @@ class PreferenceWebCsrfTest < ActionDispatch::IntegrationTest
       Rails.configuration.action_controller.allow_forgery_protection
   end
 
-  test "same-site POST without an Origin is forbidden on base surfaces" do
+  test "same-site preference mutations without Origin still require tokens on base surfaces" do
     ActionController::Base.allow_forgery_protection = true
 
     [
-      [ENV.fetch("PUBLIC_BASE_SERVICE_URL"), base_app_web_v0_theme_path],
-      [ENV.fetch("PUBLIC_BASE_CORPORATE_URL"), base_com_web_v0_theme_path],
-      [ENV.fetch("PUBLIC_BASE_STAFF_URL"), base_org_web_v0_theme_path],
+      [ENV.fetch("PUBLIC_BASE_SERVICE_URL"), base_app_api_v0_preferences_theme_path],
+      [ENV.fetch("PUBLIC_BASE_CORPORATE_URL"), base_com_api_v0_preferences_theme_path],
+      [ENV.fetch("PUBLIC_BASE_STAFF_URL"), base_org_api_v0_preferences_theme_path],
     ].each do |host, path|
       host!(host)
       patch(
@@ -192,7 +198,7 @@ class PreferenceWebCsrfTest < ActionDispatch::IntegrationTest
     host!(host)
 
     patch(
-      base_app_web_v0_theme_path,
+      base_app_api_v0_preferences_theme_path,
       params: { theme: "dark" },
       headers: {
         "Accept" => "application/json",
@@ -216,7 +222,6 @@ class PreferenceWebCsrfTest < ActionDispatch::IntegrationTest
     ActionController::Base.allow_forgery_protection = true
     Base::App::ApplicationController.forgery_protection_trusted_origins = [
       "https://#{ENV.fetch("PUBLIC_BASE_SERVICE_URL")}",
-      "https://#{ENV.fetch("PUBLIC_AUTH_SERVICE_URL")}",
     ]
 
     host = ENV.fetch("PUBLIC_BASE_SERVICE_URL")
@@ -224,11 +229,11 @@ class PreferenceWebCsrfTest < ActionDispatch::IntegrationTest
 
     [
       "https://#{host}.evil.example",
-      "http://#{ENV.fetch("PUBLIC_AUTH_SERVICE_URL")}",
-      "https://#{ENV.fetch("PUBLIC_AUTH_SERVICE_URL")}:444",
+      "http://#{host}",
+      "https://#{host}:444",
     ].each do |origin|
       patch(
-        base_app_web_v0_theme_path,
+        base_app_api_v0_preferences_theme_path,
         params: { theme: "dark" },
         headers: {
           "Accept" => "application/json",
@@ -249,18 +254,18 @@ class PreferenceWebCsrfTest < ActionDispatch::IntegrationTest
     Base::App::ApplicationController.forgery_protection_trusted_origins = original_trusted_origins
   end
 
-  test "ordinary base app endpoint rejects cross-site POST from auth origin" do
+  test "ordinary base app endpoint rejects cross-site POST from an untrusted origin" do
     ActionController::Base.allow_forgery_protection = true
 
     host = ENV.fetch("PUBLIC_BASE_SERVICE_URL")
     host!(host)
 
     patch(
-      base_app_web_v0_theme_path,
+      base_app_api_v0_preferences_theme_path,
       params: { theme: "dark" },
       headers: {
         "Accept" => "application/json",
-        "Origin" => "https://#{ENV.fetch("PUBLIC_AUTH_SERVICE_URL")}",
+        "Origin" => "https://foreign.example.test",
         "Sec-Fetch-Site" => "cross-site",
       },
       as: :json,
@@ -275,29 +280,15 @@ class PreferenceWebCsrfTest < ActionDispatch::IntegrationTest
       Rails.configuration.action_controller.allow_forgery_protection
   end
 
-  test "ordinary base app endpoint rejects auth origin even with a real session-bound token" do
+  test "ordinary base app endpoint rejects a foreign origin even with a real session-bound token" do
     ActionController::Base.allow_forgery_protection = true
 
     host = ENV.fetch("PUBLIC_BASE_SERVICE_URL")
     host!(host)
+    https!
 
-    user = Client.first
-    session_record = ClientToken.create!(
-      user: user,
-      user_token_status_id: ClientTokenStatus::NOTHING,
-      user_token_kind_id: ClientTokenKind::BROWSER_WEB,
-      public_id: "csrf_#{SecureRandom.hex(4)}",
-      discarded_at: 1.day.from_now,
-    )
-    auth_headers = {
-      "Accept" => "text/html",
-      "Authorization" => "Bearer #{jwt_access_token_for(
-        user, host: host, session_public_id: session_record.public_id, resource_type: "client",
-      )}",
-      "X-TEST-SESSION-PUBLIC-ID" => session_record.public_id,
-    }
-
-    get(base_app_identity_emails_path(ri: "jp"), headers: auth_headers)
+    # The anonymous Preference page establishes the browser's Rails CSRF session.
+    get(base_app_preference_path(ri: "jp"), headers: { "Accept" => "text/html" })
 
     assert_response :success
     token = response.body[/name="csrf-token" content="([^"]+)"/, 1]
@@ -306,11 +297,25 @@ class PreferenceWebCsrfTest < ActionDispatch::IntegrationTest
     assert_predicate token, :present?
 
     patch(
-      base_app_web_v0_theme_path(ri: "jp"),
+      base_app_api_v0_preferences_theme_path(ri: "jp"),
       params: { theme: "dark" },
       headers: {
         "Accept" => "application/json",
-        "Origin" => "https://#{ENV.fetch("PUBLIC_AUTH_SERVICE_URL")}",
+        "Origin" => "https://#{host}",
+        "X-CSRF-Token" => token,
+        "Sec-Fetch-Site" => "same-origin",
+      },
+      as: :json,
+    )
+
+    assert_response :success
+
+    patch(
+      base_app_api_v0_preferences_theme_path(ri: "jp"),
+      params: { theme: "dark" },
+      headers: {
+        "Accept" => "application/json",
+        "Origin" => "https://foreign.example.test",
         "Sec-Fetch-Site" => "cross-site",
         "X-CSRF-Token" => token,
       },
@@ -335,14 +340,13 @@ class PreferenceWebCsrfTest < ActionDispatch::IntegrationTest
     host!(host)
 
     patch(
-      base_app_web_v0_theme_path,
+      base_app_api_v0_preferences_theme_path,
       params: { theme: "dark" },
       headers: {
         "Accept" => "application/json",
         "Origin" => "https://#{host}",
         "X-CSRF-Token" => token,
-        # Empty means absent: FetchMetadataDefaults injects same-origin unless the test
-        # states the header itself, and same-origin never reaches the legacy token path.
+        # Empty means absent: the hybrid strategy uses this session-bound token fallback.
         "Sec-Fetch-Site" => "",
       },
       as: :json,
@@ -362,24 +366,10 @@ class PreferenceWebCsrfTest < ActionDispatch::IntegrationTest
 
     host = ENV.fetch("PUBLIC_BASE_SERVICE_URL")
     host!(host)
+    https!
 
-    user = Client.first
-    session_record = ClientToken.create!(
-      user: user,
-      user_token_status_id: ClientTokenStatus::NOTHING,
-      user_token_kind_id: ClientTokenKind::BROWSER_WEB,
-      public_id: "csrf_#{SecureRandom.hex(4)}",
-      discarded_at: 1.day.from_now,
-    )
-    auth_headers = {
-      "Accept" => "text/html",
-      "Authorization" => "Bearer #{jwt_access_token_for(
-        user, host: host, session_public_id: session_record.public_id, resource_type: "client",
-      )}",
-      "X-TEST-SESSION-PUBLIC-ID" => session_record.public_id,
-    }
-
-    get(base_app_identity_emails_path(ri: "jp"), headers: auth_headers)
+    # The anonymous Preference page establishes the browser's Rails CSRF session.
+    get(base_app_preference_path(ri: "jp"), headers: { "Accept" => "text/html" })
 
     assert_response :success
     token = response.body[/name="csrf-token" content="([^"]+)"/, 1]
@@ -388,33 +378,31 @@ class PreferenceWebCsrfTest < ActionDispatch::IntegrationTest
     assert_predicate token, :present?
 
     patch(
-      base_app_web_v0_theme_path(ri: "jp"),
+      base_app_api_v0_preferences_theme_path(ri: "jp"),
       params: { theme: "dark" },
       headers: {
         "Accept" => "application/json",
         "Origin" => "https://#{host}",
         "X-CSRF-Token" => token,
-        # Empty means absent: FetchMetadataDefaults injects same-origin unless the test
-        # states the header itself, and same-origin never reaches the legacy token path.
+        # Empty means absent. Base still requires the session-bound token for this request.
         "Sec-Fetch-Site" => "",
       },
       as: :json,
     )
 
-    assert_not_equal 403, response.status
+    assert_response :success
 
     second_session = open_session
     second_session.host!(host)
+    second_session.https!
     second_session.patch(
-      base_app_web_v0_theme_path(ri: "jp"),
+      base_app_api_v0_preferences_theme_path(ri: "jp"),
       params: { theme: "dark" },
       headers: {
         "Accept" => "application/json",
         "Origin" => "https://#{host}",
         "X-CSRF-Token" => token,
-        # Empty means absent: FetchMetadataDefaults injects same-origin unless the test
-        # states the header itself, and same-origin never reaches the legacy token path.
-        "Sec-Fetch-Site" => "",
+        "Sec-Fetch-Site" => "same-origin",
       },
       as: :json,
     )
@@ -422,14 +410,13 @@ class PreferenceWebCsrfTest < ActionDispatch::IntegrationTest
     assert_equal 403, second_session.response.status
 
     patch(
-      base_app_web_v0_theme_path(ri: "jp"),
+      base_app_api_v0_preferences_theme_path(ri: "jp"),
       params: { theme: "dark" },
       headers: {
         "Accept" => "application/json",
         "Origin" => "https://#{host}",
         "X-CSRF-Token" => "invalid-token",
-        # Empty means absent: FetchMetadataDefaults injects same-origin unless the test
-        # states the header itself, and same-origin never reaches the legacy token path.
+        # Empty means absent. Base requires a valid session-bound token for this request.
         "Sec-Fetch-Site" => "",
       },
       as: :json,
@@ -438,48 +425,18 @@ class PreferenceWebCsrfTest < ActionDispatch::IntegrationTest
     assert_response :forbidden
 
     patch(
-      base_app_web_v0_theme_path(ri: "jp"),
+      base_app_api_v0_preferences_theme_path(ri: "jp"),
       params: { theme: "dark" },
       headers: {
         "Accept" => "application/json",
         "Origin" => "https://#{host}",
-        # Empty means absent: FetchMetadataDefaults injects same-origin unless the test
-        # states the header itself, and same-origin never reaches the legacy token path.
+        # Empty means absent. Base requires a valid session-bound token for this request.
         "Sec-Fetch-Site" => "",
       },
       as: :json,
     )
 
     assert_response :forbidden
-  ensure
-    # Restore the environment default, not the value observed on entry: if the flag was
-    # already leaked as true, restoring the observation would pin the leak for the rest
-    # of the process.
-    ActionController::Base.allow_forgery_protection =
-      Rails.configuration.action_controller.allow_forgery_protection
-  end
-
-  test "protocol exception endpoints remain tokenless but protected by protocol-specific guards" do
-    ActionController::Base.allow_forgery_protection = true
-
-    host!(ENV.fetch("PUBLIC_BASE_SERVICE_URL"))
-    post(
-      base_app_oauth_token_path,
-      params: { grant_type: "client_credentials" },
-      headers: { "Accept" => "application/json", "Sec-Fetch-Site" => "cross-site" },
-      as: :json,
-    )
-
-    assert_not_equal 403, response.status
-
-    post(
-      auth_app_oidc_backchannel_logout_url(host: ENV.fetch("PUBLIC_AUTH_SERVICE_URL")),
-      params: { logout_token: "invalid" },
-      headers: { "Accept" => "application/json", "Sec-Fetch-Site" => "cross-site" },
-      as: :json,
-    )
-
-    assert_not_equal 403, response.status
   ensure
     # Restore the environment default, not the value observed on entry: if the flag was
     # already leaked as true, restoring the observation would pin the leak for the rest

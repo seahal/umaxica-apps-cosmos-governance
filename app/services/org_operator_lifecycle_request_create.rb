@@ -5,20 +5,17 @@ class OrgOperatorLifecycleRequestCreate
   def self.call(actor:, attributes:)
     new(actor: actor, attributes: attributes).call
   end
+  public_class_method :call
 
   def initialize(actor:, attributes:)
     @actor = actor
     @attributes = attributes
   end
 
+  public
   def call
-    unless org_owner_authorized?
-      request = OperatorLifecycleRequest.new(request_attributes)
-      request.errors.add(:organization_id, :not_authorized)
-      return OrgOperatorLifecycleResult.new(
-        success: false, request: request, error: request.errors.full_messages.to_sentence,
-        invitation: nil,
-      )
+    if attributes[:action].to_s == OperatorLifecycleRequest::ACTION_JOIN
+      raise AccessOpDataUnavailableError
     end
 
     request = OperatorLifecycleRequest.new(request_attributes)
@@ -61,17 +58,5 @@ class OrgOperatorLifecycleRequestCreate
 
   def normalized_target_email
     attributes[:target_email].to_s.downcase.strip.presence
-  end
-
-  # Only the organization owner may initiate a JOIN lifecycle request for that org.
-  # Non-JOIN actions carry no organization_id and are not org-scoped (the 4-eyes approval
-  # is the only control for those actions).
-  def org_owner_authorized?
-    return true unless attributes[:action].to_s == OperatorLifecycleRequest::ACTION_JOIN
-
-    org_id = attributes[:organization_id].to_i
-    return false if org_id.zero?
-
-    Organization.find_by(id: org_id)&.operator_id == actor.id
   end
 end

@@ -14,9 +14,6 @@ module AnalyticsConsentGuardPreConsentAllowlist
     /\Aauthentication\./,
     /\Aauthorization\./,
     /\Asession\./,
-    /\Asocial_auth\./,
-    /\Asign\.social\.omniauth/,
-    /\Asign\.social\.org\.omniauth/,
     /\Auser\.token\./,
     /\Astaff\.token\./,
     /\Auser\.occurrence\./,
@@ -62,4 +59,5 @@ module AnalyticsConsentGuardPreConsentAllowlist
 
     ALLOWED.any? { |pattern| pattern.match?(event_name.to_s) }
   end
+  public_class_method :allowed?
 end

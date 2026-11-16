@@ -13,6 +13,8 @@
 class OperatorOccurrenceStatus < OccurrenceRecord
   include ReferenceRecord
 
+  include OccurrenceStatus
+
   # Fixed IDs - do not modify these values
   NOTHING = 1
   ACTIVE = 2
@@ -20,7 +22,7 @@ class OperatorOccurrenceStatus < OccurrenceRecord
   DELETED = 4
   DEFAULTS = [NOTHING, ACTIVE, INACTIVE, DELETED].freeze
 
-  include OccurrenceStatus
+  self.record_timestamps = false
 
   has_many :staff_occurrences,
            class_name: "OperatorOccurrence",

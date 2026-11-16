@@ -5,6 +5,8 @@ require "test_helper"
 
 # rubocop:disable I18n/RailsI18n/DecorateString -- appeal statements are stored user content, not UI copy
 class EnforcementAppealTest < ActiveSupport::TestCase
+  self.fixture_table_names = []
+
   test "app appeal requires a fixed reason category and a bounded statement" do
     appeal = AppEnforcementAppeal.new(
       enforcement_case: AppEnforcementCase.new(
@@ -59,7 +61,7 @@ class EnforcementAppealTest < ActiveSupport::TestCase
     assert_not_nil appeal.redacted_at
   end
 
-  test "appeal resolution requires a reviewer distinct from the Case operators" do
+  test "appeal resolution refuses unavailable reviewer authority without changing the stored appeal" do
     enforcement_case = AppEnforcementCase.create!(
       kind: "security_lock", state: "draft", duration_mode: "indefinite", visibility: "visible",
       release_mode: "verification_required", effective_at: Time.current, reason_code: "security_incident",
@@ -74,16 +76,18 @@ class EnforcementAppealTest < ActiveSupport::TestCase
       state: "submitted",
     )
 
-    error =
-      assert_raises(EnforcementAppeal::ReviewerSeparationError) do
-        appeal.resolve!(reviewer_operator_public_id: "operator-applying", resolution_code: "rejected")
-      end
-
-    assert_match(/must differ/, error.message)
-    assert_equal "submitted", appeal.reload.state
+    before_appeal = appeal.reload.attributes
+    before_case = enforcement_case.reload.attributes
+    before_events = EnforcementEvent.where(case_public_id: enforcement_case.public_id).count
+    assert_raises(AccessOpDataUnavailableError) do
+      appeal.resolve!(reviewer_operator_public_id: "operator-applying", resolution_code: "rejected")
+    end
+    assert_equal before_appeal, appeal.reload.attributes
+    assert_equal before_case, enforcement_case.reload.attributes
+    assert_equal before_events, EnforcementEvent.where(case_public_id: enforcement_case.public_id).count
   end
 
-  test "a rejected appeal records its reviewer and immutable resolution" do
+  test "rejection cannot invent a reviewer or resolution without Access evidence" do
     enforcement_case = AppEnforcementCase.create!(
       kind: "security_lock", state: "draft", duration_mode: "indefinite", visibility: "visible",
       release_mode: "verification_required", effective_at: Time.current, reason_code: "security_incident",
@@ -97,12 +101,65 @@ class EnforcementAppealTest < ActiveSupport::TestCase
       state: "submitted",
     )
 
-    appeal.resolve!(reviewer_operator_public_id: "operator-reviewing", resolution_code: "rejected")
+    before_appeal = appeal.reload.attributes
+    before_case = enforcement_case.reload.attributes
+    before_events = EnforcementEvent.where(case_public_id: enforcement_case.public_id).count
+    assert_raises(AccessOpDataUnavailableError) do
+      appeal.resolve!(reviewer_operator_public_id: "operator-reviewing", resolution_code: "rejected")
+    end
+    assert_equal before_appeal, appeal.reload.attributes
+    assert_equal before_case, enforcement_case.reload.attributes
+    assert_equal before_events, EnforcementEvent.where(case_public_id: enforcement_case.public_id).count
+  end
 
-    assert_equal "rejected", appeal.state
-    assert_equal "operator-reviewing", appeal.reviewer_operator_public_id
-    assert_equal "rejected", appeal.resolution_code
-    assert_not_nil appeal.reviewed_at
+  test "approval without Access evidence cannot change the Case or commit a resolution" do
+    enforcement_case = AppEnforcementCase.create!(
+      kind: "security_lock", state: "active", duration_mode: "indefinite", visibility: "visible",
+      release_mode: "verification_required", effective_at: Time.current, reason_code: "security_incident",
+      principal_public_id: "client-standing-approved", applied_by_operator_public_id: "operator-applying",
+    )
+    appeal = AppEnforcementAppeal.create!(
+      enforcement_case: enforcement_case,
+      reason_code: "incorrect_decision",
+      statement: "The decision does not match what happened.",
+      submitted_at: Time.current,
+      state: "submitted",
+    )
+
+    before_appeal = appeal.reload.attributes
+    before_case = enforcement_case.reload.attributes
+    before_events = EnforcementEvent.where(case_public_id: enforcement_case.public_id).count
+    assert_raises(AccessOpDataUnavailableError) do
+      appeal.resolve!(reviewer_operator_public_id: "operator-reviewing", resolution_code: "approved")
+    end
+    assert_equal before_appeal, appeal.reload.attributes
+    assert_equal before_case, enforcement_case.reload.attributes
+    assert_equal before_events, EnforcementEvent.where(case_public_id: enforcement_case.public_id).count
+  end
+
+  test "missing Access evidence cannot publish a false rejected-appeal audit" do
+    enforcement_case = AppEnforcementCase.create!(
+      kind: "security_lock", state: "active", duration_mode: "indefinite", visibility: "visible",
+      release_mode: "verification_required", effective_at: Time.current, reason_code: "security_incident",
+      principal_public_id: "client-standing-rejected-audit", applied_by_operator_public_id: "operator-applying",
+    )
+    appeal = AppEnforcementAppeal.create!(
+      enforcement_case: enforcement_case,
+      reason_code: "new_information",
+      statement: "The supporting facts changed.",
+      submitted_at: Time.current,
+      state: "submitted",
+    )
+
+    before_appeal = appeal.reload.attributes
+    before_case = enforcement_case.reload.attributes
+    before_events = EnforcementEvent.where(case_public_id: enforcement_case.public_id).count
+    assert_raises(AccessOpDataUnavailableError) do
+      appeal.resolve!(reviewer_operator_public_id: "operator-reviewing", resolution_code: "rejected")
+    end
+    assert_equal before_appeal, appeal.reload.attributes
+    assert_equal before_case, enforcement_case.reload.attributes
+    assert_equal before_events, EnforcementEvent.where(case_public_id: enforcement_case.public_id).count
   end
 
   test "submit! persists the appeal and writes one audit event on the Case" do
@@ -153,3 +210,4 @@ class EnforcementAppealTest < ActiveSupport::TestCase
     assert_predicate appeal, :valid?
   end
 end
+# rubocop:enable I18n/RailsI18n/DecorateString

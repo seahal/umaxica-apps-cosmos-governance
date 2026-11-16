@@ -5,6 +5,7 @@ module Email::App
   class PromotionalMailer < ApplicationMailer
     default from: "promotion@umaxica.app"
 
+    public
     def notice
       @title = params.fetch(:title)
       @body = params.fetch(:body)

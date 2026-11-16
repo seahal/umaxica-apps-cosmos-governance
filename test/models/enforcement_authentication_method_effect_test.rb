@@ -16,13 +16,6 @@ class EnforcementAuthenticationMethodEffectTest < ActiveSupport::TestCase
       principal: -> { clients(:one) },
     },
     {
-      name: "com",
-      effect_model: ComEnforcementAuthenticationMethodEffect,
-      case_model: ComEnforcementCase,
-      method: "passkey",
-      principal: -> { visitors(:reserved_visitor) },
-    },
-    {
       name: "org",
       effect_model: OrgEnforcementAuthenticationMethodEffect,
       case_model: OrgEnforcementCase,
@@ -79,6 +72,33 @@ class EnforcementAuthenticationMethodEffectTest < ActiveSupport::TestCase
       )
 
       assert_predicate effect, :valid?
+    end
+
+    test "#{realm[:name]} permits one open method effect and retains ended history" do
+      principal = instance_exec(&realm[:principal])
+      enforcement_case = realm[:case_model].create!(
+        kind: "method_protection", duration_mode: "indefinite", visibility: "visible",
+        release_mode: "operator", effective_at: Time.current, reason_code: "abuse",
+        principal_public_id: principal.public_id, applied_by_operator_public_id: operators(:one).public_id,
+      )
+      attributes = {
+        enforcement_case: enforcement_case,
+        principal_public_id: principal.public_id,
+        authentication_method: realm[:method],
+        effect: "mutation_locked",
+        effective_at: Time.current,
+      }
+      original = realm[:effect_model].create!(**attributes)
+      duplicate = realm[:effect_model].new(**attributes)
+
+      assert_not duplicate.valid?
+      assert duplicate.errors.of_kind?(:principal_public_id, :taken)
+      assert_raises(ActiveRecord::RecordNotUnique) do
+        realm[:effect_model].transaction(requires_new: true) { duplicate.save!(validate: false) }
+      end
+      original.update!(ended_at: Time.current)
+
+      assert_predicate realm[:effect_model].create!(**attributes), :persisted?
     end
 
     test "#{realm[:name]} realm leaves a non-freezing effect unconstrained by case kind" do

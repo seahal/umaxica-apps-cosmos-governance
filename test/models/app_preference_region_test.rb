@@ -1,4 +1,6 @@
+# frozen_string_literal: true
 # typed: false
+
 # == Schema Information
 #
 # Table name: app_preference_regions
@@ -21,8 +23,6 @@
 #  fk_rails_...                            (preference_id => app_preferences.id)
 #
 
-# frozen_string_literal: true
-
 require "test_helper"
 
 class AppPreferenceRegionTest < ActiveSupport::TestCase
@@ -30,7 +30,10 @@ class AppPreferenceRegionTest < ActiveSupport::TestCase
 
   setup do
     AppPreferenceStatus.ensure_defaults!
-    @preference = AppPreference.create!(status_id: AppPreferenceStatus::NOTHING)
+    @preference = AppPreference.create!(
+      jti: SecureRandom.uuid, last_issued_at: Time.current, last_issued_expires_at: 400.days.from_now,
+      status_id: AppPreferenceStatus::ACTIVE,
+    )
   end
 
   test "belongs to preference" do

@@ -121,6 +121,15 @@ Examples:
 - `["email_otp", "totp"]`
 - `["google", "passkey"]`
 
+## Scoped Base front-channel ID Token profile (2026-11-14)
+
+The owner-approved first-party Base App and Base Org profile is defined by the amendment in
+[`oidc-authorization-code-only-implicit-and-hybrid-non-adoption.md`](oidc-authorization-code-only-implicit-and-hybrid-non-adoption.md).
+For only those two RP clients, the exact accepted claim set is `iss`, `sub`, `aud`, `exp`, `iat`,
+`auth_time`, `nonce`, `jti`, `sid`, `acr`, and `amr`. `subject_type` is not accepted in this
+front-channel token; `sid` and `jti` are required. This scoped profile does not change the broader
+claim direction for other OIDC tokens.
+
 ## Difference from current implementation
 
 At the time of writing, the repository already has partial foundations such as:
@@ -141,3 +150,19 @@ Expected gaps include:
 ## Implementation follow-up
 
 This memo should be treated as the design reference for the next implementation pass.
+
+## Delivered reconciliation (2026-10-06)
+
+The planned callback contract is now implemented for the current Base RP paths: validate the
+authorization response and token response, validate issuer/client/audience/nonce/PKCE, call the
+scope-filtered UserInfo endpoint with the returned access token, then resolve the canonical Identity
+and RP session before setting cookies. Discovery advertises only accepted endpoints and grants. The
+earlier “not yet consistently implemented” list is superseded for these paths; real provider and
+deployment verification remain operational prerequisites.
+
+## Base front-channel reconciliation (2026-11-14)
+
+Base App and Base Org now implement the owner-approved scoped profile above. Those two callback
+paths no longer perform a code exchange or UserInfo call, and do not receive Access or Refresh
+Tokens. Other clients and the historical Code/S256 contract remain governed by their own accepted
+decisions.

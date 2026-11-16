@@ -8,6 +8,12 @@
 # `index?`/`create?` gate the actor *type*; the per-record write rules require ownership
 # (record.staff_id == operator.id). Other defaults stay deny-all (allowlist).
 class OperatorEmailPolicy < ApplicationPolicy
+  public
+
+  def credential_registration_requirement(token:)
+    raise AccessOpDataUnavailableError
+  end
+
   def index?
     user.is_a?(Operator)
   end

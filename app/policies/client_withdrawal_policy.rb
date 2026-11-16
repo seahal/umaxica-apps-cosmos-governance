@@ -11,6 +11,7 @@
 # before_actions.
 class ClientWithdrawalPolicy < ApplicationPolicy
   # new? -> create?, edit? -> update? via ApplicationPolicy aliases.
+  public
   def create?
     owner?
   end

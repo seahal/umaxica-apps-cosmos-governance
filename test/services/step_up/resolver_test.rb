@@ -1,208 +1,62 @@
-# typed: false
 # frozen_string_literal: true
 
 require "test_helper"
-# require "helpers/global_test_support"
 
 module StepUp
   class ResolverTest < ActiveSupport::TestCase
-    Token =
-      Struct.new(
-        :currently_usable,
-        :public_id,
-        :last_step_up_at,
-        :last_step_up_scope,
-        :last_step_up_aal,
-        :last_step_up_method,
-        :last_step_up_session_public_id,
-        :last_step_up_purpose,
-        :last_step_up_audience,
-        keyword_init: true,
-      ) do
-        def currently_usable? = currently_usable
+    test "legacy proof objects are unavailable before their properties can be mistaken for authority" do
+      assert_raises(AccessOpDataUnavailableError) do
+        StepUpResolver.call(token: Object.new, scope: "settings_email")
+      end
+    end
 
-        def has_attribute?(attribute)
-          members.include?(attribute.to_sym)
+    test "absent proof never satisfies an active requirement or creates a usable token" do
+      result = StepUpResolver.call(
+        token: nil, scope: "settings_email",
+        session_binding: "required-session", token_binding: "required-token",
+      )
+
+      assert_not result.satisfied?
+      assert_not result.usable_token?
+      assert_nil result.method
+      assert_nil result.satisfied_at
+      assert_nil result.expires_at
+    end
+
+    test "blank requested scopes retain the strict requirement contract without any fabricated proof" do
+      [[nil, "scope is required"], ["", "scope must not be blank"]].each do |scope, message|
+        error =
+          assert_raises(StepUpRequirement::Invalid) do
+            StepUpResolver.call(token: nil, scope: scope, session_binding: "session", token_binding: "token")
+          end
+
+        assert_equal message, error.message
+      end
+    end
+
+    test "legacy AAL demands are rejected before unavailable proof interpretation" do
+      %w(aal1 aal2 aal3).each do |aal|
+        error =
+          assert_raises(StepUpRequirement::Invalid) do
+            StepUpResolver.call(token: Object.new, required_aal: aal)
+          end
+
+        assert_equal "legacy AAL requirements are unsupported", error.message
+      end
+    end
+
+    test "active requirements cannot omit the session binding or turn off its binding requirement" do
+      [true, false].each do |requires_binding|
+        assert_raises(StepUpRequirement::Invalid) do
+          StepUpRequirement.new(
+            step_up_required: true, scope: "settings_email", allowed_methods: [:totp],
+            phishing_resistant_required: false, user_verification_required: false,
+            full_reauthentication_required: false, ttl: 15.minutes, purpose: "step_up",
+            audience: "step_up:resolver", session_binding: nil, token_binding: "token_1",
+            require_session_binding: requires_binding, actor_ref: "resolver", resource_ref: nil, tenant_ref: nil,
+          )
         end
       end
-
-    test "returns satisfied when token is usable, fresh, and scope matches" do
-      now = Time.zone.parse("2026-05-25 00:00:00")
-      token = Token.new(
-        currently_usable: true,
-        public_id: "token_1",
-        last_step_up_at: now - 5.minutes,
-        last_step_up_scope: "profile",
-        last_step_up_aal: "aal2",
-        last_step_up_method: "totp",
-        last_step_up_session_public_id: "session_1",
-      )
-
-      step_up = StepUpResolver.call(
-        token: token,
-        scope: "profile",
-        session_binding: "session_1",
-        token_binding: "token_1",
-        now: now,
-      )
-
-      assert_predicate step_up, :satisfied?
-      assert_predicate step_up, :usable_token?
-      assert_equal "profile", step_up.scope
-      assert_nil step_up.required_aal
-      assert_equal now + 10.minutes, step_up.expires_at
-    end
-
-    test "returns unsatisfied when token is expired, unusable, or scope mismatched" do
-      now = Time.zone.parse("2026-05-25 00:00:00")
-
-      expired = token_at(now - 16.minutes, scope: "profile")
-      unusable = token_at(now - 5.minutes, currently_usable: false, scope: "profile")
-      mismatched = token_at(now - 5.minutes, scope: "other")
-
-      assert_not StepUpResolver.call(token: expired, scope: "profile", now: now).satisfied?
-      assert_not StepUpResolver.call(token: unusable, scope: "profile", now: now).satisfied?
-      assert_not StepUpResolver.call(token: mismatched, scope: "profile", now: now).satisfied?
-    end
-
-    test "satisfies just before ttl and rejects exactly at ttl" do
-      now = Time.zone.parse("2026-05-25 00:00:00")
-      ttl = 15.minutes
-
-      just_before = token_at(now - ttl + 1.second, scope: "profile")
-      exactly_at = token_at(now - ttl, scope: "profile")
-
-      assert_predicate StepUpResolver.call(token: just_before, scope: "profile", now: now, ttl: ttl), :satisfied?
-      assert_not StepUpResolver.call(token: exactly_at, scope: "profile", now: now, ttl: ttl).satisfied?
-    end
-
-    test "blank requested scope is never satisfied" do
-      now = Time.zone.parse("2026-05-25 00:00:00")
-      token = token_at(now - 1.minute, scope: "settings_email")
-
-      assert_not StepUpResolver.call(token: token, scope: nil, now: now).satisfied?
-      assert_not StepUpResolver.call(token: token, scope: "", now: now).satisfied?
-      assert_not StepUpResolver.call(token: token, scope: "settings_passkey", now: now).satisfied?
-    end
-
-    test "rejects wrong method, unsupported aal, and binding mismatch" do
-      now = Time.zone.parse("2026-05-25 00:00:00")
-      token = token_at(now - 1.minute, scope: "settings_passkey", method: "email_otp")
-
-      assert_not StepUpResolver.call(token: token, scope: "settings_passkey", now: now).satisfied?
-      assert_not StepUpResolver.call(token: token, scope: "settings_passkey", required_aal: :aal3, now: now).satisfied?
-      assert_not StepUpResolver.call(
-        token: token_at(now - 1.minute, scope: "settings_passkey"),
-        scope: "settings_passkey",
-        session_binding: "other_session",
-        token_binding: "token_1",
-        now: now,
-      ).satisfied?
-    end
-
-    test "rejects wrong purpose and audience when requirement binds them" do
-      now = Time.zone.parse("2026-05-25 00:00:00")
-      token = token_at(
-        now - 1.minute,
-        scope: "settings_email",
-        purpose: "step_up",
-        audience: "step_up:app",
-      )
-      requirement = StepUpRequirement.new(
-        scope: "settings_email",
-        purpose: "step_up",
-        audience: "step_up:app",
-      )
-
-      assert_predicate StepUpResolver.call(token: token, requirement: requirement, now: now), :satisfied?
-
-      wrong_purpose = StepUpRequirement.new(
-        scope: "settings_email",
-        purpose: "other",
-        audience: "step_up:app",
-      )
-      wrong_audience = StepUpRequirement.new(
-        scope: "settings_email",
-        purpose: "step_up",
-        audience: "step_up:org",
-      )
-
-      assert_not StepUpResolver.call(token: token, requirement: wrong_purpose, now: now).satisfied?
-      assert_not StepUpResolver.call(token: token, requirement: wrong_audience, now: now).satisfied?
-    end
-
-    test "rejects missing session binding when requirement explicitly requires it" do
-      now = Time.zone.parse("2026-05-25 00:00:00")
-      token = token_at(now - 1.minute, scope: "settings_email", session_public_id: nil)
-      requirement = StepUpRequirement.new(
-        scope: "settings_email",
-        session_binding: nil,
-        require_session_binding: true,
-      )
-
-      step_up = StepUpResolver.call(token: token, requirement: requirement, now: now)
-
-      assert_not_predicate step_up, :satisfied?
-    end
-
-    test "rejects mismatched session binding when requirement explicitly requires it" do
-      now = Time.zone.parse("2026-05-25 00:00:00")
-      token = token_at(now - 1.minute, scope: "settings_email", session_public_id: "session_1")
-      requirement = StepUpRequirement.new(
-        scope: "settings_email",
-        session_binding: "session_2",
-        require_session_binding: true,
-      )
-
-      assert_not StepUpResolver.call(token: token, requirement: requirement, now: now).satisfied?
-    end
-
-    test "still allows step-up without a session binding when it is not required" do
-      now = Time.zone.parse("2026-05-25 00:00:00")
-      token = token_at(now - 1.minute, scope: "settings_email", session_public_id: nil)
-      requirement = StepUpRequirement.new(scope: "settings_email")
-
-      assert_predicate StepUpResolver.call(token: token, requirement: requirement, now: now), :satisfied?
-    end
-
-    test "browser step-up contract requires a live session binding" do
-      now = Time.zone.parse("2026-05-25 00:00:00")
-      token = token_at(now - 1.minute, scope: "settings_email", session_public_id: "session_1")
-      requirement = StepUpRequirement.new(
-        scope: "settings_email",
-        session_binding: "session_1",
-        require_session_binding: true,
-      )
-
-      assert_predicate StepUpResolver.call(token: token, requirement: requirement, now: now), :satisfied?
-      assert_not StepUpResolver.call(
-        token: token_at(now - 1.minute, scope: "settings_email", session_public_id: nil),
-        requirement: requirement,
-        now: now,
-      ).satisfied?
-      assert_not StepUpResolver.call(
-        token: token_at(now - 1.minute, scope: "settings_email", session_public_id: "other_session"),
-        requirement: requirement,
-        now: now,
-      ).satisfied?
-    end
-
-    private
-
-    def token_at(time, currently_usable: true, scope:, aal: "aal2", method: "totp",
-                 public_id: "token_1", session_public_id: "session_1",
-                 purpose: nil, audience: nil)
-      Token.new(
-        currently_usable: currently_usable,
-        public_id: public_id,
-        last_step_up_at: time,
-        last_step_up_scope: scope,
-        last_step_up_aal: aal,
-        last_step_up_method: method,
-        last_step_up_session_public_id: session_public_id,
-        last_step_up_purpose: purpose,
-        last_step_up_audience: audience,
-      )
     end
   end
 end

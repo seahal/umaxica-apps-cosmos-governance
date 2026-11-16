@@ -7,11 +7,6 @@ module MfaStatusTrackable
   class InvalidMfaStatus < StandardError; end
   REFERENCE_CLASSES = Concurrent::Map.new
 
-  included do
-    before_validation :assign_calculated_mfa_status, if: :mfa_status_placeholder?
-    after_create :refresh_mfa_status!
-  end
-
   class_methods do
     def mfa_status_reference(model_class)
       REFERENCE_CLASSES[self] = model_class
@@ -22,6 +17,7 @@ module MfaStatusTrackable
     end
   end
 
+  public
   def refresh_mfa_status!
     return true unless persisted? && has_attribute?(:mfa_status_id)
 

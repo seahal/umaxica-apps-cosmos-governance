@@ -37,14 +37,12 @@ class OperatorEmailStatusTest < ActiveSupport::TestCase
   test "restrict_with_error prevents deletion when emails exist" do
     status = OperatorEmailStatus.find(OperatorEmailStatus::VERIFIED)
     # Create a staff identity email with this status
-    staff = Operator.create!
+    staff = Operator.create!(security_mode_id: SecurityModeConfigurable::ADVANCED)
     OperatorEmail.create!(
       address: "staff@example.com",
       staff_id: staff.id,
       staff_email_status_id: status.id,
-      public_id: "email#{SecureRandom.hex(6)}",
-      otp_counter: "1",
-      otp_private_key: "secret_credential",
+      public_id: PublicId.generate,
     )
 
     assert_raises(ActiveRecord::RecordNotDestroyed) do

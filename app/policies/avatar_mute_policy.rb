@@ -2,6 +2,7 @@
 # frozen_string_literal: true
 
 class AvatarMutePolicy < ApplicationPolicy
+  public
   def create?
     actor_avatar = user
     target_avatar = record&.muted_avatar
@@ -20,6 +21,6 @@ class AvatarMutePolicy < ApplicationPolicy
   private
 
   def active_avatar?(avatar)
-    avatar.lifecycle_state&.key == "active" && avatar.accessible?
+    AvatarLifecycleState.exists?(id: avatar.lifecycle_state_id, key: "active") && avatar.accessible?
   end
 end

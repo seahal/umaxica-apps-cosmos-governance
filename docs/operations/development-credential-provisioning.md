@@ -64,6 +64,21 @@ committed payload is corrupt.
 CI does not use these files. GitHub Actions supplies the key through the `RAILS_MASTER_KEY` secret
 (`.github/workflows/ci.yml`).
 
+### Governance live identifier lookup keys
+
+The encrypted development and test payloads each hold their own independent
+`APP_EMAIL_ADDRESS_HMAC_KEY`, `ORG_EMAIL_ADDRESS_HMAC_KEY`,
+`APP_TELEPHONE_NUMBER_HMAC_KEY` and `ORG_TELEPHONE_NUMBER_HMAC_KEY` entries. These secrets are
+not local environment configuration. `IdentifierBlindIndex` and live-key reuse checks access
+`Rails.app.credentials` directly: the installed Rails `Rails.app.creds` also searches ENV and
+therefore cannot enforce this source boundary. Missing or blank lookup credentials fail clearly.
+
+New keys make existing lookup digests stale. Recomputing retained development records requires
+owner approval and the existing identifier maintenance safeguards; replacing credentials alone
+does not restore lookup of existing accounts. Current migration verification and pending work are
+tracked in `specs/governance-identifier-hmac-credentials/spec.md`. Production secret-store delivery
+and other application secrets remain separately scoped.
+
 ## Repository-root `.env`
 
 Compose reads the repository-root `.env`. It currently carries four settings:
@@ -96,14 +111,9 @@ development lead when you do not have dashboard access.** Only the tunnel you ac
 token; a connector started without one exits immediately and stays stopped after three bounded
 restart attempts. There is no anonymous fallback.
 
-The committed `.env.example` and `.env.devcontainer.example` files are non-secret development
-contracts only. They contain obvious local placeholders, never provider credentials or Rails keys.
-Copy `.env.example` to the ignored `.env` only when host-specific overrides are needed:
-
-```bash
-cp .env.example .env
-chmod 600 .env
-```
+The committed `.env.container.devcontainer` file is a non-secret development contract only. It
+contains obvious local placeholders, never provider credentials or Rails keys. Put host-specific
+overrides in the ignored `.env` only when they are needed, and keep it at mode `600`.
 
 ## Provider credentials for staging, production, and individual environments
 
@@ -125,20 +135,21 @@ behalf. Broad or long-lived credentials are not issued for convenience.
 
 A credential you receive stays out of the repository. Put it in the gitignored `.env`, in Rails
 encrypted credentials, or in the provider's own secret store. Never place it in a tracked file, a
-Compose file, a container image, a plan under `plans/`, or a note under `notes/`. When a credential
-is no longer needed, or may have been exposed, tell the development lead so it can be revoked.
+Compose file, a container image, a plan under `plans/`, or a note under `research/`. When a
+credential is no longer needed, or may have been exposed, tell the development lead so it can be
+revoked.
 
 ## Development service passwords: fixed literals
 
-The development PostgreSQL passwords are fixed, development-only values represented in the local
-environment contract and consumed by the infrastructure services. They are not generated, not
-rotated, and not secret:
+The development PostgreSQL passwords are fixed, development-only values written in
+`config/database.yml` and in the infrastructure services. They are not generated, not rotated, and
+not secret:
 
-| Variable                        | Value         | Set on                 |
-| :------------------------------ | :------------ | :--------------------- |
-| `POSTGRESQL_PASSWORD`           | `development` | `.env.example`, `core` |
-| `POSTGRES_PASSWORD`             | `development` | `primary`, `replica`   |
-| `POSTGRES_REPLICATION_PASSWORD` | `replication` | `primary`, `replica`   |
+| Variable                        | Value         | Set on                |
+| :------------------------------ | :------------ | :-------------------- |
+| `password` (development, test)  | `development` | `config/database.yml` |
+| `POSTGRES_PASSWORD`             | `development` | `primary`, `replica`  |
+| `POSTGRES_REPLICATION_PASSWORD` | `replication` | `primary`, `replica`  |
 
 This is deliberate. The stack is development-only, every database it serves is disposable, no port
 is published for `primary` or `replica`, and the values guard nothing reachable off the host. A

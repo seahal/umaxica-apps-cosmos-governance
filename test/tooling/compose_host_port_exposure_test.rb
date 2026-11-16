@@ -8,27 +8,23 @@ require "yaml"
 # A `ports:` entry with no host address makes Podman bind 0.0.0.0, which places a development
 # service on every host interface (LAN, Wi-Fi, Ethernet, Tailscale). This test reads the Compose
 # files as text rather than running `podman compose config`, so it needs no container engine and
-# runs in CI.
+# runs in CI. It is a contract test over committed configuration, not a test of environment
+# construction (.agents/harnesses/rules/project/no-environment-tests.mdc).
 class ComposeHostPortExposureTest < Minitest::Test
   REPOSITORY_ROOT = File.expand_path("../..", __dir__)
 
-  # Every tracked Compose file that participates in a development `up`, plus the opt-in
-  # overlays. `.devcontainer/compose.yaml` defines `core`, whose publications the
-  # Dev Container relies on, so it belongs here too. The gitignored `compose.override.yaml` is
-  # deliberately absent: it is optional, per-machine, and not present on a fresh clone.
+  # Every tracked Compose file that participates in a development `up`. The gitignored
+  # `compose.override.yaml` is deliberately absent: it is optional, per-machine, and not present
+  # on a fresh clone.
   COMPOSE_FILES = %w(
     compose.yaml
     .devcontainer/compose.yaml
-    compose.override.yaml.example
-    compose.remote-access.yaml
-    .devcontainer/compose.yaml
-    podman/fdw-poc/compose.fdw-poc.yml
-    docker/fdw-poc/compose.fdw-poc.yml
   ).freeze
 
   # Services that must never be reachable from the host, at any bind address. Each is consumed
-  # only over a Compose network, by service name.
-  DATASTORE_SERVICES = %w(primary replica valkey-cache valkey-rate-limit).freeze
+  # only over a Compose network, by service name. Tempo, Prometheus and Loki are backends of the
+  # Alloy gateway: Grafana queries them over `observability`, and nothing on the host dials them.
+  CONTAINER_ONLY_SERVICES = %w(tempo prometheus loki).freeze
 
   # An IPv4 or IPv6 loopback host address is the only accepted publication target.
   LOOPBACK_HOST_ADDRESSES = ["127.0.0.1", "::1"].freeze
@@ -42,14 +38,25 @@ class ComposeHostPortExposureTest < Minitest::Test
                  "service to the LAN."
   end
 
-  def test_datastore_publications_are_loopback_only
+  def test_backend_observability_services_have_no_host_publication
     offenders =
-      each_published_port.select do |entry|
-        DATASTORE_SERVICES.include?(entry.fetch(:service)) && !loopback?(entry.fetch(:published))
-      end
+      each_published_port.select { |entry| CONTAINER_ONLY_SERVICES.include?(entry.fetch(:service)) }
 
     assert_empty offenders.map { |entry| describe(entry) },
-                 "Host-native Rails may use PostgreSQL and Valkey only through explicit loopback publications."
+                 "Tempo, Prometheus and Loki are reached only by Alloy and Grafana over the " \
+                 "`observability` network. Publishing one to the host adds an ingestion path " \
+                 "that bypasses the single Alloy gateway."
+  end
+
+  # Each Cosmos repository publishes only its Dev Container Rails, on its own host port, so the four
+  # Dev Containers can run side by side. Datastores, Vite, noVNC, fakecloud, Grafana and Alloy are
+  # reached over Compose networks only.
+  def test_only_dev_container_rails_is_published
+    entries = each_published_port.to_a
+
+    assert_equal [["core", "3000"]], entries.map { |entry| [entry.fetch(:service), container_port(entry)] },
+                 "Only `core` publishes, and only Rails (container port 3000); found " \
+                 "#{entries.map { |entry| describe(entry) }.inspect}"
   end
 
   def test_no_service_uses_host_networking
@@ -64,10 +71,10 @@ class ComposeHostPortExposureTest < Minitest::Test
   end
 
   # fakecloud is the one AWS-facing service that is published, and only to loopback so OpenTofu
-  # and the AWS CLI can run from the host. It must never gain a container socket mount: that
+  # and the AWS CLI can run from the host. No service may gain a container socket mount: that
   # would hand it full container-management rights under the invoking user, which is a far
-  # larger grant than any port publication. See docs/operations/local-aws-fakecloud.md.
-  def test_fakecloud_mounts_no_container_socket
+  # larger grant than any port publication.
+  def test_no_service_mounts_a_container_socket
     offenders =
       each_service.flat_map do |file, service, definition|
         Array(definition["volumes"]).filter_map do |mount|
@@ -76,10 +83,7 @@ class ComposeHostPortExposureTest < Minitest::Test
         end
       end
 
-    assert_empty offenders,
-                 "No Compose service may mount a container runtime socket. fakecloud serves the " \
-                 "MSK control plane without one; handing it a socket to gain a real Kafka broker " \
-                 "would grant it the invoking user's full container-management rights."
+    assert_empty offenders, "No Compose service may mount a container runtime socket."
   end
 
   private
@@ -110,6 +114,17 @@ class ComposeHostPortExposureTest < Minitest::Test
 
     segments = text.split(":")
     (segments.length >= 3) ? segments.first : ""
+  end
+
+  def container_port(entry)
+    port = entry.fetch(:entry)
+    return port["target"].to_s if port.is_a?(Hash)
+
+    interpolate(port.to_s).split(":").last
+  end
+
+  def interpolate(text)
+    text.gsub(/\$\{[A-Z0-9_]+:-([^}]*)\}/, '\1')
   end
 
   def loopback?(address)

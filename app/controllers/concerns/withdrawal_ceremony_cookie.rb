@@ -13,13 +13,16 @@ module WithdrawalCeremonyCookie
   end
 
   def withdrawal_ceremony_cookie_options
-    authentication_cookie_service.auth_cookie_options.merge(
+    BrowserCookieOptions.for(
+      request: request, same_site: :strict, path: "/",
       expires: WithdrawalCeremonyRecordable::TTL.from_now,
     )
   end
 
   def withdrawal_ceremony_cookie_deletion_options
-    authentication_cookie_service.auth_cookie_deletion_options
+    BrowserCookieOptions.for(
+      request: request, same_site: :strict, path: "/",
+    ).except(:expires, :httponly)
   end
 
   def write_withdrawal_ceremony_cookie!(ceremony)

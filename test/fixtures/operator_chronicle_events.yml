@@ -29,9 +29,25 @@ login_failed:
   id: 5
 token_refreshed:
   id: 6
+staff_secret_created:
+  id: 8
+staff_secret_removed:
+  id: 9
+staff_secret_updated:
+  id: 10
 step_up_verified:
   id: 11
 social_unlinked:
   id: 12
 logout:
   id: 13
+credential_security_transition:
+  id: 14
+passkey_registered:
+  id: 15
+step_up_failed:
+  id: 16
+refresh_token_reuse_detected:
+  id: 17
+sign_flow_halted:
+  id: 18

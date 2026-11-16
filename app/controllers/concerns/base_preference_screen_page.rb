@@ -125,11 +125,35 @@ module BasePreferenceScreenPage
     option_class = model.class.reflect_on_association(:option)&.klass
     option_type = screen.to_sym
 
-    option_class.order(:id).filter_map do |option|
+    preference_ordered_options(option_class, option_type).filter_map do |option|
       name = option.name.to_s
       next if name.blank?
 
-      { label: t(preference_option_translation_key(option_type, name)), value: option.id }
+      {
+        label: t(preference_option_translation_key(option_type, name)),
+        value: option.id,
+        disabled: option.id == model.option_id,
+      }
+    end
+  end
+
+  # Option IDs and names are fixed by each option model. Building unsaved rows from that catalog
+  # keeps a first-time GET read-only; explicit preference writes persist the referenced rows before
+  # they can be selected. Timezones sort by standard UTC offset so DST does not reshuffle the list.
+  # Themes list the default (system) first, then light and dark, matching the footer control and
+  # common OS settings; the fixed option IDs stay unchanged.
+  THEME_DISPLAY_ORDER = %w(system light dark).freeze
+
+  def preference_ordered_options(option_class, option_type)
+    rows = option_class.const_get(:DEFAULTS, false).map { |id| option_class.new(id: id) }
+    case option_type
+    when :timezone
+      rows.sort_by { |option| TimezoneIdentifier.utc_offset_sort_key(option.name) }
+    when :theme
+      rows.select { |option| THEME_DISPLAY_ORDER.include?(option.name) }
+        .sort_by { |option| THEME_DISPLAY_ORDER.index(option.name) }
+    else
+      rows
     end
   end
 
@@ -170,7 +194,9 @@ module BasePreferenceScreenPage
         field: "option_id",
         label: t(preference_base_i18n_key(:preference, type, :edit, :option_label)),
         value: @preference_option.option_id,
-        choices: @preference_option_choices.map { |label, value| { label: label, value: value } },
+        choices: @preference_option_choices.map { |label, value|
+          { label: label, value: value, disabled: value == @preference_option.option_id }
+        },
         submit_label: t(preference_base_i18n_key(:preferences, :update_settings)),
         submitting_label: t(preference_base_i18n_key(:preferences, :submitting)),
       },
@@ -182,6 +208,7 @@ module BasePreferenceScreenPage
   # --- cookie ------------------------------------------------------------------------------------
 
   def preference_cookie_page_props
+    consent_state = preference_cookie_screen_state
     {
       screen: "cookie",
       title: t(preference_acme_i18n_key(:preference, :cookie, :edit, :h1)),
@@ -200,13 +227,17 @@ module BasePreferenceScreenPage
           {
             key: field.to_s,
             label: t(preference_acme_i18n_key(:preference, :cookie, :edit, label_key)),
-            value: @preference_cookie.public_send(field) ? true : false,
+            value: consent_state.fetch(field),
           }
         end,
         submit_label: t(preference_acme_i18n_key(:preferences, :update_settings)),
         submitting_label: t(preference_acme_i18n_key(:preferences, :submitting)),
       },
     }
+  end
+
+  def preference_cookie_screen_state
+    @preference_cookie_screen_state || cookie_consent_state
   end
 
   # --- customizations (reset) --------------------------------------------------------------------
@@ -229,7 +260,7 @@ module BasePreferenceScreenPage
         method: "delete",
         field: "confirm_reset",
         label: t(preference_acme_i18n_key(:preference, :resets, :confirm)),
-        value: @preference&.confirm_reset == "1",
+        value: @preference_confirmation == "1",
         submit_label: t(preference_acme_i18n_key(:preference, :resets, :button)),
         submitting_label: t(preference_acme_i18n_key(:preferences, :submitting)),
       },

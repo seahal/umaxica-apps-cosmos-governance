@@ -53,11 +53,26 @@
 class PersonaMembership < AppRpRecord
   include ::CollectiveMembership
 
+  scope :current, lambda {
+    now = Time.current
+    table = arel_table
+
+    where(revoked_at: nil)
+      .where(table[:starts_at].eq(nil).or(table[:starts_at].lteq(now)))
+      .where(table[:ends_at].eq(nil).or(table[:ends_at].gt(now)))
+  }
+  scope :active, -> { current.where(membership_state_id: membership_state_active_id) }
+  scope :primary_first, -> { order(primary: :desc, created_at: :asc, id: :asc) }
+  scope :primary_active, -> { active.where(primary: true) }
+
+  validate :unit_must_belong_to_same_collective
+  validate :only_one_active_primary_membership
+
   collective_membership_config account_foreign_key: :persona_id,
                                collective_foreign_key: :enterprise_id,
                                unit_association_name: :enterprise_unit
 
-  belongs_to :persona, inverse_of: :persona_memberships
+  belongs_to :persona, class_name: "ClientPersona", inverse_of: :persona_memberships
   belongs_to :enterprise, inverse_of: :persona_memberships
   belongs_to :enterprise_unit, inverse_of: :persona_memberships
   belongs_to :membership_kind,
@@ -66,16 +81,22 @@ class PersonaMembership < AppRpRecord
   belongs_to :membership_state,
              class_name: "PersonaMembershipState",
              inverse_of: :persona_memberships
+  # Active memberships have no revocation reason until revoked.
   belongs_to :revoke_reason,
              class_name: "PersonaMembershipRevokeReason",
-             inverse_of: :persona_memberships
-  belongs_to :granted_by_persona, class_name: "Persona", inverse_of: false
-  belongs_to :approved_by_persona, class_name: "Persona", inverse_of: false
-  belongs_to :revoked_by_persona, class_name: "Persona", inverse_of: false
+             inverse_of: :persona_memberships,
+             optional: true
+  # Audit attribution is nullable and is nullified if its actor is deleted.
+  belongs_to :granted_by_persona, class_name: "ClientPersona", inverse_of: false, optional: true
+  # Audit attribution is nullable and is nullified if its actor is deleted.
+  belongs_to :approved_by_persona, class_name: "ClientPersona", inverse_of: false, optional: true
+  # Audit attribution is nullable and is nullified if its actor is deleted.
+  belongs_to :revoked_by_persona, class_name: "ClientPersona", inverse_of: false, optional: true
 
   validates :persona_id,
             uniqueness: {
               conditions: -> { where(primary: true, revoked_at: nil, ends_at: nil) },
             },
             if: :primary?
+  validates :enterprise_id, :enterprise_unit_id, :persona_id, exclusion: { in: [nil] }
 end

@@ -1,4 +1,6 @@
+# frozen_string_literal: true
 # typed: false
+
 # == Schema Information
 #
 # Table name: app_preference_cookies
@@ -24,14 +26,15 @@
 #  fk_rails_...  (preference_id => app_preferences.id)
 #
 
-# frozen_string_literal: true
-
 require "test_helper"
 
 class AppPreferenceCookieTest < ActiveSupport::TestCase
   setup do
     AppPreferenceStatus.ensure_defaults!
-    @preference = AppPreference.create!(status_id: AppPreferenceStatus::NOTHING)
+    @preference = AppPreference.create!(
+      jti: SecureRandom.uuid, last_issued_at: Time.current, last_issued_expires_at: 400.days.from_now,
+      status_id: AppPreferenceStatus::ACTIVE,
+    )
   end
 
   %i(targetable performant functional).each do |flag|
@@ -88,20 +91,5 @@ class AppPreferenceCookieTest < ActiveSupport::TestCase
     assert loaded.performant
     assert loaded.functional
     assert loaded.consented
-  end
-
-  test "set_defaults fills nil booleans on new records" do
-    cookie = AppPreferenceCookie.new(preference: @preference)
-    cookie.targetable = nil
-    cookie.performant = nil
-    cookie.functional = nil
-    cookie.consented = nil
-
-    cookie.send(:set_defaults)
-
-    assert_not cookie.targetable
-    assert_not cookie.performant
-    assert_not cookie.functional
-    assert_not cookie.consented
   end
 end

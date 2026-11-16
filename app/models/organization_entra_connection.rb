@@ -34,6 +34,12 @@
 class OrganizationEntraConnection < OrgRpRecord
   include ::PublicId
 
+  before_validation :generate_public_id, on: :create
+  before_validation :refresh_generated_public_id_after_collision, on: :create
+  before_create :generate_public_id
+  around_create :retry_public_id_collision
+  validate :public_id_immutable_after_create, on: :update
+  validates :public_id, presence: true, length: { is: PublicId::GENERATION_SIZE }, uniqueness: true
   ENTRA_TENANT_ID_FORMAT = /\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z/i
   private_constant :ENTRA_TENANT_ID_FORMAT
 
@@ -53,4 +59,6 @@ class OrganizationEntraConnection < OrgRpRecord
   validates :entra_tenant_id, uniqueness: { scope: :organization_id }
   validates :entra_client_id, uniqueness: { scope: :entra_tenant_id }
   validates :entra_tenant_id, format: { with: ENTRA_TENANT_ID_FORMAT, message: :uuid_format }
+  validates :entra_tenant_id, length: { maximum: 36 }
+  validates :entra_client_id, length: { maximum: 255 }
 end

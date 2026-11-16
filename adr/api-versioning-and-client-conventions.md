@@ -4,6 +4,11 @@
 
 ## Status
 
+> **Route-source disposition (2026-11-10):** Examples below that name Core, Auth, Palm, or other
+> foreign local API controllers describe the pre-reset implementation. The versioning decision
+> remains applicable to retained Base/Tech APIs and external contracts where callers still exist;
+> it does not imply that removed local endpoints remain served.
+
 Accepted (2026-08-16). Section 4 amended on 2026-08-22: the target OpenAPI version changes from
 3.2.x to 3.0.4. Sections 1 through 3 are unchanged. See "Amendment 2026-08-22" below.
 
@@ -210,7 +215,7 @@ the probe responses carry a `namespace` member that was undocumented.
 
 ### Where the full analysis lives
 
-`plans/rails-nextjs-openapi-contract-audit.md` — the audit, the tool comparison with sources and
+`research/rails-nextjs-openapi-contract-audit.md` — the audit, the tool comparison with sources and
 access dates, and the sixteen decision records this amendment implements the first of.
 
 ## Scope
@@ -246,7 +251,7 @@ description format and the accuracy requirement on `public/openapi.yml`.
   no test, initializer, rake task, or CI job reads the file. The guard must be mechanical:
   `committee` request and response validation in the Minitest suite, a bidirectional route-coverage
   test, a lint and bundle-drift CI gate, and `oasdiff` on pull requests. Choosing 3.0.4 is what
-  makes the first of those possible. `plans/rails-nextjs-openapi-contract-audit.md` carries the
+  makes the first of those possible. `research/rails-nextjs-openapi-contract-audit.md` carries the
   plan.
 - Targeting 3.0.4 means tracking a specification line that the OpenAPI Initiative has moved two
   minor versions past. The exposure is bounded to the features listed above, none of which this API

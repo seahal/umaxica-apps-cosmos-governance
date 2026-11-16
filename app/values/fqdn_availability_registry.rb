@@ -24,44 +24,30 @@ module FqdnAvailabilityRegistry
     base_service: ->(hosts) { [hosts.base_service.host, ENV["PUBLIC_BASE_SERVICE_URL"], "base.app.localhost"] },
     base_corporate: ->(hosts) { [hosts.base_corporate.host, ENV["PUBLIC_BASE_CORPORATE_URL"], "base.com.localhost"] },
     base_staff: ->(hosts) { [hosts.base_staff.host, ENV["PUBLIC_BASE_STAFF_URL"], "base.org.localhost"] },
-    base_network: ->(_hosts) { [ENV["PRIVATE_BASE_NETWORK_URL"], "base.net.localhost"] },
-    base_developer: lambda { |_hosts|
-      [ENV["PUBLIC_BASE_DEVELOPER_URL"], ENV["PRIVATE_BASE_DEVELOPER_URL"], "base.dev.localhost"]
+    tech_staff: ->(hosts) { [hosts.tech_staff.host, ENV["PRIVATE_TECH_STAFF_URL"], "tech.org.localhost"] },
+    mission: lambda { |_hosts|
+      ["mission-governance.umaxica.dev"]
     },
-    auth_service: ->(hosts) { [hosts.auth_service.host, ENV["PUBLIC_AUTH_SERVICE_URL"], "auth.app.localhost"] },
-    auth_corporate: ->(hosts) { [hosts.auth_corporate.host, ENV["PUBLIC_AUTH_CORPORATE_URL"], "auth.com.localhost"] },
-    auth_staff: ->(hosts) { [hosts.auth_staff.host, ENV["PUBLIC_AUTH_STAFF_URL"], "auth.org.localhost"] },
-    core_service: ->(hosts) { [hosts.core_service.host, ENV["PRIVATE_CORE_SERVICE_URL"]] },
-    core_corporate: ->(hosts) { [hosts.core_corporate.host, ENV["PRIVATE_CORE_CORPORATE_URL"]] },
-    core_staff: ->(hosts) { [hosts.core_staff.host, ENV["PRIVATE_CORE_STAFF_URL"]] },
-    core_network: lambda { |_hosts|
-      [ENV["PRIVATE_CORE_NETWORK_URL"] || ENV["CORE_NETWORK_URL"], "core.net.localhost"]
+    flipper: lambda { |_hosts|
+      ["flipper-governance.umaxica.dev"]
     },
-    core_developer: lambda { |_hosts|
-      [ENV["PRIVATE_CORE_DEVELOPER_URL"] || ENV["CORE_DEVELOPER_URL"], "core.dev.localhost"]
+    blazer: lambda { |_hosts|
+      ["blazer-governance.umaxica.dev"]
     },
-    docs_service: ->(_hosts) { [ENV["PRIVATE_DOCS_SERVICE_URL"], "docs.jp.umaxica.app", "docs.app.localhost"] },
-    docs_corporate: ->(_hosts) { [ENV["PRIVATE_DOCS_CORPORATE_URL"], "docs.jp.umaxica.com", "docs.com.localhost"] },
-    docs_staff: ->(_hosts) { [ENV["PRIVATE_DOCS_STAFF_URL"], "docs.jp.umaxica.org", "docs.org.localhost"] },
-    news_service: ->(_hosts) { [ENV["PRIVATE_NEWS_SERVICE_URL"], "news.jp.umaxica.app", "news.app.localhost"] },
-    news_corporate: ->(_hosts) { [ENV["PRIVATE_NEWS_CORPORATE_URL"], "news.jp.umaxica.com", "news.com.localhost"] },
-    news_staff: ->(_hosts) { [ENV["PRIVATE_NEWS_STAFF_URL"], "news.jp.umaxica.org", "news.org.localhost"] },
-    help_service: ->(hosts) { [hosts.help_service.host, "help.jp.umaxica.app", "help.app.localhost"] },
-    help_corporate: ->(hosts) { [hosts.help_corporate.host, "help.jp.umaxica.com", "help.com.localhost"] },
-    help_staff: ->(hosts) { [hosts.help_staff.host, "help.jp.umaxica.org", "help.org.localhost"] },
-    info_service: ->(hosts) { [hosts.info_service.host, "info.app.localhost", "info.umaxica.app"] },
-    info_corporate: ->(hosts) { [hosts.info_corporate.host, "info.com.localhost", "info.umaxica.com"] },
-    info_staff: ->(hosts) { [hosts.info_staff.host, "info.org.localhost", "info.umaxica.org"] },
-    side_service: ->(hosts) { [hosts.side_service.host, "side.app.localhost"] },
-    side_corporate: ->(hosts) { [hosts.side_corporate.host, "side.com.localhost"] },
-    side_staff: ->(hosts) { [hosts.side_staff.host, "side.org.localhost"] },
-    palm_service: ->(hosts) { [hosts.palm_service.host, "palm.app.localhost"] },
+    pghero: lambda { |_hosts|
+      ["pghero-governance.umaxica.dev"]
+    },
+    coverband: lambda { |_hosts|
+      ["coverband-governance.umaxica.dev"]
+    },
+    swagger: lambda { |_hosts|
+      ["swagger-governance.umaxica.dev"]
+    },
   }.freeze
 
   SLOT_NAMES = SLOT_SOURCES.keys.freeze
 
   FLAG_PREFIX = "fqdn_available_"
-
   module_function
 
   def flag_name_for(slot) = :"#{FLAG_PREFIX}#{slot}"
@@ -108,4 +94,5 @@ module FqdnAvailabilityRegistry
   end
 
   def normalize(value) = value.to_s.strip.downcase
+  private_class_method :hostnames_from
 end

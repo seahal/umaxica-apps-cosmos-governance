@@ -6,20 +6,16 @@ require "concurrent"
 module OidcClientRegistry
   class ClientNotFound < StandardError; end
 
-  class InvalidRedirectUri < StandardError; end
-
   class ClientAuthenticationConfigurationError < StandardError; end
 
   DEFAULT_ALLOWED_SCOPES = %w(openid profile email).freeze
-  PALM_ALLOWED_SCOPES = (DEFAULT_ALLOWED_SCOPES + %w(palm.read)).freeze
 
-  VisitorAccount =
+  ClientConfiguration =
     Data.define(
-      :client_id, :client_secret, :redirect_uris, :redirect_uris_by_realm, :post_logout_redirect_uris,
+      :client_id, :redirect_uris, :redirect_uris_by_realm, :post_logout_redirect_uris,
       :aud, :resource_type,
       :name, :domains, :allowed_scopes, :registered_token_endpoint_auth_method,
-      :metadata_token_endpoint_auth_method, :jwt_namespace, :backchannel_logout_uris,
-      :backchannel_logout_session_required,
+      :metadata_token_endpoint_auth_method, :jwt_namespace, :required_operator_capability,
     ) do
       def public_client?
         registered_token_endpoint_auth_method == "none"
@@ -33,13 +29,19 @@ module OidcClientRegistry
         registered_token_endpoint_auth_method == "private_key_jwt"
       end
     end
+  AssertionAuthenticationResult =
+    Data.define(:authenticated, :client, :step_up_claims_state, :step_up_expectation) do
+      def authenticated? = authenticated
+
+      def step_up_claims_present? = step_up_claims_state != :none
+    end
   CLIENTS_MUTEX = Mutex.new
   CLIENTS_CACHE = Concurrent::AtomicReference.new(nil)
 
   module_function
 
   # @param client_id [String]
-  # @return [VisitorAccount, nil]
+  # @return [ClientConfiguration, nil]
   def find(client_id)
     config = clients[client_id.to_s]
     return nil unless config
@@ -52,14 +54,12 @@ module OidcClientRegistry
     all_redirect_uris = redirect_uris_by_realm.values.flatten
     all_redirect_uris.uniq!
 
-    VisitorAccount.new(
+    ClientConfiguration.new(
       client_id: client_id.to_s,
-      client_secret: resolve_secret_credential(client_id.to_s),
       redirect_uris: all_redirect_uris,
       redirect_uris_by_realm: redirect_uris_by_realm,
       post_logout_redirect_uris: (config[:post_logout_redirect_uris] || []).uniq,
-      backchannel_logout_uris: (config[:backchannel_logout_uris] || []).uniq,
-      backchannel_logout_session_required: config.fetch(:backchannel_logout_session_required, false),
+      required_operator_capability: config[:required_operator_capability],
       aud: config[:aud],
       resource_type: config[:resource_type],
       name: config[:name],
@@ -72,60 +72,31 @@ module OidcClientRegistry
   end
 
   # @param client_id [String]
-  # @return [VisitorAccount]
+  # @return [ClientConfiguration]
   # @raise [ClientNotFound]
   def find!(client_id)
     find(client_id) || raise(ClientNotFound, "Unknown OIDC client: #{client_id}")
   end
 
-  # @param client_id [String]
-  # @param uri [String]
-  # @param resource_type [String, nil] when given, the redirect_uri must be registered for this
-  #   realm (client/operator/visitor) specifically, not merely registered anywhere for the client.
-  # @return [Boolean]
-  def valid_redirect_uri?(client_id, uri, resource_type: nil)
-    client = find(client_id)
-
-    OidcRedirectUriPolicy.valid_redirect_uri?(client, uri, resource_type: resource_type)
-  end
-
-  def valid_post_logout_redirect_uri?(client_id:, uri:, resource_type:)
-    client = find(client_id)
-    return false unless OidcRedirectUriPolicy.valid_post_logout_redirect_uri?(client, uri)
-
-    # Registered post_logout URIs mix all three realms in one list; a logout on
-    # one surface must not redirect to another surface's host.
-    logout_uri_resource_type(uri) == normalize_resource_type(resource_type)
-  end
-
-  def backchannel_logout_uris_for(client_id:, resource_type: nil)
-    filter_logout_uris(find(client_id)&.backchannel_logout_uris || [], resource_type)
-  end
-
-  def logout_clients_for_resource_type(resource_type)
-    clients.filter_map do |client_id, config|
-      next if filter_logout_uris(Array(config[:backchannel_logout_uris]), resource_type).blank?
-
-      find(client_id)
-    end
-  end
-
-  # @param client_id [String]
-  # @param secret_credential [String]
-  # @return [Boolean]
-  def authenticate(client_id, secret_credential)
-    client = find(client_id)
-    return false unless client
-    return false if client.client_secret.blank? || secret_credential.blank?
-
-    ActiveSupport::SecurityUtils.secure_compare(client.client_secret, secret_credential)
-  end
-
   def authenticate_assertion(client_id, assertion, token_url:)
-    client = find(client_id)
-    return false unless client&.private_key_jwt_client?
+    verify_client_assertion(client_id, assertion, token_url:).authenticated?
+  end
 
-    OidcClientAssertionJwt.valid?(client_id: client_id, assertion: assertion, token_url: token_url)
+  def verify_client_assertion(client_id, assertion, token_url:)
+    client = find(client_id)
+    unless client&.private_key_jwt_client?
+      return AssertionAuthenticationResult.new(
+        authenticated: false, client: nil, step_up_claims_state: :none, step_up_expectation: nil,
+      )
+    end
+
+    verification = OidcClientAssertionJwt.verify(client_id:, assertion:, token_url:)
+    AssertionAuthenticationResult.new(
+      authenticated: verification.authenticated?,
+      client: verification.authenticated? ? client : nil,
+      step_up_claims_state: verification.step_up_claims_state,
+      step_up_expectation: verification.step_up_expectation,
+    )
   end
 
   def jwt_namespace_for(client_id)
@@ -137,8 +108,15 @@ module OidcClientRegistry
   end
 
   def validate_private_key_jwt_configuration!
+    # An RP cell process holds only its own client key (RuntimeRole.rp_private_env_names).
+    checked_ids =
+      if RuntimeRole::RP_ROLES.include?(RuntimeRole.current)
+        [RpCellBinding.fetch(RuntimeRole.cell_connection).client_id]
+      else
+        client_ids
+      end
     missing =
-      client_ids.filter_map do |client_id|
+      checked_ids.filter_map do |client_id|
         client = find(client_id)
         next unless client&.private_key_jwt_client?
         next if client.jwt_namespace.present? &&
@@ -161,6 +139,24 @@ module OidcClientRegistry
         next unless normalize_resource_type(config[:resource_type]) == normalized_resource_type
 
         config[:aud]
+      end
+    result.uniq!
+    result
+  end
+
+  # RFC 8414 describes the methods supported by the revocation endpoint separately from the token
+  # endpoint.  This application intentionally derives the set from the same registered client
+  # contract used by the revoker; advertising a method that no registered client can use would make
+  # discovery lie, while accepting an unregistered method would turn revocation into a guessing
+  # oracle.
+  def revocation_endpoint_auth_methods_for(resource_type)
+    normalized_resource_type = normalize_resource_type(resource_type)
+
+    result =
+      clients.values.filter_map do |config|
+        next unless normalize_resource_type(config[:resource_type]) == normalized_resource_type
+
+        config[:token_endpoint_auth_method].presence
       end
     result.uniq!
     result
@@ -193,18 +189,13 @@ module OidcClientRegistry
     hosts = Rails.configuration.x.boot_config.fetch(:hosts)
     boot_signature =
       %i(
-        sign_service sign_staff sign_corporate
-        base_service base_staff base_corporate
-        side_service side_staff side_corporate
-        core_service core_staff core_corporate
+        base_service base_staff
+        tech_staff
       ).map { |name| [name, hosts.public_send(name).to_s] }
     env_signature =
       %w(
-        PUBLIC_AUTH_SERVICE_URL PUBLIC_AUTH_STAFF_URL PUBLIC_AUTH_CORPORATE_URL
-        PRIVATE_AUTH_SERVICE_URL PRIVATE_AUTH_STAFF_URL PRIVATE_AUTH_CORPORATE_URL
-        BASE_SERVICE_URL BASE_STAFF_URL BASE_CORPORATE_URL
-        SIDE_SERVICE_URL SIDE_STAFF_URL SIDE_CORPORATE_URL
-        CORE_SERVICE_URL CORE_STAFF_URL CORE_CORPORATE_URL
+        BASE_SERVICE_URL BASE_STAFF_URL
+        PUBLIC_TECH_STAFF_URL PRIVATE_TECH_STAFF_URL
       ).map { |name| [name, ENV.fetch(name, nil)] }
 
     (boot_signature + env_signature).freeze
@@ -212,10 +203,6 @@ module OidcClientRegistry
 
   def build_clients
     OidcClientStoresStaticClientStore.clients
-  end
-
-  def resolve_secret_credential(client_id)
-    OidcClientSecretResolver.resolve(client_id)
   end
 
   # This method is metadata/diagnostic-only. It must not be used for token endpoint authentication
@@ -232,70 +219,6 @@ module OidcClientRegistry
     []
   end
 
-  def public_host?(host)
-    parsed_host = normalize_host(host)
-    return false if parsed_host.blank?
-
-    uri = URI.parse("//#{parsed_host}")
-    return false if uri.host.blank?
-
-    ip = IPAddr.new(uri.host)
-    !ip.loopback? && !ip.private? && !ip.link_local?
-  rescue IPAddr::InvalidAddressError
-    uri.host.present? && uri.host != "localhost"
-  rescue URI::InvalidURIError
-    false
-  end
-
-  def filter_logout_uris(uris, resource_type)
-    return uris if resource_type.blank?
-
-    normalized_resource_type = normalize_resource_type(resource_type)
-    uris.select do |uri|
-      logout_uri_resource_type(uri) == normalized_resource_type
-    end
-  end
-
-  def logout_uri_resource_type(uri)
-    host = URI.parse(uri.to_s).host.to_s
-    return "operator" if logout_hosts_for("operator").include?(host)
-    return "visitor" if logout_hosts_for("visitor").include?(host)
-
-    "client"
-  rescue URI::InvalidURIError
-    nil
-  end
-
-  def logout_hosts_for(resource_type)
-    hosts = Rails.configuration.x.boot_config.fetch(:hosts)
-    case normalize_resource_type(resource_type)
-    when "operator"
-      [
-        normalize_host(hosts.sign_staff),
-        normalize_host(hosts.auth_staff),
-        normalize_host(hosts.core_staff),
-        normalize_host(ENV.fetch("PRIVATE_AUTH_STAFF_URL", nil)),
-        normalize_host(ENV.fetch("PUBLIC_AUTH_STAFF_URL", nil)),
-      ].compact_blank.uniq
-    when "visitor"
-      [
-        normalize_host(hosts.sign_corporate),
-        normalize_host(hosts.auth_corporate),
-        normalize_host(hosts.core_corporate),
-        normalize_host(ENV.fetch("PRIVATE_AUTH_CORPORATE_URL", nil)),
-        normalize_host(ENV.fetch("PUBLIC_AUTH_CORPORATE_URL", nil)),
-      ].compact_blank.uniq
-    else
-      [
-        normalize_host(hosts.sign_service),
-        normalize_host(hosts.auth_service),
-        normalize_host(hosts.core_service),
-        normalize_host(ENV.fetch("PRIVATE_AUTH_SERVICE_URL", nil)),
-        normalize_host(ENV.fetch("PUBLIC_AUTH_SERVICE_URL", nil)),
-      ].compact_blank.uniq
-    end
-  end
-
   def redirect_uris_by_realm_for(config)
     return config[:redirect_uris_by_realm] if config[:redirect_uris_by_realm]
 
@@ -305,8 +228,8 @@ module OidcClientRegistry
   def normalize_resource_type(resource_type)
     case resource_type.to_s
     when "operator", "staff" then "operator"
-    when "visitor", "customer" then "visitor"
-    else "client"
+    when "client" then "client"
+    else raise ArgumentError, "unsupported OIDC resource type"
     end
   end
 
@@ -317,10 +240,9 @@ module OidcClientRegistry
     host.to_s
   end
 
-  private_class_method :clients, :build_clients,
-                       :resolve_secret_credential, :domains_from_redirect_uris,
-                       :public_host?, :redirect_uris_by_realm_for,
-                       :filter_logout_uris, :logout_uri_resource_type, :logout_hosts_for,
+  private_class_method :clients, :build_clients, :client_config_signature,
+                       :domains_from_redirect_uris,
+                       :redirect_uris_by_realm_for,
                        :normalize_resource_type, :metadata_auth_method, :normalize_allowed_scopes,
                        :normalize_host
 end

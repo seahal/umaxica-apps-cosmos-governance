@@ -4,25 +4,23 @@ require "test_helper"
 require_relative "../support/openapi_contract"
 
 # Validates the machine-readable deployment identifier `GET /api/v0/revision.json` against each
-# surface description.
-#
-# The text `GET /revision` endpoint answers `text/plain` and is not described: only this JSON
-# representation is a contract. Both derive the same value from `Rails.application.revision`.
+# Governance route host and its surface description.
 class OpenapiRevisionContractTest < ActionDispatch::IntegrationTest
   include OpenapiContract
 
   REVISION = "0123456789abcdef0123456789abcdef01234567"
 
-  SURFACE_HOSTS = {
-    "app" => ENV.fetch("PRIVATE_CORE_SERVICE_URL"),
-    "com" => ENV.fetch("PRIVATE_CORE_CORPORATE_URL"),
-    "org" => ENV.fetch("PRIVATE_CORE_STAFF_URL"),
-  }.freeze
+  ROUTE_SURFACES = [
+    { label: "Base app", schema: "app", host: ENV.fetch("PUBLIC_BASE_SERVICE_URL") },
+    { label: "Base com", schema: "com", host: ENV.fetch("PUBLIC_BASE_CORPORATE_URL") },
+    { label: "Base org", schema: "org", host: ENV.fetch("PUBLIC_BASE_STAFF_URL") },
+    { label: "Tech org", schema: "org", host: ENV.fetch("PUBLIC_TECH_STAFF_URL") },
+  ].freeze
 
-  SURFACE_HOSTS.each do |surface, host|
-    test "GET /api/v0/revision.json conforms to the #{surface} description with a revision" do
-      self.openapi_surface = surface
-      host! host
+  ROUTE_SURFACES.each do |route_surface|
+    test "GET /api/v0/revision.json conforms to #{route_surface.fetch(:label)} with a revision" do
+      self.openapi_surface = route_surface.fetch(:schema)
+      host! route_surface.fetch(:host)
 
       Rails.application.stub(:revision, REVISION) do
         get "/api/v0/revision.json", headers: { "Accept" => "application/json" }
@@ -35,9 +33,9 @@ class OpenapiRevisionContractTest < ActionDispatch::IntegrationTest
       assert_openapi_conform 200
     end
 
-    test "GET /api/v0/revision.json conforms to the #{surface} description with a null revision" do
-      self.openapi_surface = surface
-      host! host
+    test "GET /api/v0/revision.json conforms to #{route_surface.fetch(:label)} with a null revision" do
+      self.openapi_surface = route_surface.fetch(:schema)
+      host! route_surface.fetch(:host)
 
       Rails.application.stub(:revision, nil) do
         get "/api/v0/revision.json", headers: { "Accept" => "application/json" }
@@ -49,9 +47,9 @@ class OpenapiRevisionContractTest < ActionDispatch::IntegrationTest
       assert_openapi_conform 200
     end
 
-    test "GET /api/v0/revision.json refuses a non-JSON Accept with 406 and an empty body on #{surface}" do
-      self.openapi_surface = surface
-      host! host
+    test "GET /api/v0/revision.json refuses non-JSON Accept on #{route_surface.fetch(:label)}" do
+      self.openapi_surface = route_surface.fetch(:schema)
+      host! route_surface.fetch(:host)
 
       Rails.application.stub(:revision, REVISION) do
         get "/api/v0/revision.json", headers: { "Accept" => "text/plain" }
@@ -64,7 +62,7 @@ class OpenapiRevisionContractTest < ActionDispatch::IntegrationTest
   end
 
   test "the revision member is described as a nullable string on every surface" do
-    SURFACE_HOSTS.each_key do |surface|
+    OpenapiContract::SURFACES.each do |surface|
       document = YAML.safe_load_file(OpenapiContract.schema_path(surface), aliases: true)
       get_op = document.dig("paths", "/api/v0/revision.json", "get")
 

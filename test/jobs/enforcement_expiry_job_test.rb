@@ -5,7 +5,7 @@ require "test_helper"
 
 class EnforcementExpiryJobTest < ActiveJob::TestCase
   test "ends an active cooldown case whose expires_at has passed and unlocks nothing since it never blocked access" do
-    client = clients(:one)
+    client = create_test_client!
     operator = operators(:one)
 
     the_case = AppEnforcementCase.new(
@@ -19,7 +19,10 @@ class EnforcementExpiryJobTest < ActiveJob::TestCase
       principal_public_id: client.public_id,
       applied_by_operator_public_id: operator.public_id,
     )
-    EnforcementCaseApplyOperation.call(enforcement_case: the_case)
+    EnforcementCaseApplyOperation.call(
+      enforcement_case: the_case,
+      actor_operator_public_id: the_case.applied_by_operator_public_id,
+    )
 
     EnforcementExpiryJob.perform_now
 
@@ -29,8 +32,8 @@ class EnforcementExpiryJobTest < ActiveJob::TestCase
     assert_equal "expired", the_case.end_reason
   end
 
-  test "expiring a temporary_freeze releases admin_locked when no other blocking case remains" do
-    client = clients(:one)
+  test "expiring a temporary_freeze retains admin_locked and reports missing Access release authority" do
+    client = create_test_client!
     operator = operators(:one)
 
     the_case = AppEnforcementCase.new(
@@ -49,16 +52,27 @@ class EnforcementExpiryJobTest < ActiveJob::TestCase
       access_blocking: true,
       effective_at: 2.days.ago,
     )
-    EnforcementCaseApplyOperation.call(enforcement_case: the_case)
+    assert_raises(AccessOpDataUnavailableError) do
+      EnforcementCaseApplyOperation.call(
+        enforcement_case: the_case,
+        actor_operator_public_id: the_case.applied_by_operator_public_id,
+      )
+    end
 
-    EnforcementExpiryJob.perform_now
+    failures = []
+    Rails.logger.stub(:error, ->(message) { failures << message }) do
+      EnforcementExpiryJob.perform_now
+    end
     client.reload
 
-    assert_not_predicate client, :admin_locked?
+    assert_predicate client, :admin_locked?
+    assert_predicate the_case.reload.ended_at, :present?
+    assert failures.any? { |message| message.include?("AccessOpDataUnavailableError") }
+    assert_not the_case.audit_event_recorded?("expired")
   end
 
   test "does not touch a case whose expires_at has not yet passed" do
-    client = clients(:one)
+    client = create_test_client!
     operator = operators(:one)
 
     the_case = AppEnforcementCase.new(
@@ -72,10 +86,24 @@ class EnforcementExpiryJobTest < ActiveJob::TestCase
       principal_public_id: client.public_id,
       applied_by_operator_public_id: operator.public_id,
     )
-    EnforcementCaseApplyOperation.call(enforcement_case: the_case)
+    EnforcementCaseApplyOperation.call(
+      enforcement_case: the_case,
+      actor_operator_public_id: the_case.applied_by_operator_public_id,
+    )
 
     EnforcementExpiryJob.perform_now
 
     assert_not_predicate the_case.reload.ended_at, :present?
+  end
+
+  private
+
+  def create_test_client!
+    Client.create!(
+      security_mode_id: SecurityModeConfigurable::NORMAL,
+      id: 1_000_000_000_000 + SecureRandom.random_number(1_000_000_000),
+      status_id: ClientStatus::ACTIVE,
+      visibility_id: ClientVisibility::BOTH,
+    )
   end
 end

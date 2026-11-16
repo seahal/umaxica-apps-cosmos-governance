@@ -8,7 +8,7 @@ class PreferenceWebThemeActionsIncludedDoTest < ActiveSupport::TestCase
   test "including web theme actions does not include endpoint implicitly" do
     klass =
       Class.new(ApplicationController) do
-        include AuthenticationBase
+        include BrowserRpAuthentication
         include PreferenceWebThemeActions
       end
 
@@ -18,7 +18,7 @@ class PreferenceWebThemeActionsIncludedDoTest < ActiveSupport::TestCase
   test "including web theme actions does not register callback skips implicitly" do
     klass =
       Class.new(ApplicationController) do
-        include AuthenticationBase
+        include BrowserRpAuthentication
         include PreferenceWebThemeActions
       end
 

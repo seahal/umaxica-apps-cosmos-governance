@@ -10,6 +10,10 @@ module Base
         AUTHENTICATION_MODE = :bare
         HEALTH_PROFILE = ::Health::Profiles::Com
 
+        before_action :disable_health_response_cache
+
+        public
+
         def show
           render_probe(::Health::StartupCheck.call(profile: health_profile))
         end

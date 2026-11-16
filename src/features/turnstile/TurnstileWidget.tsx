@@ -11,6 +11,8 @@ import { waitForTurnstileApi, type TurnstileApi } from "@/lib/turnstile";
 export type TurnstileWidgetProps = {
   /** Site key, published by the server; the secret half never reaches the browser. */
   site_key: string;
+  /** Server-generated render identity used by pages that must force a fresh challenge. */
+  challenge_id?: string | null;
   action?: string | null;
   cdata?: string | null;
   /** "execute" runs the challenge immediately; "render" shows the widget and waits. */
@@ -35,11 +37,16 @@ export default function TurnstileWidget({
   const [failure, setFailure] = useState<string | null>(null);
 
   useEffect(() => {
-    let removed = false;
-    let widgetId: string | null = null;
-    let api: TurnstileApi | null = null;
+    const controller = new AbortController();
+    const widget: { api: TurnstileApi | null; id: string | null } = {
+      api: null,
+      id: null,
+    };
 
     const publish = (value: string) => {
+      if (controller.signal.aborted) {
+        return;
+      }
       setToken(value);
       onToken?.(value);
     };
@@ -52,19 +59,21 @@ export default function TurnstileWidget({
       }
 
       try {
-        api = await waitForTurnstileApi(errorMessage);
+        widget.api = await waitForTurnstileApi(errorMessage);
       } catch {
-        if (!removed) {
+        if (!controller.signal.aborted) {
           setFailure(errorMessage);
         }
         return;
       }
 
-      if (removed) {
+      if (controller.signal.aborted) {
         return;
       }
 
-      widgetId = api.render(element, {
+      const { api } = widget;
+
+      const widgetId = api.render(element, {
         sitekey: siteKey,
         ...(action ? { action } : {}),
         ...(cdata ? { cData: cdata } : {}),
@@ -77,6 +86,7 @@ export default function TurnstileWidget({
         "timeout-callback": () => publish(""),
         "unsupported-callback": () => publish(""),
       });
+      widget.id = widgetId;
 
       if (mode === "execute") {
         api.execute(widgetId);
@@ -86,9 +96,9 @@ export default function TurnstileWidget({
     void start();
 
     return () => {
-      removed = true;
-      if (api && widgetId) {
-        api.remove(widgetId);
+      controller.abort();
+      if (widget.api && widget.id) {
+        widget.api.remove(widget.id);
       }
     };
     // The challenge is rendered once per mount; its configuration comes from the server and does
@@ -112,7 +122,7 @@ export default function TurnstileWidget({
       {failure ? (
         <p
           role="alert"
-          className="text-sm text-danger"
+          className="text-base text-error"
         >
           {failure}
         </p>

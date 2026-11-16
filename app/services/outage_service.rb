@@ -10,4 +10,5 @@ class OutageService
   def self.update!(*)
     raise NotImplementedError, "OutageService.update! is not implemented yet"
   end
+  public_class_method :update!
 end

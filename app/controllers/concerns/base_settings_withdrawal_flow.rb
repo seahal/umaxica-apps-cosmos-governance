@@ -4,6 +4,9 @@
 module BaseSettingsWithdrawalFlow
   extend ActiveSupport::Concern
 
+  # The including controller provides the verified current session through
+  # `current_session_public_id` and `current_session`.
+
   private
 
   def render_withdrawal_entry(actor)
@@ -65,7 +68,9 @@ module BaseSettingsWithdrawalFlow
       current_session_public_id: withdrawal_current_session_public_id,
       request: request,
     )
-    clear_auth_cookies!
+    # Suspension revokes the sessions server-side; this drops the browser's own RP credential so
+    # the next request is not presented with a credential that can only be refused.
+    clear_browser_rp_cookies!
     issue_withdrawal_ceremony!(subject: actor, purpose: "status")
 
     safe_redirect_to(
@@ -78,8 +83,13 @@ module BaseSettingsWithdrawalFlow
   end
 
   def terminate_withdrawal!(actor)
-    ::WithdrawalLifecycle.terminate!(actor: actor, request: request) if actor.early_terminatable?
+    # The lifecycle owns the locked deadline/hold check. Never consume the ceremony or redirect
+    # as though termination succeeded when the destructive operation was refused.
+    ::WithdrawalLifecycle.terminate!(actor: actor, request: request)
     consume_current_withdrawal_ceremony!
+    # Suspension already cleared the signed-in history; the withdrawal pages shown since then
+    # belong to an account that no longer exists.
+    session[:inertia_clear_history] = true
 
     safe_redirect_to(
       withdrawal_public_fallback_path,
@@ -128,15 +138,14 @@ module BaseSettingsWithdrawalFlow
     case actor
     when Client
       actor.client_withdrawal_flows.active.recent_first.first
-    when Visitor
-      actor.visitor_withdrawal_flows.active.recent_first.first
     end
   end
 
   def withdrawal_current_session_public_id
-    current_session_public_id.presence ||
-      instance_variable_get(:@current_token_public_id).presence ||
-      (current_session.public_id if respond_to?(:current_session, true))
+    session_public_id = current_session_public_id.presence || current_session&.public_id
+    return session_public_id if session_public_id.present?
+
+    raise AccessOpDataUnavailableError
   end
 
   def assign_status_view_state(actor)
@@ -151,7 +160,6 @@ module BaseSettingsWithdrawalFlow
   def privacy_request_blocks_recovery?(actor)
     case actor
     when Client then actor.client_privacy_requests.open_for_recovery_block.exists?
-    when Visitor then actor.visitor_privacy_requests.open_for_recovery_block.exists?
     else
       false
     end

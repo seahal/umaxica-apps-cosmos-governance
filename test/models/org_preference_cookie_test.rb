@@ -1,4 +1,6 @@
+# frozen_string_literal: true
 # typed: false
+
 # == Schema Information
 #
 # Table name: org_preference_cookies
@@ -24,14 +26,15 @@
 #  fk_rails_...  (preference_id => org_preferences.id)
 #
 
-# frozen_string_literal: true
-
 require "test_helper"
 
 class OrgPreferenceCookieTest < ActiveSupport::TestCase
   setup do
-    OrgPreferenceStatus.find_or_create_by!(id: OrgPreferenceStatus::NOTHING)
-    @preference = OrgPreference.create!(status_id: OrgPreferenceStatus::NOTHING)
+    OrgPreferenceStatus.find_or_create_by!(id: OrgPreferenceStatus::ACTIVE)
+    @preference = OrgPreference.create!(
+      jti: SecureRandom.uuid, last_issued_at: Time.current, last_issued_expires_at: 400.days.from_now,
+      status_id: OrgPreferenceStatus::ACTIVE,
+    )
   end
 
   test "belongs to preference" do
@@ -92,18 +95,5 @@ class OrgPreferenceCookieTest < ActiveSupport::TestCase
       assert cookie.save, "combo failed: targetable=#{targetable} performant=#{performant} functional=#{functional}"
       cookie.destroy!
     end
-  end
-
-  test "set_defaults fills nil booleans on new records" do
-    cookie = OrgPreferenceCookie.new(preference: @preference)
-    cookie.targetable = nil
-    cookie.performant = nil
-    cookie.consented = nil
-
-    cookie.send(:set_defaults)
-
-    assert_not cookie.targetable
-    assert_not cookie.performant
-    assert_not cookie.consented
   end
 end

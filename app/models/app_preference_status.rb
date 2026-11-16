@@ -1,4 +1,6 @@
+# frozen_string_literal: true
 # typed: false
+
 # == Schema Information
 #
 # Table name: app_preference_statuses
@@ -7,16 +9,14 @@
 #  id :bigint           not null, primary key
 #
 
-# frozen_string_literal: true
-
 class AppPreferenceStatus < AppSettingRecord
   include ReferenceRecord
 
-  # Fixed IDs - do not modify these values
-  NOTHING = 0
-  DELETED = 1
-  LEGACY_NOTHING = 2
-  DEFAULTS = [NOTHING, DELETED, LEGACY_NOTHING].freeze
+  ACTIVE = 0
+  RETIRED = 1
+  DEFAULTS = [ACTIVE, RETIRED].freeze
+
+  self.record_timestamps = false
 
   has_many :app_preferences,
            class_name: "AppPreference",
@@ -28,4 +28,5 @@ class AppPreferenceStatus < AppSettingRecord
   def self.ensure_defaults!
     insert_missing_fixed_ids!(DEFAULTS)
   end
+  public_class_method :ensure_defaults!
 end

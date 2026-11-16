@@ -19,6 +19,8 @@ class AvatarPermission < AvatarRecord
   ADMIN = 4
   DEFAULTS = [NOTHING, READ, WRITE, ADMIN].freeze
 
+  self.record_timestamps = false
+
   has_many :avatar_role_permissions, dependent: :restrict_with_error
   has_many :avatar_roles, through: :avatar_role_permissions
 end

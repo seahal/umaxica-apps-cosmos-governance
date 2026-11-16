@@ -30,6 +30,7 @@ class ProblemType
     method_not_allowed: { status: :method_not_allowed, title: "Method not allowed." },
     not_acceptable: { status: :not_acceptable, title: "No acceptable representation." },
     unsupported_media_type: { status: :unsupported_media_type, title: "Unsupported media type." },
+    content_too_large: { status: :content_too_large, title: "Content too large." },
     validation_failed: { status: :unprocessable_content, title: "Validation failed." },
     rate_limited: { status: :too_many_requests, title: "Rate limit exceeded." },
     server_error: { status: :internal_server_error, title: "Internal server error." },
@@ -49,6 +50,7 @@ class ProblemType
     405 => :method_not_allowed,
     406 => :not_acceptable,
     415 => :unsupported_media_type,
+    413 => :content_too_large,
     422 => :validation_failed,
     429 => :rate_limited,
     500 => :server_error,
@@ -56,6 +58,7 @@ class ProblemType
   }.freeze
 
   class << self
+    public
     def fetch(slug)
       key = slug.to_sym
       definition =
@@ -92,6 +95,7 @@ class ProblemType
 
   # Slugs are underscored as Ruby symbols and hyphenated in the URI. The URI form is the published
   # contract; the symbol form is an implementation detail of the registry.
+  public
   def uri
     "#{NAMESPACE}:#{slug.to_s.tr("_", "-")}"
   end

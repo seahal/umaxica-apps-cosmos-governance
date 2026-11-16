@@ -4,6 +4,8 @@
 module CommonRedirect
   extend ActiveSupport::Concern
 
+  class JumpRedirectFailure < StandardError; end
+
   def self.normalize_host(val)
     return nil if val.blank?
 
@@ -17,94 +19,50 @@ module CommonRedirect
     # strip scheme remnants and spaces
     host.to_s.downcase.sub(%r{^https?://}i, "").split("/").first
   end
-
-  def allowed_hosts
-    # NOTE: External redirect is disabled. This list remains only for diagnostics/auditing.
-    keys = %w(CORPORATE_URL SERVICE_URL STAFF_URL NETWORK_URL DEV_URL)
-    keys.filter_map { |key| CommonRedirect.normalize_host(ENV[key]) }
-  end
+  public_class_method :normalize_host
 
   private
 
-  def redirect_to_pt(default:, pt: nil, **)
-    result = RedirectsPathTargetResolver.call(pt, source: :raw_pt)
-    log_redirect_target_failure(result) unless result.ok? || pt.blank?
-
-    redirect_to(result.ok? ? result.value : default, allow_other_host: false, **)
-  end
-
-  def redirect_to_nt(key, scope: nil, **)
-    result = RedirectsNavigationTargetResolver.call(
-      key,
-      routes: self,
-      params: redirect_target_context_params,
-      scope: scope,
-    )
-    return redirect_to(result.value, allow_other_host: false, **) if result.ok?
-
-    log_redirect_target_failure(result)
-    render plain: I18n.t("errors.messages.invalid_request"),
-           status: :unprocessable_content
-  end
-
-  def redirect_to_external_jump(key, path: "/", query: {}, **)
-    result = RedirectsExternalTargetResolver.call(key, path: path, query: query)
-    return redirect_to_jump_url(result.value, dst: "external", **) if result.ok?
-
-    log_redirect_target_failure(result)
-    render plain: I18n.t("errors.messages.invalid_request"),
-           status: :unprocessable_content
-  end
-
-  def redirect_to_external_jump_url(url, allowed_urls:, **)
-    result = RedirectsExternalTargetResolver.url(url, allowed_urls: allowed_urls)
-    return redirect_to_jump_url(result.value, dst: "external", **) if result.ok?
-
-    log_redirect_target_failure(result)
-    render plain: I18n.t("errors.messages.invalid_request"),
-           status: :unprocessable_content
-  end
-
-  def redirect_to_jump_rt(token, **)
-    result = RedirectsJumpGatewayUrl.call(token)
-    return redirect_to(result.value, allow_other_host: true, **) if result.ok?
-
-    log_redirect_target_failure(result)
-    render plain: I18n.t("errors.messages.invalid_request"),
-           status: :unprocessable_content
+  def redirect_to_surface_url(url, preserve_query_keys: [], **)
+    uri = URI.parse(url.to_s)
+    if uri.host.nil?
+      redirect_to(url, allow_other_host: false, **)
+    elsif request_origin_url?(url)
+      redirect_to(uri.request_uri, allow_other_host: false, **)
+    else
+      redirect_to_jump_url(url, preserve_query_keys: preserve_query_keys, **)
+    end
+  rescue URI::InvalidURIError
+    render plain: I18n.t("errors.messages.invalid_request"), status: :unprocessable_content
   end
 
   def redirect_to_jump_url(
     url,
     namespace: jump_rt_issuer_namespace,
     dst: "internal",
-    replay_policy: "reuse",
     preserve_query_keys: [],
     fallback_internal: false,
+    strict: false,
     **
   )
-    token =
-      begin
-        preserve_query_keys |= safe_jump_preserved_query_keys(url)
-        JumpRtIssuer.call(
-          namespace: namespace,
-          url: url,
-          dst: dst,
-          replay_policy: replay_policy,
-          preserve_query_keys: preserve_query_keys,
-        )
-      rescue ArgumentError
-        nil
-      end
+    preserve_query_keys |= safe_jump_preserved_query_keys(url)
+    token = JumpRtIssuer.call(
+      namespace: namespace,
+      url: url,
+      dst: dst,
+      preserve_query_keys: preserve_query_keys,
+    )
     if token.present?
-      log_jump_rt_issued(token: token, namespace: namespace, dst: dst, replay_policy: replay_policy, url: url)
+      log_jump_rt_issued(token: token, namespace: namespace, dst: dst, url: url)
       result = RedirectsJumpGatewayUrl.call(token)
       return redirect_to(result.value, allow_other_host: true, **) if result.ok?
+
+      raise JumpRedirectFailure, "Jump gateway unavailable" if strict
 
       fallback_path = safe_return_path(url) if fallback_internal
       if fallback_path.present?
         log_jump_rt_fallback_internal(
-          namespace: namespace, dst: dst, replay_policy: replay_policy, url: url,
+          namespace: namespace, dst: dst, url: url,
           reason: :gateway_url_failed, gateway_failure: result.failure_reason,
         )
         return redirect_to(fallback_path, allow_other_host: false, **)
@@ -115,10 +73,12 @@ module CommonRedirect
                     status: :unprocessable_content
     end
 
+    raise JumpRedirectFailure, "Jump ticket unavailable" if strict
+
     fallback_path = safe_return_path(url) if fallback_internal
     if fallback_path.present?
       log_jump_rt_fallback_internal(
-        namespace: namespace, dst: dst, replay_policy: replay_policy, url: url,
+        namespace: namespace, dst: dst, url: url,
         reason: :issuance_failed,
       )
       return redirect_to(fallback_path, allow_other_host: false, **)
@@ -133,44 +93,21 @@ module CommonRedirect
            status: :unprocessable_content
   end
 
-  def safe_jump_preserved_query_keys(url)
-    uri = URI.parse(url.to_s)
-    query = Rack::Utils.parse_nested_query(uri.query.to_s)
-    return [] unless uri.is_a?(URI::HTTP)
-    return [] unless uri.path == "/oauth/authorize"
-    return [] unless oidc_authorize_host_allowed?(uri.host)
-    return [] unless defined?(OidcClientRegistry)
-    return [] unless OidcClientRegistry.valid_redirect_uri?(query["client_id"], query["redirect_uri"])
+  # Jump mediates cross-origin navigation only: it refuses an rt whose url origin equals its iss
+  # (adr/secure-jump-link-redirector.md). A target on this request's own origin therefore moves by
+  # path, and every other target goes through Jump unchanged. Callers opt in explicitly.
+  def redirect_to_same_origin_or_jump_url(url, **)
+    return redirect_to(URI.parse(url.to_s).request_uri, allow_other_host: false, **) if request_origin_url?(url)
 
-    ["redirect_uri"]
-  rescue URI::InvalidURIError
+    redirect_to_jump_url(url, **)
+  end
+
+  def request_origin_url?(url)
+    RedirectOriginValue.same_origin?(target: url, origin: request.base_url)
+  end
+
+  def safe_jump_preserved_query_keys(_url)
     []
-  end
-
-  def oidc_authorize_host_allowed?(host)
-    allowed_hosts =
-      %w(
-        PUBLIC_AUTH_SERVICE_URL PRIVATE_AUTH_CORPORATE_URL PRIVATE_AUTH_STAFF_URL
-        PUBLIC_BASE_SERVICE_URL PUBLIC_BASE_CORPORATE_URL PUBLIC_BASE_STAFF_URL
-      ).filter_map do |key|
-        Oidc::AcmeServiceOrigin.host_from(ENV.fetch(key)) || CommonRedirect.normalize_host(ENV.fetch(key))
-      end
-    allowed_hosts += %w(
-      auth.app.localhost auth.com.localhost auth.org.localhost
-      base.app.localhost base.com.localhost base.org.localhost
-    )
-    allowed_hosts.include?(CommonRedirect.normalize_host(host))
-  end
-
-  def resolve_redirect_target(priority:, default:)
-    result = RedirectsPriorityResolver.call(
-      priority: priority,
-      routes: self,
-      params: redirect_target_context_params,
-      default: default,
-    )
-    log_redirect_target_failure(result) unless result.ok?
-    result
   end
 
   def safe_redirect_to(target, fallback: "/", **)
@@ -211,21 +148,7 @@ module CommonRedirect
     nil
   end
 
-  alias safe_return_to_path safe_return_path
-
-  def generate_redirect_url(target)
-    safe_path = safe_internal_path(target)
-    Base64.urlsafe_encode64(safe_path, padding: false) if safe_path.present?
-  end
-
-  def jump_to_generated_url(target, fallback:)
-    decoded = Base64.urlsafe_decode64(target.to_s)
-    safe_redirect_to(decoded, fallback: fallback)
-  rescue ArgumentError
-    safe_redirect_to(nil, fallback: fallback)
-  end
-
-  private :safe_return_path, :generate_redirect_url, :jump_to_generated_url
+  private :safe_return_path
 
   def allowed_return_hosts(allowed_hosts)
     req = request if defined?(request)
@@ -288,7 +211,7 @@ module CommonRedirect
     JumpRtSurface.namespace_for_controller(self.class.name)
   end
 
-  def log_jump_rt_issued(token:, namespace:, dst:, replay_policy:, url:)
+  def log_jump_rt_issued(token:, namespace:, dst:, url:)
     req = request if respond_to?(:request, true)
     headers = req.headers if req&.respond_to?(:headers)
     request_id = req.request_id if req&.respond_to?(:request_id)
@@ -302,7 +225,6 @@ module CommonRedirect
         request_id: request_id,
         namespace: namespace,
         dst: dst,
-        rpl: replay_policy,
         rt_length: token.to_s.bytesize,
         rt_parts: token.to_s.split(".").size,
         rt_digest12: Digest::SHA256.hexdigest(token.to_s)[0, 12],
@@ -318,11 +240,10 @@ module CommonRedirect
     )
   end
 
-  # Emitted when redirect_to_jump_url could not push the user through the
-  # Jump gateway and silently downgraded to a same-host redirect via
-  # fallback_internal. Surfaces key-config and gateway-issuance regressions
-  # that would otherwise be invisible in production.
-  def log_jump_rt_fallback_internal(namespace:, dst:, replay_policy:, url:, reason:, gateway_failure: nil)
+  # Emitted when redirect_to_jump_url downgraded an unusable target URL to a same-host redirect via
+  # fallback_internal. Jump configuration errors (gateway, issuer identity, signing key) raise
+  # JumpRtConfigurationError before this point and are never downgraded.
+  def log_jump_rt_fallback_internal(namespace:, dst:, url:, reason:, gateway_failure: nil)
     request_id = request.request_id if respond_to?(:request, true) && request.respond_to?(:request_id)
     Rails.logger.warn(
       JitLogEvent.format(
@@ -330,7 +251,6 @@ module CommonRedirect
         request_id: request_id,
         namespace: namespace,
         dst: dst,
-        rpl: replay_policy,
         reason: reason,
         gateway_failure: gateway_failure,
         target_url_digest: Digest::SHA256.hexdigest(url.to_s)[0, 12],

@@ -35,7 +35,6 @@ Application code may read the resolved immutable request context through `Actor`
 - `Actor.whoami`
 - `Actor.client`
 - `Actor.operator`
-- `Actor.visitor`
 - `Actor.tld`
 - `Actor.preferences`
 - `Actor.authn`
@@ -81,24 +80,25 @@ clearing effect, but application code should prefer the domain-facing `clear` na
 The resolved context includes:
 
 - authenticated actor or `Unauthenticated.instance`
-- actor type (`:client`, `:operator`, `:visitor`, or `:unauthenticated`)
+- actor type (`:client`, `:operator`, or `:unauthenticated`)
 - `Actor.tld` from `HostContextResolver`
 - `Actor.authn.login_public_id`
 - typed authentication state derived from access-token claims
 - resolved `Actor::Preference`
 - resolved `Actor::Authz`
 - resolved `Actor::StepUp`
-- observability identifiers when performant consent allows them
+- technical observability identifiers from the current valid OpenTelemetry span context, when
+  OpenTelemetry is enabled; this is independent of product-analytics consent
 
 ## Surface Actors
 
-The three user-facing surfaces use these runtime actor names:
+Authenticated `app` and `org` requests use these runtime actor names. The public `com` surface has
+no authenticated actor; `Actor.tld` still identifies its surface as `:com`.
 
 | Surface | Actor type  | Helper           |
 | ------- | ----------- | ---------------- |
 | `app`   | `:client`   | `Actor.client`   |
 | `org`   | `:operator` | `Actor.operator` |
-| `com`   | `:visitor`  | `Actor.visitor`  |
 
 `Actor.whoami` returns the current actor type. `Actor.tld` returns the current surface label:
 `:app`, `:com`, `:org`, `:net`, or `:dev`.
@@ -113,25 +113,36 @@ Preference is exposed as an immutable value object through `Actor.preferences`.
 Request code should not read preference state from controller instance variables, raw JWT claims, or
 legacy current-context APIs when `Actor.preferences` is available.
 
-`Actor::Preference` contains the resolved runtime preference used by the app/org/com preference
-flows. In normal authenticated requests it is initialized from the Preference JWT payload, then
-valid request-local `lx`, `ct`, and `tz` values are overlaid when explicitly present. That overlay
-affects only the current request and must not be copied back to the database or JWT.
+`Actor::Preference` contains the resolved display preference used by authenticated app/org flows.
+In normal authenticated requests it is initialized from the verified realm Preference JWT, then supported
+request-local context values such as `ri`, `lx`, `ct`, and `tz` are overlaid when explicitly
+present. That overlay affects only the current request and must not be copied back to the database
+or JWT.
 
-Logged-in HTML preference edit screens may first refresh the current surface preference token from
-the actor-local preference DB so another browser's preference change is visible before the edit
-screen renders. This refresh is a bounded preference-screen entry flow and must run before
-`Actor.preferences` is initialized.
+Base preference edit screens read account-local values from the actor's Preference records. They do
+not refresh a shared Preference JWT from account storage. On Base app/org GET or HEAD, if the JWT is
+valid but its language or experience display cookie is missing or does not match, Base may rebuild
+those two display cookies from the verified snapshot, active anonymous row and explicit actor
+values. This read does not update or reissue the JWT, change row lifecycle, or extend expiry.
+Invalid or missing JWTs are not repaired from the Preference database. Other read-only hosts render
+from the verified JWT without reading the Preference database or issuing or deleting Preference
+cookies.
 
 - localization: `language`, `region`, `timezone`
 - presentation: `theme`, `motion`, `density`, `items_per_page`
 - format defaults: `currency`, `date_format`, `time_format`
-- consent cookie state through `Actor.preferences.cookie`
+- consent receipts, browser binding and Web Push state are separate Base-owned records; they are not
+  hydrated from the Preference JWT into `Actor.preferences` and are not authorized by display
+  cookies
 
-Authenticated request setup must not repair a missing or malformed preference access-token by
-reading the preference database. Treat that as a token failure and route it through the normal
-failure path. `Actor::Preference::NULL` is reserved for unauthenticated, bearer-only, or explicitly
-preference-free paths that are designed to run without a preference token.
+Supported request-local context overlays change only the current request's `Actor.preferences`. They
+must not write the database, reissue JWTs, or update the persistent Preference snapshot.
+
+Authenticated request setup must not repair a missing or malformed Preference JWT by reading the
+Preference database. Treat that as a token failure and route it through the normal failure path. A
+request that has not loaded a Preference JWT uses the default preference values (theme `sy`) rather
+than `Actor::Preference::NULL`. `Actor::Preference::NULL` is reserved for an unbound context (jobs,
+mailers, tests, and the empty snapshot before a request installs state).
 
 ## Authentication
 
@@ -147,7 +158,6 @@ Do not treat raw access-token payloads as the normal application contract. Prefe
 - `login_public_id`
 - `acr`
 - `amr`
-- `restricted?`
 - `verified?`
 
 `Actor.authn.access_claims` may exist as a low-level authentication-boundary escape hatch, but new
@@ -161,15 +171,28 @@ authorization-library interface, not a `User` model or application-facing curren
 
 Do not rename the Action Policy subject to `actor`: `Actor` is already the request-local current
 context facade. Controllers should continue wiring Action Policy with
-`authorize :user, through: :current_client`, `:current_operator`, or `:current_visitor` as
-appropriate for the surface. Policies read token claims through `Actor.authz.token_claims`, not by
+`authorize :user, through: :current_client` or `:current_operator` as appropriate for the surface.
+Policies read token claims through `Actor.authz.token_claims`, not by
 falling back into authentication storage.
 
 `Actor.signed_in?` is the request-level predicate for an authenticated actor. It is true when the
-current actor type is `:client`, `:operator`, or `:visitor`.
+current actor type is `:client` or `:operator`.
 
 `Actor.signed_up?` is true only when the current request has an authenticated actor with a persisted
 identity. Anonymous users and unsaved actor objects return false.
+
+## Selection context
+
+`Actor::SelectedContext#persona_selected?` reports whether a Persona/account identifier is selected.
+`#organization_context_selected?` additionally requires the organization and organization-unit
+identifiers. The existing `#selected?` predicate retains the complete organization-context contract,
+because full-access controllers require all three identifiers. Callers that only manage a Persona
+must use the narrower predicate rather than weakening `selected?` globally.
+
+The persisted protocol field names remain `selected_account_public_id`,
+`selected_collective_public_id`, and `selected_collective_unit_public_id` until a separate reader /
+writer migration is approved. A selected identifier is context, not authorization proof; the current
+surface authority must still be checked before an operation is performed.
 
 ## Configuration
 

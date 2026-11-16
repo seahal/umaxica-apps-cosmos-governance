@@ -19,10 +19,6 @@ module AuthenticationCookieName
     with_host_prefix(AuthIoKeys::Cookies::REFRESH_BASENAME, production: production)
   end
 
-  def dbsc(production: JitSessionCookieConfig.force_secure?)
-    with_host_prefix(AuthIoKeys::Cookies::DBSC_BASENAME, production: production)
-  end
-
   def with_host_prefix(basename, production:)
     return basename unless production
 

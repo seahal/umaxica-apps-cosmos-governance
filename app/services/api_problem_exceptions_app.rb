@@ -14,12 +14,12 @@
 class ApiProblemExceptionsApp
   CONTENT_TYPE = "application/problem+json"
 
-  # Scoped to the namespace that actually renders Problem Details today. `/edge/v0` and `/web/v0`
-  # still emit their own shapes, so claiming them here would produce two different error formats on
-  # one endpoint depending on whether the failure reached a controller.
+  # Scoped to the namespace that currently renders Problem Details. No other API namespace remains
+  # mounted, so a routing miss and a controller error share the same response format.
   API_PATH_PREFIX = "/api/"
 
   class << self
+    public
     def call(env)
       new(env).call
     end
@@ -29,8 +29,13 @@ class ApiProblemExceptionsApp
     @env = env
   end
 
+  public
   def call
-    return public_exceptions.call(env) unless api_request?
+    unless api_request?
+      status_code, response_headers, response_body = public_exceptions.call(env)
+      response_headers["cache-control"] = "private, no-store" if status_code == 404
+      return [status_code, response_headers, response_body]
+    end
 
     [status, headers, [body]]
   end

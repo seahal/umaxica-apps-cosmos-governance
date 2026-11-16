@@ -4,6 +4,9 @@
 class ClientPrivacyRequestStatus < AppPrincipalRecord
   include ReferenceRecord
 
+  has_many :client_privacy_requests, foreign_key: :status_id, inverse_of: :status,
+                                     dependent: :restrict_with_error
+
   RECEIVED = 10
   VERIFICATION_REQUIRED = 20
   VERIFIED = 30
@@ -17,4 +20,6 @@ class ClientPrivacyRequestStatus < AppPrincipalRecord
     RECEIVED, VERIFICATION_REQUIRED, VERIFIED, PROCESSING, COMPLETED, PARTIALLY_DENIED,
     BLOCKED_BY_LEGAL_HOLD, CANCELLED, FAILED,
   ].freeze
+
+  self.record_timestamps = false
 end

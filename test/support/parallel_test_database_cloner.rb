@@ -3,7 +3,6 @@
 require "digest"
 require "fileutils"
 require "pg"
-require "set"
 
 module ParallelTestDatabaseCloner
   # CREATE DATABASE ... TEMPLATE fails when the template is used by another
@@ -22,10 +21,14 @@ module ParallelTestDatabaseCloner
     end
 
     ActiveSupport::Testing::Parallelization.after_fork_hook do |worker|
-      ActiveRecord::Base.configurations.configs_for(env_name: "test", include_hidden: true).each do |db_config|
+      configurations = ActiveRecord::Base.configurations.configs_for(env_name: "test", include_hidden: true)
+      configurations.each do |db_config|
         db_config._database = "#{db_config.database}_#{worker}"
       end
-      ActiveRecord::Base.establish_connection
+      Umaxica::TestEnvironment::DatabaseSafety.verify!(configurations: configurations)
+      # Rails' nil configuration may select another domain's first YAML entry,
+      # whereas ApplicationRecord explicitly owns the primary connection.
+      ActiveRecord::Base.establish_connection(:primary)
     end
   end
 
@@ -33,23 +36,16 @@ module ParallelTestDatabaseCloner
     return if @test_process_lock
 
     FileUtils.mkdir_p(Rails.root.join("tmp"))
-    @test_process_lock = Rails.root.join("tmp/parallel-test-databases.lock").open(File::RDWR | File::CREAT, 0o644)
-    @test_process_lock.flock(File::LOCK_EX)
+    @test_process_lock = Rails.root.join("tmp/parallel-test-databases.lock").open(File::RDWR | File::CREAT, 0o600)
+    # Rails runs Minitest in an earlier at_exit callback. Keep the descriptor
+    # through the suite; the OS releases the inherited lock after process exit.
+    return if @test_process_lock.flock(File::LOCK_EX | File::LOCK_NB)
 
-    at_exit do
-      @test_process_lock&.flock(File::LOCK_UN)
-      @test_process_lock&.close
-    end
+    raise RuntimeError, "test databases are in use by another test process"
   end
 
-  # Staleness is judged from the schema_sha comment stamped on each clone
-  # database (readable for all clones in one pg_database catalog query), NOT
-  # from per-clone data fingerprints: clones are dropped and re-templated on any
-  # schema change, and test writes are rolled back by transactional fixtures, so
-  # a per-clone data scan (previously: one connection + count(*) on every table
-  # for each of workers x databases clones) bought no real protection for its
-  # cost. If a clone is ever corrupted outside that model, drop it (or wipe the
-  # tmpfs data dir) and it is rebuilt on the next run.
+  # The schema stamp proves only schema freshness. Committed tests can leave rows
+  # behind; a dirty ordinary test database needs an explicitly authorized reset.
   def rebuild_stale_worker_clones(workers)
     configs = ActiveRecord::Base.configurations.configs_for(env_name: "test", include_hidden: true)
     base_configs = configs.reject(&:replica?)
@@ -64,7 +60,7 @@ module ParallelTestDatabaseCloner
 
     ActiveRecord::Base.connection_handler.clear_all_connections!
 
-    admin_connection = connect(first_config, ENV.fetch("POSTGRESQL_DATABASE", "db"))
+    admin_connection = connect(first_config, Umaxica::TestEnvironment::DatabaseSafety::ADMIN_DATABASE)
     admin_connection.exec("select pg_advisory_lock(hashtext('umaxica_parallel_test_database_cloner'))")
 
     stamped_sha = clone_sha_by_database(admin_connection)
@@ -154,8 +150,8 @@ module ParallelTestDatabaseCloner
 
     errors = Queue.new
     Array.new(thread_count) {
-      Thread.new do # rubocop:disable ThreadSafety/NewThread
-        connection = connect(config, ENV.fetch("POSTGRESQL_DATABASE", "db"))
+      Thread.new do
+        connection = connect(config, Umaxica::TestEnvironment::DatabaseSafety::ADMIN_DATABASE)
         begin
           loop do
             group = queue.pop
@@ -163,7 +159,7 @@ module ParallelTestDatabaseCloner
 
             group.each { |task| rebuild_clone(connection, **task) }
           end
-        rescue => e
+        rescue StandardError => e
           errors << e
         ensure
           connection.close
@@ -224,10 +220,15 @@ module ParallelTestDatabaseCloner
     digest = Digest::SHA1.new
     digest << File.binread(schema_path)
     Array(config.migrations_paths).sort.each do |path|
-      Dir.glob(File.join(path, "*.rb")).sort.each do |migration_path|
+      Dir.glob(File.join(path, "*.rb")).each do |migration_path|
         digest << migration_path
         digest << File.binread(migration_path)
       end
+    end
+    seed_path = Rails.root.join("db/seeds.rb")
+    if seed_path.file?
+      digest << seed_path.to_s
+      digest << File.binread(seed_path)
     end
     digest << base_schema_digest(config)
     digest.hexdigest
@@ -236,8 +237,12 @@ module ParallelTestDatabaseCloner
   # Every column of every ordinary, partitioned, and view relation in `public`, ordered so the
   # digest does not depend on catalog scan order. Aggregated in PostgreSQL rather than in Ruby: one
   # round trip per base database, and nothing but the 32-byte result crosses the wire.
+  # The base database OID is part of the digest: a base rebuilt under the same name with the same
+  # columns otherwise left workers cloned from the previous base, with its rows, function owners
+  # and role names.
   BASE_SCHEMA_DIGEST_SQL = <<~SQL.squish
-    select coalesce(md5(string_agg(entry, chr(10) order by entry)), '') as digest
+    select (select oid from pg_database where datname = current_database()) || ':' ||
+           coalesce(md5(string_agg(entry, chr(10) order by entry)), '') as digest
     from (
       select c.relname || ':' || a.attname || ':' ||
              format_type(a.atttypid, a.atttypmod) || ':' || a.attnotnull as entry

@@ -2,139 +2,51 @@
 # frozen_string_literal: true
 
 require "test_helper"
-# require "helpers/global_test_support"
 
 class JumpRtReturnPolicyTest < ActiveSupport::TestCase
   self.fixture_table_names = []
 
-  test "normalize_origin returns nil for invalid URI" do
-    assert_nil JumpRtReturnPolicy.normalize_origin("not a url")
+  test "normalize_origin rejects invalid uri classes" do
+    ["not a url", "ftp://example.test", "https://user:pass@example.test", "https://"].each do |origin|
+      assert_nil JumpRtReturnPolicy.normalize_origin(origin), origin
+    end
   end
 
-  test "normalize_origin returns nil for non-http scheme" do
-    assert_nil JumpRtReturnPolicy.normalize_origin("ftp://example.com")
+  test "normalize_origin rejects paths queries and fragments" do
+    ["https://example.test/", "https://example.test/path", "https://example.test?x=1",
+     "https://example.test#fragment",].each do |origin|
+      assert_nil JumpRtReturnPolicy.normalize_origin(origin), origin
+    end
   end
 
-  test "normalize_origin returns nil for URI with userinfo" do
-    assert_nil JumpRtReturnPolicy.normalize_origin("https://user:pass@www.umaxica.app")
+  test "normalize_origin canonicalizes case and default ports" do
+    assert_equal "https://example.test", JumpRtReturnPolicy.normalize_origin("https://EXAMPLE.TEST:443")
+    assert_equal "http://example.test", JumpRtReturnPolicy.normalize_origin("http://EXAMPLE.TEST:80")
+    assert_equal "https://example.test:8443", JumpRtReturnPolicy.normalize_origin("https://EXAMPLE.TEST:8443")
   end
 
-  test "normalize_origin normalizes https origin" do
-    result = JumpRtReturnPolicy.normalize_origin("https://www.umaxica.app")
+  test "no cross-surface Jump return edges are configured after the surface reset" do
+    assert_empty JumpRtReturnPolicy::EDGE_CATALOG
+    assert_empty JumpRtReturnPolicy::ALLOWED_EDGES
 
-    assert_equal "https://www.umaxica.app", result
+    [
+      ["https://www.umaxica.app", "https://www.umaxica.app"],
+      ["https://www.umaxica.org", "https://www.umaxica.app"],
+      ["https://unregistered.example.test", "https://www.umaxica.app"],
+    ].each do |source, destination|
+      assert_not JumpRtReturnPolicy.allowed_source?(destination_origin: destination, source: source)
+    end
   end
 
-  test "normalize_origin normalizes http origin" do
-    result = JumpRtReturnPolicy.normalize_origin("http://example.com")
-
-    assert_equal "http://example.com", result
+  test "private and retired origins are denied in either direction" do
+    [nil, "", "https://unregistered.example.test", "http://base.app.localhost", "https://127.0.0.1"].each do |origin|
+      assert_not JumpRtReturnPolicy.allowed_source?(destination_origin: "https://www.umaxica.app", source: origin)
+      assert_not JumpRtReturnPolicy.allowed_source?(destination_origin: origin, source: "https://www.umaxica.app")
+    end
   end
 
-  test "normalize_origin downcases host" do
-    result = JumpRtReturnPolicy.normalize_origin("https://WWW.UMAXICA.APP")
-
-    assert_equal "https://www.umaxica.app", result
-  end
-
-  test "normalize_origin includes non-default port" do
-    result = JumpRtReturnPolicy.normalize_origin("https://www.umaxica.app:8443")
-
-    assert_equal "https://www.umaxica.app:8443", result
-  end
-
-  test "normalize_origin omits default https port" do
-    result = JumpRtReturnPolicy.normalize_origin("https://www.umaxica.app:443")
-
-    assert_equal "https://www.umaxica.app", result
-  end
-
-  test "normalize_origin omits default http port" do
-    result = JumpRtReturnPolicy.normalize_origin("http://example.com:80")
-
-    assert_equal "http://example.com", result
-  end
-
-  test "normalize_origin returns nil for blank host" do
-    assert_nil JumpRtReturnPolicy.normalize_origin("https://")
-  end
-
-  test "allowed_source returns true for valid source matching destination" do
-    assert JumpRtReturnPolicy.allowed_source?(
-      destination_origin: "https://www.umaxica.app",
-      source: "https://log.umaxica.app",
-    )
-  end
-
-  test "allowed_source returns false for unauthorized source" do
-    assert_not JumpRtReturnPolicy.allowed_source?(
-      destination_origin: "https://www.umaxica.app",
-      source: "https://evil.example.com",
-    )
-  end
-
-  test "allowed_source returns false when destination origin is unknown" do
-    assert_not JumpRtReturnPolicy.allowed_source?(
-      destination_origin: "https://unknown.example.com",
-      source: "https://log.umaxica.app",
-    )
-  end
-
-  test "default_port_for returns 443 for https" do
+  test "default_port_for returns each scheme port" do
     assert_equal 443, JumpRtReturnPolicy.default_port_for("https")
-  end
-
-  test "default_port_for returns 80 for http" do
     assert_equal 80, JumpRtReturnPolicy.default_port_for("http")
-  end
-
-  test "allowed_sources includes hardcoded production origins" do
-    sources = JumpRtReturnPolicy.allowed_sources
-
-    assert_includes sources.keys, "https://www.umaxica.app"
-    assert_includes sources["https://www.umaxica.app"], "https://log.umaxica.app"
-  end
-
-  test "core destinations allow matching idp sources" do
-    assert JumpRtReturnPolicy.allowed_source?(
-      destination_origin: "https://www.jp.umaxica.app",
-      source: "https://log.umaxica.app",
-    )
-    assert JumpRtReturnPolicy.allowed_source?(
-      destination_origin: "https://www.jp.umaxica.com",
-      source: "https://log.umaxica.com",
-    )
-    assert JumpRtReturnPolicy.allowed_source?(
-      destination_origin: "https://www.jp.umaxica.org",
-      source: "https://log.umaxica.org",
-    )
-  end
-
-  test "core destinations reject cross surface idp sources" do
-    assert_not JumpRtReturnPolicy.allowed_source?(
-      destination_origin: "https://www.jp.umaxica.app",
-      source: "https://log.umaxica.org",
-    )
-  end
-
-  def with_env(values)
-    saved = {}
-    values.each_key { |key| saved[key.to_s] = ENV[key.to_s] }
-    values.each do |key, value|
-      if value.nil?
-        ENV.delete(key)
-      else
-        ENV[key] = value
-      end
-    end
-    yield
-  ensure
-    values.each_key do |key|
-      if saved[key.to_s].nil?
-        ENV.delete(key)
-      else
-        ENV[key] = saved[key.to_s]
-      end
-    end
   end
 end

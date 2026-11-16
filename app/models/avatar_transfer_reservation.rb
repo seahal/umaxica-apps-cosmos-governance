@@ -1,0 +1,67 @@
+# typed: false
+# frozen_string_literal: true
+
+class AvatarTransferReservation < AvatarRecord
+  include ::PublicId
+
+  before_validation :generate_public_id, on: :create
+  before_validation :refresh_generated_public_id_after_collision, on: :create
+  before_create :generate_public_id
+  around_create :retry_public_id_collision
+  validate :public_id_immutable_after_create, on: :update
+  validates :public_id, presence: true, length: { is: PublicId::GENERATION_SIZE }, uniqueness: true
+  OPERATION_KINDS = %w(
+    enterprise_to_enterprise
+    enterprise_to_bureau
+    bureau_to_enterprise
+    bureau_to_bureau
+  ).freeze
+  STATES = %w(pending accepted cancelled expired).freeze
+
+  belongs_to :avatar, inverse_of: :transfer_reservations
+  has_one :enterprise_to_enterprise_detail,
+          class_name: "AvatarEnterpriseToEnterpriseTransferDetail",
+          dependent: :restrict_with_error,
+          inverse_of: :transfer_reservation
+  has_one :enterprise_to_bureau_detail,
+          class_name: "AvatarEnterpriseToBureauTransferDetail",
+          dependent: :restrict_with_error,
+          inverse_of: :transfer_reservation
+  has_one :bureau_to_enterprise_detail,
+          class_name: "AvatarBureauToEnterpriseTransferDetail",
+          dependent: :restrict_with_error,
+          inverse_of: :transfer_reservation
+  has_one :bureau_to_bureau_detail,
+          class_name: "AvatarBureauToBureauTransferDetail",
+          dependent: :restrict_with_error,
+          inverse_of: :transfer_reservation
+
+  validates :operation_kind, inclusion: { in: OPERATION_KINDS }
+  validates :state, inclusion: { in: STATES }
+  validates :idempotency_key,
+            format: { with: /\A[0-9a-f]{8}-[0-9a-f]{4}-[47][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\z/ }
+  validates :idempotency_key, uniqueness: true
+  validates :avatar_id, uniqueness: { conditions: -> { where(state: "pending") } },
+                        if: -> { state == "pending" }
+  validates :request_fingerprint, presence: true
+  validate :expiry_follows_request
+  validates :state, length: { maximum: 20 }
+  validates :idempotency_key, length: { maximum: 36 }
+  validates :operation_kind, length: { maximum: 40 }
+  validates :request_fingerprint, length: { maximum: 64 }
+  validates :idempotency_key, exclusion: { in: [nil] }
+
+  scope :pending, -> { where(state: "pending") }
+
+  private
+
+  def expiry_follows_request
+    return if requested_at.blank? || expires_at.blank?
+
+    if expires_at <= requested_at
+      errors.add(:expires_at, "must be after requested_at")
+    elsif expires_at > requested_at + 120.hours
+      errors.add(:expires_at, "must be within five days of requested_at")
+    end
+  end
+end

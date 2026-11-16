@@ -9,9 +9,8 @@ require "test_helper"
 # `ri` reaches generated URLs solely because `before_action :set_region` has already redirected it
 # into the query string. There is no fallback path. A single `skip_before_action :set_region` on a
 # controller that renders regional HTML therefore silently strips the region from every link on the
-# page. That is exactly what happened to the auth sign-in and sign-up entry pages, and it survived
-# two months of green CI because the existing callback assertions were aimed at the surface
-# ApplicationController -- which was never the thing that broke.
+# page. The guard covers the currently routed Base and Tech controllers, rather than relying on
+# route inventory alone.
 #
 # The four tests below close that gap from four directions:
 #
@@ -22,8 +21,8 @@ require "test_helper"
 #      chain (catches a leaf that loses the mechanism through inheritance rather than through a
 #      visible `skip_before_action`).
 #
-# Tests 1-3 read source files, so they run without booting a full request stack. Test 4 resolves the
-# real classes, because that is the only way to see a chain assembled across a parent controller.
+# Tests 1-3 mostly read source files. Test 4 resolves the real classes for every target, because
+# that is the only way to see a callback chain assembled across a parent controller.
 class RiRoutingContractTest < ActiveSupport::TestCase
   self.fixture_table_names = []
 
@@ -32,100 +31,30 @@ class RiRoutingContractTest < ActiveSupport::TestCase
   # Targets that serve regional HTML and therefore owe the `ri` contract described in
   # docs/architecture/preference.md:197.
   RI_PARTICIPATING_TARGETS = %w(
-    auth/app auth/com auth/org
     base/app base/com base/org
-    core/app core/com core/org
-    side/app side/com side/org
-    palm/app
+    tech/org
   ).freeze
 
-  # Targets deliberately outside the contract. An unexplained absence is indistinguishable from the
-  # oversight this test exists to catch, so every exemption is grouped under a stated reason.
+  RI_EXEMPT_TARGETS = [].freeze
 
-  # Infrastructure editions: health probes, CSP sinks and root stubs only. They serve no regional
-  # HTML and are not reachable by ordinary users.
-  RI_EXEMPT_INFRASTRUCTURE_TARGETS = %w(base/dev base/net core/dev core/net).freeze
-
-  # Publishing content surfaces. Their language comes from the published document
-  # (PublishingContentRendering), not from request context, so they do not carry `ri`.
-  RI_EXEMPT_CONTENT_TARGETS = %w(
-    docs/app docs/com docs/org
-    help/app help/com help/org
-    info/app info/com info/org
-    news/app news/com news/org
-  ).freeze
-
-  RI_EXEMPT_TARGETS = (RI_EXEMPT_INFRASTRUCTURE_TARGETS + RI_EXEMPT_CONTENT_TARGETS).freeze
-
-  # Controllers inside a participating target that legitimately do not run `set_region`. Every entry
-  # is a machine-to-machine endpoint: protocol redirects and token/cookie transports that must not
-  # bounce a caller through a region canonicalization redirect. None of them render regional HTML.
+  # Preference email pages use one-click URLs sent out of band. A canonicalization redirect would
+  # rewrite the recipient's URL; the page itself generates no regional navigation links.
   #
   # This list is compared by equality, not inclusion, so a NEW skip fails the test and so does a
   # skip that silently disappears. Adding an entry is a deliberate, reviewable act.
+  # Process the OP response before region canonicalization can echo its query to the browser.
   RI_SKIP_ALLOWLIST = %w(
-    app/controllers/auth/app/edge/v0/token/checks_controller.rb
-    app/controllers/auth/app/edge/v0/token/dbsc_controller.rb
-    app/controllers/auth/app/oidc/authorizations_controller.rb
-    app/controllers/auth/app/oidc/callbacks_controller.rb
-    app/controllers/auth/app/omniauth/omniauth_callbacks_controller.rb
-    app/controllers/auth/com/edge/v0/token/checks_controller.rb
-    app/controllers/auth/com/edge/v0/token/dbsc_controller.rb
-    app/controllers/auth/com/oidc/authorizations_controller.rb
-    app/controllers/auth/com/oidc/callbacks_controller.rb
-    app/controllers/auth/org/edge/v0/token/checks_controller.rb
-    app/controllers/auth/org/edge/v0/token/dbsc_controller.rb
-    app/controllers/auth/org/oidc/authorizations_controller.rb
-    app/controllers/auth/org/oidc/callbacks_controller.rb
-    app/controllers/auth/org/omniauth/omniauth_callbacks_controller.rb
-    app/controllers/base/app/edge/v0/cookies_controller.rb
-    app/controllers/base/app/oauth/authorizations_controller.rb
-    app/controllers/base/app/oidc/authorizations_controller.rb
     app/controllers/base/app/oidc/callbacks_controller.rb
-    app/controllers/base/com/edge/v0/cookies_controller.rb
-    app/controllers/base/com/oauth/authorizations_controller.rb
-    app/controllers/base/com/oidc/authorizations_controller.rb
-    app/controllers/base/com/oidc/callbacks_controller.rb
-    app/controllers/base/org/edge/v0/cookies_controller.rb
-    app/controllers/base/org/oauth/authorizations_controller.rb
-    app/controllers/base/org/oidc/authorizations_controller.rb
     app/controllers/base/org/oidc/callbacks_controller.rb
-    app/controllers/core/app/edge/v0/cookies_controller.rb
-    app/controllers/core/app/edge/v0/dbsc_controller.rb
-    app/controllers/core/app/oidc/authorizations_controller.rb
-    app/controllers/core/app/oidc/callbacks_controller.rb
-    app/controllers/core/com/edge/v0/cookies_controller.rb
-    app/controllers/core/com/edge/v0/dbsc_controller.rb
-    app/controllers/core/com/oidc/authorizations_controller.rb
-    app/controllers/core/com/oidc/callbacks_controller.rb
-    app/controllers/core/org/edge/v0/cookies_controller.rb
-    app/controllers/core/org/edge/v0/dbsc_controller.rb
-    app/controllers/core/org/oidc/authorizations_controller.rb
-    app/controllers/core/org/oidc/callbacks_controller.rb
-    app/controllers/side/app/oidc/authorizations_controller.rb
-    app/controllers/side/app/oidc/callbacks_controller.rb
-    app/controllers/side/com/oidc/authorizations_controller.rb
-    app/controllers/side/com/oidc/callbacks_controller.rb
-    app/controllers/side/org/oidc/authorizations_controller.rb
-    app/controllers/side/org/oidc/callbacks_controller.rb
+    app/controllers/base/org/sign/interruptions_controller.rb
   ).freeze
 
   # Controllers that render HTML on a participating target and still run without region
   # enforcement.
   #
-  # Preference email unsubscribe pages are reached by a token URL sent in an email, not by
-  # in-surface navigation: the page carries a one-click form back to itself and generates no
-  # regional link, and a canonicalization redirect there would rewrite a URL the recipient
-  # received out of band.
-  #
-  # Base.Org Publishing CMS controllers inherited BareController and skipped the preference
-  # pipeline entirely. They now inherit Base::Org::ApplicationController (`:private`
-  # authentication, `authenticate_operator!`) like every other staff management surface, so
-  # `set_region` runs like it does for `accounts`, `audit`, and the rest -- this exemption no
-  # longer applies to them.
+  # Preference email one-click pages intentionally do not canonicalize a URL received out of band.
   RI_HTML_EXEMPT_CONTROLLERS = %w(
     base/app/preference/emails
-    base/com/preference/emails
     base/org/preference/emails
   ).freeze
 
@@ -180,7 +109,7 @@ class RiRoutingContractTest < ActiveSupport::TestCase
     assert_equal RI_SKIP_ALLOWLIST, offenders,
                  "Controllers skipping set_region changed. Skipping it on a controller that " \
                  "renders regional HTML strips ri from every URL that controller generates -- the " \
-                 "auth sign-in/sign-up regression. Confirm the endpoint is machine-to-machine and " \
+                 "regional link regression. Confirm the one-click URL contract and " \
                  "update RI_SKIP_ALLOWLIST deliberately.\n" \
                  "added:   #{(offenders - RI_SKIP_ALLOWLIST).inspect}\n" \
                  "removed: #{(RI_SKIP_ALLOWLIST - offenders).inspect}"
@@ -213,7 +142,7 @@ class RiRoutingContractTest < ActiveSupport::TestCase
 
   private
 
-  # Family/edition pairs that own controllers, e.g. "auth/app". Derived from the controller tree so
+  # Family/edition pairs that own controllers, e.g. "base/app". Derived from the controller tree so
   # a newly added surface shows up here without anyone remembering to register it.
   def discovered_targets
     Rails.root.join(CONTROLLER_ROOT).glob("*/*")

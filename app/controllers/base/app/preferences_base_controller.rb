@@ -7,30 +7,32 @@ module Base
       include ::PreferenceCore
       include ::BasePreferenceViewRouteAliases
       include ::SurfaceInertiaPage
+      include ::PreferenceWebCookieEndpoint
 
       AUTHENTICATION_MODE = :open
+
+      layout "base/app/inertia"
+      inertia_share chrome: -> { surface_chrome }
+      inertia_share clear_history: -> { session[:inertia_clear_history] == true }
 
       helper_method :preference_base_i18n_key, :preference_acme_i18n_key
 
       before_action :authorize_preference_write!, if: :preference_write_request?
 
-      private
+      rescue_from PreferenceBase::ResolutionError, with: :render_preference_dependency_failure
 
-      def set_current_actor
-        refresh_preference_token_from_db_for_edit_entry! if preference_edit_entry_request?
-        super
-      end
+      private
 
       def preference_write_request?
         !request.get? && !request.head?
       end
 
-      def preference_edit_entry_request?
-        (request.get? || request.head?) && request.format.html? && action_name == "edit"
-      end
-
       def authorize_preference_write!
         authorize!(@preferences || preference_class, to: :update?)
+      end
+
+      def render_preference_dependency_failure
+        head :service_unavailable
       end
     end
   end

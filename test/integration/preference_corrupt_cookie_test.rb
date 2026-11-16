@@ -3,65 +3,136 @@
 
 require "test_helper"
 
-# A garbage/corrupt preference refresh cookie or access JWT must never raise
-# an unhandled exception and must never be treated as authority over existing
-# DB state. The current, intentional fail-closed behavior for a *presented but
-# invalid* refresh token is a controlled 401 (not a silent bootstrap and not a
-# 500) with the stale cookie cleared, so a replayed/garbage token cannot be
-# used to smuggle state into an unrelated preference record.
 class PreferenceCorruptCookieTest < ActionDispatch::IntegrationTest
   setup do
     https!
-    host! ENV.fetch("PUBLIC_BASE_SERVICE_URL", "base.app.localhost")
+    host! ENV.fetch("PUBLIC_BASE_SERVICE_URL")
   end
 
-  REFRESH_COOKIE_NAME = -> { PreferenceCookieName.refresh(production: false, surface: :app) }
-  ACCESS_COOKIE_NAME = -> { PreferenceCookieName.access(production: false, surface: :app) }
+  test "a malformed anonymous JWT is detached on GET without creating a preference" do
+    cookies[PreferenceCookieName.anonymous_jwt] = "not.a.jwt"
+    cookies[PreferenceIoKeys::Cookies::LANGUAGE] = "en"
+    cookies[PreferenceCookieName.anonymous_experience] = "{\"theme\":\"dark\"}"
 
-  test "garbage refresh cookie fails closed without raising and clears the stale cookie" do
-    cookies[REFRESH_COOKIE_NAME.call] = "not-a-real-token.garbage"
-
-    get "/preference?ri=jp"
-
-    assert_response :unauthorized
-    assert_predicate cookies[REFRESH_COOKIE_NAME.call].to_s, :empty?
-  end
-
-  test "garbage refresh cookie does not overwrite an existing preference's DB state" do
-    get "/preference?ri=jp"
+    assert_no_difference -> { AppPreference.count } do
+      get "/preference?ri=jp"
+    end
 
     assert_response :success
+    [PreferenceCookieName.anonymous_jwt, PreferenceIoKeys::Cookies::LANGUAGE,
+     PreferenceCookieName.anonymous_experience,].each do |name|
+      assert_shared_cookie_expired(name)
+    end
+  end
 
-    existing = AppPreference.order(:created_at).last
-    existing_region_option_id = existing.app_preference_region.option_id
+  test "an explicit write after a malformed JWT creates a fresh row and issues the three shared cookies" do
+    cookies[PreferenceCookieName.anonymous_jwt] = "not.a.jwt"
+    before = AppPreference.count
 
-    reset!
+    patch base_app_preference_theme_path(ri: "jp"),
+          params: { preference_theme: { option_id: AppPreferenceThemeOption::DARK.to_s } }
+
+    assert_response :redirect
+    assert_equal before + 1, AppPreference.count
+    [PreferenceCookieName.anonymous_jwt, PreferenceIoKeys::Cookies::LANGUAGE,
+     PreferenceCookieName.anonymous_experience,].each do |name|
+      assert_predicate cookies[name], :present?, "#{name} should be issued after the explicit write"
+    end
+  end
+
+  test "a theme storage dependency failure preserves the current preference and its browser cookies" do
+    host = ENV.fetch("PUBLIC_BASE_SERVICE_URL")
+    host! host
     https!
-    host! ENV.fetch("PUBLIC_BASE_SERVICE_URL", "base.app.localhost")
-    cookies[REFRESH_COOKIE_NAME.call] = "totally-invalid-cookie-value"
+    patch base_app_preference_theme_path(ri: "jp"),
+          params: { preference_theme: { option_id: AppPreferenceThemeOption::DARK.to_s } }
 
-    get "/preference?ri=us"
+    assert_response :redirect
+    jwt = cookies[PreferenceCookieName.anonymous_jwt]
+    claims = PreferenceToken.decode(jwt, host:)
+    preference = AppPreference.find_by!(public_id: claims.fetch("sub"))
+    issuance = preference.attributes
+    theme = AppPreferenceTheme.find_by!(preference_id: preference.id)
+    unavailable = ->(*) { raise ActiveRecord::ConnectionNotEstablished, "preference storage unavailable" }
 
-    assert_response :unauthorized
+    AppPreference.stub(:transaction, unavailable) do
+      assert_no_difference -> { AppPreference.count } do
+        patch base_app_preference_theme_path(ri: "jp"),
+              params: { preference_theme: { option_id: AppPreferenceThemeOption::LIGHT.to_s } }
+      end
+    end
 
-    existing.reload
-
-    assert_equal existing_region_option_id, existing.app_preference_region.option_id,
-                 "a corrupt cookie from a different session must not mutate an unrelated existing preference"
+    assert_response :service_unavailable
+    assert_empty response.body
+    assert_equal issuance, preference.reload.attributes
+    assert_equal AppPreferenceThemeOption::DARK, theme.reload.option_id
+    assert_equal jwt, cookies[PreferenceCookieName.anonymous_jwt]
+    [PreferenceCookieName.anonymous_jwt, PreferenceIoKeys::Cookies::LANGUAGE,
+     PreferenceCookieName.anonymous_experience,].each do |name|
+      assert_not_includes response.headers["Set-Cookie"].to_s, "#{name}="
+    end
   end
 
-  test "absent refresh cookie (never presented) still bootstraps a fresh preference" do
-    get "/preference?ri=jp"
+  test "a signing key lookup failure rolls back a theme change and preserves the previous issuance" do
+    host = ENV.fetch("PUBLIC_BASE_SERVICE_URL")
+    host! host
+    https!
+    patch base_app_preference_theme_path(ri: "jp"),
+          params: { preference_theme: { option_id: AppPreferenceThemeOption::DARK.to_s } }
 
-    assert_response :success
-    assert_not_nil cookies[REFRESH_COOKIE_NAME.call]
+    assert_response :redirect
+    jwt = cookies[PreferenceCookieName.anonymous_jwt]
+    claims = PreferenceToken.decode(jwt, host:)
+    preference = AppPreference.find_by!(public_id: claims.fetch("sub"))
+    issuance = preference.attributes
+    theme = AppPreferenceTheme.find_by!(preference_id: preference.id)
+    unavailable = ->(*) { raise JitSecurityJwtRegistry::ConfigurationError, "preference signing key unavailable" }
+
+    PreferenceJwtConfiguration.stub(:private_key_for_active, unavailable) do
+      assert_no_difference -> { AppPreference.count } do
+        patch base_app_preference_theme_path(ri: "jp"),
+              params: { preference_theme: { option_id: AppPreferenceThemeOption::LIGHT.to_s } }
+      end
+    end
+
+    assert_response :service_unavailable
+    assert_empty response.body
+    assert_equal issuance, preference.reload.attributes
+    assert_equal AppPreferenceThemeOption::DARK, theme.reload.option_id
+    assert_equal jwt, cookies[PreferenceCookieName.anonymous_jwt]
+    [PreferenceCookieName.anonymous_jwt, PreferenceIoKeys::Cookies::LANGUAGE,
+     PreferenceCookieName.anonymous_experience,].each do |name|
+      assert_not_includes response.headers["Set-Cookie"].to_s, "#{name}="
+    end
   end
 
-  test "garbage access token JWT does not raise and falls back to refresh-token handling" do
-    cookies[ACCESS_COOKIE_NAME.call] = "garbage.jwt.value"
+  test "a signing key lookup failure on the first theme write leaves no preference or issued cookies" do
+    host! ENV.fetch("PUBLIC_BASE_SERVICE_URL")
+    https!
+    unavailable = ->(*) { raise JitSecurityJwtRegistry::ConfigurationError, "preference signing key unavailable" }
 
-    get "/preference?ri=jp"
+    PreferenceJwtConfiguration.stub(:private_key_for_active, unavailable) do
+      assert_no_difference [-> { AppPreference.count }, -> { AppPreferenceTheme.count }] do
+        patch base_app_preference_theme_path(ri: "jp"),
+              params: { preference_theme: { option_id: AppPreferenceThemeOption::DARK.to_s } }
+      end
+    end
 
-    assert_response :success
+    assert_response :service_unavailable
+    assert_empty response.body
+    [PreferenceCookieName.anonymous_jwt, PreferenceIoKeys::Cookies::LANGUAGE,
+     PreferenceCookieName.anonymous_experience,].each do |name|
+      assert_nil cookies[name]
+      assert_not_includes response.headers["Set-Cookie"].to_s, "#{name}="
+    end
+  end
+
+  private
+
+  def assert_shared_cookie_expired(name)
+    entry = set_cookie_entries(name).sole
+
+    assert_equal "", entry[:value]
+    assert(entry[:"max-age"] == "0" || (entry[:expires] && Time.httpdate(entry[:expires]) < Time.current))
   end
 end

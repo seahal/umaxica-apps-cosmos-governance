@@ -12,12 +12,12 @@
 #  backup_eligible          :boolean
 #  backup_state             :boolean
 #  description              :string           default(""), not null
-#  discarded_at             :datetime         default(Infinity), not null
+#  discard_at             :datetime         default(Infinity), not null
 #  last_used_at             :datetime
 #  metadata_source          :string
 #  provider_name            :string
 #  public_key               :text             not null
-#  purged_at                :datetime         default(Infinity), not null
+#  purge_eligible_at                :datetime         default(Infinity), not null
 #  sign_count               :bigint           default(0), not null
 #  transports               :jsonb
 #  created_at               :datetime         not null
@@ -30,9 +30,9 @@
 #
 # Indexes
 #
-#  index_client_passkeys_on_discarded_at    (discarded_at)
+#  index_client_passkeys_on_discard_at    (discard_at)
 #  index_client_passkeys_on_public_id       (public_id) UNIQUE
-#  index_client_passkeys_on_purged_at       (purged_at)
+#  index_client_passkeys_on_purge_eligible_at       (purge_eligible_at)
 #  index_client_passkeys_on_status_id       (status_id)
 #  index_client_passkeys_on_webauthn_id     (webauthn_id) UNIQUE
 #  index_user_identity_passkeys_on_user_id  (user_id)
@@ -46,9 +46,57 @@
 require "test_helper"
 
 class ClientPasskeyTest < ActiveSupport::TestCase
+  test "physical deletion removes the Passkey from the owner count" do
+    actor = Client.create!(
+      security_mode_id: SecurityModeConfigurable::NORMAL,
+      id: 1_000_000_000_000 + SecureRandom.random_number(1_000_000_000),
+    )
+    passkeys =
+      3.times.map do |index|
+        PasskeyRegistrationOperation.call!(
+          actor: actor, passkey_class: ClientPasskey,
+          attributes: { webauthn_id: SecureRandom.uuid, public_key: "slot-public-key-#{index}" },
+          audit: { event_type: "passkey.registered.settings", surface: "app" },
+        )
+      end
+    passkeys.first.destroy!
+    replacement = PasskeyRegistrationOperation.call!(
+      actor: actor, passkey_class: ClientPasskey,
+      attributes: { webauthn_id: SecureRandom.uuid, public_key: "replacement-public-key" },
+      audit: { event_type: "passkey.registered.settings", surface: "app" },
+    )
+
+    assert_predicate replacement, :persisted?
+    assert_equal 3, actor.client_passkeys.count
+    assert_not StepUpBootstrapEligibilityQuery.call(actor: actor)
+  end
+
+  test "validation accepts the tenth Passkey and refuses the eleventh for one user" do
+    owner = Client.create!(security_mode_id: SecurityModeConfigurable::NORMAL)
+    9.times do |index|
+      PasskeyRegistrationOperation.call!(
+        actor: owner, passkey_class: ClientPasskey,
+        attributes: { webauthn_id: SecureRandom.uuid, public_key: "limit-public-key-#{index}" },
+        audit: { event_type: "passkey.registered.settings", surface: "app" },
+      )
+    end
+    tenth = ClientPasskey.new(user: owner, webauthn_id: SecureRandom.uuid, public_key: "tenth-public-key")
+
+    assert_predicate tenth, :valid?
+
+    tenth.save!
+    eleventh = ClientPasskey.new(user: owner, webauthn_id: SecureRandom.uuid, public_key: "eleventh-public-key")
+
+    assert_not eleventh.valid?
+    assert_match(/exceeds maximum passkeys/, eleventh.errors[:base].join)
+  end
+
   def setup
     ClientEmailStatus.find_or_create_by!(id: ClientEmailStatus::VERIFIED)
-    @user = Client.create!(public_id: "u_#{SecureRandom.hex(8)}", status_id: ClientStatus::NOTHING)
+    @user = Client.create!(
+      security_mode_id: SecurityModeConfigurable::NORMAL, public_id: PublicId.generate,
+      status_id: ClientStatus::NOTHING,
+    )
     ClientEmail.create!(
       user: @user,
       address: "passkey-model-#{SecureRandom.hex(4)}@example.com",
@@ -80,23 +128,17 @@ class ClientPasskeyTest < ActiveSupport::TestCase
     assert_equal ClientPasskeyStatus::ACTIVE, default.to_i
   end
 
-  test "repairs missing active status before create" do
-    ClientPasskeyStatus.where(id: ClientPasskeyStatus::ACTIVE).delete_all
+  test "referenced active status cannot be removed while its Passkey remains" do
+    @passkey.save!
 
-    passkey = ClientPasskey.new(
-      user: @user,
-      webauthn_id: "repair-test",
-      public_key: "repair-key",
-      description: "Repair Test",
-    )
-
-    assert_difference -> { ClientPasskeyStatus.where(id: ClientPasskeyStatus::ACTIVE).count }, 1 do
-      assert_difference("ClientPasskey.count", 1) do
-        passkey.save!
+    assert_raises(ActiveRecord::InvalidForeignKey) do
+      ClientPasskeyStatus.transaction(requires_new: true) do
+        ClientPasskeyStatus.where(id: ClientPasskeyStatus::ACTIVE).delete_all
       end
     end
 
-    assert_equal ClientPasskeyStatus::ACTIVE, passkey.status_id
+    assert_equal ClientPasskeyStatus::ACTIVE, @passkey.reload.status_id
+    assert ClientPasskeyStatus.exists?(ClientPasskeyStatus::ACTIVE)
   end
 
   test "status association uses status_id" do
@@ -176,28 +218,23 @@ class ClientPasskeyTest < ActiveSupport::TestCase
   end
 
   test "enforces maximum passkeys per user" do
-    Prosopite.pause do
-      ClientPasskey::MAX_PASSKEYS_PER_USER.times do |i|
-        ClientPasskey.create!(
-          user: @user,
-          webauthn_id: SecureRandom.uuid,
-          external_id: SecureRandom.uuid,
-          public_key: "test-key-#{i}",
-          description: "Key #{i}",
-        )
-      end
+    ClientPasskey::MAX_PASSKEYS_PER_USER.times do |i|
+      PasskeyRegistrationOperation.call!(
+        actor: @user, passkey_class: ClientPasskey,
+        attributes: { webauthn_id: SecureRandom.uuid, public_key: "test-key-#{i}", description: "Key #{i}" },
+        audit: { event_type: "passkey.registered.settings", surface: "app" },
+      )
     end
 
-    extra_passkey = ClientPasskey.new(
-      user: @user,
-      webauthn_id: SecureRandom.uuid,
-      external_id: SecureRandom.uuid,
-      public_key: "overflow-key",
-      description: "Overflow key",
-    )
-
-    assert_not extra_passkey.valid?
-    assert_includes extra_passkey.errors[:base], "exceeds maximum passkeys per user (#{ClientPasskey::MAX_PASSKEYS_PER_USER})"
+    error =
+      assert_raises(ActiveRecord::RecordInvalid) do
+        PasskeyRegistrationOperation.call!(
+          actor: @user, passkey_class: ClientPasskey,
+          attributes: { webauthn_id: SecureRandom.uuid, public_key: "overflow-key" },
+          audit: { event_type: "passkey.registered.settings", surface: "app" },
+        )
+      end
+    assert_match(/exceeds maximum passkeys/, error.record.errors[:base].join)
   end
 
   test "description is invalid when blank" do
@@ -215,14 +252,18 @@ class ClientPasskeyTest < ActiveSupport::TestCase
     assert_not_empty @passkey.errors[:sign_count]
   end
 
-  test "association deletion: destroys when user is destroyed" do
+  test "recoverable owner destruction refuses erasure and preserves its passkey" do
     @passkey.save!
-    @user.destroy
-    assert_raise(ActiveRecord::RecordNotFound) { @passkey.reload }
+    assert_raises(ActiveRecord::RecordNotDestroyed) { @user.destroy! }
+    assert_not_predicate @passkey.reload, :destroyed?
+    assert Client.exists?(@user.id)
   end
 
   test "is valid on create when user has no verified recovery identity" do
-    user_without_identity = Client.create!(public_id: "u_#{SecureRandom.hex(8)}", status_id: ClientStatus::NOTHING)
+    user_without_identity = Client.create!(
+      security_mode_id: SecurityModeConfigurable::NORMAL,
+      public_id: PublicId.generate, status_id: ClientStatus::NOTHING,
+    )
     passkey = ClientPasskey.new(
       user: user_without_identity,
       webauthn_id: SecureRandom.uuid,
@@ -233,5 +274,9 @@ class ClientPasskeyTest < ActiveSupport::TestCase
     )
 
     assert_predicate passkey, :valid?
+  end
+
+  test "public_id is a fixed 21-character NanoID" do
+    assert_public_id_fixed_length(::ClientPasskey)
   end
 end

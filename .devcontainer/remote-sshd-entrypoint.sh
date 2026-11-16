@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# `core`'s main process when `compose.remote-access.yaml` is loaded.
+# `core`'s main process under `compose.override.yaml`'s `remote-access` profile.
 #
 # Identical in umaxica-apps-global, umaxica-apps-edge and portal except for the
 # account name and its home. Change one, change all three.
@@ -19,7 +19,7 @@ authorized_keys=/home/global/.config/umaxica/authorized_keys
 # fails. Fail here instead, where the reason is one `podman logs` away.
 if [[ ! -s ${authorized_keys} ]]; then
   echo "remote-sshd: ${authorized_keys} is missing or empty." >&2
-  echo 'compose.remote-access.yaml binds it read-only from .secrets/codex_authorized_keys' >&2
+  echo 'compose.override.yaml binds it read-only from .secrets/codex_authorized_keys' >&2
   echo 'in the repository. Put the public key Codex App connects with there, then' >&2
   echo 'recreate core. See the remote-access document for the full procedure.' >&2
   exit 78
@@ -166,7 +166,7 @@ if [[ -n ${TS_AUTHKEY:-} ]]; then
   echo 'remote-sshd: enrolling in the tailnet (first start only).' >&2
   /usr/bin/tailscale --socket="${ts_socket}" up \
     --authkey="${TS_AUTHKEY}" \
-    --hostname=umaxica-global-core \
+    --hostname=umaxica-cosmos-governance-core \
     --advertise-tags=tag:umaxica-devcontainer \
     --accept-dns=false
 fi

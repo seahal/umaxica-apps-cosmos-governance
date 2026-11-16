@@ -8,6 +8,7 @@
 # an owner-self read on `current_operator`. The withdrawal step-up scope guard remains on the
 # controller's verification before_actions.
 class OperatorWithdrawalPolicy < ApplicationPolicy
+  public
   def show?
     owner?
   end

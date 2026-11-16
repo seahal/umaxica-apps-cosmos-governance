@@ -10,7 +10,8 @@ module Authentication
 
     setup do
       @user = Client.create!(
-        public_id: "audit_#{SecureRandom.hex(6)}",
+        security_mode_id: SecurityModeConfigurable::NORMAL,
+        public_id: PublicId.generate,
         status_id: ClientStatus::ACTIVE,
         visibility_id: ClientVisibility::USER,
       )
@@ -66,7 +67,9 @@ module Authentication
 
     test "write recreates missing user chronicle event and level references" do
       ChronicleRecord.connected_to(role: :writing) do
-        ClientChronicle.where(event_id: ClientChronicleEvent::LOGGED_IN).delete_all
+        ClientChronicle.where(event_id: ClientChronicleEvent::LOGGED_IN).or(
+          ClientChronicle.where(level_id: ClientChronicleLevel::NOTHING),
+        ).delete_all
         ClientChronicleEvent.where(id: ClientChronicleEvent::LOGGED_IN).delete_all
         ClientChronicleLevel.where(id: ClientChronicleLevel::NOTHING).delete_all
       end

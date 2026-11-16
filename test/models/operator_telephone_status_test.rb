@@ -37,13 +37,11 @@ class OperatorTelephoneStatusTest < ActiveSupport::TestCase
   test "restrict_with_error prevents deletion when telephones exist" do
     status = OperatorTelephoneStatus.find(OperatorTelephoneStatus::VERIFIED)
     # Create a staff identity telephone with this status
-    staff = Operator.create!
+    staff = Operator.create!(security_mode_id: SecurityModeConfigurable::ADVANCED)
     OperatorTelephone.create!(
       number: "+81901234567",
       staff_id: staff.id,
       staff_telephone_status_id: status.id,
-      otp_counter: "1",
-      otp_private_key: "secret_credential",
     )
 
     assert_raises(ActiveRecord::RecordNotDestroyed) do

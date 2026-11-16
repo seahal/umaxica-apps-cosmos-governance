@@ -5,12 +5,14 @@ class IdentityGraphProvisioner
   def self.call!(surface:, principal:)
     new(surface: surface, principal: principal).call!
   end
+  public_class_method :call!
 
   def initialize(surface:, principal:)
     @surface = surface
     @principal = principal
   end
 
+  public
   def call!
     BaseSelectorBootstrapAuthority.call(surface: surface, principal: principal)
   rescue StandardError => e

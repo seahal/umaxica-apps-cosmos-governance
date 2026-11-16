@@ -4,30 +4,6 @@
 module WithdrawalFlow
   extend ActiveSupport::Concern
 
-  included do
-    include ::PublicId
-    include ::Retainable
-
-    attribute :began_at, :datetime, default: -> { Time.current }
-
-    before_validation :ensure_withdrawal_flow_reference_defaults
-    before_validation :assign_default_status_id
-
-    after_create :record_initial_withdrawal_event
-
-    validates :status_id, presence: true, inclusion: { in: ->(record) { record.class::STATUS_IDS } }
-    validates :began_at, presence: true
-    validate :terminal_status_has_completed_at
-    validate :failed_status_has_failed_at
-
-    scope :recent_first, -> { order(created_at: :desc) }
-    scope :active,
-          -> do
-            where(status_id: status_ids_for("REQUESTED", "CLOSING", "DISCARDED"))
-              .where(arel_table[:discarded_at].gt(Time.current))
-          end
-  end
-
   class_methods do
     def status_id_for(status_name)
       self::STATUSES.fetch(status_name.to_s)
@@ -54,6 +30,7 @@ module WithdrawalFlow
 
   delegate :status_name_for, to: :class
 
+  public
   def status_ids_for(*status_names)
     self.class.status_ids_for(*status_names)
   end

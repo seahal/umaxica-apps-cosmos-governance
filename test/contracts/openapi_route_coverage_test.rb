@@ -15,10 +15,9 @@ require_relative "../support/openapi_contract"
 # adr/api-versioning-and-client-conventions.md: a description that names routes the router does not
 # serve, or omits routes it does.
 class OpenapiRouteCoverageTest < ActiveSupport::TestCase
-  # Paths the descriptions are responsible for. Everything else the router serves -- HTML ceremony
-  # routes, OAuth, OIDC, WebAuthn, DBSC, MCP, `.well-known` -- is out of scope by
-  # docs/reference/api-design-standards.md, and `/edge/v0` and `/web/v0` are deferred until they
-  # converge on `/api/v0` (adr/api-route-vocabulary-consolidation.md).
+  # Paths the descriptions are responsible for. HTML identity-management routes, WebAuthn, and
+  # `.well-known` endpoints are outside the JSON contract described by
+  # docs/reference/api-design-standards.md.
   DESCRIBED_PREFIXES = %r{\A/(api/v0|health)(/|\z)}
 
   # The text operational endpoints render `text/plain` and do not negotiate
@@ -27,12 +26,17 @@ class OpenapiRouteCoverageTest < ActiveSupport::TestCase
   # `/api/v0/health.json` and `/api/v0/revision.json` are described.
   TEXT_ONLY_PATHS = ["/health", "/health/startup", "/health/liveness", "/health/readiness"].freeze
 
-  # DBSC's wire format is fixed by its own specification, so it is absent from the JSON
-  # descriptions even after the registration endpoint moved under `/api/v0/preferences`.
-  PROTOCOL_EXEMPT_PATHS = ["/api/v0/preferences/dbsc"].freeze
+  # Base owner APIs (R5-WU12/14/15) are server-to-server calls from the realm's own Base Self-RP,
+  # not a client-facing JSON contract; their contract is
+  # docs/architecture/avatar-authority-contract-proposal.md and the owner/relay tests. Deferred, not
+  # permanent: adr/owner-api-openapi-description-deferred.md says when to revisit.
+  OWNER_API_PATHS = %r{
+    \A/api/v0/(avatar|membership|iam|support|identity/(?:standing|selection)|tech-capability-checks)(/|\z)
+  }x
 
   # Surfaces with their own description. `net` and `dev` are internal-only and have none.
   SURFACES = OpenapiContract::SURFACES
+  APPLICATION_SERVICE_NAMES = %w(base tech).freeze
 
   test "every described surface has a bundled description that parses" do
     SURFACES.each do |surface|
@@ -50,31 +54,42 @@ class OpenapiRouteCoverageTest < ActiveSupport::TestCase
   end
 
   test "no route the router serves is missing from its surface description" do
-    SURFACES.each do |surface|
-      undescribed = routed_operations(surface) - described_operations(surface)
+    undescribed =
+      SURFACES.flat_map do |surface|
+        (routed_operations(surface) - described_operations(surface)).map { |operation| "#{surface}: #{operation}" }
+      end
 
-      assert_empty undescribed,
-                   "the #{surface} surface routes these operations but openapi/#{surface}.yml does not " \
-                   "describe them: #{undescribed.to_a.sort.join(", ")}"
-    end
+    assert_empty undescribed, "these routed operations are missing from their OpenAPI descriptions: #{undescribed.sort}"
   end
 
   test "no operation in a surface description is absent from the router" do
-    SURFACES.each do |surface|
-      unrouted = described_operations(surface) - routed_operations(surface)
+    unrouted =
+      SURFACES.flat_map do |surface|
+        (described_operations(surface) - routed_operations(surface)).map { |operation| "#{surface}: #{operation}" }
+      end
 
-      assert_empty unrouted,
-                   "openapi/#{surface}.yml describes these operations but the #{surface} surface does " \
-                   "not route them: #{unrouted.to_a.sort.join(", ")}"
-    end
+    assert_empty unrouted, "these OpenAPI operations have no route in their surface: #{unrouted.sort}"
   end
 
   test "the surfaces differ only where the routes differ" do
-    # Palm serves the app surface only, so `/api/v0/profile` must be app-only in the descriptions
-    # too. This is the concrete case that a single shared description could not express.
-    assert_includes described_operations("app"), "GET /api/v0/profile"
-    assert_not_includes described_operations("com"), "GET /api/v0/profile"
-    assert_not_includes described_operations("org"), "GET /api/v0/profile"
+    %w(app com org).each do |surface|
+      assert_not_includes described_operations(surface), "GET /api/v0/profile"
+    end
+  end
+
+  test "Tech org operational API routes are covered by the org description" do
+    tech_operations = Rails.application.routes.routes.filter_map { |route|
+      next unless route.defaults[:controller].to_s.start_with?("tech/org/api/v0/")
+
+      path = route.path.spec.to_s.sub(/\(\.:format\)\z/, "")
+      verb = route.verb.to_s.strip
+      next if verb.empty?
+
+      "#{verb} #{path}"
+    }.to_set
+
+    assert_equal Set["GET /api/v0/health.json", "GET /api/v0/revision.json"], tech_operations
+    assert tech_operations.subset?(described_operations("org"))
   end
 
   private
@@ -83,17 +98,22 @@ class OpenapiRouteCoverageTest < ActiveSupport::TestCase
   # OpenAPI's `{slug}`. Deduplicated: several services serve the same path on the same surface --
   # `/api/v0/entries` comes from docs, help, info, and news -- and the description states the path
   # once.
+  # Tech owns an org-facing API health/revision pair and must be included even though it is not a
+  # browser application namespace. Guid was retired and has no route or OpenAPI owner here.
   def routed_operations(surface)
+    service_pattern = Regexp.union(*APPLICATION_SERVICE_NAMES)
+    controller_pattern = %r{\A(?:#{service_pattern})/#{Regexp.escape(surface)}(?:/|\z)}
+
     Rails.application.routes.routes.filter_map { |route|
       name = route.name.to_s
       controller_path = route.defaults[:controller].to_s
       next unless name.include?("_#{surface}_") ||
-        controller_path.match?(%r{\A(?:core|docs|help|info|news|palm|auth|base|side)/#{Regexp.escape(surface)}(?:/|\z)})
+        controller_path.match?(controller_pattern)
 
       path = route.path.spec.to_s.sub(/\(\.:format\)\z/, "")
       next unless path.match?(DESCRIBED_PREFIXES)
       next if TEXT_ONLY_PATHS.include?(path)
-      next if PROTOCOL_EXEMPT_PATHS.include?(path)
+      next if OWNER_API_PATHS.match?(path)
 
       verb = route.verb.to_s
       next if verb.empty?

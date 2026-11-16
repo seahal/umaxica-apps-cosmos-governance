@@ -3,22 +3,15 @@
 
 require "test_helper"
 
-# The PWA offline fallback is served by the framework's own Rails::PwaController on every origin whose
-# public HTML Rails renders itself: base, auth, side, and palm. See adr/pwa-offline-route-exception.md.
+# The PWA offline fallback is served by Rails::PwaController on Base's public browser surfaces.
+# See adr/pwa-offline-route-exception.md.
 class PwaEndpointsTest < ActionDispatch::IntegrationTest
   self.fixture_table_names = []
 
   HOSTS = [
-    ENV.fetch("PUBLIC_BASE_SERVICE_URL", "base.app.localhost"),
-    ENV.fetch("PUBLIC_BASE_CORPORATE_URL", "base.com.localhost"),
-    ENV.fetch("PUBLIC_BASE_STAFF_URL", "base.org.localhost"),
-    ENV.fetch("PUBLIC_AUTH_SERVICE_URL", "auth.app.localhost"),
-    ENV.fetch("PUBLIC_AUTH_CORPORATE_URL", "auth.com.localhost"),
-    ENV.fetch("PUBLIC_AUTH_STAFF_URL", "auth.org.localhost"),
-    ENV.fetch("PUBLIC_SIDE_SERVICE_URL", "side.app.localhost"),
-    ENV.fetch("PUBLIC_SIDE_CORPORATE_URL", "side.com.localhost"),
-    ENV.fetch("PUBLIC_SIDE_STAFF_URL", "side.org.localhost"),
-    ENV.fetch("PUBLIC_PALM_SERVICE_URL", "palm.app.localhost"),
+    ENV.fetch("PUBLIC_BASE_SERVICE_URL"),
+    ENV.fetch("PUBLIC_BASE_CORPORATE_URL"),
+    ENV.fetch("PUBLIC_BASE_STAFF_URL"),
   ].freeze
 
   # A browser fetching a service worker script sends `Accept: */*`; the offline document is fetched
@@ -56,8 +49,36 @@ class PwaEndpointsTest < ActionDispatch::IntegrationTest
       assert_response :success, "GET /offline failed on #{host}"
       assert_not_predicate response, :redirect?, "on #{host}"
       assert_match(%r{\Atext/html}, response.content_type, "on #{host}")
-      assert_includes response.body, "ネットワークに接続できません", "on #{host}"
+      assert_select "h1", text: I18n.t("pwa.offline.title"), count: 1
       assert_nil response.headers["Set-Cookie"], "on #{host}"
+    end
+  end
+
+  test "the offline document renders English and Japanese copy with the matching language" do
+    # Japanese literals are expected localized customer copy.
+    {
+      en: ["Unable to connect to the network",
+           "Unable to connect to the server. Check your internet connection and try again.", # rubocop:disable I18n/RailsI18n/DecorateString -- Expected rendered translation.
+           "Reload this page", "Retry",],
+      ja: ["ネットワークに接続できません",
+           "サーバーに接続できませんでした。インターネット接続を確認して、もう一度お試しください。",
+           "このページを再読み込みする", "再試行",],
+    }.each do |locale, (title, description, reload, retry_label)|
+      I18n.with_locale(locale) do
+        HOSTS.each do |host|
+          host! host
+          get "/offline", headers: WORKER_HEADERS
+
+          assert_response :success
+          assert_select "html[lang=?]", locale.to_s
+          assert_select "title", text: /#{Regexp.escape(title)}/
+          assert_select "h1", text: title
+          assert_select "main p", text: description
+          assert_select "form[aria-label=?]", reload
+          assert_select "button[type=submit]", text: retry_label
+          assert_nil response.headers["Set-Cookie"]
+        end
+      end
     end
   end
 
@@ -70,13 +91,23 @@ class PwaEndpointsTest < ActionDispatch::IntegrationTest
     assert_not_includes response.body, "<script"
   end
 
+  # A form without `action` submits to the document's own URL, so retrying a failed /dashboard
+  # navigation requests /dashboard again rather than its directory, `/`.
+  test "the offline retry control is a GET form that targets the failed path, not its directory" do
+    host! HOSTS.first
+    get "/offline", headers: WORKER_HEADERS
+
+    assert_select "form[method=get]", 1
+    assert_select "form[action]", 0
+    assert_select "form input", 0
+  end
+
   test "both endpoints resolve to the framework PWA controller, not a surface controller" do
     assert_equal Rails::PwaController, "rails/pwa".camelize.concat("Controller").constantize
 
     %w(Base::App::ServiceWorkersController Base::App::OfflinesController
-       Auth::App::ServiceWorkersController Auth::App::OfflinesController
-       Side::App::ServiceWorkersController Side::App::OfflinesController
-       Palm::App::ServiceWorkersController Palm::App::OfflinesController).each do |name|
+       Base::Com::ServiceWorkersController Base::Com::OfflinesController
+       Base::Org::ServiceWorkersController Base::Org::OfflinesController).each do |name|
       assert_nil name.safe_constantize,
                  "#{name} still exists; the PWA endpoints must be served by Rails::PwaController"
     end

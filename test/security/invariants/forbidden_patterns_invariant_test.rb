@@ -4,7 +4,6 @@
 # rubocop:disable I18n/RailsI18n/DecorateString
 
 require "test_helper"
-# require "helpers/global_test_support"
 
 module Security
   module Invariants
@@ -27,209 +26,31 @@ module Security
       }.freeze
 
       SECURITY_LOGGER_PATH_PATTERN =
-        %r{\A(?:app|lib)/(?:controllers/concerns/(?:authentication|authorization_audit|sign|oidc)|
-                          controllers/sign/|
-                          services/(?:chronicle|jit/security|social_auth)|
+        %r{\A(?:app|lib)/(?:controllers/concerns/(?:authentication|authorization_audit|oidc)|
+                          services/(?:chronicle|jit/security)|
                           subscribers/jwt_anomaly_subscriber|
                           jit/security)}x
 
-      OIDC_LOGOUT_REDIRECT_RE = Regexp.new(
-        'redirect_to\(post_logout_redirect_uri_with_state\(result\), allow_other_host: true, status: :see_other\)',
-      )
-
       # Allowlist entries document existing reviewed exceptions. They are not
       # blanket permission for new uses: the line snippet must still match.
-      # Responsibility: owners of the named component must migrate to
-      # Rails.logger with JitLogEvent.format or a sanitized audit sink before
-      # removing the exception.
       ALLOWLIST = [
         {
           pattern: "access policy bypass",
-          path: "app/controllers/concerns/authentication_base.rb",
-          line: /skip_before_action :enforce_access_policy! is prohibited/,
-          reason: "Policy guard raises on attempts to skip enforce_access_policy!.",
+          path: "app/controllers/concerns/browser_rp_authentication.rb",
+          line: /\A\s*raise SkipNotAllowedError, "skip_before_action :enforce_access_policy! is prohibited/,
+          reason: "The Browser RP policy guard raises when an inheritor attempts to disable authorization.",
         },
         {
           pattern: "cross-host redirect escape hatch",
           path: "app/controllers/concerns/common_redirect.rb",
           line: /redirect_to\(result\.value, allow_other_host: true/,
-          reason: "Only the Jump gateway facade may enable cross-host redirects after token URL validation.",
-        },
-        {
-          pattern: "cross-host redirect escape hatch",
-          path: "app/controllers/concerns/sign_oidc_logout.rb",
-          line: OIDC_LOGOUT_REDIRECT_RE,
-          reason: "OIDC logout must redirect to the RP post-logout URI after state validation.",
-        },
-        {
-          pattern: "cross-host redirect escape hatch",
-          path: "app/controllers/concerns/oidc_callback.rb",
-          line: /redirect_to\(sign_in_url_with_pt\(nil\), alert: I18n\.t\("errors\.messages\.login_required"\),
-                \s*allow_other_host: true\)/,
-          reason: "OIDC callback failure must send the browser back to the sign-in surface " \
-                  "through the reviewed RP redirect.",
-        },
-        {
-          pattern: "cross-host redirect escape hatch",
-          path: "app/controllers/concerns/oidc_rp_logout_launcher.rb",
-          line: /allow_other_host: true,/,
-          reason: "OIDC RP logout must hand the browser to Acme for the reviewed end-session flow.",
+          reason: "Only the Jump gateway facade enables cross-host redirects after validating the token URL.",
         },
         {
           pattern: "csrf bypass",
           path: "app/controllers/concerns/csp_violation_report.rb",
           line: /skip_forgery_protection\(only: :create\)/,
-          reason: "CSP reports are browser sensor inputs, not session form mutations; " \
-                  "create still rate limits and reads bounded bodies only.",
-        },
-        {
-          pattern: "csrf null_session",
-          path: "app/controllers/acme/app/oauth/protocol_controller.rb",
-          line: /with: :null_session/,
-          reason: [
-            "Acme OAuth token exchange is a server-to-server protocol endpoint",
-            "and must not use browser session CSRF handling.",
-          ].join(" "),
-        },
-        {
-          pattern: "csrf null_session",
-          path: "app/controllers/acme/app/oauth/tokens_controller.rb",
-          line: /with: :null_session/,
-          reason: "Acme OAuth token exchange is a server-to-server protocol endpoint " \
-                  "and does not use browser session CSRF.",
-        },
-        {
-          pattern: "csrf null_session",
-          path: "app/controllers/sign/app/tokens_controller.rb",
-          line: /protect_from_forgery with: :null_session, only: :create/,
-          reason: "OIDC token exchange uses client auth and PKCE, not browser session CSRF.",
-        },
-        {
-          pattern: "csrf null_session",
-          path: "app/controllers/sign/com/tokens_controller.rb",
-          line: /protect_from_forgery with: :null_session, only: :create/,
-          reason: "OIDC token exchange uses client auth and PKCE, not browser session CSRF.",
-        },
-        {
-          pattern: "csrf null_session",
-          path: "app/controllers/sign/org/tokens_controller.rb",
-          line: /protect_from_forgery with: :null_session, only: :create/,
-          reason: "OIDC token exchange uses client auth and PKCE, not browser session CSRF.",
-        },
-        {
-          pattern: "csrf null_session",
-          path: "app/controllers/sign/app/oauth/base_controller.rb",
-          line: /protect_from_forgery with: :null_session/,
-          reason: "OAuth protocol endpoints use client auth or bearer tokens and skip Rails browser session state.",
-        },
-        {
-          pattern: "csrf null_session",
-          path: "app/controllers/sign/com/oauth/base_controller.rb",
-          line: /protect_from_forgery with: :null_session/,
-          reason: "OAuth protocol endpoints use client auth or bearer tokens and skip Rails browser session state.",
-        },
-        {
-          pattern: "csrf null_session",
-          path: "app/controllers/sign/org/oauth/base_controller.rb",
-          line: /protect_from_forgery with: :null_session/,
-          reason: "OAuth protocol endpoints use client auth or bearer tokens and skip Rails browser session state.",
-        },
-        {
-          pattern: "csrf null_session",
-          path: "app/controllers/sign/app/oidc/backchannel/logouts_controller.rb",
-          line: /protect_from_forgery with: :null_session/,
-          reason: "OIDC backchannel logout is a server-to-server callback and does not use browser session CSRF.",
-        },
-        {
-          pattern: "csrf null_session",
-          path: "app/controllers/sign/com/oidc/backchannel/logouts_controller.rb",
-          line: /protect_from_forgery with: :null_session/,
-          reason: "OIDC backchannel logout is a server-to-server callback and does not use browser session CSRF.",
-        },
-        {
-          pattern: "csrf null_session",
-          path: "app/controllers/sign/org/oidc/backchannel/logouts_controller.rb",
-          line: /protect_from_forgery with: :null_session/,
-          reason: "OIDC backchannel logout is a server-to-server callback and does not use browser session CSRF.",
-        },
-        {
-          pattern: "cross-host redirect escape hatch",
-          path: "app/controllers/base/app/oidc/authorizations_controller.rb",
-          line: /redirect_to\(url, allow_other_host: true\)/,
-          reason: "Base app authorization starts the reviewed jump gateway handoff.",
-        },
-        {
-          pattern: "cross-host redirect escape hatch",
-          path: "app/controllers/base/com/oidc/authorizations_controller.rb",
-          line: /redirect_to\(url, allow_other_host: true\)/,
-          reason: "Base com authorization starts the reviewed jump gateway handoff.",
-        },
-        {
-          pattern: "cross-host redirect escape hatch",
-          path: "app/controllers/base/org/oidc/authorizations_controller.rb",
-          line: /redirect_to\(url, allow_other_host: true\)/,
-          reason: "Base org authorization starts the reviewed jump gateway handoff.",
-        },
-        {
-          pattern: "cross-host redirect escape hatch",
-          path: "app/controllers/palm/app/oidc/authorizations_controller.rb",
-          line: /redirect_to\(url, allow_other_host: true\)/,
-          reason: "Palm app authorization starts the reviewed jump gateway handoff.",
-        },
-        {
-          pattern: "cross-host redirect escape hatch",
-          path: "app/controllers/sign/app/sign/ins_controller.rb",
-          line: /redirect_to\(result\.resume_url, allow_other_host: true\)/,
-          reason: "Sign-in completion returns through the reviewed RP resume URL.",
-        },
-        {
-          pattern: "cross-host redirect escape hatch",
-          path: "app/controllers/auth/app/sign/in/sessions_controller.rb",
-          line: /redirect_to\(resume_url, allow_other_host: true\)/,
-          reason: "Sign-in completion returns through the reviewed RP resume URL.",
-        },
-        {
-          pattern: "cross-host redirect escape hatch",
-          path: "app/controllers/auth/app/sign/ins_controller.rb",
-          line: /\A\s*allow_other_host: true,\s*\z/,
-          reason: "Auth app sign-in sends authenticated browsers to the reviewed Base dashboard host.",
-        },
-        {
-          pattern: "cross-host redirect escape hatch",
-          path: "app/controllers/auth/app/sign/ins_controller.rb",
-          line: /redirect_to\(result\.resume_url, allow_other_host: true\)/,
-          reason: "Sign-in completion returns through the reviewed RP resume URL.",
-        },
-        {
-          pattern: "cross-host redirect escape hatch",
-          path: "app/controllers/auth/app/sign/outs_controller.rb",
-          line: /allow_other_host: true,/,
-          reason: "The coordinated sign-out continuation returns the browser to the reviewed " \
-                  "Base completion page after the auth-host cleanup hop.",
-        },
-        {
-          pattern: "cross-host redirect escape hatch",
-          path: "app/controllers/auth/app/sign/ups_controller.rb",
-          line: /\A\s*allow_other_host: true,\s*\z/,
-          reason: "Auth app sign-up sends authenticated browsers to the reviewed Base dashboard host.",
-        },
-        {
-          pattern: "cross-host redirect escape hatch",
-          path: "app/controllers/auth/org/sign/in/entra/authorizations_controller.rb",
-          line: /allow_other_host: true,/,
-          reason: "Org Entra sign-in completion returns through the reviewed RP resume URL.",
-        },
-        {
-          pattern: "cross-host redirect escape hatch",
-          path: "app/controllers/concerns/oidc_callback.rb",
-          line: /redirect_to\(sign_in_url_with_pt\(nil\), allow_other_host: true\)/,
-          reason: "OIDC callback failure must send the browser back to the sign-in surface.",
-        },
-        {
-          pattern: "cross-host redirect escape hatch",
-          path: "app/controllers/concerns/oidc_sso_initiator.rb",
-          line: /redirect_to\(url, allow_other_host: true,/,
-          reason: "OIDC SSO initiation hands the browser to the reviewed authorization endpoint.",
+          reason: "CSP reports are sensor inputs; creation is rate limited and reads bounded bodies only.",
         },
       ].freeze
 
@@ -237,64 +58,9 @@ module Security
 
       RAW_ACTOR_CLAIMS_ALLOWLIST = [
         {
-          path: "app/controllers/auth/app/application_controller.rb",
-          line: /Actor\.authn\.access_claims/,
-          reason: "Current auth app controller records assurance metadata from the decoded token boundary.",
-        },
-        {
-          path: "app/controllers/auth/com/application_controller.rb",
-          line: /Actor\.authn\.access_claims/,
-          reason: "Current auth com controller records assurance metadata from the decoded token boundary.",
-        },
-        {
-          path: "app/controllers/auth/org/application_controller.rb",
-          line: /Actor\.authn\.access_claims/,
-          reason: "Current auth org controller records assurance metadata from the decoded token boundary.",
-        },
-        {
-          path: "app/controllers/base/app/oauth/authorizations_controller.rb",
-          line: /Actor\.authn\.access_claims/,
-          reason: "Current OAuth launch code forwards assurance metadata to the protocol boundary.",
-        },
-        {
-          path: "app/controllers/base/com/oauth/authorizations_controller.rb",
-          line: /Actor\.authn\.access_claims/,
-          reason: "Current OAuth launch code forwards assurance metadata to the protocol boundary.",
-        },
-        {
-          path: "app/controllers/base/org/oauth/authorizations_controller.rb",
-          line: /Actor\.authn\.access_claims/,
-          reason: "Current OAuth launch code forwards assurance metadata to the protocol boundary.",
-        },
-        {
-          path: "app/controllers/concerns/actor_support.rb",
-          line: /token_claims: authn\.access_claims/,
-          reason: "ActorSupport installs the decoded authn snapshot at the request boundary.",
-        },
-        {
-          path: "app/controllers/concerns/authentication_base.rb",
-          line: /token_claims: authn\.access_claims/,
-          reason: "AuthenticationBase bridges authenticated resource resolution into Actor authz.",
-        },
-        {
-          path: "app/controllers/concerns/sign_out_notice.rb",
-          line: /access_expires_at_from_claims\(Actor\.authn\.access_claims\)/,
-          reason: "Sign-out notice derives display expiry from the current token snapshot.",
-        },
-        {
-          path: "app/controllers/concerns/sign_up_sequence_controller_support.rb",
-          line: /access_claims: Actor\.authn\.access_claims/,
-          reason: "Sign-up support passes the authenticated token snapshot through the existing boundary.",
-        },
-        {
           path: "app/policies/application_policy.rb",
           line: /Actor\.authz\.token_claims/,
           reason: "ApplicationPolicy is the reviewed policy boundary for current raw authz claims.",
-        },
-        {
-          path: "app/services/oidc_end_session_request.rb",
-          line: /Actor\.authn\.access_claims/,
-          reason: "OIDC end-session uses the current sid claim at the protocol boundary.",
         },
       ].freeze
 
@@ -338,8 +104,7 @@ module Security
               next if lines[index, 4].join.include?("JitLogEvent.format(")
               next if allowlisted?(LOGGER_ALLOWLIST, nil, relative_path, line)
 
-              line_number = index + 1
-              "#{relative_path}:#{line_number}: direct Rails.logger.error: #{line.strip}"
+              "#{relative_path}:#{index + 1}: direct Rails.logger.error: #{line.strip}"
             end
           end.flatten
 
@@ -388,3 +153,5 @@ module Security
     end
   end
 end
+
+# rubocop:enable I18n/RailsI18n/DecorateString

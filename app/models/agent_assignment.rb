@@ -29,7 +29,23 @@
 #
 class AgentAssignment < OrgRpRecord
   include ::AccountAssignment
+  include ::PublicId
+
+  before_validation :generate_public_id, on: :create
+  before_validation :refresh_generated_public_id_after_collision, on: :create
+  before_validation :set_assigned_at, on: :create
+  before_create :generate_public_id
+  before_create :set_assigned_at
+  around_create :retry_public_id_collision
+  validate :public_id_immutable_after_create, on: :update
+  validates :public_id, presence: true, length: { is: PublicId::GENERATION_SIZE }, uniqueness: true
+  scope :active, -> { where(revoked_at: nil) }
+  validates :assigned_at, presence: true
 
   belongs_to :agent, inverse_of: :agent_assignments
   belongs_to :operator_identity, inverse_of: :agent_assignments
+
+  validates :agent_id,
+            uniqueness: { scope: :operator_identity_id, conditions: -> { where(revoked_at: nil) } },
+            on: :create, if: -> { revoked_at.nil? }
 end

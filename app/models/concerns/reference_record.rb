@@ -4,10 +4,6 @@
 module ReferenceRecord
   extend ActiveSupport::Concern
 
-  included do
-    self.record_timestamps = false
-  end
-
   class_methods do
     def nothing_id
       self::NOTHING

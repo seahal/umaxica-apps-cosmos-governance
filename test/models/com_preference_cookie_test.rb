@@ -1,13 +1,13 @@
+# frozen_string_literal: true
 # typed: false
+
 # == Schema Information
 #
 # Table name: com_preference_cookies
 # Database name: com_setting
 #
 #  id              :bigint           not null, primary key
-#  consent_version :uuid
 #  consented       :boolean          default(FALSE), not null
-#  consented_at    :datetime
 #  functional      :boolean          default(FALSE), not null
 #  performant      :boolean          default(FALSE), not null
 #  targetable      :boolean          default(FALSE), not null
@@ -24,14 +24,17 @@
 #  fk_rails_...  (preference_id => com_preferences.id)
 #
 
-# frozen_string_literal: true
-
 require "test_helper"
 
 class ComPreferenceCookieTest < ActiveSupport::TestCase
   setup do
-    ComPreferenceStatus.find_or_create_by!(id: ComPreferenceStatus::NOTHING)
-    @preference = ComPreference.create!(status_id: ComPreferenceStatus::NOTHING)
+    ComPreferenceStatus.find_or_create_by!(id: ComPreferenceStatus::ACTIVE)
+    @preference = ComPreference.create!(
+      jti: SecureRandom.uuid,
+      last_issued_at: Time.current,
+      last_issued_expires_at: 400.days.from_now,
+      status_id: ComPreferenceStatus::ACTIVE,
+    )
   end
 
   test "belongs to preference" do
@@ -90,20 +93,5 @@ class ComPreferenceCookieTest < ActiveSupport::TestCase
       assert cookie.save, "combo failed: targetable=#{targetable} performant=#{performant} functional=#{functional}"
       cookie.destroy!
     end
-  end
-
-  test "set_defaults fills nil booleans on new records" do
-    cookie = ComPreferenceCookie.new(preference: @preference)
-    cookie.targetable = nil
-    cookie.performant = nil
-    cookie.functional = nil
-    cookie.consented = nil
-
-    cookie.send(:set_defaults)
-
-    assert_not cookie.targetable
-    assert_not cookie.performant
-    assert_not cookie.functional
-    assert_not cookie.consented
   end
 end

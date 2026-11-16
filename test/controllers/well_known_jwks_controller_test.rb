@@ -15,14 +15,7 @@ class WellKnownJwksControllerTest < ActionDispatch::IntegrationTest
 
   ENDPOINTS = [
     ["base app", "BASE_APP", normalized_host(ENV.fetch("PUBLIC_BASE_SERVICE_URL", "www.app.localhost"))],
-    ["base com", "BASE_COM", normalized_host(ENV.fetch("PUBLIC_BASE_CORPORATE_URL", "www.com.localhost"))],
     ["base org", "BASE_ORG", normalized_host(ENV.fetch("PUBLIC_BASE_STAFF_URL", "www.org.localhost"))],
-    ["core app", "CORE_APP", normalized_host(ENV.fetch("PUBLIC_CORE_SERVICE_URL", "core.app.localhost"))],
-    ["core com", "CORE_COM", normalized_host(ENV.fetch("PUBLIC_CORE_CORPORATE_URL", "core.com.localhost"))],
-    ["core org", "CORE_ORG", normalized_host(ENV.fetch("PUBLIC_CORE_STAFF_URL", "core.org.localhost"))],
-    ["sign app", "SIGN_APP", normalized_host(ENV.fetch("PRIVATE_AUTH_SERVICE_URL", "auth.app.localhost"))],
-    ["sign com", "SIGN_COM", normalized_host(ENV.fetch("PRIVATE_AUTH_CORPORATE_URL", "sign.com.localhost"))],
-    ["sign org", "SIGN_ORG", normalized_host(ENV.fetch("PRIVATE_AUTH_STAFF_URL", "sign.org.localhost"))],
   ].freeze
 
   setup do
@@ -57,9 +50,9 @@ class WellKnownJwksControllerTest < ActionDispatch::IntegrationTest
       key = response.parsed_body.fetch("keys").first
 
       assert_equal JitSecurityJwtRegistry.surface(namespace).current_kid, key.fetch("kid")
-      assert_equal "EC", key.fetch("kty")
-      assert_equal "P-384", key.fetch("crv")
-      assert_equal "ES384", key.fetch("alg")
+      assert_equal "RSA", key.fetch("kty")
+      assert_operator JWT::JWK.import(key).public_key.n.num_bits, :>=, 3_072
+      assert_equal "PS256", key.fetch("alg")
       assert_equal "sig", key.fetch("use")
       assert_not_equal "none", key.fetch("alg")
       assert_not_includes key.keys, "d"
@@ -68,23 +61,28 @@ class WellKnownJwksControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
+  # The corporate hosts are anonymous or public-read-only: none of them is an OIDC provider, so
+  # none may publish signing keys.
+  test "corporate hosts publish no JWKS" do
+    [
+      self.class.normalized_host(ENV.fetch("PUBLIC_BASE_CORPORATE_URL", "www.com.localhost")),
+    ].each do |host|
+      assert_raises(ActionController::RoutingError, "#{host} must not route JWKS") do
+        Rails.application.routes.recognize_path("https://#{host}/.well-known/jwks.json", method: :get)
+      end
+    end
+  end
+
   def docker_core_jwt_env
-    key = Base64.strict_encode64(OpenSSL::PKey::EC.generate("secp384r1").to_der)
-    env = {
+    key = Base64.strict_encode64(OpenSSL::PKey::RSA.generate(3072).to_der)
+    {
       "AUTH_JWT_ACTIVE_KID" => "auth-test",
       "AUTH_JWT_ISSUER" => "auth-test-issuer",
       "AUTH_JWT_PRIVATE_KEYSET" => JSON.generate("auth-test" => key),
       "AUTH_JWT_PUBLIC_KEYSET" => JSON.generate(keys: []),
-      "PREFERENCE_JWT_ACTIVE_KID" => "preference-test",
-      "PREFERENCE_JWT_ISSUER" => "preference-test-issuer",
-      "PREFERENCE_JWT_PRIVATE_KEYSET" => JSON.generate("preference-test" => key),
-      "PREFERENCE_JWT_PUBLIC_KEYSET" => JSON.generate(keys: []),
+      "PREFERENCE_COM_JWT_ISSUER" => "https://www.umaxica.com",
+      "PREFERENCE_COM_JWT_AUDIENCE" => "com",
     }
-    ENDPOINTS.each_with_object(env) do |(_name, namespace, _host), jwt_env|
-      jwt_env["JWT_#{namespace}_ACTIVE_KID"] = "#{namespace.downcase.tr("_", "-")}-test"
-      jwt_env["JWT_#{namespace}_PRIVATE_KEY"] = key
-      jwt_env["JWT_#{namespace}_PUBLIC_KEYSET"] = JSON.generate(keys: [])
-    end
   end
   private
 
@@ -113,65 +111,6 @@ class WellKnownJwksControllerTest < ActionDispatch::IntegrationTest
     end
 
     headers
-  end
-
-  def as_user_headers(user, host: nil, headers: {}, session_public_id: nil)
-    base = host_headers(host).merge(headers).merge("X-TEST-CURRENT-USER" => user.id.to_s)
-
-    if user.respond_to?(:persisted?) && user.persisted? && user.class.name == "Client"
-      token =
-        if session_public_id.present?
-          ClientToken.find_by(public_id: session_public_id)
-        else
-          ClientToken.where(user_id: user.id).where("discarded_at > ?", Time.current).order(created_at: :desc).first
-        end
-      token ||= ClientToken.create!(user_id: user.id, user_token_kind_id: ClientTokenKind::BROWSER_WEB)
-      base["X-TEST-SESSION-PUBLIC-ID"] = session_public_id.presence || token.public_id
-    end
-
-    base
-  end
-
-  def as_staff_headers(staff, host: nil, headers: {}, session_public_id: nil)
-    base = host_headers(host).merge(headers).merge("X-TEST-CURRENT-STAFF" => staff.id.to_s)
-
-    if staff.respond_to?(:persisted?) && staff.persisted? && staff.class.name == "Operator"
-      token =
-        if session_public_id.present?
-          OperatorToken.find_by(public_id: session_public_id)
-        else
-          OperatorToken.where(staff_id: staff.id).where(
-            "discarded_at > ?",
-            Time.current,
-          ).order(created_at: :desc).first
-        end
-      token ||= OperatorToken.create!(staff: staff, staff_token_kind_id: OperatorTokenKind::BROWSER_WEB)
-      base["X-TEST-SESSION-PUBLIC-ID"] = session_public_id.presence || token.public_id
-    end
-
-    base
-  end
-
-  def as_visitor_headers(visitor, host: nil, headers: {}, session_public_id: nil)
-    VisitorTokenBindingMethod.ensure_defaults! if defined?(VisitorTokenBindingMethod)
-    VisitorTokenKind.find_or_create_by!(id: VisitorTokenKind::BROWSER_WEB) if defined?(VisitorTokenKind)
-    base = host_headers(host).merge(headers).merge("X-TEST-CURRENT-RESOURCE" => visitor.id.to_s)
-
-    if visitor.respond_to?(:persisted?) && visitor.persisted? && visitor.class.name == "Visitor"
-      token =
-        if session_public_id.present?
-          VisitorToken.find_by(public_id: session_public_id)
-        else
-          VisitorToken.where(visitor_id: visitor.id).where(
-            "discarded_at > ?",
-            Time.current,
-          ).order(created_at: :desc).first
-        end
-      token ||= VisitorToken.create!(visitor_id: visitor.id, visitor_token_kind_id: VisitorTokenKind::BROWSER_WEB)
-      base["X-TEST-SESSION-PUBLIC-ID"] = session_public_id.presence || token.public_id
-    end
-
-    base
   end
 
   def bearer_headers(token, host: nil, headers: {})

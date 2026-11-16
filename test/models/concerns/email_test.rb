@@ -114,12 +114,22 @@ class EmailTest < ActiveSupport::TestCase
     assert_predicate email.errors[:address], :any?
   end
 
-  test "validates uniqueness of address case insensitively" do
-    create_email(address: "test@example.com", confirm_policy: true)
-    duplicate = build_email(address: "TEST@EXAMPLE.COM", confirm_policy: true)
+  test "effective Email bindings enforce address uniqueness case insensitively at finalization" do
+    existing =
+      ClientEmail.create!(user: @user, address: "test@example.com", confirm_policy: true).tap { |binding_record|
+        binding_record.update!(binding_finalized_at: Time.current)
+      }
+    duplicate = ClientEmail.create!(user: @user, address: "TEST@EXAMPLE.COM", confirm_policy: true)
 
-    assert_not duplicate.valid?
-    assert_predicate duplicate.errors[:address], :any?
+    assert_equal existing.address_digest, duplicate.address_digest
+    assert_predicate duplicate, :valid?
+    assert_raises(ActiveRecord::RecordNotUnique) do
+      ClientEmail.transaction(requires_new: true) do
+        duplicate.update_columns(binding_finalized_at: Time.current)
+      end
+    end
+    assert_nil duplicate.reload.binding_finalized_at
+    assert_predicate existing.reload, :binding_effective?
   end
 
   test "validates confirm_policy acceptance" do
@@ -221,7 +231,7 @@ class EmailTest < ActiveSupport::TestCase
     assert_not email.locked?
   end
 
-  test "attempts outside observation window reset before lockout" do
+  test "attempts outside observation window are retained and still reach lockout" do
     email = create_email(address: "test@example.com", confirm_policy: true)
     email.update!(
       otp_attempts_count: Email::MAX_OTP_ATTEMPTS - 1,
@@ -230,19 +240,8 @@ class EmailTest < ActiveSupport::TestCase
 
     email.increment_attempts!
 
-    assert_equal 1, email.reload.otp_attempts_count
-    assert_not email.locked?
-  end
-
-  test "clear_otp resets attempts and locked_at" do
-    email = create_email(address: "test@example.com", confirm_policy: true)
-    Email::MAX_OTP_ATTEMPTS.times { email.increment_attempts! }
-    email.update!(locked_at: 1.minute.from_now)
-
-    email.clear_otp
-
-    assert_equal 0, email.otp_attempts_count
-    assert_not email.locked?
+    assert_equal Email::MAX_OTP_ATTEMPTS, email.reload.otp_attempts_count
+    assert_predicate email, :locked?
   end
 
   test "increment_attempts! is thread-safe under concurrent access" do
@@ -264,132 +263,6 @@ class EmailTest < ActiveSupport::TestCase
 
     assert_equal Email::MAX_OTP_ATTEMPTS, email.reload.otp_attempts_count
     assert_predicate email, :locked?
-  end
-
-  # OTP method tests
-
-  test "store_otp stores OTP configuration" do
-    email = create_email(address: "otp@example.com", confirm_policy: true)
-    otp_key = "secret_key_123"
-    otp_counter = 10
-    expires_at = 1.hour.from_now.to_i
-
-    email.store_otp(otp_key, otp_counter, expires_at)
-
-    assert_equal otp_key, email.otp_private_key
-    assert_equal otp_counter.to_s, email.otp_counter.to_s
-    assert_equal 0, email.otp_attempts_count
-    assert_not email.locked?
-  end
-
-  test "get_otp returns OTP configuration when valid" do
-    email = create_email(address: "otp2@example.com", confirm_policy: true)
-    otp_key = "secret_key_456"
-    otp_counter = 20
-    expires_at = 1.hour.from_now.to_i
-
-    email.store_otp(otp_key, otp_counter, expires_at)
-    otp_data = email.get_otp
-
-    assert_not_nil otp_data
-    assert_equal otp_key, otp_data[:otp_private_key]
-    assert_equal otp_counter, otp_data[:otp_counter]
-  end
-
-  test "get_otp returns nil when OTP is expired" do
-    email = create_email(address: "otp3@example.com", confirm_policy: true)
-    otp_key = "secret_key_789"
-    otp_counter = 30
-    expires_at = 1.hour.ago.to_i # Already expired
-
-    email.store_otp(otp_key, otp_counter, expires_at)
-    otp_data = email.get_otp
-
-    assert_nil otp_data
-  end
-
-  test "get_otp returns nil when OTP is locked" do
-    email = create_email(address: "otp4@example.com", confirm_policy: true)
-    otp_key = "secret_key_101"
-    otp_counter = 40
-    expires_at = 1.hour.from_now.to_i
-
-    email.store_otp(otp_key, otp_counter, expires_at)
-    email.update!(locked_at: 1.minute.from_now)
-
-    otp_data = email.get_otp
-
-    assert_nil otp_data
-  end
-
-  test "get_otp returns nil when otp_private_key is blank" do
-    email = create_email(address: "otp5@example.com", confirm_policy: true)
-
-    otp_data = email.get_otp
-
-    assert_nil otp_data
-  end
-
-  test "otp_expired? returns true when otp_expires_at is nil" do
-    email = create_email(address: "otp6@example.com", confirm_policy: true)
-
-    assert_predicate email, :otp_expired?
-  end
-
-  test "otp_expired? returns true when otp_expires_at is in the past" do
-    email = create_email(address: "otp7@example.com", confirm_policy: true)
-    email.update!(otp_expires_at: 1.hour.ago)
-
-    assert_predicate email, :otp_expired?
-  end
-
-  test "otp_expired? returns false when otp_expires_at is in the future" do
-    email = create_email(address: "otp8@example.com", confirm_policy: true)
-    email.update!(otp_expires_at: 1.hour.from_now)
-
-    assert_not email.otp_expired?
-  end
-
-  test "otp_active? returns true when OTP is not expired and not locked" do
-    email = create_email(address: "otp9@example.com", confirm_policy: true)
-    email.update!(otp_expires_at: 1.hour.from_now, locked_at: -Float::INFINITY) # Use sentinel
-
-    assert_predicate email, :otp_active?
-  end
-
-  test "otp_active? returns false when OTP is expired" do
-    email = create_email(address: "otp10@example.com", confirm_policy: true)
-    email.update!(otp_expires_at: 1.hour.ago)
-
-    assert_not email.otp_active?
-  end
-
-  test "otp_active? returns false when OTP is locked" do
-    email = create_email(address: "otp11@example.com", confirm_policy: true)
-    email.update!(otp_expires_at: 1.hour.from_now, locked_at: 1.minute.from_now)
-
-    assert_not email.otp_active?
-  end
-
-  test "clear_otp clears all OTP data" do
-    email = create_email(address: "otp12@example.com", confirm_policy: true)
-    email.store_otp("key", 50, 1.hour.from_now.to_i)
-    email.update!(locked_at: 1.minute.from_now, otp_attempts_count: 2)
-
-    email.clear_otp
-
-    # clear_otp resets counter, expiry, attempts, and lock state but intentionally
-    # keeps otp_private_key (the column is NOT NULL, and the key is safe to reuse).
-    assert_equal "key", email.otp_private_key
-    assert_equal "0", email.otp_counter
-    # otp_expires_at is reset to the "-infinity" sentinel ("never valid").
-    assert(
-      email.otp_expires_at.is_a?(Time) ||
-      email.otp_expires_at.to_s == "-infinity" ||
-      (email.otp_expires_at.is_a?(Float) && email.otp_expires_at == -Float::INFINITY),
-    )
-    assert_equal 0, email.otp_attempts_count
-    assert_not email.locked?
   end
 
   test "validates pass_code presence when pass_code is not nil" do

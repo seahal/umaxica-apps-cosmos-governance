@@ -36,6 +36,16 @@ module WithdrawalCeremonyAuthentication
     safe_redirect_to(withdrawal_ceremony_entry_path, fallback: withdrawal_public_fallback_path, status: :see_other)
   end
 
+  # A status/re-entry proof is intentionally not an authorization for irreversible operations.
+  # The purpose-specific issuance and assurance contract for termination is still pending, so
+  # fail closed until a ceremony with the explicit termination purpose exists.
+  def withdrawal_termination_ceremony_required!
+    ceremony = current_withdrawal_ceremony
+    return if ceremony&.purpose == "termination"
+
+    raise Sign::InvalidWithdrawalStateError, ceremony&.purpose.presence || "missing"
+  end
+
   def revoke_current_withdrawal_ceremony!
     ceremony = current_withdrawal_ceremony
     if ceremony&.active?
@@ -43,6 +53,9 @@ module WithdrawalCeremonyAuthentication
       record_withdrawal_ceremony_occurrence!("withdrawal.ceremony_revoked", ceremony.subject, ceremony)
     end
     clear_withdrawal_ceremony_cookie!
+    # The withdrawal pages shown under this ceremony stay in the tab's encrypted history until the
+    # next Inertia page clears it; the callers redirect, which carries the flag to that page.
+    session[:inertia_clear_history] = true
     @current_withdrawal_ceremony = nil
     @current_withdrawal_subject = nil
   end

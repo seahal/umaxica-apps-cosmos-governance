@@ -15,6 +15,7 @@ class IdentityAudit
       occurred_at: occurred_at,
     ).record!
   end
+  public_class_method :record!
 
   def initialize(actor:, event_id:, subject:, action:, ip_address:, user_agent:, metadata:, occurred_at:)
     @actor = actor
@@ -27,6 +28,7 @@ class IdentityAudit
     @occurred_at = occurred_at
   end
 
+  public
   def record!
     ChronicleRecord.connected_to(role: :writing) do
       ensure_dependencies!

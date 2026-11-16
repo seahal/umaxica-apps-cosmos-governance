@@ -4,21 +4,10 @@
 module CollectiveUnit
   extend ActiveSupport::Concern
 
-  include ::PublicId
-
-  included do
-    self.belongs_to_required_by_default = false
-
-    after_create :create_closure_rows
-
-    validates :name, presence: true
-    validate :parent_must_belong_to_same_collective
-    validate :parent_id_is_immutable, on: :update
-  end
-
   CONFIG_REGISTRY = {}
   private_constant :CONFIG_REGISTRY
 
+  public
   def ancestors(include_self: false)
     relation = self.class.where(id: ancestor_links.select(:ancestor_id))
     include_self ? relation : relation.where.not(id:)

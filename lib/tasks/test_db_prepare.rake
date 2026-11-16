@@ -12,12 +12,28 @@ namespace :db do
   namespace :test do
     desc "Override db:test:prepare to run db:migrate instead of db:schema:load"
     task prepare: :environment do
+      catalog = Umaxica::TestEnvironment::DatabaseSafety.verify_catalog!
+      selected_databases = Umaxica::TestEnvironment::DatabaseSafety.prepare_database_names!(
+        catalog:,
+      )
+      puts "Test database catalog: admin=#{catalog.fetch(:admin_database)} " \
+           "databases=#{catalog.fetch(:test_databases).join(",")} " \
+           "server=#{catalog[:server_address]}:#{catalog[:server_port]} " \
+           "version=#{catalog[:server_version]}"
+      puts "Test database migration scope: #{selected_databases.join(",")}"
+
       ActiveRecord::Tasks::DatabaseTasks.with_temporary_pool_for_each(env: "test") do |pool|
         db_config = pool.db_config
         next if db_config.replica?
+        next unless selected_databases.include?(db_config.database)
 
-        ActiveRecord::Tasks::DatabaseTasks.migrate(db_config)
+        # Empty databases must execute data migrations, not import dump version receipts.
+        ActiveRecord::Tasks::DatabaseTasks.migrate(skip_initialize: true)
       end
+
+      # The test command prepares databases after Rails has booted. Clear pools created during
+      # boot so model schema caches observe tables added by the migration pass.
+      ActiveRecord::Base.connection_handler.clear_all_connections!
     end
   end
 end

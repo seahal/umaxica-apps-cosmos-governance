@@ -9,16 +9,13 @@
 #  id                        :bigint           not null, primary key
 #  address                   :string           default(""), not null
 #  address_digest            :string
-#  discarded_at              :datetime         default(Infinity), not null
+#  discard_at              :datetime         default(Infinity), not null
 #  locked_at                 :datetime         default(Infinity), not null
 #  notifiable                :boolean          default(TRUE), not null
 #  otp_attempts_count        :integer          default(0), not null
-#  otp_counter               :text             default(""), not null
-#  otp_expires_at            :datetime         default(-Infinity), not null
 #  otp_last_sent_at          :datetime         default(-Infinity), not null
-#  otp_private_key           :string           default(""), not null
 #  promotional               :boolean          default(TRUE), not null
-#  purged_at                 :datetime         default(Infinity), not null
+#  purge_eligible_at                 :datetime         default(Infinity), not null
 #  subscribable              :boolean          default(TRUE), not null
 #  undeletable               :boolean          default(FALSE), not null
 #  verification_token_digest :binary
@@ -31,10 +28,10 @@
 # Indexes
 #
 #  index_client_emails_on_active_address_digest  (address_digest) UNIQUE WHERE ((address_digest IS NOT NULL) AND (user_email_status_id <> 4))
-#  index_client_emails_on_discarded_at           (discarded_at)
+#  index_client_emails_on_discard_at           (discard_at)
 #  index_client_emails_on_otp_last_sent_at       (otp_last_sent_at)
 #  index_client_emails_on_public_id              (public_id) UNIQUE
-#  index_client_emails_on_purged_at              (purged_at)
+#  index_client_emails_on_purge_eligible_at              (purge_eligible_at)
 #  index_client_emails_on_user_email_status_id   (user_email_status_id)
 #  index_client_emails_on_user_id                (user_id)
 #
@@ -45,54 +42,102 @@
 #
 
 class ClientEmail < AppPrincipalRecord
+  include PublicId
+
+  after_initialize :initialize_email_otp_state
+  before_validation :generate_public_id, on: :create
+  before_validation :refresh_generated_public_id_after_collision, on: :create
+  before_validation :normalize_address_from_raw
+  before_validation :set_address_digests
+  before_create :generate_public_id
+  around_create :retry_public_id_collision
+  validate :public_id_immutable_after_create, on: :update
+  validates :public_id, presence: true, length: { is: PublicId::GENERATION_SIZE }, uniqueness: true
+  include Retainable
+
+  attribute :discard_at, :datetime, default: -> { Retainable::SENTINEL }
+  attribute :purge_eligible_at, :datetime, default: -> { Retainable::SENTINEL }
+  validates :discard_at, presence: true
+  validates :purge_eligible_at, presence: true
+  validate :retention_order_valid
+  validate :retention_times_not_before_created_at, on: :update
+  Retainable.register_host(self)
+
+  include Email
+
+  scope :with_address, ->(value) do
+    digest = IdentifierBlindIndex.bidx_for_email(value, realm: identifier_hmac_realm)
+    digest.present? ? where(address_digest: digest) : none
+  end
+  validate :validate_email_address
+  validates :confirm_policy, acceptance: true, on: :create,
+                             unless: proc { |a| a.raw_address.blank? && a.pass_code.present? }
+  validates :pass_code, numericality: { only_integer: true },
+                        length: { is: 6 },
+                        presence: true,
+                        unless: proc { |a| a.pass_code.blank? && a.raw_address.present? }
+  include EmailDeadIdentifierHistory
+
+  include MfaStatusCredential
+  include PromotionalEmailUnsubscribable
+  include EmailContactBinding
+
+  IDENTIFIER_REALM = "app"
+
   EDITABLE_SUBSCRIPTION_PREFERENCE_STATUS_IDS = [
     ClientEmailStatus::VERIFIED,
     ClientEmailStatus::VERIFIED_WITH_SIGN_UP,
   ].freeze
 
-  include PublicId
-  include Retainable
-  include Email
-  include MfaStatusCredential
-  include PromotionalEmailUnsubscribable
-
-  self.filter_attributes += %w(address)
-
-  MAX_EMAILS_PER_USER = 4
+  encrypts :address, downcase: true,
+                     key_provider: RealmIdentifierEncryptionKeyProvider.key_provider(realm: IDENTIFIER_REALM)
 
   attribute :user_email_status_id, default: ClientEmailStatus::UNVERIFIED
   belongs_to :user_email_status, class_name: "ClientEmailStatus",
                                  inverse_of: :client_emails
   belongs_to :user, class_name: "Client", inverse_of: :client_emails
-  mfa_status_owner :user
+
+  validates :address_digest,
+            contact_binding_uniqueness: {
+              error_attribute: :address,
+              conditions: -> { where.not(binding_finalized_at: nil).where(binding_released_at: nil) },
+            },
+            if: -> {
+              binding_effective? &&
+                (will_save_change_to_address_digest? || will_save_change_to_binding_finalized_at? ||
+                  will_save_change_to_binding_released_at?)
+            }
+  validates :user_id,
+            uniqueness: { conditions: -> { where.not(binding_finalized_at: nil).where(binding_released_at: nil) } },
+            if: -> {
+              binding_effective? &&
+                (will_save_change_to_user_id? || will_save_change_to_binding_finalized_at? ||
+                  will_save_change_to_binding_released_at?)
+            }
+
+  validate :effective_binding_has_digest
   validates :address, presence: true
   validates :otp_attempts_count, presence: true, numericality: { only_integer: true }
-  validates :otp_counter, presence: true
-  validates :otp_private_key, presence: true, length: { maximum: 255 }
   validates :user_email_status_id, numericality: { only_integer: true }
-  validates :address_digest,
-            blind_index_uniqueness: {
-              error_attribute: :address,
-              status_column: :user_email_status_id,
-              deleted_status_id: ClientEmailStatus::DELETED,
-            },
-            allow_blank: true
-  validates_with AssociatedRecordLimitValidator,
-                 on: :create,
-                 owner: :user,
-                 association: :client_emails,
-                 foreign_key: :user_id,
-                 limit: :MAX_EMAILS_PER_USER,
-                 record_name: "emails",
-                 owner_name: "user"
-  before_destroy :prevent_destroy_when_undeletable
+  validates :address_digest, presence: true, if: :binding_effective?
 
-  def to_param
-    public_id
-  end
+  before_destroy :archive_dead_email_identifier, prepend: true
+  before_destroy :prevent_destroy_when_undeletable
 
   after_initialize do
     self.address ||= ""
+  end
+  after_commit :refresh_owner_mfa_status
+
+  scope :effective_binding, -> { where.not(binding_finalized_at: nil).where(binding_released_at: nil) }
+
+  self.filter_attributes += %w(address)
+  mfa_status_owner :user
+
+  public
+
+  def to_param
+    public_id
   end
 
   # Generates a new verification token and saves its digest
@@ -120,6 +165,10 @@ class ClientEmail < AppPrincipalRecord
 
   def promotional_unsubscribe_scope
     :client
+  end
+
+  def contact_binding_digest
+    address_digest
   end
 
   private

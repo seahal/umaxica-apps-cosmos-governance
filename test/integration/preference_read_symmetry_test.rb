@@ -4,13 +4,12 @@
 require "test_helper"
 
 # The rendered theme/language value must come from the expected authority for
-# the caller's state: the token-side preference for an anonymous visitor, and
-# the same token-side preference (now adopted/synced with the resource mirror)
-# once signed in. Both reads should agree on the value the user actually set.
+# the caller's state: the anonymous token snapshot for a visitor, and the
+# option-backed actor preference after an authenticated write.
 class PreferenceReadSymmetryTest < ActionDispatch::IntegrationTest
   setup do
     https!
-    host! ENV.fetch("PUBLIC_BASE_SERVICE_URL", "base.app.localhost")
+    host! ENV.fetch("PUBLIC_BASE_SERVICE_URL")
   end
 
   test "anonymous theme read reflects the value just written on the same anonymous session" do
@@ -19,43 +18,278 @@ class PreferenceReadSymmetryTest < ActionDispatch::IntegrationTest
     assert_response :success
 
     patch base_app_preference_theme_url(ri: "jp"),
-          params: { preference_theme: { option_id: "dr" } }
+          params: { preference_theme: { option_id: AppPreferenceThemeOption::DARK.to_s } }
 
     assert_response :redirect
 
-    get base_app_web_v0_theme_url(ri: "jp")
+    get base_app_api_v0_preferences_theme_url(ri: "jp")
 
     assert_response :success
     assert_equal "dr", response.parsed_body["theme"]
   end
 
-  test "signed-in theme read reflects the same token-side value after adoption" do
-    host = ENV.fetch("PUBLIC_BASE_SERVICE_URL", "base.app.localhost")
-    user = clients(:one)
-    token = ClientToken.create!(user: user, user_token_kind_id: ClientTokenKind::BROWSER_WEB)
-    headers = {
-      "Authorization" => "Bearer #{
-        AuthenticationToken.encode(
-          user, host: host, session_public_id: token.public_id, resource_type: "client",
-                jwt_issuer_id: "surface:BASE_APP",
-        )
-      }",
-    }
+  test "Base HTML projection keeps browser defaults when receipt storage is unavailable" do
+    AppPreferenceStatus.ensure_defaults!
+    AppPreferenceRegionOption.ensure_defaults!
+    AppPreferenceWebPushOption.ensure_defaults!
 
-    patch base_app_preference_theme_url(ri: "jp"), headers: headers, as: :json,
-                                                   params: { preference_theme: { option_id: "dr" } }
+    preference = AppPreference.create!(
+      last_issued_at: Time.current,
+      last_issued_expires_at: 400.days.from_now,
+      jti: JitSecurityJwtJtiGenerator.generate,
+    )
+    AppPreferenceRegion.create!(preference:, option_id: AppPreferenceRegionOption::US)
+    AppPreferenceCookie.create!(
+      preference:, consented: true, functional: true, performant: false, targetable: false,
+    )
+    AppPreferenceConsentReceipt.create!(
+      preference:, version: SecureRandom.uuid, recorded_at: Time.current,
+    )
+    raw_binding = PreferenceBrowserBinding.mint_value
+    AppPreferenceBrowserBinding.create!(
+      preference:, digest: PreferenceBrowserBinding.digest_for(raw_binding),
+    )
+    AppPreferenceWebPush.create!(preference:, option_id: AppPreferenceWebPushOption::ENABLED)
 
-    assert_response :ok
-    assert_equal "dr", response.parsed_body.dig("preference", "ct"),
-                 "signed-in write's own response must reflect the value it just wrote"
+    cookies[PreferenceCookieName.anonymous_jwt] = PreferenceToken.encode(
+      {
+        "theme" => "dark",
+        "language" => "en",
+        "timezone" => "Asia/Tokyo",
+        "currency" => "jpy",
+        "date_format" => "iso",
+        "time_format" => "24",
+        "motion" => "standard",
+        "density" => "standard",
+        "page_size" => "infinity",
+      },
+      host: ENV.fetch("PUBLIC_BASE_SERVICE_URL"), preference_type: "AppPreference", issued_at: Time.current,
+      public_id: preference.public_id, jti: preference.jti,
+    )
+    cookies[PreferenceBrowserBinding::COOKIE_NAME] = raw_binding
 
-    get base_app_web_v0_theme_url(ri: "jp"), headers: headers
+    snapshots = []
+    capture = ->(*) { snapshots << Actor.preferences }
+    unavailable_receipts = ->(*) { raise ActiveRecord::ConnectionNotEstablished, "receipt store unavailable" }
+
+    ActiveSupport::Notifications.subscribed(capture, "render_template.action_view") do
+      AppPreferenceConsentReceipt.stub(:find_by, unavailable_receipts) do
+        get edit_base_app_preference_theme_url(ri: "us")
+      end
+    end
 
     assert_response :success
-    assert_equal "dr", response.parsed_body["theme"],
-                 "signed-in read must reflect the value written through the same session"
+    assert_not_empty snapshots
+    assert snapshots.all? { |snapshot| snapshot.theme == "dr" }
+    assert snapshots.all? { |snapshot| !snapshot.cookie.consented? }
+    assert snapshots.all? { |snapshot| snapshot.web_push == "disabled" }
+  end
 
-    assert_equal "dr", user.reload.user_preference.theme,
-                 "resource mirror (DB canonical for the signed-in user) must match the token-side write"
+  test "Base app and org HTML requests project their bound browser state and saved region into Actor preferences" do
+    realms = [
+      {
+        host: ENV.fetch("PUBLIC_BASE_SERVICE_URL"),
+        preference_class: AppPreference,
+        status_class: AppPreferenceStatus,
+        region_option_class: AppPreferenceRegionOption,
+        region_us_id: AppPreferenceRegionOption::US,
+        region_class: AppPreferenceRegion,
+        cookie_class: AppPreferenceCookie,
+        receipt_class: AppPreferenceConsentReceipt,
+        binding_class: AppPreferenceBrowserBinding,
+        web_push_class: AppPreferenceWebPush,
+        web_push_option_class: AppPreferenceWebPushOption,
+        web_push_enabled_id: AppPreferenceWebPushOption::ENABLED,
+        path_helper: :edit_base_app_preference_cookie_path,
+        jwt_type: "AppPreference",
+      },
+      {
+        host: ENV.fetch("PUBLIC_BASE_STAFF_URL"),
+        preference_class: OrgPreference,
+        status_class: OrgPreferenceStatus,
+        region_option_class: OrgPreferenceRegionOption,
+        region_us_id: OrgPreferenceRegionOption::US,
+        region_class: OrgPreferenceRegion,
+        cookie_class: OrgPreferenceCookie,
+        receipt_class: OrgPreferenceConsentReceipt,
+        binding_class: OrgPreferenceBrowserBinding,
+        web_push_class: OrgPreferenceWebPush,
+        web_push_option_class: OrgPreferenceWebPushOption,
+        web_push_enabled_id: OrgPreferenceWebPushOption::ENABLED,
+        path_helper: :edit_base_org_preference_cookie_path,
+        jwt_type: "OrgPreference",
+      },
+    ]
+
+    realms.each do |realm|
+      reset!
+      host! realm.fetch(:host)
+      https!
+      [realm.fetch(:status_class), realm.fetch(:region_option_class), realm.fetch(:web_push_option_class)]
+        .each do |klass|
+        klass.ensure_defaults!
+      end
+
+      preference = realm.fetch(:preference_class).create!(
+        last_issued_at: Time.current,
+        last_issued_expires_at: 400.days.from_now,
+        jti: JitSecurityJwtJtiGenerator.generate,
+      )
+      realm.fetch(:region_class).create!(
+        preference: preference, option_id: realm.fetch(:region_us_id),
+      )
+      realm.fetch(:cookie_class).create!(
+        preference: preference, consented: true, functional: true, performant: false, targetable: false,
+      )
+      receipt = realm.fetch(:receipt_class).create!(
+        preference: preference, version: SecureRandom.uuid, recorded_at: Time.current,
+      )
+      raw_binding = PreferenceBrowserBinding.mint_value
+      realm.fetch(:binding_class).create!(
+        preference: preference, digest: PreferenceBrowserBinding.digest_for(raw_binding),
+      )
+      realm.fetch(:web_push_class).create!(
+        preference: preference, option_id: realm.fetch(:web_push_enabled_id),
+      )
+      cookies[PreferenceCookieName.anonymous_jwt] = PreferenceToken.encode(
+        {
+          "theme" => "dark",
+          "language" => "en",
+          "timezone" => "Asia/Tokyo",
+          "currency" => "jpy",
+          "date_format" => "iso",
+          "time_format" => "24",
+          "motion" => "standard",
+          "density" => "standard",
+          "page_size" => "infinity",
+        },
+        host: realm.fetch(:host), preference_type: realm.fetch(:jwt_type), issued_at: Time.current,
+        public_id: preference.public_id, jti: preference.jti,
+      )
+      cookies[PreferenceBrowserBinding::COOKIE_NAME] = raw_binding
+      cookies[PreferenceIoKeys::Cookies::LANGUAGE] = "en"
+      cookies[PreferenceCookieName.anonymous_experience] = {
+        "theme" => "dark",
+        "timezone" => "Asia/Tokyo",
+        "currency" => "jpy",
+        "date_format" => "iso",
+        "time_format" => "24",
+        "motion" => "standard",
+        "density" => "standard",
+        "page_size" => "infinity",
+      }.to_json
+
+      snapshots = []
+      capture = ->(*) { snapshots << Actor.preferences }
+      ActiveSupport::Notifications.subscribed(capture, "render_template.action_view") do
+        get public_send(realm.fetch(:path_helper))
+
+        assert_response :redirect
+        assert_includes response.location, "ri=us"
+        follow_redirect!
+      end
+
+      assert_response :success
+      assert_not_empty snapshots
+      assert snapshots.all? { |snapshot| snapshot.region == "us" }
+      assert snapshots.all? { |snapshot| snapshot.web_push == "enabled" }
+      assert snapshots.all? { |snapshot| snapshot.cookie.consented? && snapshot.cookie.functional? }
+      assert snapshots.all? { |snapshot| snapshot.cookie.consent_version == receipt.version }
+      assert snapshots.all? { |snapshot| snapshot.cookie.consented_at == receipt.recorded_at }
+
+      cookies[PreferenceBrowserBinding::COOKIE_NAME] = PreferenceBrowserBinding.mint_value
+      snapshots.clear
+      ActiveSupport::Notifications.subscribed(capture, "render_template.action_view") do
+        get public_send(realm.fetch(:path_helper), ri: "us")
+      end
+
+      assert_response :success
+      assert_not_empty snapshots
+      assert snapshots.all? { |snapshot| snapshot.region == "us" }
+      assert snapshots.all? { |snapshot| snapshot.web_push == "disabled" }
+      assert snapshots.all? { |snapshot| !snapshot.cookie.consented? && !snapshot.cookie.functional? }
+    end
+  end
+
+  # The JS-readable `language` cookie is a write-only mirror for the browser. Rails resolves the
+  # locale from the preference JWT (via Actor.preferences) and the `?lx` overlay only; a stale or
+  # forged `language` cookie must not become a second source of truth that overrides it. The
+  # resolution code is shared by the base, auth, and Warp application controllers.
+  test "a conflicting language cookie does not override the region-seeded locale" do
+    cookies[PreferenceIoKeys::Cookies::LANGUAGE] = "en"
+
+    get edit_base_app_preference_theme_url(ri: "jp")
+
+    assert_response :success
+    assert_select "html[lang=?]", "ja"
+  end
+
+  test "a regional request overlay wins over the saved language for that request" do
+    # An anonymous session that explicitly chose English on the language screen.
+    get edit_base_app_preference_language_url(ri: "jp")
+    patch base_app_preference_language_url(ri: "jp"),
+          params: { preference_language: { option_id: AppPreferenceLanguageOption::EN.to_s } }
+
+    assert_response :redirect
+
+    cookies[PreferenceIoKeys::Cookies::LANGUAGE] = "ja"
+
+    get edit_base_app_preference_theme_url(ri: "jp")
+
+    assert_response :success
+    assert_select "html[lang=?]", "ja"
+  end
+
+  test "a non-RP process refuses a Base RP session without writing visitor or actor preferences" do
+    host = ENV.fetch("PUBLIC_BASE_SERVICE_URL")
+    user = clients(:one)
+    headers = as_user_headers(user, host: host)
+    actor_preference = ClientPreference.includes(:client_preference_theme).find_by(
+      client_id: user.id, status_id: ClientPreferenceStatus::ACTIVE,
+    )
+    actor_theme = actor_preference&.client_preference_theme&.option_id
+    preference_ids = ClientPreference.where(client_id: user.id).order(:id).pluck(:id)
+    anonymous_preference_count = AppPreference.count
+
+    patch base_app_preference_theme_url(ri: "jp"), headers: headers, as: :json,
+                                                   params: { preference_theme: { option_id: AppPreferenceThemeOption::DARK.to_s } }
+
+    assert_response :service_unavailable
+    assert_equal preference_ids, ClientPreference.where(client_id: user.id).order(:id).pluck(:id)
+    assert_equal anonymous_preference_count, AppPreference.count
+    current_preference = ClientPreference.includes(:client_preference_theme).find_by(
+      client_id: user.id, status_id: ClientPreferenceStatus::ACTIVE,
+    )
+
+    assert_equal actor_preference&.id, current_preference&.id
+    assert_equal actor_theme, current_preference&.client_preference_theme&.option_id
+  end
+
+  test "the APP RP process saves and reads its authenticated actor preference without OP storage" do
+    as_rp_cell("base-app-ww") do
+      host = ENV.fetch("PUBLIC_BASE_SERVICE_URL")
+      user = clients(:one)
+      headers = as_user_headers(user, host: host)
+      rp_cookie = headers.fetch("Cookie")
+      patch base_app_preference_theme_url(ri: "jp"), headers: headers, as: :json,
+                                                     params: { preference_theme: { option_id: AppPreferenceThemeOption::DARK.to_s } }
+
+      assert_response :ok
+      assert_equal "dr", response.parsed_body.dig("preference", "ct")
+
+      headers["Cookie"] = ([rp_cookie] + cookies.to_hash.map do |name, value|
+        "#{name}=#{Rack::Utils.escape(value)}"
+      end).join("; ")
+      headers["HTTP_COOKIE"] = headers.fetch("Cookie")
+      get base_app_api_v0_preferences_theme_url(ri: "jp"), headers: headers
+
+      assert_response :success
+      assert_equal "dr", response.parsed_body.fetch("theme")
+      actor_preference = ClientPreference.includes(:client_preference_theme).find_by!(
+        client_id: user.id, status_id: ClientPreferenceStatus::ACTIVE,
+      )
+
+      assert_equal ClientPreferenceThemeOption::DARK, actor_preference.client_preference_theme.option_id
+    end
   end
 end

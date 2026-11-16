@@ -12,7 +12,9 @@ class PromotionAdapter
       raise ArgumentError, "Unknown promotion delivery channel: #{surface}/#{channel}"
     end
   end
+  public_class_method :for
 
+  public
   def deliver(**)
     raise NotImplementedError, "#{self.class}#deliver is not implemented"
   end

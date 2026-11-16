@@ -27,10 +27,44 @@ Rails issues only signed, short-lived Jump redirect tokens.
 
 The external Jump gateway verifies the inbound Rails-issued token against the issuing surface JWKS.
 For an internal return, the gateway issues its own signed return token and redirects back to the
-app. The app verifies that returned token with `JumpRt::ReturnVerifier`.
+app. The app verifies that returned token with `JumpRtReturnVerifier` against the Jump public JWKS
+only (`https://jump.umaxica.net/.well-known/jwks.json` derived from the configured Jump origin).
+Return tokens are PS256, at most 30 seconds, with 5 seconds of clock leeway. JWKS fetch failures
+fail closed. Rails must not hold the Jump gateway private key.
+
+Amended 2026-11-13: Governance uses PS256 for its first-party Jump tokens with RSA keys of at least
+3072 bits, and Rails accepts PS256 only for return tokens. The gateway owner must provision and
+publish a compatible PS256 key under its own approved procedure before production traffic uses the
+cut-over; its live implementation and key are not verified by this Rails change. Rails continues to
+verify return tokens with the gateway's public JWKS and never holds its private key. The 30-second
+lifetime, 5-second clock leeway, and fail-closed JWKS behavior are unchanged.
 
 This Rails app must not expose `jump_*` route helpers, DB-backed `JumpLink` models, or
 `JumpLinkable` lifecycle behavior.
+
+### Jump rt issuing origin (2026-09-28)
+
+Three identifiers must not be conflated:
+
+- **Logical ceremony issuer** — the `iss` of ceremony contracts (social, email, telephone,
+  secret-credential, and similar), `https://log.umaxica.{app,com,org}` for the Auth surfaces. It
+  names a trust domain and publishes no JWKS.
+- **JWKS publication origin** — the origin whose `/.well-known/jwks.json` publishes a namespace's
+  signing keys. For `SIGN_APP`, `SIGN_COM`, and `SIGN_ORG` that is the Auth host of the surface.
+- **Jump rt issuing origin** — the `iss` of a Jump rt. Because the gateway verifies against the
+  issuing surface JWKS, it must equal the JWKS publication origin of the key that signed the rt.
+
+`JumpRtSurface.issuer_origin` owns the Jump rt issuing origin. For `SIGN_*` it reads the Auth hosts
+(`sign_service`, `sign_corporate`, `sign_staff`) from the boot host registry, never from the
+request; every other namespace's registry surface issuer already equals its JWKS publication origin.
+The logical ceremony issuer in `JitSecurityJwtRegistry::SURFACE_ISSUER_ORIGINS` is unchanged.
+
+The return side follows the same contract: `JumpRtReturnPolicy` accepts the Jump rt issuing origin
+as the return `src`, not the logical ceremony issuer. The retired `log.umaxica.*` sources are not
+accepted, since no Rails-issued rt carries them.
+
+Observed gateway behavior (black-box, 2026-09-28): the gateway refuses an rt whose `url` origin
+equals its `iss` (`x-jump-error: invalid_request`); it mediates cross-origin navigations only.
 
 ## Consequences
 
@@ -41,3 +75,122 @@ This Rails app must not expose `jump_*` route helpers, DB-backed `JumpLink` mode
   records.
 - Tests must assert the absence of app-hosted Jump routes and legacy JumpLink models, and must cover
   issuer/audience/purpose/TTL validation for `rt`.
+
+## Amendment: Deprecation of Jump RT External Destinations (2026-10-12)
+
+**Status: Accepted — Deprecated for new use**
+
+### Decision
+
+`JumpRtIssuer.call(..., dst: "external")` is deprecated. New application code MUST NOT issue Jump RT
+tokens with `dst: "external"`.
+
+The same restriction applies to `CommonRedirect#redirect_to_jump_url` and any wrapper that issues an
+equivalent external-destination Jump token.
+
+`dst: "internal"` remains supported for approved first-party cross-origin handoffs governed by
+`adr/jump-directed-rails-handoff-contract.md`.
+
+### Responsibility Boundaries
+
+- `pt`: Same-origin internal path targets.
+- `nt`: Registered internal navigation targets.
+- Jump RT: Approved first-party cross-origin handoffs.
+- `xt`: External website destinations, intended to use the future `away.umaxica.net` gateway.
+
+An origin difference alone does not classify a trusted first-party handoff as `xt`.
+
+### Compatibility and Migration
+
+The deprecated API remains available temporarily for compatibility. This decision does not
+immediately remove the `"external"` enum value or alter existing runtime behavior.
+
+Existing consumers must be inventoried before removal.
+
+New callers MUST NOT use the deprecated mode. Until the Away contract is implemented, unsupported
+outbound XT requests must fail closed rather than fall back to Jump external mode.
+
+### Future Away Integration
+
+External website navigation will be handled through the planned isolated `away.umaxica.net`
+boundary; the direction is tracked in `plans/backlog/xt-away-external-navigation-gateway.md`.
+
+The token format, issuer, audience, destination authorization, validation, and migration contract
+require a separate design decision before implementation.
+
+### Scope
+
+This amendment changes the architectural contract only.
+
+No Rails, Jump, or Away runtime behavior is changed by this decision.
+
+## Amendment: Required Jump and Away Selection (2026-10-22)
+
+**Status: Accepted; runtime implementation pending.**
+
+This amendment supersedes gateway selection in the earlier amendments and the broad cross-origin
+wording in [Rails Directed Jump Handoffs](jump-directed-rails-handoff-contract.md). Existing Jump
+signing, verification and approved directed-edge requirements remain in force.
+
+- Same-origin navigation MAY use a validated local path directly.
+- Navigation between different subdomains of the same registered application domain MUST use
+  `https://jump.umaxica.net` and an approved Jump edge.
+- Cross-TLD navigation MUST use `https://away.umaxica.net`, including first-party destinations.
+  Other external website navigation MUST also use Away.
+- Rails MUST select the gateway from the initiating surface and final destination, before adding the
+  gateway hop. Request input MUST NOT choose a gateway or expand destination permissions.
+- Cross-origin browser navigation generated by Rails MUST use the common facade, whose immediate
+  gateway destination MUST match exactly one of these two HTTPS origins. Rails helpers and
+  `allow_other_host: true` do not provide this allowlist themselves.
+- Unsupported destinations and unavailable Away integration MUST fail closed, with no direct or Jump
+  fallback. Existing cross-origin POST and server-to-server transport contracts remain separate.
+
+[Redirect Targets](../docs/security/redirect_targets.md#required-gateway-selection) owns the
+detailed classification, origin validation and navigation requirements. Away's token format,
+audience, issuer, receiver validation and rollout still require a separate implementation contract;
+Jump RT MUST NOT be treated as Away authorization without that decision. OIDC registered callback
+URLs remain final-receiver identities rather than gateway URLs.
+
+This is a documentation-only decision. The existing single-Jump-gateway implementation and direct
+cross-host callers have not been migrated. The absence of an Away implementation is not permission
+to bypass the required route.
+
+## Amendment: Confirmation for the Cosmos Split (2026-11-10)
+
+**Status: Accepted (owner).** The 2026-10-22 selection stands unchanged after the Cosmos split:
+
+- Jump carries navigation only between subdomains of the same registered domain, never across
+  top-level domains. The Jump gateway's own host (`jump.umaxica.net`) is the intermediate hop, not a
+  destination.
+- Navigation across top-level domains uses Away, first-party included (for example `.com` to
+  `.app`).
+- Until Away is implemented, cross-TLD navigation fails closed; Rails offers no direct or Jump
+  fallback and shows no cross-TLD link that would need one.
+- The Jump token issuer gets an allowlist of permitted final destinations, loaded from configuration
+  at boot and frozen (`adr/cosmos-outbound-network-access-policy.md`); signing alone is not
+  permission.
+- **Only two exits.** Rails leaves its own origin only through `https://jump.umaxica.net` and
+  `https://away.umaxica.net`, via one common facade implemented as a single controller concern. Only
+  that concern may call `redirect_to(..., allow_other_host: true)`; every other controller uses the
+  concern's methods when it needs to leave its origin, and nothing else may set `allow_other_host`
+  (owner, 2026-11-10). Enforce it three ways: the facade can emit only those two origins; a static
+  check fails when `allow_other_host: true` or a raw external `href` appears outside the facade;
+  Rails' own refusal of redirects to other hosts stays enabled outside the facade. This holds
+  regardless of what the gateways do internally, so their implementations are verified separately.
+- **Same-origin destinations are server-decided too.** Request input carries only a server-issued
+  reference or a signed value, never a raw URL. A local path must start with exactly one `/` and
+  contain no `//`, no backslash, no scheme and no control characters (`//host` is read by browsers
+  as another site).
+- **Away shows a notice when crossing top-level domains,** first-party included, before continuing.
+- **No gateway-to-gateway destinations.** A Jump token must never name Away or Jump as its
+  destination, and an Away token must never name Jump or Away. Rails' facade, Jump and Away each
+  refuse such destinations, so no redirect loop or chained hop can form.
+
+### Direction confirmed (owner, 2026-11-10)
+
+Although OpenID Connect single sign-on could now keep a session across top-level domains, Jump stays
+limited to subdomain moves within one top-level domain. Its value is that it has no interstitial
+page and adds no waiting time; Away is mandatory for every cross-TLD move, first-party included, and
+always shows the notice. The `.com` surfaces are now almost unused, so Jump's approved edges and
+origin lists need a review after the split; that review is recorded in the Jump repository
+(`umaxica-apps-edge-jump`, `plans/2026-11-10-review-after-cosmos-split.md`).

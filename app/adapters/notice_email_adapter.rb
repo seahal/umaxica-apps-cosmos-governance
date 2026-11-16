@@ -7,6 +7,7 @@ class NoticeEmailAdapter < NoticeAdapter
     @mailer = mailer
   end
 
+  public
   def deliver(email_address:, title:, body:, **)
     @mailer.with(
       email_address: email_address,

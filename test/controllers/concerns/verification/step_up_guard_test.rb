@@ -72,11 +72,11 @@ module Verification
 
     test "uses an explicit literal scope when provided" do
       klass = build_controller
-      klass.step_up(only: :destroy, scope: "social_unlink")
+      klass.step_up(only: :destroy, scope: "settings_birthdate")
 
       _options, calls = run_registration(klass)
 
-      assert_equal [[:require_step_up!, { scope: "social_unlink" }]], calls
+      assert_equal [[:require_step_up!, { scope: "settings_birthdate" }]], calls
     end
 
     test "bootstrap option routes to require_step_up_unless_bootstrap!" do

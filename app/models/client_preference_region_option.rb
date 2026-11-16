@@ -16,23 +16,27 @@ class ClientPreferenceRegionOption < AppPrincipalRecord
   US = 1
   JP = 2
 
+  DEFAULTS = [NOTHING, US, JP].freeze
+
+  self.record_timestamps = false
+
   has_many :client_preference_regions,
            class_name: "ClientPreferenceRegion",
            foreign_key: :option_id,
            inverse_of: :option,
            dependent: :restrict_with_error
 
+  def self.ensure_defaults!
+    insert_missing_fixed_ids!(DEFAULTS)
+  end
+  public_class_method :ensure_defaults!
+
+  public
   def name
     case id
     when US then "US"
     when JP then "JP"
     end
-  end
-
-  DEFAULTS = [NOTHING, US, JP].freeze
-
-  def self.ensure_defaults!
-    insert_missing_fixed_ids!(DEFAULTS)
   end
 
   self.primary_key = :id

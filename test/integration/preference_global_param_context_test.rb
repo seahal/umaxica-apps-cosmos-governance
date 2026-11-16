@@ -342,13 +342,7 @@ class PreferenceGlobalParamContextTest < ActionDispatch::IntegrationTest
   end
 
   def internal_links_for(host)
-    allowed_hosts = [
-      host,
-      ENV["PRIVATE_AUTH_SERVICE_URL"],
-      ENV["PRIVATE_AUTH_STAFF_URL"],
-      ENV["EDGE_SERVICE_URL"],
-      ENV["EDGE_STAFF_URL"],
-    ].compact
+    allowed_hosts = [host]
 
     css_select("a[href]").select do |link|
       href = link["href"]
@@ -357,7 +351,12 @@ class PreferenceGlobalParamContextTest < ActionDispatch::IntegrationTest
       if href.start_with?("/")
         true
       else
-        uri = URI.parse(href) rescue nil
+        uri =
+          begin
+            URI.parse(href)
+          rescue StandardError
+            nil
+          end
         uri&.host && allowed_hosts.include?(uri.host)
       end
     end

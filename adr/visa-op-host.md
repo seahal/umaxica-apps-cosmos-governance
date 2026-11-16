@@ -1,0 +1,97 @@
+# Visa OpenID Provider Host and Base Browser RP Boundary
+
+## Status
+
+Accepted and implemented in Rails (2026-10-24). This decision records the WU-02 host split and
+supersedes the same-FQDN authority portion of `adr/base-authority-and-self-rp-separation.md`. The
+role separation in `adr/op-auth-rp-authentication-responsibility-separation.md` remains applicable.
+
+> **Local-route disposition (2026-11-10):** The owner-approved local-surface hard reset removes
+> this repository's local Visa and Auth routes/controllers. This supersedes the local Rails host and
+> endpoint implementation described below. It does not retire external OP/Auth authorities, their
+> OIDC registrations, or contracts used by retained Base/Tech callers; Base behavior remains only
+> where a current local caller exists.
+
+## Context
+
+Base originally served both the OpenID Provider and its own browser relying party on the same host
+family. That made a host-local cookie or controller ancestry an unsafe signal of which role a
+request was using. It also made issuer, Jump return, logout, ceremony-binding and UI ownership
+contracts depend on one value named as a Base authority host.
+
+## Decision
+
+Visa is the only Rails OpenID Provider and authority surface for the app and org realms:
+
+| Realm | Visa OP            | Base RP           | Auth ceremony      | Logical host identities      |
+| ----- | ------------------ | ----------------- | ------------------ | ---------------------------- |
+| app   | `visa.umaxica.app` | `www.umaxica.app` | `auth.umaxica.app` | `visa-app-ww`, `base-app-ww` |
+| org   | `visa.umaxica.org` | `www.umaxica.org` | `auth.umaxica.org` | `visa-org-ww`, `base-org-ww` |
+
+Visa owns discovery, JWKS, authorization, token, UserInfo, revocation, end-session logout, authority
+sign-out result, session-limit resolution and sign-in-path ceremony binding. Base owns the browser
+RP callback, RP credentials and cookies, dashboard and identity pages, re-verification, and
+RP-initiated logout. Auth owns credential ceremonies and provider callbacks; provider callback
+registrations do not move to Visa.
+
+The public and development host contracts are explicit. Visa app and org use
+`VISA_{SERVICE,STAFF}_URL` or their public deployment equivalents
+`PUBLIC_VISA_{SERVICE,STAFF}_URL`, with `visa.{app,org}.localhost` as local hosts. The retired COM
+realm has no Visa issuer or protocol routes. The legacy corporate host setting remains part of
+host-family configuration, but it does not name an OIDC or Jump issuer. Base keeps its existing
+`BASE_*` / `PUBLIC_BASE_*` host contract; Base com remains an anonymous public Preference surface,
+not a browser RP. Missing required production configuration fails closed; no host wildcard or
+Base-to-Visa fallback is permitted.
+
+Visa OIDC and authority credentials use independent `VISA_APP` and `VISA_ORG` JWT namespaces and key
+sets. Base retains `BASE_APP` and `BASE_ORG` for Base-owned Jump and RP responsibilities. Corporate
+authentication signing namespaces have been removed. A Visa issuer never signs a token under a Base
+namespace, and the application accepts no old `www` issuer as a compatibility path. The `visa-*` and
+`base-*` names above are logical host identities, not OIDC client IDs; Base RP client registrations
+remain the existing `base-*` identities.
+
+Ceremony contract JWTs follow the path that owns the decision: the live App social sign-up grant is
+issued and verified with `VISA_APP`; Step-Up/re-verification grants continue to use the matching
+`BASE_*` namespace. The grant contract selects the expected issuer from the explicit namespace; it
+never infers a Visa/Base role from the request host.
+
+Visa and Base use host-only cookies and Rails sessions. Visa cannot clear Base cookies, and Base
+cannot use its RP credential as Visa authority proof. Cross-host navigation uses the Rails-side Jump
+edge catalog in `docs/operations/jump-rt-visa-edges.md`; this repository does not modify the separate
+Edge/Jump service or verify its deployment configuration.
+
+## Consequences
+
+The route, controller, issuer, CSP, Host Authorization, FQDN, key namespace and UI inventories must
+name Visa explicitly. Base route helpers and URLs now describe RP destinations, while Visa route
+helpers describe authority destinations. Logout is authority-first: Base launches to Visa, Visa
+commits authority cleanup, and the browser returns to Base for local RP cleanup. A deployment must
+update the external Jump graph and provision the two Visa app/org production key sets before a
+cross-host browser flow can operate outside Rails tests.
+
+The old Base OP paths are removed rather than redirected or aliased. This is intentional because the
+application is not deployed and accepting both issuer families would create an ambiguous trust
+boundary.
+
+## Verification
+
+### Controller lifecycle refinement (2026-10-25)
+
+Each supported realm has its own `Visa::{App,Org}::AuthorizationBaseController`, derived from the
+matching AuthorityController. Authorization, result, cancellation and switch endpoints inherit this
+Rails abstract protocol base rather than another concrete endpoint. Actor lookup, credential
+finalization and Root issuance remain realm-local. The base denies access by default; each concrete
+endpoint declares its open protocol action. Authorization exposes GET/POST, while continuation
+controllers expose only their navigation GET action. Inherited lifecycle helpers are internal
+methods of the abstract base, not endpoint actions. The retired COM protocol has no controller or
+issuer compatibility path.
+
+The existing protocol exemption from region canonicalization applies to the app and org bases. Rate
+limiting remains on the inherited protocol pipeline;
+each concrete endpoint explicitly registers request-size validation. The Visa hosts route nothing at
+`/` (owner decision, 2026-11-02); the protocol BareControllers and their machine-facing endpoints
+retain their existing transport.
+
+The implementation is covered by the host exclusivity, Base route withdrawal, issuer/JWKS,
+ceremony-binding purpose, Jump edge catalog, OIDC browser, logout and static invariant tests. The
+Rails-side Jump handoff is documented but external Edge integration is not claimed.

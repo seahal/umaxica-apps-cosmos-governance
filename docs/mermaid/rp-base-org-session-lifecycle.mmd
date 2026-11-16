@@ -1,0 +1,16 @@
+stateDiagram-v2
+    [*] --> Active: state and issuer checked; PS256 ID Token verified; one-use JTI and sid-bound session committed
+    Active --> Expired: absolute_expires_at passes (derived)
+    Expired --> Active: prompt=none callback renews the same sid-bound session
+    Active --> Revoked: Base Org POST sign-out commits local revocation
+    Active --> Revoked: verified Visa Back-Channel Logout commits
+    Expired --> Revoked: verified Visa Back-Channel Logout commits
+    [*] --> Revoked: Back-Channel Logout commits unknown-sid tombstone
+    Revoked --> [*]
+
+    note right of Active
+        Effective only while the RP session and OP sid binding
+        are unrevoked and absolute_expires_at is in the future.
+        Expired is derived at read time, not stored. Renewal uses a new
+        front-channel ID Token with prompt=none and the same OP sid.
+    end note

@@ -1,37 +1,69 @@
 # typed: false
 # frozen_string_literal: true
 
+require "base64"
+require "json"
+
 class SecurityJwtPreferenceTokenCodec
-  JWT_ALGORITHM = "ES384"
-  ACCESS_TOKEN_TTL = SecurityTokenLifetimes::PREFERENCE_JWT_TTL
-  TOKEN_TYPE = "preference-access-token"
+  JWT_ALGORITHM = SecurityJwtRfc9068AccessTokenProfile::ALGORITHM
+  ANONYMOUS_REALM_TOKEN_TTL = 400.days
+  ANONYMOUS_REALM_TOKEN_MAX_BYTES = 3 * 1024
+  TOKEN_TYPE = "JWT"
   AudienceMismatchError = Class.new(StandardError)
 
+  # --- WU-7 section 4.2: the anonymous com writer claims shape -------------------
+  # Wire values match the named com option records. Readers must validate without querying a DB.
+  ANONYMOUS_PREFERENCE_VALUES = {
+    "theme" => %w(light dark system),
+    "language" => %w(ja en),
+    "timezone" => %w(Etc/UTC Asia/Tokyo America/New_York America/Chicago America/Denver
+                     America/Los_Angeles America/Anchorage Pacific/Honolulu),
+    "currency" => %w(usd jpy),
+    "date_format" => %w(iso uk us),
+    "time_format" => %w(24 12),
+    "motion" => %w(standard reduced),
+    "density" => %w(standard compact),
+    "page_size" => %w(10 20 50 100 infinity),
+  }.freeze
+
+  ANONYMOUS_REALMS = %w(app com org).freeze
+  ANONYMOUS_CLAIMS = %w(iss sub aud iat exp jti preferences).freeze
+
   class << self
-    def encode(preferences, host:, preference_type:, public_id:, jti:, jwt_issuer_id: nil)
+    public
+    def encode(preferences, host:, preference_type:, public_id:, jti:, jwt_issuer_id: nil, issued_at: nil)
       return nil unless valid_encode_params?(preferences, host, preference_type, public_id, jti)
 
-      payload = build_payload(preferences, host, preference_type, public_id, jti)
-      issuer_id = jwt_issuer_id.presence || "preference"
-      JWT.encode(
-        payload,
-        jwt_private_key_for_active(issuer_id),
-        JWT_ALGORITHM,
-        { kid: jwt_active_kid(issuer_id), typ: TOKEN_TYPE },
-      )
+      realm = anonymous_realm_for_preference_type(preference_type)
+      if realm
+        return nil unless anonymous_realm_host?(host, realm)
+        return nil if jwt_issuer_id.present? && jwt_issuer_id != "preference_#{realm}"
+
+        encode_anonymous_realm(
+          preferences, realm:, host:, public_id:, jti:, issued_at:,
+        )
+      end
     rescue JWT::EncodeError, OpenSSL::PKey::PKeyError, ArgumentError, TypeError => e
       Rails.logger.error(JitLogEvent.format("preference.token.encoding_failed", error_class: e.class.name))
       nil
     end
 
     def decode(token, host:, jwt_issuer_id: nil, raise_on_audience_mismatch: false)
-      return nil if token.blank? || host.blank?
+      return nil unless token.is_a?(String) && token.present? && host.present?
+      return nil if token.bytesize > ANONYMOUS_REALM_TOKEN_MAX_BYTES
+      return nil unless unambiguous_json_segments?(token)
 
-      header = jwt_configuration.parse_header(token)
-      decode_verified_payload(
-        token, host: host, header: header, jwt_issuer_id: jwt_issuer_id,
-               raise_on_audience_mismatch: raise_on_audience_mismatch,
-      )
+      if anonymous_realm_token_shape?(token)
+        realm = anonymous_realm_for_host(host)
+        return nil unless realm
+        return nil if jwt_issuer_id.present? && jwt_issuer_id != "preference_#{realm}"
+
+        return decode_anonymous_realm(
+          token, realm:, raise_on_audience_mismatch:,
+        )
+      end
+
+      nil
     end
 
     def extract_preferences(payload)
@@ -41,176 +73,240 @@ class SecurityJwtPreferenceTokenCodec
     end
 
     def extract_public_id(payload)
-      payload&.dig("public_id")
-    end
+      return unless payload.is_a?(Hash)
 
-    def extract_preference_type(payload)
-      payload&.dig("preference_type")
+      # The realm-local anonymous shape carries the row id only in `sub`.
+      return payload["sub"] if ANONYMOUS_REALMS.include?(payload["aud"]) && payload.key?("preferences")
+
+      nil
     end
 
     def extract_jti(payload)
       payload&.dig("jti")
     end
 
+    public
+
+    def valid_display_snapshot?(preferences)
+      anonymous_preference_keys_closed?(preferences) && preferences.keys.sort == ANONYMOUS_PREFERENCE_VALUES.keys.sort
+    end
+
     private
 
-    def decode_verified_payload(token, host:, header:, jwt_issuer_id:, raise_on_audience_mismatch:)
-      unless valid_header?(header)
-        report_invalid_header(host: host, header: header)
-        return nil
+    def unambiguous_json_segments?(token)
+      segments = token.split(".", -1)
+      return false unless segments.length == 3
+
+      segments.first(2).all? do |segment|
+        JSON.parse(Base64.urlsafe_decode64(segment), allow_duplicate_key: false).is_a?(Hash)
       end
-
-      issuer_id = jwt_issuer_id.presence || "preference"
-      public_key = resolve_public_key(header, issuer_id)
-      if public_key.nil?
-        JitSecurityJwtAnomalyReporter.report_preference(host: host, header: header, reason: "UNKNOWN_KID")
-        return nil
-      end
-
-      payload, = JWT.decode(token, public_key, true, decode_options(host))
-      validated_payload = validate_payload(payload, host)
-      unless validated_payload
-        report_invalid_payload(host: host, header: header, payload: payload)
-        return nil
-      end
-
-      validated_payload
-    rescue JWT::ExpiredSignature
-      JitSecurityJwtAnomalyReporter.report_preference(host: host, header: header, reason: "EXPIRED")
-      Rails.logger.debug("PreferenceToken.decode failed: token expired")
-      nil
-    rescue JWT::InvalidAudError => e
-      report_audience_mismatch(host: host, header: header, token: token, error: e)
-      Rails.logger.debug { "PreferenceToken.decode invalid audience: #{e.class}: #{e.message}" }
-      raise AudienceMismatchError, e.message if raise_on_audience_mismatch
-
-      nil
-    rescue JWT::InvalidIssuerError, JWT::InvalidIatError, JWT::ImmatureSignature => e
-      report_claim_error(host: host, header: header, error: e)
-      Rails.logger.debug { "PreferenceToken.decode invalid claims: #{e.class}: #{e.message}" }
-      nil
-    rescue JWT::DecodeError, JWT::VerificationError => e
-      report_decode_error(host: host, header: header, error: e)
-      Rails.logger.debug { "PreferenceToken.decode invalid token: #{e.message}" }
-      nil
-    rescue OpenSSL::PKey::PKeyError, ArgumentError, TypeError => e
-      Rails.logger.error(JitLogEvent.format("preference.token.decoding_failed", error_class: e.class.name))
-      nil
-    end
-
-    def jwt_active_kid(issuer_id)
-      return jwt_configuration.active_kid if issuer_id == "preference"
-
-      jwt_configuration.active_kid(issuer_id)
-    end
-
-    def jwt_private_key_for_active(issuer_id)
-      return jwt_configuration.private_key_for_active if issuer_id == "preference"
-
-      jwt_configuration.private_key_for_active(issuer_id)
+    rescue JSON::ParserError, ArgumentError
+      Rails.logger.info(JitLogEvent.format("preference.token.invalid_json"))
+      false
     end
 
     def resolve_public_key(header, issuer_id)
-      if issuer_id == "preference"
-        jwt_configuration.public_key_for(header["kid"])
-      else
-        jwt_configuration.public_key_for(header["kid"], issuer_id: issuer_id)
-      end
+      jwt_configuration.public_key_for(header["kid"], issuer_id: issuer_id)
     end
 
     def valid_encode_params?(preferences, host, preference_type, public_id, jti)
       [preferences, host, preference_type, public_id, jti].all?(&:present?)
     end
 
-    def build_payload(preferences, host, preference_type, public_id, jti)
-      now = Time.current.to_i
-      {
-        preferences: preferences,
-        host: jwt_configuration.host_scope_for(host),
-        preference_type: preference_type,
-        public_id: public_id,
-        jti: jti,
-        typ: TOKEN_TYPE,
-        iss: jwt_configuration.issuer,
-        aud: jwt_configuration.audience_for(host),
-        iat: now,
-        exp: now + Integer(ACCESS_TOKEN_TTL.to_s, 10),
-      }
+    def anonymous_realm_for_preference_type(preference_type)
+      case preference_type
+      when "AppPreference" then "app"
+      when "ComPreference" then "com"
+      when "OrgPreference" then "org"
+      else
+        raise ArgumentError, "unsupported anonymous preference model: #{preference_type.inspect}"
+      end
     end
 
-    def decode_options(host)
-      {
-        algorithms: [JWT_ALGORITHM],
-        required_claims: %w(iss aud typ exp iat public_id jti preference_type),
-        leeway: jwt_configuration.leeway_seconds,
-        verify_iss: true,
-        iss: jwt_configuration.issuer,
-        verify_aud: true,
-        aud: jwt_configuration.audience_for(host),
-        verify_iat: true,
-        verify_exp: true,
-      }
+    def anonymous_realm_for_host(host)
+      return unless host.is_a?(String) && host.present?
+
+      local_realm = local_anonymous_realm_for_host(host)
+      return local_realm if local_realm.present?
+
+      configured_anonymous_realm_for_host(host)
     end
 
-    def validate_payload(payload, host)
-      return nil unless payload.is_a?(Hash)
-      return nil unless payload["typ"] == TOKEN_TYPE
-      return nil unless host_matches?(payload["host"], host)
-      return nil unless audience_matches?(payload["aud"], host)
+    def local_anonymous_realm_for_host(host)
+      return unless Rails.env.local?
+
+      %w(app com org).find do |realm|
+        host == "#{realm}.localhost" || host.end_with?(".#{realm}.localhost")
+      end
+    end
+
+    def configured_anonymous_realm_for_host(host)
+      hosts = Rails.configuration.x.boot_config.fetch(:hosts)
+      realm_hosts = {
+        "app" => hosts.base_service&.host,
+        "com" => hosts.base_corporate&.host,
+        "org" => hosts.base_staff&.host,
+      }
+      matched =
+        realm_hosts.filter_map do |realm, configured_host|
+          next if configured_host.blank?
+
+          realm if registrable_domain(host) == registrable_domain(configured_host)
+        end
+      return if matched.length > 1
+
+      matched.first
+    end
+
+    def anonymous_realm_host?(host, realm)
+      anonymous_realm_for_host(host) == realm
+    end
+
+    def anonymous_realm_token_shape?(token)
+      payload, = JWT.decode(token, nil, false)
+      payload.is_a?(Hash) && payload.key?("preferences") &&
+        payload.exclude?("client_id") && payload.exclude?("preference_type")
+    rescue JWT::DecodeError, NameError
+      false
+    end
+
+    def encode_anonymous_realm(preferences, realm:, host:, public_id:, jti:, issued_at:)
+      validate_anonymous_preference_keys!(preferences)
+      raise ArgumentError, "anonymous preference issuance time is required" unless issued_at.acts_like?(:time)
+      raise ArgumentError, "unsupported anonymous preference realm" unless ANONYMOUS_REALMS.include?(realm)
+      unless anonymous_realm_host?(host, realm)
+        raise ArgumentError, "preference token host does not belong to its realm"
+      end
+
+      now = issued_at.to_i
+      issuer_id = "preference_#{realm}"
+      token_payload = {
+        "iss" => jwt_configuration.issuer_for(issuer_id),
+        "sub" => public_id.to_s,
+        "aud" => realm,
+        "iat" => now,
+        "exp" => now + ANONYMOUS_REALM_TOKEN_TTL.to_i,
+        "jti" => jti,
+        "preferences" => preferences,
+      }
+      token = JWT.encode(
+        token_payload, jwt_configuration.private_key_for_active(issuer_id), JWT_ALGORITHM,
+        { kid: jwt_configuration.active_kid(issuer_id), typ: TOKEN_TYPE, alg: JWT_ALGORITHM },
+      )
+      if token.bytesize > ANONYMOUS_REALM_TOKEN_MAX_BYTES
+        raise ArgumentError, "anonymous preference token exceeds size limit"
+      end
+
+      token
+    rescue JWT::EncodeError, OpenSSL::PKey::PKeyError, ArgumentError, TypeError => e
+      Rails.logger.error(JitLogEvent.format("preference.token.encoding_failed", error_class: e.class.name))
+      nil
+    end
+
+    def validate_anonymous_preference_keys!(preferences)
+      closed = valid_display_snapshot?(preferences)
+      return if closed
+
+      raise ArgumentError, "anonymous preference payload keys or values are outside the closed contract"
+    end
+
+    def decode_anonymous_realm(token, realm:, raise_on_audience_mismatch:)
+      issuer_id = "preference_#{realm}"
+      host = realm
+      header = jwt_configuration.parse_header(token)
+      unless valid_header?(header)
+        report_invalid_header(host:, header:)
+        return nil
+      end
+
+      public_key = resolve_public_key(header, issuer_id)
+      if public_key.nil?
+        JitSecurityJwtAnomalyReporter.report_preference(host:, header:, reason: "UNKNOWN_KID")
+        return nil
+      end
+
+      payload, = JWT.decode(token, public_key, true, anonymous_decode_options(issuer_id, realm))
+      return nil unless anonymous_realm_claims_valid?(payload, realm:)
 
       payload
+    rescue JWT::ExpiredSignature
+      JitSecurityJwtAnomalyReporter.report_preference(host:, header: {}, reason: "EXPIRED")
+      nil
+    rescue JWT::InvalidAudError => e
+      report_audience_mismatch(host:, header: {}, token: token, error: e)
+      raise AudienceMismatchError, e.message if raise_on_audience_mismatch
+
+      nil
+    rescue JWT::InvalidIssuerError, JWT::InvalidIatError, JWT::ImmatureSignature, JWT::MissingRequiredClaim => e
+      report_claim_error(host:, header: {}, error: e)
+      nil
+    rescue JWT::DecodeError, JWT::VerificationError => e
+      report_decode_error(host:, header: {}, error: e)
+      nil
+    rescue OpenSSL::PKey::PKeyError, ArgumentError, TypeError => e
+      Rails.logger.error(JitLogEvent.format("preference.token.decoding_failed", error_class: e.class.name))
+      nil
+    end
+
+    def anonymous_decode_options(issuer_id, realm)
+      {
+        algorithms: [JWT_ALGORITHM],
+        required_claims: %w(iss aud exp iat jti sub preferences),
+        leeway: 0,
+        verify_iss: true,
+        iss: jwt_configuration.issuer_for(issuer_id),
+        aud: realm,
+        verify_aud: true,
+        verify_iat: { leeway: jwt_configuration.leeway_seconds },
+        verify_expiration: true,
+      }
+    end
+
+    def anonymous_preference_keys_closed?(preferences)
+      preferences.is_a?(Hash) &&
+        preferences.all? { |key, value| ANONYMOUS_PREFERENCE_VALUES.fetch(key, []).include?(value) }
+    end
+
+    def anonymous_realm_claims_valid?(payload, realm:)
+      return false unless payload.is_a?(Hash) && payload.keys.sort == ANONYMOUS_CLAIMS.sort
+      return false unless %w(iss sub jti).all? { |key| payload[key].is_a?(String) && payload[key].present? }
+      return false unless payload["aud"] == realm
+      return false unless payload["iat"].is_a?(Integer) && payload["exp"].is_a?(Integer)
+      return false unless payload["exp"] > payload["iat"]
+      return false if payload["exp"] - payload["iat"] > ANONYMOUS_REALM_TOKEN_TTL.to_i
+
+      valid_display_snapshot?(payload["preferences"])
     end
 
     def valid_header?(header)
-      return false if header.blank?
-      return false unless header["alg"] == JWT_ALGORITHM
-      return false if header["kid"].blank?
-
-      header["typ"] == TOKEN_TYPE
+      header.is_a?(Hash) && header["alg"] == JWT_ALGORITHM && header["typ"] == TOKEN_TYPE &&
+        header["kid"].is_a?(String) && header["kid"].present?
     end
 
     def report_invalid_header(host:, header:)
-      reason =
-        if header.blank? || header["alg"].blank?
-          "MALFORMED_TOKEN"
-        elsif header["kid"].blank?
-          "MISSING_KID"
-        elsif header["alg"] == "none"
-          "ALG_NONE"
-        elsif header["alg"] != JWT_ALGORITHM
-          "ALG_MISMATCH"
-        elsif header["typ"].blank?
-          "MISSING_TYP"
-        else
-          "TYP_MISMATCH"
-        end
-
-      JitSecurityJwtAnomalyReporter.report_preference(host: host, header: header, reason: reason)
-    end
-
-    def report_invalid_payload(host:, header:, payload:)
-      reason =
-        if payload["typ"] != TOKEN_TYPE
-          "TYP_MISMATCH"
-        elsif payload["host"].blank? || !host_matches?(payload["host"], host)
-          "HOST_MISMATCH"
-        elsif !audience_matches?(payload["aud"], host)
-          "AUD_MISMATCH"
-        else
-          "OTHER"
-        end
-
       JitSecurityJwtAnomalyReporter.report_preference(
         host: host,
         header: header,
-        payload: payload,
-        reason: reason,
+        reason: preference_header_rejection_reason(header),
       )
+    end
+
+    def preference_header_rejection_reason(header)
+      return "MALFORMED_TOKEN" if header.blank? || !header.is_a?(Hash) || header["alg"].blank?
+      return "MISSING_KID" if header["kid"].blank?
+      return "ALG_NONE" if header["alg"] == "none"
+      return "ALG_MISMATCH" if header["alg"] != JWT_ALGORITHM
+      return "MISSING_TYP" if header["typ"].blank?
+      return "TYP_MISMATCH" if header["typ"] != TOKEN_TYPE
+
+      "INVALID_HEADER"
     end
 
     def report_claim_error(host:, header:, error:)
       reason =
         case error
+        when JWT::MissingRequiredClaim
+          JitSecurityJwtAnomalyReporter.reason_for_missing_claim(error.message)
         when JWT::InvalidIssuerError then "ISS_MISMATCH"
         when JWT::InvalidIatError then "IAT_INVALID"
         when JWT::ImmatureSignature then "IMMATURE"
@@ -239,7 +335,7 @@ class SecurityJwtPreferenceTokenCodec
       payload, = JWT.decode(token, nil, false)
       return {} unless payload.is_a?(Hash)
 
-      payload.slice("iss", "aud", "typ", "jti")
+      payload.slice("iss", "aud", "jti")
     rescue JWT::DecodeError
       {}
     end
@@ -264,35 +360,11 @@ class SecurityJwtPreferenceTokenCodec
       )
     end
 
-    def host_matches?(host_claim, host)
-      return false if host_claim.blank?
-
-      host == host_claim ||
-        host.end_with?(".#{host_claim}") ||
-        host_family(host_claim) == host_family(host)
-    end
-
-    def audience_matches?(aud_claim, host)
-      normalize_audiences(aud_claim).any? do |aud|
-        host == aud ||
-          host.end_with?(".#{aud}") ||
-          host_family(aud) == host_family(host)
-      end
-    end
-
-    def host_family(host)
+    def registrable_domain(host)
       parts = host.to_s.split(".")
       return host.to_s if parts.length < 3
 
       parts.last(2).join(".")
-    end
-
-    def normalize_audiences(aud_claim)
-      case aud_claim
-      when Array then aud_claim
-      when String then [aud_claim]
-      else []
-      end
     end
 
     def jwt_configuration

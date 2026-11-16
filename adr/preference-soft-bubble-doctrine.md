@@ -16,6 +16,13 @@
 > **Placement update (2026-05-18):** Session-side surface preference families now live in
 > `app_setting`, `org_setting`, and `com_setting`. Actor-local preferences stay in the matching
 > principal database.
+
+> **Amendment (2026-11-04):** The owner-approved redesign in `five.md` C0-C4 replaces this ADR's
+> Preference-specific read, synchronization, and screen-entry behavior. Keep the realm-local
+> database boundary as an architectural constraint, but do not use this ADR to reintroduce the
+> unified `Actor.preferences` runtime contract, sign-in copying, or edit-screen GET writes. The
+> current concepts are Browser Experience, Account Experience, Cookie Consent, Affinity and Display
+> Snapshot. Their exact persistent shapes and lifecycle remain subject to `five.md` C5.
 >
 > **Runtime overlay update (2026-05-19, superseded 2026-05-30):** `Actor.preferences` is the
 > effective request runtime preference. Normal authenticated requests now build it from the
@@ -62,7 +69,7 @@ planning documents disagree:
 
 - `adr/setting-preference-remove-polymorphic-owner.md` describes a `settings_preferences`
   polymorphic-owner table that does not exist.
-- `plans/backlog/gh628-move-preferences-to-setting-db.md` planned to move all session-side
+- `plans/archive/gh628-move-preferences-to-setting-db.md` planned to move all session-side
   preferences to one database; this was abandoned. Each surface now has its own setting database.
 - `Preference::StorageAdapter`, the dual-read / dual-write layer that GH-628 introduced, has been
   removed.
@@ -210,7 +217,6 @@ The following are explicitly out of scope of this ADR and will be addressed in s
 - `plans/archive/customer-preferences-move-to-com-preference-db.md` — superseded com TLD bubble
   closure note
 - `plans/archive/staff-preference-move-to-operator-db.md` — historical org TLD bubble closure note
-- `plans/backlog/gh578-preference-consolidation.md` — `Actor::Preference` runtime consolidation
-  (still relevant)
+- GH issue #578 — `Actor::Preference` runtime consolidation (still relevant)
 - `plans/archive/actor-support-integration-test-coverage.md` — `ActorSupport` request-lifecycle test
   coverage gap

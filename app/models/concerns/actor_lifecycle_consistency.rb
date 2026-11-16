@@ -4,11 +4,6 @@
 module ActorLifecycleConsistency
   extend ActiveSupport::Concern
 
-  included do
-    validate :lifecycle_timestamps_are_consistent
-    validate :mfa_level_requirement_columns_are_consistent
-  end
-
   private
 
   def lifecycle_timestamps_are_consistent
@@ -31,18 +26,6 @@ module ActorLifecycleConsistency
     return if has_attribute?(:withdrawn_at) && withdrawn_at.present? && !lifecycle_infinite_time?(withdrawn_at)
 
     errors.add(:terminated_at, "requires a finite withdrawn_at")
-
-  end
-
-  def mfa_level_requirement_columns_are_consistent
-    return unless has_attribute?(:mfa_level_enabled) && has_attribute?(:mfa_level_id)
-
-    enabled = ActiveModel::Type::Boolean.new.cast(self[:mfa_level_enabled])
-    if enabled && mfa_level_id.to_i == mfa_level_nothing_id
-      errors.add(:mfa_level_id, "must not be nothing when mfa_level_enabled is true")
-    elsif !enabled && mfa_level_id.to_i != mfa_level_nothing_id
-      errors.add(:mfa_level_enabled, "must be true when mfa_level_id requires multi-factor")
-    end
   end
 
   def lifecycle_infinite_time?(value)

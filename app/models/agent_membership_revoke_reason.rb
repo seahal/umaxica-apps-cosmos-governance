@@ -17,6 +17,8 @@ class AgentMembershipRevokeReason < OrgRpRecord
   POLICY = 3
   DEFAULTS = [NOTHING, MANUAL, EXPIRED, POLICY].freeze
 
+  self.record_timestamps = false
+
   has_many :agent_memberships,
            foreign_key: :revoke_reason_id,
            dependent: :restrict_with_error,

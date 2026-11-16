@@ -2,6 +2,7 @@
 # frozen_string_literal: true
 
 class ComPreferencePolicy < ApplicationPolicy
+  public
   def update?
     record == ComPreference || record.is_a?(ComPreference)
   end

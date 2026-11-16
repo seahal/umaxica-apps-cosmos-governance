@@ -2,7 +2,8 @@
 # frozen_string_literal: true
 
 class OperatorPreferencePolicy < ApplicationPolicy
+  public
   def update?
-    user.is_a?(Operator) && record.is_a?(OperatorPreference) && record.staff_id == user.id
+    user.is_a?(Operator) && record.is_a?(OperatorPreference) && record.operator_id == user.id
   end
 end

@@ -6,9 +6,8 @@
 # restricted to the withdrawal flow itself. Anything else gets a redirect (HTML) or a 403 with
 # `WITHDRAWAL_REQUIRED` (JSON / non-HTML).
 #
-# Lives as its own concern (extracted from the very large
-# `AuthenticationBase`) so the rule is reviewable in isolation and
-# to make it obvious where the allowlist gets edited.
+# Shared by retained Base and Tech request controllers so the withdrawal rule and allowlist remain
+# explicit at the request boundary.
 module AuthenticationWithdrawalGate
   extend ActiveSupport::Concern
 
@@ -42,10 +41,14 @@ module AuthenticationWithdrawalGate
   end
 
   def withdrawal_controller_allowlisted?
-    %w(
-      base/app/identity/withdrawals
-      base/com/identity/withdrawals
-    ).include?(controller_path) && %w(show new edit update create destroy).include?(action_name)
+    case controller_path
+    when "base/app/identity/withdrawals"
+      %w(show new edit update create destroy).include?(action_name)
+    when "base/org/identity/withdrawals"
+      action_name == "show"
+    else
+      false
+    end
   end
 
   def withdrawal_restricted_resource?(resource)
@@ -61,16 +64,14 @@ module AuthenticationWithdrawalGate
 
     case withdrawal_gate_surface_family
     when "app" then edit_base_app_identity_withdrawal_path(ri: ri)
-    when "com" then edit_base_com_identity_withdrawal_path(ri: ri)
     when "org" then base_org_identity_withdrawal_path(ri: ri)
     else
       raise ArgumentError, "no withdrawal redirect path configured for controller_path=#{controller_path}"
     end
   end
 
-  # Derives the app/com/org family from the surface/family/... controller_path shape shared by
-  # every surface (auth, base, core, side). A rescued default here would silently cross surfaces
-  # (e.g. redirect an org request to the app withdrawal page), so unknown families raise instead.
+  # Derives the app/org family from a retained controller path. Unknown families raise instead of
+  # crossing request ownership by guessing a destination.
   def withdrawal_gate_surface_family
     controller_path.split("/")[1]
   end

@@ -40,13 +40,15 @@ module Concerns
       end
     end
 
-    test "all application controllers include ActorSupport" do
+    test "all application controllers include an actor lifecycle" do
       CONTROLLER_FILES.each_value do |controller|
         content = controller[:content]
         controller_name = controller[:name]
 
-        assert_includes content, "ActorSupport",
-                        "#{controller_name} should include ActorSupport"
+        assert(
+          content.include?("ActorSupport") || content.include?("ComAnonymousActorContext"),
+          "#{controller_name} should include ActorSupport or ComAnonymousActorContext",
+        )
       end
     end
 
@@ -74,7 +76,7 @@ module Concerns
       pattern = %r{
         (after_action|append_after_action)\s+:(purge_current|finish_request)
         |
-        (prepend_around_action|around_action)\s+:with_actor_lifecycle
+        (prepend_around_action|around_action)\s+:(with_actor_lifecycle|with_anonymous_context_lifecycle)
     }x
 
       CONTROLLER_FILES.each_value do |controller|
@@ -105,73 +107,18 @@ module Concerns
         controller_name = controller[:path_name]
 
         assert_match(
-          /before_action :set_current_context\s+before_action :reset_flash/,
+          /before_action :(set_current_context|set_anonymous_context)\s+before_action :reset_flash/,
           content,
           "#{controller_name} should set current context before reset flash",
         )
       end
     end
 
-    test "application controllers with user auth include required concerns" do
-      user_controllers =
-        CONTROLLER_FILES.values.select do |controller|
-          controller[:content].include?("AuthenticationClient")
-        end
-
-      user_controllers.each do |controller|
-        content = controller[:content]
-        controller_name = controller[:path_name]
-
-        assert_includes content, "AuthorizationClient",
-                        "#{controller_name} should include AuthorizationClient when using AuthenticationClient"
-        assert_includes content, "VerificationClient",
-                        "#{controller_name} should include VerificationClient when using AuthenticationClient"
-      end
-    end
-
-    test "application controllers with staff auth include required concerns" do
-      staff_controllers =
-        CONTROLLER_FILES.values.select do |controller|
-          controller[:content].include?("AuthenticationOperator")
-        end
-
-      staff_controllers.each do |controller|
-        content = controller[:content]
-        controller_name = controller[:path_name]
-
-        assert_includes content, "AuthorizationOperator",
-                        "#{controller_name} should include AuthorizationOperator when using AuthenticationOperator"
-        assert_includes content, "VerificationOperator",
-                        "#{controller_name} should include VerificationOperator when using AuthenticationOperator"
-      end
-    end
-
-    test "application controllers with visitor auth include required concerns" do
-      visitor_controllers =
-        CONTROLLER_FILES.values.select do |controller|
-          controller[:content].include?("AuthenticationVisitor")
-        end
-
-      visitor_controllers.each do |controller|
-        content = controller[:content]
-        controller_name = controller[:path_name]
-
-        assert_includes content, "AuthorizationVisitor",
-                        "#{controller_name} should include AuthorizationVisitor when using AuthenticationVisitor"
-        assert_includes content, "VerificationVisitor",
-                        "#{controller_name} should include VerificationVisitor when using AuthenticationVisitor"
-      end
-    end
-
-    test "application controllers with OIDC include OidcSsoInitiator" do
+    # Base com stays public and does not establish a visitor credential boundary.
+    test "no application controller authenticates a visitor" do
       CONTROLLER_FILES.each_value do |controller|
-        content = controller[:content]
-        controller_name = controller[:path_name]
-
-        if content.include?("oidc_client_id")
-          assert_includes content, "OidcSsoInitiator",
-                          "#{controller_name} with oidc_client_id should include OidcSsoInitiator"
-        end
+        assert_not_includes controller[:content], "AuthenticationVisitor",
+                            "#{controller[:path_name]} must not authenticate a visitor"
       end
     end
 
@@ -195,31 +142,28 @@ module Concerns
       end
     end
 
-    # Wedge: every full-lifecycle surface controller must enforce the restricted-session
-    # guard. Regression guard against core/side surfaces silently dropping it again.
-    test "all lifecycle application controllers enforce the restricted session guard" do
+    # Wedge: the retired session-limit placeholder must not reintroduce a controller guard.
+    test "lifecycle application controllers do not register the retired restricted-session guard" do
       lifecycle_controllers.each do |controller|
         content = controller[:content]
         controller_name = controller[:path_name]
 
-        assert_includes content, "RestrictedSessionGuard",
-                        "#{controller_name} should include RestrictedSessionGuard (guard drift)"
-        assert_match(
+        assert_not_includes content, "RestrictedSessionGuard",
+                            "#{controller_name} reintroduced the retired restricted-session guard"
+        assert_no_match(
           /before_action :enforce_restricted_session_guard!$/,
           content,
-          "#{controller_name} should run enforce_restricted_session_guard! (guard drift)",
+          "#{controller_name} reintroduced the retired restricted-session callback",
         )
       end
     end
 
-    # Wedge: app-surface controllers (AuthenticationClient) must reflect the request
-    # timezone alongside locale. Regression guard against auth/app losing set_timezone.
-    test "app surface lifecycle controllers reflect timezone" do
+    # Base App remains the only Governance app lifecycle controller after route separation.
+    test "Base App lifecycle reflects timezone" do
       app_controllers =
-        lifecycle_controllers.select { |controller| controller[:content].include?("AuthenticationClient") }
+        lifecycle_controllers.select { |controller| controller[:path_name].end_with?("::app") }
 
-      assert_operator app_controllers.length, :>=, 3,
-                      "expected multiple app-surface lifecycle controllers"
+      assert_equal ["base::app"], app_controllers.pluck(:path_name)
 
       app_controllers.each do |controller|
         assert_match(

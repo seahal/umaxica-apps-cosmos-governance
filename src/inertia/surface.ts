@@ -1,11 +1,12 @@
-import { createInertiaApp, type ResolvedComponent } from "@inertiajs/react";
+import { createInertiaApp, router, type ResolvedComponent } from "@inertiajs/react";
 
 import SurfaceLayout from "@/layouts/SurfaceLayout";
+import { handleStepUpChallenge } from "@/lib/step_up_challenge";
 import { applyTheme, readThemeCookie, watchThemeCookie } from "@/lib/theme";
 
 // Shared pieces for the per-FQDN Inertia entrypoints.
 //
-// Every trust boundary (base/app, base/com, auth/org, ...) boots its own Inertia application from
+// Every trust boundary (base/app, base/com, tech/org, ...) boots its own Inertia application from
 // its own entrypoint and globs only its own page directory, so one surface can never resolve
 // another surface's page component. This module holds what is genuinely identical between them;
 // the glob itself stays a literal in each entrypoint because Vite can only rewrite a literal.
@@ -141,7 +142,7 @@ export function reportInertiaBootFailure(error: unknown): void {
 }
 
 /**
- * Keeps `<html data-theme>` in step with the `ct` cookie.
+ * Keeps `<html data-theme>` in step with the current surface's display cookie.
  *
  * Rails renders the attribute from the cookie, and every `dark:` utility and every `--ui-*` token
  * is keyed on it, so the document's colours are only ever as current as the last document load.
@@ -179,6 +180,17 @@ export function bootSurfaceInertiaApp(
   surface: string,
 ): Promise<unknown> {
   keepDocumentThemeInStep();
+
+  if (surface === "base/app" || surface === "base/org") {
+    router.on("httpException", (event) => {
+      if (handleStepUpChallenge(event.detail.response)) {
+        event.preventDefault();
+        return false;
+      }
+
+      return true;
+    });
+  }
 
   const nonce = cspNonce();
 

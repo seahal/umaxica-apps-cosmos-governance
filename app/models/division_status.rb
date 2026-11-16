@@ -18,5 +18,7 @@ class DivisionStatus < OrgPrincipalRecord
   DELETED = 4
   DEFAULTS = [NOTHING, ACTIVE, INACTIVE, DELETED].freeze
 
+  self.record_timestamps = false
+
   has_many :divisions, dependent: :restrict_with_error
 end

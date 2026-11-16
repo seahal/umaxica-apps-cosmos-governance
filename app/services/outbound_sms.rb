@@ -1,6 +1,9 @@
 # typed: false
 # frozen_string_literal: true
 
+require "timeout"
+require "net/protocol"
+
 class OutboundSms < ApplicationService
   PROVIDERS = {
     "aws_sns" => OutboundSmsProvidersAwsSns,
@@ -9,32 +12,55 @@ class OutboundSms < ApplicationService
 
   SUSPENDED_ERROR = "outbound sms channel is suspended"
 
-  def self.deliver_now(to:, title:, body:)
+  def self.deliver_now(to:, title:, body:, timeout: nil)
+    if !timeout.nil? && (!timeout.is_a?(Numeric) || !timeout.finite? || !timeout.positive?)
+      raise ArgumentError, "transport timeout must be a finite positive number"
+    end
     return suspended_result if suspended?
 
-    provider.send_message(to: to, title: title, body: body)
+    # Only the disposable provider request is interrupted; the delivery audit runs afterward.
+    response = Timeout.timeout(timeout, Net::ReadTimeout) { provider.send_message(to: to, title: title, body: body) }
+    record_delivery_event_safely(
+      "provider_accepted",
+      metadata: provider_acceptance_metadata(response),
+    )
+    response
+  rescue StandardError => e
+    record_delivery_event_safely("delivery_failed", reason: e.class.name)
+    raise
   end
+  public_class_method :deliver_now
 
-  def self.deliver_later(to:, title:, body:)
+  def self.deliver_later(to:, title:, body:, otp_binding: nil, otp_code: nil)
     return suspended_result if suspended?
 
     provider
-    Outbound::SmsDeliveryJob.perform_later(
-      encrypted_payload: OutboundSensitivePayload.encrypt_sms_delivery(to:, title:, body:),
+    enqueued = Outbound::SmsDeliveryJob.perform_later(
+      encrypted_payload: OutboundSensitivePayload.encrypt_sms_delivery(to:, title:, body:, otp_binding:, otp_code:),
     )
+    raise ActiveJob::EnqueueError, "SMS queue did not accept the job" unless enqueued
+
+    record_delivery_event_safely("enqueued")
     OutboundResult.accepted(channel: :sms)
+  rescue StandardError => e
+    record_delivery_event_safely("enqueue_failed", reason: e.class.name)
+    raise
   end
+  public_class_method :deliver_later
 
   def self.suspended?
     OutboundChannelSuspension.suspended?(:sms)
   end
+  public_class_method :suspended?
 
   # The recipient is not logged: the outcome and the channel are what an operator needs
   # while the kill switch is pulled.
   def self.suspended_result
+    record_delivery_event_safely("suspended", reason: SUSPENDED_ERROR)
     Rails.logger.warn(JitLogEvent.format("outbound.sms.suspended", channel: "sms"))
     OutboundResult.rejected(channel: :sms, error: SUSPENDED_ERROR)
   end
+  public_class_method :suspended_result
 
   def self.provider
     provider_name = Rails.application.config.sms_provider.to_s
@@ -45,6 +71,39 @@ class OutboundSms < ApplicationService
 
     provider_class.new
   end
+  public_class_method :provider
+
+  def self.record_delivery_event_safely(event, metadata: {}, reason: nil)
+    Chronicle.capture(
+      action: "notification.delivery.sms.#{event}",
+      reason: reason,
+      metadata: metadata.compact,
+    )
+  rescue StandardError => e
+    Rails.logger.error(
+      JitLogEvent.format(
+        "notification.delivery_audit_failed",
+        action: "notification.delivery.sms.#{event}",
+        error_class: e.class.name,
+      ),
+    )
+    nil
+  end
+
+  def self.provider_acceptance_metadata(response)
+    return {} unless response.respond_to?(:provider)
+
+    {
+      provider: response.provider,
+      provider_reference: response.provider_reference,
+      accepted_at: response.accepted_at&.iso8601,
+    }
+  rescue StandardError
+    {}
+  end
+
+  private_class_method :record_delivery_event_safely
+  private_class_method :provider_acceptance_metadata
 
   def initialize(to:, title:, body:, **options)
     super()
@@ -54,6 +113,7 @@ class OutboundSms < ApplicationService
     @options = options
   end
 
+  public
   def call
     self.class.deliver_later(to: to, title: title, body: body)
   end

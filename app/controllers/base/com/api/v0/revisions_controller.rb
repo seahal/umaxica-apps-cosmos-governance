@@ -17,7 +17,11 @@ module Base
 
           AUTHENTICATION_MODE = :bare
 
+          before_action :disable_machine_json_response_cache
+
           before_action :refuse_unless_machine_json_acceptable
+
+          public
 
           def show
             render_revision_json

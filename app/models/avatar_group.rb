@@ -4,11 +4,44 @@
 class AvatarGroup < AvatarRecord
   include PublicId
 
+  before_validation :generate_public_id, on: :create
+  before_validation :refresh_generated_public_id_after_collision, on: :create
+  before_create :generate_public_id
+  around_create :retry_public_id_collision
+  validate :public_id_immutable_after_create, on: :update
+  validates :public_id, presence: true, length: { is: PublicId::GENERATION_SIZE }, uniqueness: true
   STATES = %w(active archived).freeze
   ACCOUNT_SURFACES = %w(app org com).freeze
 
   has_many :group_avatar_memberships, dependent: :restrict_with_error, inverse_of: :avatar_group
   has_many :avatars, through: :group_avatar_memberships
+  has_many :ownership_periods,
+           class_name: "AvatarGroupOwnershipPeriod",
+           dependent: :restrict_with_error,
+           inverse_of: :avatar_group
+  has_many :concrete_ownership_periods,
+           class_name: "AvatarGroupConcreteOwnershipPeriod",
+           dependent: :restrict_with_error,
+           inverse_of: :avatar_group
+  # The full ownership_periods association owns retention; this view adds no deletion callback.
+  has_one :current_ownership_period,
+          -> { where("valid_to = 'infinity'::timestamp with time zone") },
+          class_name: "AvatarGroupOwnershipPeriod",
+          dependent: nil,
+          inverse_of: :avatar_group
+
+  # These readers are intentionally explicit because the concrete table becomes authoritative only
+  # after AvatarOwnershipCutover is established. The association reflections above remain
+  # available for migration inspection and legacy reads, while runtime authority is selected here.
+  public
+
+  def ownership_periods
+    AvatarGroupOwnershipPeriodSource.all_for(self)
+  end
+
+  def current_ownership_period
+    AvatarGroupOwnershipPeriodSource.current_for(self)
+  end
 
   validates :account_surface, inclusion: { in: ACCOUNT_SURFACES }
   validates :account_public_id, presence: true

@@ -32,10 +32,18 @@
 class OperatorIdentity < OrgRpRecord
   include ::PublicId
 
+  before_validation :generate_public_id, on: :create
+  before_validation :refresh_generated_public_id_after_collision, on: :create
+  before_create :generate_public_id
+  around_create :retry_public_id_collision
+  validate :public_id_immutable_after_create, on: :update
+  validates :public_id, presence: true, length: { is: PublicId::GENERATION_SIZE }, uniqueness: true
   belongs_to :identity_state, class_name: "OperatorIdentityState", foreign_key: :status_id,
                               inverse_of: :operator_identities
   has_one :agent, dependent: :restrict_with_error, inverse_of: :operator_identity
   has_many :agent_assignments, dependent: :destroy, inverse_of: :operator_identity
+  has_many :oidc_identity_bindings, class_name: "OperatorOidcIdentityBinding",
+                                    dependent: :restrict_with_error, inverse_of: :operator_identity
 
   validates :issuer, :subject, :audience, :source_record_id, presence: true
   validates :public_id, uniqueness: true

@@ -2,8 +2,7 @@
 # frozen_string_literal: true
 
 # Semantic principal/actor base backed by the consolidated org zenith database.
-class OrgPrincipalRecord < ApplicationRecord
+class OrgPrincipalRecord < OrgZenithRecord
   self.abstract_class = true
-
-  connects_to database: { writing: :org_zenith, reading: :org_zenith_replica }
+  self.strict_loading_by_default = true
 end

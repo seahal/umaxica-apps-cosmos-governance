@@ -10,7 +10,7 @@ class ActorTest < ActiveSupport::TestCase
   teardown { Actor.reset }
 
   test "stores actor state in current attributes" do
-    user = Client.new(id: 123)
+    user = Client.new(security_mode_id: SecurityModeConfigurable::NORMAL, id: 123)
     Actor.actor = user
     Actor.actor_type = :client
 
@@ -64,9 +64,9 @@ class ActorTest < ActiveSupport::TestCase
   end
 
   test "whoami aliases actor type" do
-    Actor.actor_type = :visitor
+    Actor.actor_type = :client
 
-    assert_equal :visitor, Actor.whoami
+    assert_equal :client, Actor.whoami
   end
 
   test "tld stores surface label" do
@@ -88,7 +88,7 @@ class ActorTest < ActiveSupport::TestCase
   end
 
   test "clear empties current actor context" do
-    Actor.actor = Client.new(id: 123)
+    Actor.actor = Client.new(security_mode_id: SecurityModeConfigurable::NORMAL, id: 123)
     Actor.actor_type = :client
     Actor.install_context!(
       authn: Actor::Authentication.new(
@@ -149,6 +149,7 @@ class ActorTest < ActiveSupport::TestCase
   end
 
   test "step up null returns true for NULL and false for non-null" do
+    assert_equal Actor::StepUp::NULL, Actor::StepUp.null
     assert_predicate Actor::StepUp::NULL, :null?
     assert_not Actor::StepUp::NULL.with(scope: "email").null?
     assert_not Actor::StepUp::NULL.with(satisfied: true).null?
@@ -213,7 +214,7 @@ class ActorTest < ActiveSupport::TestCase
   end
 
   test "subject and actor are the same compatibility slot" do
-    user = Client.new(id: 7)
+    user = Client.new(security_mode_id: SecurityModeConfigurable::NORMAL, id: 7)
     Actor.actor = user
 
     assert_equal user, Actor.subject
@@ -221,7 +222,7 @@ class ActorTest < ActiveSupport::TestCase
   end
 
   test "compatibility setters update the installed context" do
-    user = Client.new(id: 8)
+    user = Client.new(security_mode_id: SecurityModeConfigurable::NORMAL, id: 8)
 
     Actor.subject = user
     Actor.authn = Actor::Authentication.new(login_public_id: "session-8")
@@ -249,11 +250,13 @@ class ActorTest < ActiveSupport::TestCase
   test "channel drives browser and native predicates" do
     Actor.install_context!(channel: :browser)
 
+    assert_equal :browser, Actor.channel
     assert_predicate Actor, :browser?
     assert_not_predicate Actor, :native?
 
     Actor.install_context!(channel: :native)
 
+    assert_equal :native, Actor.channel
     assert_predicate Actor, :native?
     assert_not_predicate Actor, :browser?
   end
@@ -261,11 +264,13 @@ class ActorTest < ActiveSupport::TestCase
   test "transport drives cookie and bearer predicates" do
     Actor.install_context!(transport: :cookie)
 
+    assert_equal :cookie, Actor.transport
     assert_predicate Actor, :cookie?
     assert_not_predicate Actor, :bearer?
 
     Actor.install_context!(transport: :bearer)
 
+    assert_equal :bearer, Actor.transport
     assert_predicate Actor, :bearer?
     assert_not_predicate Actor, :cookie?
   end
@@ -311,12 +316,12 @@ class ActorTest < ActiveSupport::TestCase
   end
 
   test "coerce merges a to_h-able object onto the empty baseline" do
-    obj = Struct.new(:actor_type, :tld, :surface, :transport, :channel).new(:visitor, :com, :acme, :cookie, :browser)
+    obj = Struct.new(:actor_type, :tld, :surface, :transport, :channel).new(:client, :app, :acme, :cookie, :browser)
 
     result = ActorValuesContext.coerce(obj)
 
-    assert_equal :visitor, result.actor_type
-    assert_equal :com, result.tld
+    assert_equal :client, result.actor_type
+    assert_equal :app, result.tld
     assert_equal :acme, result.surface
     assert_predicate result, :cookie?
     assert_predicate result, :browser?

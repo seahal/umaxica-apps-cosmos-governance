@@ -7,6 +7,7 @@
 # operator's own rows (`subject_id == current_operator.id`); this policy gates the actor *type*
 # allowed to reach a listing at all. `show` delegates to `index` in that controller, so both apply.
 class OperatorChroniclePolicy < ApplicationPolicy
+  public
   def index?
     user.is_a?(Operator)
   end

@@ -18,21 +18,25 @@ class BaseSwitcherAuthority
   # for the principal (cross-user, inconsistent, or avatar mismatch on an avatar-required surface).
   InvalidSwitch = Class.new(StandardError)
 
-  def self.current(surface:, principal:, session:)
-    new(surface: surface, principal: principal, session: session).current
+  def self.current(surface:, principal:, session:, selection: nil)
+    new(surface: surface, principal: principal, session: session, selection:).current
   end
+  public_class_method :current
 
   def self.switch(surface:, principal:, session:, params:)
     new(surface: surface, principal: principal, session: session).switch(params)
   end
+  public_class_method :switch
 
-  def initialize(surface:, principal:, session: nil)
+  def initialize(surface:, principal:, session: nil, selection: nil)
     @config = AcmeSelector.config_for(surface)
     @principal = principal
     @session = session
+    @selection = selection
   end
 
   # Current selection plus the candidates the actor may switch to.
+  public
   def current
     {
       status: "ok",
@@ -48,7 +52,7 @@ class BaseSwitcherAuthority
     raise InvalidSwitch, "invalid_switch" if candidate.blank?
 
     persist_selection!(candidate)
-    { status: "switched", next: "/dashboard" }
+    { status: "switched", next: "/" }
   end
 
   # --- Read helpers for entity CRUD controllers (scoped to the principal's available set) ---
@@ -68,33 +72,88 @@ class BaseSwitcherAuthority
   def available_avatars
     result = selectable_candidates.filter_map { |candidate| candidate.fetch(:avatar) }
     result.uniq!(&:id)
+    ActiveRecord::Associations::Preloader.new(
+      records: result,
+      associations: :current_avatar_moniker,
+    ).call if result.any?
     result
   end
 
   def find_account(public_id)
-    public_id.present? && available_accounts.find { |account| account.public_id == public_id }
+    return if public_id.blank?
+
+    available_accounts.find { |account| account.public_id == public_id }
   end
 
   def find_organization(public_id)
-    public_id.present? && available_organizations.find { |organization| organization.public_id == public_id }
+    return if public_id.blank?
+
+    available_organizations.find { |organization| organization.public_id == public_id }
   end
 
   def find_avatar(public_id)
-    public_id.present? && available_avatars.find { |avatar| avatar.public_id == public_id }
+    return if public_id.blank?
+
+    available_avatars.find { |avatar| avatar.public_id == public_id }
+  end
+
+  public
+
+  # The Avatar of the session's whole current selection (Persona, organization, unit, Avatar),
+  # re-validated against the real candidates. A selection that is no longer a candidate raises;
+  # nil means the valid candidate has no Avatar slot (org optional, com none).
+  def selected_avatar
+    candidate = candidate_for_public_ids(current_selection || {})
+    raise ActiveRecord::RecordNotFound, "selected context is not available to this principal" if candidate.blank?
+
+    candidate.fetch(:avatar)
   end
 
   private
 
-  attr_reader :config, :principal, :session
+  attr_reader :config, :principal, :session, :selection
 
   def current_selection
+    return selection if selection
     return nil if session.blank?
+    return rp_app_session_selection if session.instance_of?(RpBaseAppSession)
+    return rp_org_session_selection if session.instance_of?(RpBaseOrgSession)
 
     {
       account_public_id: session.try(:selected_account_public_id),
       organization_public_id: session.try(:selected_collective_public_id),
       organization_unit_public_id: session.try(:selected_collective_unit_public_id),
       avatar_public_id: session.try(:selected_avatar_public_id),
+    }
+  end
+
+  def rp_app_session_selection
+    record =
+      RpBaseAppRecord.connected_to(role: :writing) do
+        RpBaseAppSessionSelection.find_by(rp_session_id: session.id)
+      end
+    return nil unless record
+
+    {
+      account_public_id: record.account_public_id,
+      organization_public_id: record.organization_public_id,
+      organization_unit_public_id: record.organization_unit_public_id,
+      avatar_public_id: record.avatar_public_id,
+    }
+  end
+
+  def rp_org_session_selection
+    record =
+      RpBaseOrgRecord.connected_to(role: :writing) do
+        RpBaseOrgSessionSelection.includes(:avatar_selection).find_by(rp_session_id: session.id)
+      end
+    return nil unless record
+
+    {
+      account_public_id: record.account_public_id,
+      organization_public_id: record.organization_public_id,
+      organization_unit_public_id: record.organization_unit_public_id,
+      avatar_public_id: record.avatar_selection&.avatar_public_id,
     }
   end
 end

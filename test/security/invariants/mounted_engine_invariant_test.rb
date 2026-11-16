@@ -9,7 +9,7 @@ module Security
   module Invariants
     # Third-party Rack apps mounted with `mount` bypass the entire application
     # authorization stack: they subclass ActionController::Base (or are bare Rack
-    # apps), so AuthenticationBase, enforce_access_policy!, surface isolation, and
+    # apps), so BrowserRpAuthentication, enforce_access_policy!, surface isolation, and
     # the per-surface CSRF origin configuration never run for them.
     #
     # This test pins which mounts are allowed to exist outside development, and
@@ -21,14 +21,7 @@ module Security
       # confined to `group :development` in the Gemfile so it is never loaded in
       # test or production.
       #
-      # rails_db: config/routes.rb in the gem calls
-      #   `Rails.application.routes.draw { mount_rails_db_routes }` whenever
-      #   RailsDb.automatic_routes_mount is true (the default), and
-      #   RailsDb.verify_access_proc defaults to `proc { |controller| true }`
-      #   with http_basic_authentication_enabled = false. Mounted, it exposes
-      #   POST /rails/db/execute (arbitrary SQL) and GET /rails/db/tables/:id/truncate.
       UNAUTHENTICATED_ENGINE_CONSTANTS = %w(
-        RailsDb
         Blazer
         PgHero
       ).freeze
@@ -36,6 +29,7 @@ module Security
       # Path prefixes that must not appear in the route set outside development.
       FORBIDDEN_MOUNT_PATHS = %w(
         /rails/db
+        /rails/performance
         /blazer
         /pghero
       ).freeze
@@ -70,10 +64,34 @@ module Security
         # Rails mounts the ActionCable server by default. The application defines no
         # channels and no Connection class, so there is no reachable subscription.
         "/cable" => "ActionCable::Server::Base",
-        # Feature-flag UI on the developer host. Guarded by Rack::Auth::Basic in
-        # config/routes/base.rb, which fails closed when credentials are unset.
-        "/flipper" => "Rack::Auth::Basic",
+        # Feature-flag UI on its dedicated hosts (config/routes/flipper.rb). Guarded by
+        # Rack::Auth::Basic, which fails closed when credentials are unset.
+        "flipper-governance.umaxica.dev /" => "Rack::Auth::Basic",
+        # Solid Queue job-monitoring UI, dedicated host (config/routes/mission.rb). Guarded by
+        # MissionControl::Jobs' own HTTP Basic Auth (config/initializers/mission_control_jobs.rb),
+        # which fails closed (401) when its credentials are unset. Not loaded in test (the gem is
+        # `group :development, :production`), so this entry documents production; it is inert here.
+        "mission-governance.umaxica.dev /" => "MissionControl::Jobs::Engine",
+        # SQL exploration dashboard, dedicated host (config/routes/blazer.rb). `blazer` stays a
+        # `group :development` gem (Gemfile) even though it is mounted -- it is not loaded outside
+        # development, so this entry is inert in test/production and documents development only.
+        # Guarded by Rack::Auth::Basic, which fails closed when credentials are unset.
+        "blazer-governance.umaxica.dev /" => "Blazer::Engine",
+        # PostgreSQL monitoring dashboard, dedicated host (config/routes/pghero.rb). Same
+        # `group :development`-only, mounted-in-dev-only shape as Blazer above.
+        "pghero-governance.umaxica.dev /" => "PgHero::Engine",
       }.freeze
+
+      # Both the Flipper and Mission Control mounts sit at the path root of their own dedicated
+      # host, so path alone no longer identifies a mount uniquely; the key folds in the route's
+      # host constraint (nil for an unconstrained mount such as /cable).
+      def self.mount_key(route) = [route.constraints[:host]&.first, route.path.spec.to_s].compact.join(" ")
+
+      # A directly-mounted Rails::Engine class responds to `.call` as a class method, so its
+      # dispatcher's `#app` is the class itself and `.class.name` is always the unhelpful "Class".
+      # Rack apps mounted as an instance (Rack::Auth::Basic.new(...), ActionCable.server) keep
+      # `.class.name`, which is what actually names the guard.
+      def self.mount_identity(endpoint) = endpoint.is_a?(Class) ? endpoint.name : endpoint.class.name
 
       test "every mounted Rack app is reviewed and carries its own authorization guard" do
         # `mount` produces a route whose endpoint is not the application's own router.
@@ -88,7 +106,7 @@ module Security
             next unless endpoint.respond_to?(:call)
             next if endpoint.is_a?(Proc)
 
-            [route.path.spec.to_s, endpoint.class.name]
+            [self.class.mount_key(route), self.class.mount_identity(endpoint)]
           end.to_h
 
         unreviewed = mounted.keys - REVIEWED_MOUNTS.keys
@@ -98,19 +116,22 @@ module Security
                      "Mounted apps bypass enforce_access_policy! and surface isolation entirely — " \
                      "add an authorization guard, then record it in REVIEWED_MOUNTS."
 
-        REVIEWED_MOUNTS.each do |path, expected_endpoint|
-          next unless mounted.key?(path)
+        REVIEWED_MOUNTS.each do |key, expected_endpoint|
+          next unless mounted.key?(key)
 
-          assert_equal expected_endpoint, mounted.fetch(path),
-                       "The Rack app mounted at #{path} changed from #{expected_endpoint} to " \
-                       "#{mounted.fetch(path)}. If its authorization guard was removed, restore it."
+          assert_equal expected_endpoint, mounted.fetch(key),
+                       "The Rack app mounted at #{key} changed from #{expected_endpoint} to " \
+                       "#{mounted.fetch(key)}. If its authorization guard was removed, restore it."
         end
       end
 
       test "the Flipper UI mount is wrapped in an authorization guard" do
-        flipper_route = Rails.application.routes.routes.find { |route| route.path.spec.to_s == "/flipper" }
+        flipper_route =
+          Rails.application.routes.routes.find do |route|
+            Array(route.constraints[:host]).include?("flipper-governance.umaxica.dev")
+          end
 
-        skip "Flipper UI is not mounted in this environment" if flipper_route.nil?
+        assert_not_nil flipper_route, "The protected Flipper control surface must remain mounted"
 
         endpoint = flipper_route.app.app
 

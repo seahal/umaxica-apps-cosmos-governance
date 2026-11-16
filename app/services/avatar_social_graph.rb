@@ -17,6 +17,7 @@ module AvatarSocialGraph
       @target_avatar = target_avatar
     end
 
+    public
     def call
       raise SelfEdgeError, "avatar cannot follow itself" if actor_avatar == target_avatar
       raise BlockedError, "actor avatar is not active" unless active_avatar?(actor_avatar)
@@ -46,7 +47,7 @@ module AvatarSocialGraph
     end
 
     def active_avatar?(avatar)
-      avatar.lifecycle_state&.key == "active" && avatar.accessible?
+      AvatarLifecycleState.exists?(id: avatar.lifecycle_state_id, key: "active") && avatar.accessible?
     end
   end
 
@@ -59,6 +60,7 @@ module AvatarSocialGraph
       @target_avatar = target_avatar
     end
 
+    public
     def call
       raise SelfEdgeError, "avatar cannot block itself" if actor_avatar == target_avatar
       raise BlockedError, "actor avatar is not active" unless active_avatar?(actor_avatar)
@@ -85,7 +87,7 @@ module AvatarSocialGraph
     end
 
     def active_avatar?(avatar)
-      avatar.lifecycle_state&.key == "active" && avatar.accessible?
+      AvatarLifecycleState.exists?(id: avatar.lifecycle_state_id, key: "active") && avatar.accessible?
     end
   end
 
@@ -98,6 +100,7 @@ module AvatarSocialGraph
       @target_avatar = target_avatar
     end
 
+    public
     def call
       raise SelfEdgeError, "avatar cannot mute itself" if actor_avatar == target_avatar
       raise BlockedError, "actor avatar is not active" unless active_avatar?(actor_avatar)
@@ -117,7 +120,7 @@ module AvatarSocialGraph
     end
 
     def active_avatar?(avatar)
-      avatar.lifecycle_state&.key == "active" && avatar.accessible?
+      AvatarLifecycleState.exists?(id: avatar.lifecycle_state_id, key: "active") && avatar.accessible?
     end
   end
 
@@ -130,6 +133,7 @@ module AvatarSocialGraph
       @target_avatar = target_avatar
     end
 
+    public
     def call
       existing_follow&.destroy
     end
@@ -150,6 +154,7 @@ module AvatarSocialGraph
       @target_avatar = target_avatar
     end
 
+    public
     def call
       existing_block&.destroy
     end
@@ -170,6 +175,7 @@ module AvatarSocialGraph
       @target_avatar = target_avatar
     end
 
+    public
     def call
       existing_mute&.destroy
     end

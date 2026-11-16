@@ -8,6 +8,8 @@ module Base
 
       AUTHENTICATION_MODE = :open
 
+      public
+
       def show
         # `inertia: true` resolves the component through the configured component_path_resolver,
         # which is controller_path + action_name: "base/app/preferences/show".

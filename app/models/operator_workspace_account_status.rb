@@ -15,6 +15,9 @@ class OperatorWorkspaceAccountStatus < OrgPrincipalRecord
   ACTIVE = 1
   NOTHING = 2
   DEFAULTS = [ACTIVE, NOTHING].freeze
+
+  self.record_timestamps = false
+
   has_many :operator_workspace_accounts,
            class_name: "OperatorWorkspaceAccount",
            foreign_key: :status_id,

@@ -9,14 +9,12 @@ require "test_helper"
 #
 # For a hostname in that gap, Rails' development-only `get "/" => "rails/welcome#index"` answered
 # 200 while every other path returned 404. Anything checking status codes read the surface as
-# alive. A Core hostname sat in exactly that state, and the welcome page is what made it look
-# healthy while it served nothing.
+# alive, and the welcome page made an unclaimed host look healthy while it served nothing.
 class UnknownHostRootTest < ActionDispatch::IntegrationTest
   self.fixture_table_names = []
 
-  # Admitted by Host Authorization (config/environments/test.rb mirrors development here), claimed
-  # by no route.
-  UNSERVED_HOST = "palm-jp.umaxica.com"
+  # This hostname is intentionally not assigned to a product surface.
+  UNSERVED_HOST = "unclaimed.example.invalid"
 
   test "a host no surface claims does not answer 200 on root" do
     host! UNSERVED_HOST
@@ -36,9 +34,9 @@ class UnknownHostRootTest < ActionDispatch::IntegrationTest
 
   test "claiming root for unknown hosts does not take it from the surfaces that own one" do
     {
-      ENV.fetch("PRIVATE_CORE_SERVICE_URL", "core.app.localhost") => "core/app/roots",
       ENV.fetch("PRIVATE_BASE_SERVICE_URL", "base.app.localhost") => "base/app/roots",
-      ENV.fetch("PRIVATE_DOCS_SERVICE_URL", "docs.app.localhost") => "docs/app/roots",
+      ENV.fetch("PRIVATE_BASE_STAFF_URL", "base.org.localhost") => "base/org/roots",
+      ENV.fetch("PUBLIC_TECH_STAFF_URL", "tech.org.localhost") => "tech/org/roots",
     }.each do |host, controller|
       recognized = Rails.application.routes.recognize_path("http://#{host}/", method: :get)
 

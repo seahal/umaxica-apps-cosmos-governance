@@ -9,6 +9,8 @@ class ChronicleRecordPolicy
       cookie|raw_session|session_id\z|session\z|raw_email|raw_ip
     /ix
   ALLOWED_DIGEST_KEYS = %w(session_id_digest).freeze
+  ALLOWED_REFERENCE_KEYS = %w(external_id).freeze
+  UUID_PATTERN = /\A[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\z/i
   RESERVED_CONTEXT_KEYS = %w(request_id ip_address user_agent).freeze
   MAX_ERROR_MESSAGE_BYTES = 1.kilobyte
   SENSITIVE_VALUE_PATTERNS = [
@@ -25,10 +27,24 @@ class ChronicleRecordPolicy
     "auth.sign_in.failed" => "security",
     "auth.step_up.succeeded" => "compliance",
     "auth.step_up.failed" => "compliance",
+    "sensitive_admission.closed" => "compliance",
+    "step_up.requested" => "security",
+    "step_up.committed" => "compliance",
+    "step_up.installed" => "compliance",
+    "step_up.cancelled" => "compliance",
+    "step_up.expired" => "compliance",
+    "step_up.failed" => "compliance",
+    "step_up.refused" => "compliance",
+    "step_up.indeterminate" => "compliance",
+    "step_up.attempt_rejected" => "security",
     "auth.aal.changed" => "compliance",
     "auth.session.revoked" => "compliance",
     "iam.role.assigned" => "compliance",
     "iam.role.revoked" => "compliance",
+    "iam.capability.granted" => "compliance",
+    "iam.capability.revoked" => "compliance",
+    "iam.capability.bootstrapped" => "compliance",
+    "support.session.revoked" => "compliance",
     "account.suspended" => "compliance",
     "account.terminated" => "compliance",
     "chronicle.audit_incomplete" => "compliance",
@@ -48,17 +64,21 @@ class ChronicleRecordPolicy
   ].freeze
 
   class << self
-    def sanitize(value)
+    public
+    def sanitize(value, key: nil)
       case value
       when Hash
-        value.each_with_object({}) do |(key, entry), sanitized|
-          next if forbidden_key?(key)
+        value.each_with_object({}) do |(child_key, entry), sanitized|
+          next if forbidden_key?(child_key)
 
-          sanitized[key.to_s] = sanitize(entry)
+          sanitized[child_key.to_s] = sanitize(entry, key: child_key)
         end
       when Array
-        value.map { |entry| sanitize(entry) }
+        value.map { |entry| sanitize(entry, key: key) }
       when String
+        return value if safe_categorical_value?(value, key: key)
+        return "[FILTERED]" if ALLOWED_REFERENCE_KEYS.include?(key.to_s)
+
         sanitize_string(value)
       else
         value
@@ -78,6 +98,12 @@ class ChronicleRecordPolicy
 
     def retention_policy_code_for(action)
       action_value = action.to_s
+      if action_value.start_with?("step_up.")
+        return RETENTION_POLICY_BY_ACTION.fetch(action_value) do
+          raise ArgumentError, "step-up Chronicle action has no explicit retention mapping: #{action_value.inspect}"
+        end
+      end
+
       return "permanent" if PERMANENT_ACTION_PATTERNS.any? { |pattern| pattern.match?(action_value) }
       return "security" if SECURITY_ACTION_PATTERNS.any? { |pattern| pattern.match?(action_value) }
 
@@ -119,6 +145,12 @@ class ChronicleRecordPolicy
     end
 
     private
+
+    def safe_categorical_value?(value, key:)
+      return value.match?(UUID_PATTERN) if ALLOWED_REFERENCE_KEYS.include?(key.to_s)
+
+      key.to_s == "reason_code" && value.match?(/\A[a-z][a-z0-9_.-]{0,63}\z/)
+    end
 
     def forbidden_key?(key)
       normalized = key.to_s.downcase

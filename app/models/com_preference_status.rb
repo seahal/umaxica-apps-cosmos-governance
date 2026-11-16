@@ -1,4 +1,6 @@
+# frozen_string_literal: true
 # typed: false
+
 # == Schema Information
 #
 # Table name: com_preference_statuses
@@ -7,14 +9,17 @@
 #  id :bigint           not null, primary key
 #
 
-# frozen_string_literal: true
-
 class ComPreferenceStatus < ComSettingRecord
   include ReferenceRecord
 
   # Fixed IDs - do not modify these values
-  DELETED = 1
-  NOTHING = 2
+  RETIRED = 1
+  ACTIVE = 2
+
+  DEFAULTS = [RETIRED, ACTIVE].freeze
+
+  self.record_timestamps = false
+
   has_many :com_preferences,
            class_name: "ComPreference",
            foreign_key: "status_id",
@@ -22,9 +27,8 @@ class ComPreferenceStatus < ComSettingRecord
            inverse_of: :com_preference_status,
            dependent: :restrict_with_error
 
-  DEFAULTS = [DELETED, NOTHING].freeze
-
   def self.ensure_defaults!
     insert_missing_fixed_ids!(DEFAULTS)
   end
+  public_class_method :ensure_defaults!
 end

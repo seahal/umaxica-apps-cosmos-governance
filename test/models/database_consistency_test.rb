@@ -17,7 +17,7 @@ class DatabaseConsistencyTest < ActiveSupport::TestCase
     email = ClientEmail.new(
       address: "test@example.com",
       user_id: clients(:one).id,
-      public_id: "test_public_id_12345",
+      public_id: "test_public_id_12345x",
     )
 
     assert_predicate email, :valid?
@@ -31,7 +31,7 @@ class DatabaseConsistencyTest < ActiveSupport::TestCase
     duplicate = ClientEmail.new(
       address: "other@example.com",
       user_id: clients(:one).id,
-      public_id: "test_public_id_12345",
+      public_id: "test_public_id_12345x",
     )
 
     assert_not duplicate.valid?
@@ -55,12 +55,14 @@ class DatabaseConsistencyTest < ActiveSupport::TestCase
   test "AppPreference requires unique jti" do
     AppPreference.create!(
       jti: "unique_jti_123",
-      status_id: AppPreferenceStatus::NOTHING,
+      status_id: AppPreferenceStatus::ACTIVE,
+      last_issued_at: Time.current,
+      last_issued_expires_at: 400.days.from_now,
     )
 
     pref2 = AppPreference.new(
       jti: "unique_jti_123",
-      status_id: AppPreferenceStatus::NOTHING,
+      status_id: AppPreferenceStatus::ACTIVE,
     )
 
     assert_not pref2.valid?

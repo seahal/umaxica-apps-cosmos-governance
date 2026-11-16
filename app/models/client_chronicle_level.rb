@@ -18,14 +18,17 @@ class ClientChronicleLevel < ChronicleRecord
   NOTHING = 4
   WARN = 5
 
+  DEFAULTS = [DEBUG, ERROR, INFO, NOTHING, WARN].freeze
+
+  self.record_timestamps = false
+
   has_many :client_chronicles,
            foreign_key: :level_id,
            dependent: :restrict_with_error,
            inverse_of: :user_chronicle_level
 
-  DEFAULTS = [DEBUG, ERROR, INFO, NOTHING, WARN].freeze
-
   def self.ensure_defaults!
     insert_missing_fixed_ids!(DEFAULTS)
   end
+  public_class_method :ensure_defaults!
 end

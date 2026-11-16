@@ -6,8 +6,8 @@ Accepted (2026-07-19)
 
 ## Context
 
-The only passkey display name was the user-provided `description`, whose default was "Passkey".
-This did not reveal which provider or product issued a credential. webauthn-ruby 3.4.3 exposes the
+The only passkey display name was the user-provided `description`, whose default was "Passkey". This
+did not reveal which provider or product issued a credential. webauthn-ruby 3.4.3 exposes the
 AAGUID, transports, backup flags, and authenticator attachment from a registration response.
 `Webauthn::AuthenticationContext` already calculated these values but did not persist them.
 
@@ -34,7 +34,7 @@ operations whose cost is excessive for a display-only feature.
 ## Consequences
 
 - Major provider and product names can be displayed without external communication or additional
-  dependencies. Coverage depends on catalog maintenance; see `docs/operations/passkey-runbook.md`.
+  dependencies. Coverage depends on catalog maintenance; see `docs/runbooks/passkey.md`.
 - Names are not authenticated because attestation is not collected. This is an accepted tradeoff.
 - Verification: `test/services/webauthn/authenticator_name_resolver_test.rb` and
   `test/services/webauthn/verifier_uv_policy_test.rb` for metadata extraction.

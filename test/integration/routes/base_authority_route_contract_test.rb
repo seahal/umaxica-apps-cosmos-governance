@@ -11,6 +11,15 @@ class BaseAuthorityRouteContractTest < ActionDispatch::IntegrationTest
   BASE_COM_HOST = ENV.fetch("PUBLIC_BASE_CORPORATE_URL", "base.com.localhost")
   BASE_ORG_HOST = ENV.fetch("PUBLIC_BASE_STAFF_URL", "base.org.localhost")
 
+  test "route graph includes only Governance surfaces and retained operator tools" do
+    retired_families = %w(auth visa core palm warp edit info news help docs guid)
+    routed_families = Rails.application.routes.routes.filter_map do |route|
+      route.defaults[:controller].to_s.split("/").first.presence
+    end.uniq
+
+    assert_empty routed_families & retired_families
+  end
+
   test "base authority routes accept internal origin and cloudflared public hosts" do
     {
       "base.app.localhost" => "base/app/roots",
@@ -27,6 +36,19 @@ class BaseAuthorityRouteContractTest < ActionDispatch::IntegrationTest
     end
   end
 
+  test "base dashboard routes stay within the app and org faces" do
+    # com is anonymous-only: it has no authenticated dashboard (two.md WU-3).
+    {
+      "www.umaxica.app" => "base/app/roots",
+      "www.umaxica.org" => "base/org/roots",
+    }.each do |host, controller|
+      assert_recognizes(
+        { controller: controller, action: "show" },
+        { path: "http://#{host}/dashboard", method: :get },
+      )
+    end
+  end
+
   test "base authority app static and health routes" do
     assert_recognizes(
       { controller: "base/app/roots", action: "index" },
@@ -36,11 +58,6 @@ class BaseAuthorityRouteContractTest < ActionDispatch::IntegrationTest
     assert_recognizes(
       { controller: "base/app/well_known/jwks", action: "show" },
       { path: "http://#{BASE_APP_HOST}/.well-known/jwks.json", method: :get },
-    )
-
-    assert_recognizes(
-      { controller: "base/app/well_known/discoveries", action: "show" },
-      { path: "http://#{BASE_APP_HOST}/.well-known/openid-configuration", method: :get },
     )
 
     assert_recognizes(
@@ -74,7 +91,7 @@ class BaseAuthorityRouteContractTest < ActionDispatch::IntegrationTest
     )
   end
 
-  test "base authority app auth routes" do
+  test "base authority app operational routes exclude retired Auth endpoints" do
     assert_recognizes(
       { controller: "base/app/csp_violation_reports", action: "create" },
       { path: "http://#{BASE_APP_HOST}/csp-violation-report", method: :post },
@@ -86,7 +103,7 @@ class BaseAuthorityRouteContractTest < ActionDispatch::IntegrationTest
     )
 
     assert_recognizes(
-      { controller: "base/app/dashboards", action: "show" },
+      { controller: "base/app/roots", action: "show" },
       { path: "http://#{BASE_APP_HOST}/dashboard", method: :get },
     )
 
@@ -115,58 +132,36 @@ class BaseAuthorityRouteContractTest < ActionDispatch::IntegrationTest
       { path: "http://#{BASE_APP_HOST}/switcher", method: :patch },
     )
 
-    assert_recognizes(
-      { controller: "base/app/sign/in/limitations", action: "show" },
-      { path: "http://#{BASE_APP_HOST}/sign/in/limitation", method: :get },
-    )
-
-    assert_recognizes(
-      { controller: "base/app/sign/in/limitations", action: "update" },
-      { path: "http://#{BASE_APP_HOST}/sign/in/limitation", method: :patch },
-    )
-
-    assert_recognizes(
-      { controller: "base/app/sign/in/limitations", action: "update" },
-      { path: "http://#{BASE_APP_HOST}/sign/in/limitation", method: :put },
-    )
-
-    assert_recognizes(
-      { controller: "base/app/sign/in/limitations", action: "destroy" },
-      { path: "http://#{BASE_APP_HOST}/sign/in/limitation", method: :delete },
-    )
+    assert_raises(ActionController::RoutingError) do
+      Rails.application.routes.recognize_path("http://#{BASE_APP_HOST}/oidc/authorization", method: :get)
+    end
 
     assert_recognizes(
       { controller: "base/app/oidc/callbacks", action: "show" },
-      { path: "http://#{BASE_APP_HOST}/oidc/callback", method: :get },
+      { path: "https://#{BASE_APP_HOST}/oidc/callback", method: :get },
     )
-
     assert_recognizes(
-      { controller: "base/app/oidc/authorizations", action: "show" },
-      { path: "http://#{BASE_APP_HOST}/oidc/authorization", method: :get },
+      { controller: "base/app/oidc/closures", action: "create" },
+      { path: "https://#{BASE_APP_HOST}/oidc/closures", method: :post },
     )
-
     assert_recognizes(
       { controller: "base/app/sign_outs", action: "new" },
-      { path: "http://#{BASE_APP_HOST}/sign/out/new", method: :get },
-    )
-
-    assert_recognizes(
-      { controller: "base/app/sign_outs", action: "edit" },
-      { path: "http://#{BASE_APP_HOST}/sign/out/edit", method: :get },
-    )
-
-    assert_recognizes(
-      { controller: "base/app/sign_outs", action: "create" },
-      { path: "http://#{BASE_APP_HOST}/sign/out", method: :post },
-    )
-
-    assert_recognizes(
-      { controller: "base/app/sign_outs/completions", action: "show" },
-      { path: "http://#{BASE_APP_HOST}/sign/out/complete", method: :get },
+      { path: "https://#{BASE_APP_HOST}/sign/out/new", method: :get },
     )
 
     assert_raises(ActionController::RoutingError) do
-      Rails.application.routes.recognize_path("http://#{BASE_APP_HOST}/sign/out", method: :delete)
+      Rails.application.routes.recognize_path("http://#{BASE_APP_HOST}/lobby", method: :get)
+    end
+
+    assert_raises(ActionController::RoutingError) do
+      Rails.application.routes.recognize_path("http://#{BASE_APP_HOST}/sign/out/complete", method: :get)
+    end
+
+    assert_raises(ActionController::RoutingError) do
+      Rails.application.routes.recognize_path(
+        "http://#{BASE_APP_HOST}/sign/out",
+        method: :delete,
+      )
     end
 
     assert_raises(ActionController::RoutingError) do
@@ -176,42 +171,22 @@ class BaseAuthorityRouteContractTest < ActionDispatch::IntegrationTest
     assert_raises(ActionController::RoutingError) do
       Rails.application.routes.recognize_path("http://#{BASE_APP_HOST}/sso/logout", method: :post)
     end
-
-    assert_recognizes(
-      { controller: "base/app/oidc/logouts", action: "show" },
-      { path: "http://#{BASE_APP_HOST}/oidc/logout", method: :get },
-    )
-
-    assert_recognizes(
-      { controller: "base/app/oidc/logouts", action: "create" },
-      { path: "http://#{BASE_APP_HOST}/oidc/logout", method: :post },
-    )
-
-    assert_raises(ActionController::RoutingError) do
-      Rails.application.routes.recognize_path("http://#{BASE_APP_HOST}/oidc/logout", method: :delete)
-    end
   end
 
-  test "base authority app oauth and account routes" do
-    assert_recognizes(
-      { controller: "base/app/oauth/authorizations", action: "show" },
-      { path: "http://#{BASE_APP_HOST}/oauth/authorize", method: :get },
-    )
+  test "base authority app account routes exclude Access protocol endpoints" do
+    %w(/oauth/authorize /oauth/token /oauth/userinfo /oauth/revoke /oidc/logout
+       /social/google/callback /social/apple/callback /social/failure).each do |path|
+      assert_raises(ActionController::RoutingError, "#{path} belongs to Access") do
+        Rails.application.routes.recognize_path("http://#{BASE_APP_HOST}#{path}", method: :get)
+      end
+    end
 
-    assert_recognizes(
-      { controller: "base/app/oauth/tokens", action: "create" },
-      { path: "http://#{BASE_APP_HOST}/oauth/token", method: :post },
-    )
-
-    assert_recognizes(
-      { controller: "base/app/oauth/userinfos", action: "show" },
-      { path: "http://#{BASE_APP_HOST}/oauth/userinfo", method: :get },
-    )
-
-    assert_recognizes(
-      { controller: "base/app/oauth/revocations", action: "create" },
-      { path: "http://#{BASE_APP_HOST}/oauth/revoke", method: :post },
-    )
+    assert_raises(ActionController::RoutingError, "social provider entry is owned by Access") do
+      Rails.application.routes.recognize_path(
+        "http://#{BASE_APP_HOST}/social/authentication/continuation",
+        method: :post,
+      )
+    end
 
     assert_raises(ActionController::RoutingError) do
       Rails.application.routes.recognize_path("http://#{BASE_APP_HOST}/oauth/jwks", method: :get)
@@ -267,23 +242,19 @@ class BaseAuthorityRouteContractTest < ActionDispatch::IntegrationTest
       end
     end
 
-    {
-      index: { path: "/avatars", method: :get },
-      new: { path: "/avatars/new", method: :get },
-      create: { path: "/avatars", method: :post },
-      show: { path: "/avatars/example", method: :get, id: "example" },
-      edit: { path: "/avatars/example/edit", method: :get, id: "example" },
-      update: { path: "/avatars/example", method: :patch, id: "example" },
-    }.each do |action, opts|
-      assert_recognizes(
-        { controller: "base/app/avatars", action: action.to_s, id: opts[:id] }.compact,
-        { path: "http://#{BASE_APP_HOST}#{opts[:path]}", method: opts[:method], id: opts[:id] }.compact,
-      )
-    end
-
-    # Avatars are not destroyable from this surface.
-    assert_raises(ActionController::RoutingError) do
-      Rails.application.routes.recognize_path("http://#{BASE_APP_HOST}/avatars/example", method: :delete)
+    [
+      { path: "/avatars", method: :get },
+      { path: "/avatars/example", method: :get },
+      { path: "/avatars/example", method: :post },
+      { path: "/avatars/example", method: :patch },
+      { path: "/avatars/example", method: :delete },
+    ].each do |bad_route|
+      assert_raises(ActionController::RoutingError) do
+        Rails.application.routes.recognize_path(
+          "http://#{BASE_APP_HOST}#{bad_route[:path]}",
+          method: bad_route[:method],
+        )
+      end
     end
 
     {
@@ -400,235 +371,115 @@ class BaseAuthorityRouteContractTest < ActionDispatch::IntegrationTest
     end
   end
 
-  # rubocop:disable Minitest/MultipleAssertions
   test "base authority com route contract" do
     assert_recognizes(
       { controller: "base/com/roots", action: "index" },
       { path: "http://#{BASE_COM_HOST}/", method: :get },
     )
 
-    assert_recognizes(
-      { controller: "base/com/well_known/jwks", action: "show" },
-      { path: "http://#{BASE_COM_HOST}/.well-known/jwks.json", method: :get },
-    )
+    {
+      "/health" => ["base/com/healths", "show"],
+      "/health/liveness" => ["base/com/health/livenesses", "show"],
+      "/health/readiness" => ["base/com/health/readinesses", "show"],
+      "/health/startup" => ["base/com/health/startups", "show"],
+      "/revision" => ["base/com/revisions", "show"],
+      "/robots.txt" => ["base/com/robots", "index"],
+      "/sitemap.xml" => ["base/com/sitemaps", "show"],
+      "/api/v0/health.json" => ["base/com/api/v0/healths", "show"],
+      "/api/v0/revision.json" => ["base/com/api/v0/revisions", "show"],
+    }.each do |path, (controller, action)|
+      recognized = Rails.application.routes.recognize_path("http://#{BASE_COM_HOST}#{path}", method: :get)
 
-    assert_recognizes(
-      { controller: "base/com/well_known/discoveries", action: "show" },
-      { path: "http://#{BASE_COM_HOST}/.well-known/openid-configuration", method: :get },
-    )
-
-    assert_recognizes(
-      { controller: "base/com/healths", action: "show" },
-      { path: "http://#{BASE_COM_HOST}/health", method: :get },
-    )
-
-    assert_recognizes(
-      { controller: "base/com/health/livenesses", action: "show" },
-      { path: "http://#{BASE_COM_HOST}/health/liveness", method: :get },
-    )
-
-    assert_recognizes(
-      { controller: "base/com/health/readinesses", action: "show" },
-      { path: "http://#{BASE_COM_HOST}/health/readiness", method: :get },
-    )
-
-    assert_recognizes(
-      { controller: "base/com/health/startups", action: "show" },
-      { path: "http://#{BASE_COM_HOST}/health/startup", method: :get },
-    )
-
-    assert_recognizes(
-      { controller: "base/com/robots", action: "index" },
-      { path: "http://#{BASE_COM_HOST}/robots.txt", method: :get },
-    )
-
-    assert_recognizes(
-      { controller: "base/com/sitemaps", action: "show" },
-      { path: "http://#{BASE_COM_HOST}/sitemap.xml", method: :get },
-    )
+      assert_equal controller, recognized[:controller], path
+      assert_equal action, recognized[:action], path
+    end
 
     assert_recognizes(
       { controller: "base/com/csp_violation_reports", action: "create" },
       { path: "http://#{BASE_COM_HOST}/csp-violation-report", method: :post },
     )
 
+    # Anonymous visitors choose a region, language and presentation without signing in.
     assert_recognizes(
-      { controller: "base/com/welcomes", action: "show" },
-      { path: "http://#{BASE_COM_HOST}/welcome", method: :get },
-    )
-
-    assert_recognizes(
-      { controller: "base/com/dashboards", action: "show" },
-      { path: "http://#{BASE_COM_HOST}/dashboard", method: :get },
-    )
-
-    assert_recognizes(
-      { controller: "base/com/verification/cancellations", action: "create" },
-      { path: "http://#{BASE_COM_HOST}/verification/cancellation", method: :post },
-    )
-
-    assert_recognizes(
-      { controller: "base/com/selectors", action: "show" },
-      { path: "http://#{BASE_COM_HOST}/selector", method: :get },
-    )
-
-    assert_recognizes(
-      { controller: "base/com/selectors", action: "update" },
-      { path: "http://#{BASE_COM_HOST}/selector", method: :patch },
-    )
-
-    assert_recognizes(
-      { controller: "base/com/switchers", action: "show" },
-      { path: "http://#{BASE_COM_HOST}/switcher", method: :get },
-    )
-
-    assert_recognizes(
-      { controller: "base/com/switchers", action: "update" },
-      { path: "http://#{BASE_COM_HOST}/switcher", method: :patch },
-    )
-
-    assert_recognizes(
-      { controller: "base/com/oidc/callbacks", action: "show" },
-      { path: "http://#{BASE_COM_HOST}/oidc/callback", method: :get },
-    )
-
-    assert_recognizes(
-      { controller: "base/com/oidc/authorizations", action: "show" },
-      { path: "http://#{BASE_COM_HOST}/oidc/authorization", method: :get },
-    )
-
-    assert_recognizes(
-      { controller: "base/com/sign_outs", action: "new" },
-      { path: "http://#{BASE_COM_HOST}/sign/out/new", method: :get },
-    )
-
-    assert_recognizes(
-      { controller: "base/com/sign_outs", action: "edit" },
-      { path: "http://#{BASE_COM_HOST}/sign/out/edit", method: :get },
-    )
-
-    assert_recognizes(
-      { controller: "base/com/sign_outs", action: "create" },
-      { path: "http://#{BASE_COM_HOST}/sign/out", method: :post },
-    )
-
-    assert_recognizes(
-      { controller: "base/com/sign_outs/completions", action: "show" },
-      { path: "http://#{BASE_COM_HOST}/sign/out/complete", method: :get },
-    )
-
-    assert_raises(ActionController::RoutingError) do
-      Rails.application.routes.recognize_path("http://#{BASE_COM_HOST}/sign/out", method: :delete)
-    end
-
-    [
-      { path: "/sso/authorize", method: :get },
-      { path: "/sso/logout", method: :post },
-    ].each do |bad_route|
-      assert_raises(ActionController::RoutingError) do
-        Rails.application.routes.recognize_path(
-          "http://#{BASE_COM_HOST}#{bad_route[:path]}",
-          method: bad_route[:method],
-        )
-      end
-    end
-
-    assert_recognizes(
-      { controller: "base/com/oidc/logouts", action: "show" },
-      { path: "http://#{BASE_COM_HOST}/oidc/logout", method: :get },
-    )
-
-    assert_recognizes(
-      { controller: "base/com/oidc/logouts", action: "create" },
-      { path: "http://#{BASE_COM_HOST}/oidc/logout", method: :post },
-    )
-
-    assert_raises(ActionController::RoutingError) do
-      Rails.application.routes.recognize_path("http://#{BASE_COM_HOST}/oidc/logout", method: :delete)
-    end
-
-    assert_recognizes(
-      { controller: "base/com/oauth/authorizations", action: "show" },
-      { path: "http://#{BASE_COM_HOST}/oauth/authorize", method: :get },
-    )
-
-    assert_recognizes(
-      { controller: "base/com/oauth/tokens", action: "create" },
-      { path: "http://#{BASE_COM_HOST}/oauth/token", method: :post },
-    )
-
-    assert_recognizes(
-      { controller: "base/com/oauth/userinfos", action: "show" },
-      { path: "http://#{BASE_COM_HOST}/oauth/userinfo", method: :get },
-    )
-
-    assert_recognizes(
-      { controller: "base/com/oauth/revocations", action: "create" },
-      { path: "http://#{BASE_COM_HOST}/oauth/revoke", method: :post },
+      { controller: "base/com/preferences", action: "show" },
+      { path: "http://#{BASE_COM_HOST}/preference", method: :get },
     )
 
     {
-      index: { path: "/accounts", method: :get },
-      show: { path: "/accounts/example", method: :get, id: "example" },
-    }.each do |action, opts|
+      calendar: "base/com/preference/calendars",
+      clock: "base/com/preference/clocks",
+      cookie: "base/com/preference/cookies",
+      currency: "base/com/preference/currencies",
+      density: "base/com/preference/densities",
+      language: "base/com/preference/languages",
+      motion: "base/com/preference/motions",
+      pagination: "base/com/preference/paginations",
+      region: "base/com/preference/regions",
+      screen: "base/com/preference/screens",
+      theme: "base/com/preference/themes",
+      timezone: "base/com/preference/timezones",
+    }.each do |name, controller|
       assert_recognizes(
-        { controller: "base/com/accounts", action: action.to_s, id: opts[:id] }.compact,
-        { path: "http://#{BASE_COM_HOST}#{opts[:path]}", method: opts[:method], id: opts[:id] }.compact,
+        { controller: controller, action: "edit" },
+        { path: "http://#{BASE_COM_HOST}/preference/#{name}/edit", method: :get },
       )
-    end
 
-    [
-      { path: "/account", method: :get },
-      { path: "/account/edit", method: :get },
-      { path: "/account", method: :patch },
-      { path: "/current/organization", method: :get },
-      { path: "/current/organization/edit", method: :get },
-      { path: "/current/organization", method: :patch },
-      { path: "/organization", method: :get },
-      { path: "/organization/edit", method: :get },
-      { path: "/organization", method: :patch },
-      { path: "/current/avatar", method: :get },
-      { path: "/current/avatar/edit", method: :get },
-      { path: "/current/avatar", method: :patch },
-      { path: "/current/avatar", method: :delete },
-      { path: "/avatar", method: :get },
-      { path: "/avatar/edit", method: :get },
-      { path: "/avatar", method: :patch },
-      { path: "/avatar", method: :delete },
-    ].each do |bad_route|
-      assert_raises(ActionController::RoutingError) do
-        Rails.application.routes.recognize_path(
-          "http://#{BASE_COM_HOST}#{bad_route[:path]}",
-          method: bad_route[:method],
-        )
-      end
-    end
-
-    {
-      index: { path: "/organizations" },
-      show: { path: "/organizations/example", id: "example" },
-    }.each do |action, opts|
       assert_recognizes(
-        { controller: "base/com/organizations", action: action.to_s, id: opts[:id] }.compact,
-        { path: "http://#{BASE_COM_HOST}#{opts[:path]}", method: :get, id: opts[:id] }.compact,
+        { controller: controller, action: "update" },
+        { path: "http://#{BASE_COM_HOST}/preference/#{name}", method: :patch },
       )
     end
 
     assert_recognizes(
-      { controller: "base/com/organizations/memberships", action: "index", organization_id: "example" },
-      { path: "http://#{BASE_COM_HOST}/organizations/example/memberships", method: :get, organization_id: "example" },
+      { controller: "base/com/preference/customizations", action: "edit" },
+      { path: "http://#{BASE_COM_HOST}/preference/customization/edit", method: :get },
     )
 
     assert_recognizes(
-      { controller: "base/com/identities", action: "show" },
-      { path: "http://#{BASE_COM_HOST}/identity", method: :get },
+      { controller: "base/com/preference/customizations", action: "destroy" },
+      { path: "http://#{BASE_COM_HOST}/preference/customization", method: :delete },
     )
 
-    # NOTE: /settings is omitted -- recognize_path does not enforce host constraints;
-    # side/com/settings bleeds through. Integration tests cover the actual host boundary.
+    {
+      "/api/v0/preferences/theme" => "base/com/api/v0/preferences/themes",
+      "/api/v0/preferences/cookie" => "base/com/api/v0/preferences/cookies",
+    }.each do |path, controller|
+      assert_recognizes(
+        { controller: controller, action: "show" },
+        { path: "http://#{BASE_COM_HOST}#{path}", method: :get },
+      )
+
+      assert_recognizes(
+        { controller: controller, action: "update" },
+        { path: "http://#{BASE_COM_HOST}#{path}", method: :patch },
+      )
+    end
   end
-  # rubocop:enable Minitest/MultipleAssertions
 
+  test "base authority com no longer routes credential, session, or identity resources" do
+    # two.md WU-3 makes com anonymous-only. Verification, account, organization, and identity
+    # routes stay on app and org; Auth/Visa sign-in and sign-out flows are retired.
+    %w(
+      /dashboard /welcome /oidc/callback /selector /switcher
+      /sign/out/new /sign/out/edit /identity /identity/standing /identity/sessions
+      /accounts /organizations /.well-known/jwks.json /preference/emails
+    ).each do |path|
+      assert_raises(ActionController::RoutingError, "#{path} must stay unroutable on com") do
+        Rails.application.routes.recognize_path("http://#{BASE_COM_HOST}#{path}", method: :get)
+      end
+    end
+
+    assert_raises(ActionController::RoutingError) do
+      Rails.application.routes.recognize_path("http://#{BASE_COM_HOST}/sign/out", method: :post)
+    end
+
+    assert_raises(ActionController::RoutingError) do
+      Rails.application.routes.recognize_path(
+        "http://#{BASE_COM_HOST}/verification/cancellation",
+        method: :post,
+      )
+    end
+  end
   test "base authority org route contract" do
     assert_recognizes(
       { controller: "base/org/roots", action: "index" },
@@ -681,7 +532,7 @@ class BaseAuthorityRouteContractTest < ActionDispatch::IntegrationTest
     )
 
     assert_recognizes(
-      { controller: "base/org/dashboards", action: "show" },
+      { controller: "base/org/roots", action: "show" },
       { path: "http://#{BASE_ORG_HOST}/dashboard", method: :get },
     )
 
@@ -710,38 +561,64 @@ class BaseAuthorityRouteContractTest < ActionDispatch::IntegrationTest
       { path: "http://#{BASE_ORG_HOST}/switcher", method: :patch },
     )
 
-    assert_recognizes(
-      { controller: "base/org/oidc/callbacks", action: "show" },
-      { path: "http://#{BASE_ORG_HOST}/oidc/callback", method: :get },
-    )
+    {
+      ["/sign", :get] => ["base/org/sign/entries", "show"],
+      ["/sign", :post] => ["base/org/sign/entries", "create"],
+      ["/sign/interruption", :get] => ["base/org/sign/interruptions", "show"],
+      ["/oidc/callback", :get] => ["base/org/oidc/callbacks", "show"],
+      ["/oidc/closures", :post] => ["base/org/oidc/closures", "create"],
+      ["/sign/out", :get] => ["base/org/sign_outs", "show"],
+      ["/sign/out/new", :get] => ["base/org/sign_outs", "new"],
+      ["/sign/out/edit", :get] => ["base/org/sign_outs", "edit"],
+      ["/sign/out", :post] => ["base/org/sign_outs", "create"],
+      ["/sign/out/completion", :get] => ["base/org/sign_outs", "show"],
+    }.each do |(path, method), (controller, action)|
+      recognized = Rails.application.routes.recognize_path("http://#{BASE_ORG_HOST}#{path}", method:)
 
-    assert_recognizes(
-      { controller: "base/org/oidc/authorizations", action: "show" },
-      { path: "http://#{BASE_ORG_HOST}/oidc/authorization", method: :get },
-    )
-
-    assert_recognizes(
-      { controller: "base/org/sign_outs", action: "new" },
-      { path: "http://#{BASE_ORG_HOST}/sign/out/new", method: :get },
-    )
-
-    assert_recognizes(
-      { controller: "base/org/sign_outs", action: "edit" },
-      { path: "http://#{BASE_ORG_HOST}/sign/out/edit", method: :get },
-    )
-
-    assert_recognizes(
-      { controller: "base/org/sign_outs", action: "create" },
-      { path: "http://#{BASE_ORG_HOST}/sign/out", method: :post },
-    )
-
-    assert_recognizes(
-      { controller: "base/org/sign_outs/completions", action: "show" },
-      { path: "http://#{BASE_ORG_HOST}/sign/out/complete", method: :get },
-    )
+      assert_equal controller, recognized.fetch(:controller), "#{method.upcase} #{path}"
+      assert_equal action, recognized.fetch(:action), "#{method.upcase} #{path}"
+    end
 
     assert_raises(ActionController::RoutingError) do
-      Rails.application.routes.recognize_path("http://#{BASE_ORG_HOST}/sign/out", method: :delete)
+      Rails.application.routes.recognize_path("http://#{BASE_ORG_HOST}/oidc/authorization", method: :get)
+    end
+
+    assert_raises(ActionController::RoutingError) do
+      Rails.application.routes.recognize_path("http://#{BASE_ORG_HOST}/lobby", method: :get)
+    end
+
+    assert_raises(ActionController::RoutingError) do
+      Rails.application.routes.recognize_path("http://#{BASE_ORG_HOST}/sign/out/complete", method: :get)
+    end
+
+    assert_raises(ActionController::RoutingError) do
+      Rails.application.routes.recognize_path(
+        "http://#{BASE_ORG_HOST}/sign/out",
+        method: :delete,
+      )
+    end
+  end
+
+  test "base authority org membership routes are read-only" do
+    # Org memberships are read-only: changes are not routed until their authority is decided.
+    assert_recognizes(
+      { controller: "base/org/organizations/memberships",
+        action: "show",
+        organization_id: "example",
+        id: "member-example", },
+      { path: "http://#{BASE_ORG_HOST}/organizations/example/memberships/member-example",
+        method: :get,
+        organization_id: "example",
+        id: "member-example", },
+    )
+    assert_raises(Minitest::Assertion) do
+      assert_recognizes(
+        { controller: "base/org/organizations/memberships",
+          action: "destroy",
+          organization_id: "example",
+          id: "member-example", },
+        { path: "http://#{BASE_ORG_HOST}/organizations/example/memberships/member-example", method: :delete },
+      )
     end
   end
 
@@ -757,40 +634,6 @@ class BaseAuthorityRouteContractTest < ActionDispatch::IntegrationTest
         )
       end
     end
-
-    assert_recognizes(
-      { controller: "base/org/oidc/logouts", action: "show" },
-      { path: "http://#{BASE_ORG_HOST}/oidc/logout", method: :get },
-    )
-
-    assert_recognizes(
-      { controller: "base/org/oidc/logouts", action: "create" },
-      { path: "http://#{BASE_ORG_HOST}/oidc/logout", method: :post },
-    )
-
-    assert_raises(ActionController::RoutingError) do
-      Rails.application.routes.recognize_path("http://#{BASE_ORG_HOST}/oidc/logout", method: :delete)
-    end
-
-    assert_recognizes(
-      { controller: "base/org/oauth/authorizations", action: "show" },
-      { path: "http://#{BASE_ORG_HOST}/oauth/authorize", method: :get },
-    )
-
-    assert_recognizes(
-      { controller: "base/org/oauth/tokens", action: "create" },
-      { path: "http://#{BASE_ORG_HOST}/oauth/token", method: :post },
-    )
-
-    assert_recognizes(
-      { controller: "base/org/oauth/userinfos", action: "show" },
-      { path: "http://#{BASE_ORG_HOST}/oauth/userinfo", method: :get },
-    )
-
-    assert_recognizes(
-      { controller: "base/org/oauth/revocations", action: "create" },
-      { path: "http://#{BASE_ORG_HOST}/oauth/revoke", method: :post },
-    )
 
     assert_raises(ActionController::RoutingError) do
       Rails.application.routes.recognize_path("http://#{BASE_ORG_HOST}/current/organization", method: :get)
@@ -836,25 +679,13 @@ class BaseAuthorityRouteContractTest < ActionDispatch::IntegrationTest
       Rails.application.routes.recognize_path("http://#{BASE_ORG_HOST}/current/avatar", method: :delete)
     end
 
-    assert_recognizes(
-      { controller: "base/org/avatars", action: "show" },
-      { path: "http://#{BASE_ORG_HOST}/avatar", method: :get },
-    )
-
-    assert_recognizes(
-      { controller: "base/org/avatars", action: "edit" },
-      { path: "http://#{BASE_ORG_HOST}/avatar/edit", method: :get },
-    )
-
-    assert_recognizes(
-      { controller: "base/org/avatars", action: "update" },
-      { path: "http://#{BASE_ORG_HOST}/avatar", method: :patch },
-    )
-
-    assert_recognizes(
-      { controller: "base/org/avatars", action: "destroy" },
-      { path: "http://#{BASE_ORG_HOST}/avatar", method: :delete },
-    )
+    [
+      ["/avatar", :get], ["/avatar/edit", :get], ["/avatar", :patch], ["/avatar", :delete],
+    ].each do |path, method|
+      assert_raises(ActionController::RoutingError) do
+        Rails.application.routes.recognize_path("http://#{BASE_ORG_HOST}#{path}", method: method)
+      end
+    end
 
     {
       index: { path: "/organizations" },
@@ -865,17 +696,6 @@ class BaseAuthorityRouteContractTest < ActionDispatch::IntegrationTest
         { path: "http://#{BASE_ORG_HOST}#{opts[:path]}", method: :get, id: opts[:id] }.compact,
       )
     end
-
-    assert_recognizes(
-      { controller: "base/org/organizations/memberships",
-        action: "destroy",
-        organization_id: "example",
-        id: "member-example", },
-      { path: "http://#{BASE_ORG_HOST}/organizations/example/memberships/member-example",
-        method: :delete,
-        organization_id: "example",
-        id: "member-example", },
-    )
 
     {
       index: { path: "/accounts", method: :get },
@@ -888,8 +708,8 @@ class BaseAuthorityRouteContractTest < ActionDispatch::IntegrationTest
     end
 
     assert_recognizes(
-      { controller: "base/org/configurations", action: "show" },
-      { path: "http://#{BASE_ORG_HOST}/configuration", method: :get },
+      { controller: "base/org/settings", action: "show" },
+      { path: "http://#{BASE_ORG_HOST}/settings", method: :get },
     )
 
     assert_recognizes(
@@ -918,7 +738,7 @@ class BaseAuthorityRouteContractTest < ActionDispatch::IntegrationTest
     )
 
     # NOTE: /settings is omitted -- recognize_path does not enforce host constraints;
-    # side/org/settings bleeds through. Integration tests cover the actual host boundary.
+    # legacy/org/settings bleeds through. Integration tests cover the actual host boundary.
   end
 
   test "base authority settings routes are retired" do
@@ -929,7 +749,7 @@ class BaseAuthorityRouteContractTest < ActionDispatch::IntegrationTest
     }.each_key do |host|
       [
         # NOTE: /settings (bare) is intentionally excluded -- recognize_path does not enforce host
-        # constraints, so side/*/settings routes bleed through. The actual host constraint is
+        # constraints, so warp/*/settings routes bleed through. The actual host constraint is
         # verified by integration tests that make real HTTP requests.
         { path: "/settings/secrets", method: :get },
         { path: "/settings/secrets/enrollment", method: :post },
@@ -940,6 +760,25 @@ class BaseAuthorityRouteContractTest < ActionDispatch::IntegrationTest
         assert_raises(ActionController::RoutingError) do
           Rails.application.routes.recognize_path("http://#{host}#{route.fetch(:path)}", method: route.fetch(:method))
         end
+      end
+    end
+  end
+
+  test "base app generic identity secret management routes are retired" do
+    [
+      ["/identity/secrets", :get],
+      ["/identity/secrets/new", :get],
+      ["/identity/secrets/example", :get],
+      ["/identity/secrets/example/edit", :get],
+      ["/identity/secrets", :post],
+      ["/identity/secrets/example", :patch],
+      ["/identity/secrets/example", :put],
+      ["/identity/secrets/example", :delete],
+      ["/identity/secrets/example/rotation", :post],
+      ["/identity/secrets/example/removal", :post],
+    ].each do |path, method|
+      assert_raises(ActionController::RoutingError) do
+        Rails.application.routes.recognize_path("http://#{BASE_APP_HOST}#{path}", method: method)
       end
     end
   end
@@ -966,6 +805,48 @@ class BaseAuthorityRouteContractTest < ActionDispatch::IntegrationTest
         "http://#{BASE_APP_HOST}/auth/acme/callback",
         method: :get,
       )
+    end
+  end
+
+  test "retired Base authority and RP paths do not redirect on APP and ORG hosts" do
+    [ENV.fetch("PUBLIC_BASE_SERVICE_URL"), ENV.fetch("PUBLIC_BASE_STAFF_URL")].each do |host|
+      host! host
+      https!
+      %w(/oauth/user_info /auth/acme /auth/acme/callback /oidc/authorization /sign/callback).each do |path|
+        get path
+
+        assert_response :not_found, "#{host} #{path}"
+        assert_nil response.location, "#{host} #{path}"
+      end
+    end
+  end
+
+  test "Base APP and ORG retain their own JWKS routes" do
+    {
+      "app" => ENV.fetch("PUBLIC_BASE_SERVICE_URL"),
+      "org" => ENV.fetch("PUBLIC_BASE_STAFF_URL"),
+    }.each do |surface, host|
+      assert_recognizes(
+        { controller: "base/#{surface}/well_known/jwks", action: "show" },
+        { path: "http://#{host}/.well-known/jwks.json", method: :get },
+      )
+      if surface == "app"
+        assert_recognizes(
+          { controller: "base/app/oidc/callbacks", action: "show" },
+          { path: "https://#{host}/oidc/callback", method: :get },
+        )
+      else
+        assert_recognizes(
+          { controller: "base/org/oidc/callbacks", action: "show" },
+          { path: "https://#{host}/oidc/callback", method: :get },
+        )
+      end
+      host! host
+      https!
+      get "/.well-known/jwks.json"
+
+      assert_response :success
+      assert_equal "application/json", response.media_type
     end
   end
 end

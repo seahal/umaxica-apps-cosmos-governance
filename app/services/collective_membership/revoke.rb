@@ -10,6 +10,7 @@ module CollectiveMembership
       @reason_id = reason_id
     end
 
+    public
     def call
       return membership if membership.revoked?
 

@@ -6,8 +6,14 @@ require "test_helper"
 
 class AccountPolicyTest < ActiveSupport::TestCase
   def setup
-    @user = Client.create!(status_id: ClientStatus::ACTIVE, visibility_id: ClientVisibility::USER)
-    @other_user = Client.create!(status_id: ClientStatus::ACTIVE, visibility_id: ClientVisibility::USER)
+    @user = Client.create!(
+      security_mode_id: SecurityModeConfigurable::NORMAL, status_id: ClientStatus::ACTIVE,
+      visibility_id: ClientVisibility::USER,
+    )
+    @other_user = Client.create!(
+      security_mode_id: SecurityModeConfigurable::NORMAL, status_id: ClientStatus::ACTIVE,
+      visibility_id: ClientVisibility::USER,
+    )
     @record = BaseSelectorBootstrapAuthority.call(surface: :app, principal: @user).account
     @other_record = BaseSelectorBootstrapAuthority.call(surface: :app, principal: @other_user).account
     @policy = AccountPolicy.new(@record, user: @user)
@@ -23,6 +29,22 @@ class AccountPolicyTest < ActiveSupport::TestCase
 
   def test_show_rejects_account_owned_by_another_principal
     assert_not AccountPolicy.new(@other_record, user: @user).show?
+  end
+
+  def test_show_after_account_family_cutover_uses_explicit_ownership_not_legacy_identity
+    ClientPersonaAuthorityCutover.establish!
+    @record.ownership.update!(client: @other_user)
+
+    assert_not AccountPolicy.new(@record, user: @user).show?
+    assert_predicate AccountPolicy.new(@record, user: @other_user), :show?
+  end
+
+  def test_show_after_account_family_cutover_rejects_an_ineligible_owner
+    ClientPersonaAuthorityCutover.establish!
+    @other_user.update!(status_id: ClientStatus::INACTIVE)
+    @record.ownership.update!(client: @other_user)
+
+    assert_not AccountPolicy.new(@record, user: @other_user).show?
   end
 
   def test_create

@@ -9,10 +9,10 @@
 #  id           :bigint           not null, primary key
 #  body         :string           default(""), not null
 #  context      :jsonb            not null
-#  discarded_at :datetime         default(Infinity), not null
+#  discard_at :datetime         default(Infinity), not null
 #  event_type   :string           default(""), not null
 #  memo         :string           default(""), not null
-#  purged_at    :datetime         default(Infinity), not null
+#  purge_eligible_at    :datetime         default(Infinity), not null
 #  created_at   :datetime         not null
 #  updated_at   :datetime         not null
 #  public_id    :string(21)       default(""), not null
@@ -23,7 +23,7 @@
 #  index_visitor_occurrences_on_body                       (body) UNIQUE
 #  index_visitor_occurrences_on_event_type_and_created_at  (event_type,created_at)
 #  index_visitor_occurrences_on_public_id                  (public_id) UNIQUE
-#  index_visitor_occurrences_on_purged_at                  (purged_at)
+#  index_visitor_occurrences_on_purge_eligible_at                  (purge_eligible_at)
 #  index_visitor_occurrences_on_status_id_and_created_at   (status_id,created_at)
 #
 # Foreign Keys
@@ -32,8 +32,32 @@
 #
 class VisitorOccurrence < OccurrenceRecord
   include Retainable
+
+  attribute :discard_at, :datetime, default: -> { Retainable::SENTINEL }
+  attribute :purge_eligible_at, :datetime, default: -> { Retainable::SENTINEL }
+  validates :discard_at, presence: true
+  validates :purge_eligible_at, presence: true
+  validate :retention_order_valid
+  validate :retention_times_not_before_created_at, on: :update
+  Retainable.register_host(self)
+
   include PublicId
+
+  before_validation :generate_public_id, on: :create
+  before_validation :refresh_generated_public_id_after_collision, on: :create
+  before_create :generate_public_id
+  around_create :retry_public_id_collision
+  validate :public_id_immutable_after_create, on: :update
+  validates :public_id, presence: true, length: { is: PublicId::GENERATION_SIZE }, uniqueness: true
   include Occurrence
+
+  validates :public_id,
+            length: { is: 21 },
+            format: { with: /\A[A-Za-z0-9_-]{21}\z/ },
+            uniqueness: true
+  validates :body, presence: true, uniqueness: true
+  validate :status_id_must_be_present
+  validates :memo, length: { maximum: 1024 }, allow_nil: true
 
   ACTIVE_STATUS_ID = VisitorOccurrenceStatus::ACTIVE
   INACTIVE_STATUS_ID = VisitorOccurrenceStatus::INACTIVE
@@ -49,10 +73,10 @@ class VisitorOccurrence < OccurrenceRecord
   has_many :ip_visitor_occurrences, dependent: :destroy, inverse_of: :visitor_occurrence
   has_many :ip_occurrences, through: :ip_visitor_occurrences
 
-  scope :active, -> { where(status_id: ACTIVE_STATUS_ID) }
-  scope :inactive, -> { where(status_id: INACTIVE_STATUS_ID) }
-
   validates :body, length: { maximum: 36 }
   validates :status_id, numericality: { only_integer: true }
   validates :event_type, length: { maximum: 255 }, allow_nil: true
+
+  scope :active, -> { where(status_id: ACTIVE_STATUS_ID) }
+  scope :inactive, -> { where(status_id: INACTIVE_STATUS_ID) }
 end
